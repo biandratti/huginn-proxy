@@ -1,0 +1,65 @@
+name: Advanced Security
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+  schedule:
+    - cron: '0 2 * * 6'
+
+concurrency:
+  group: ${{ github.ref }}-${{ github.workflow }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  security-events: write
+  pull-requests: write
+
+jobs:
+  cargo-geiger:
+    name: Unsafe Code Analysis
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        crate: [reverse-proxy]
+    steps:
+      - uses: actions/checkout@v6
+      
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+      
+      - name: Cache cargo-geiger
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/cargo-geiger
+          key: cargo-geiger-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            cargo-geiger-${{ runner.os }}-
+            
+      - name: Install cargo-geiger
+        run: |
+          if ! command -v cargo-geiger &> /dev/null; then
+            cargo install cargo-geiger
+          else
+            echo "cargo-geiger already installed"
+          fi
+      
+      - name: Run unsafe code analysis for ${{ matrix.crate }}
+        run: |
+          echo "Analyzing ${{ matrix.crate }}..."
+          cd ${{ matrix.crate }} && cargo geiger --forbid-only
+ # Disabled because the license is not valid in ctrlc crate
+  # dependency-review:
+  #   name: Dependency Review
+  #   runs-on: ubuntu-latest
+  #   if: github.event_name == 'pull_request'
+  #   steps:
+  #     - uses: actions/checkout@v6
+  #     - name: Dependency Review
+  #       uses: actions/dependency-review-action@v4
+  #       with:
+  #         allow-licenses: MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, Unicode-3.0
+

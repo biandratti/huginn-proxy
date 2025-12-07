@@ -1,0 +1,11 @@
+[package]
+name = "reverse-proxy"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "reverse-proxy"
+path = "src/main.rs"
+
+[dependencies]
+
