@@ -22,7 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        crate: [huginn-net-db, huginn-net-tls, huginn-net-tcp, huginn-net-http, huginn-net]
+        crate: [reverse-proxy]
     steps:
       - uses: actions/checkout@v6
       

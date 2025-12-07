@@ -1,6 +1,7 @@
-[package]
-name = "huginn-proxy"
+[workspace]
+members = ["reverse-proxy"]
+resolver = "2"
+
+[workspace.package]
 version = "0.1.0"
 edition = "2024"
-
-[dependencies]
