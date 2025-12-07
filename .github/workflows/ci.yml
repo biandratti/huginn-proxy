@@ -1,0 +1,142 @@
+name: Continuous Integration
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+
+concurrency:
+  group: ${{ github.ref }}-${{ github.workflow }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  CARGO_TERM_COLOR: always
+  rust_stable: stable
+  rust_min: '1.82'
+
+jobs:
+  
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install Rust ${{ env.rust_stable }}
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.rust_stable }}
+      - name: Build workspace
+        run: cargo build --verbose --workspace
+
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install Rust ${{ env.rust_stable }}
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.rust_stable }}
+          components: rustfmt
+      - name: Check code formatting
+        run: cargo fmt --all -- --check
+
+  cargo-sort:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install Rust ${{ env.rust_stable }}
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.rust_stable }}
+      - name: Install cargo-sort
+        run: cargo install cargo-sort
+      - name: Check Cargo.toml sorting
+        run: cargo sort --workspace --check
+  
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install Rust ${{ env.rust_stable }}
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.rust_stable }}
+          components: clippy
+      - name: Check lint
+        run: |
+          cargo clippy --workspace --all-features --all-targets -- \
+            -D warnings \
+            -D clippy::expect_used \
+            -D clippy::unreachable \
+            -D clippy::arithmetic_side_effects \
+            -D clippy::unwrap_used \
+            -D clippy::todo \
+            -D clippy::redundant_clone \
+            -D clippy::unimplemented \
+            -D clippy::missing_panics_doc \
+            -D clippy::redundant_field_names
+
+  test-individual-crates:
+    name: Test individual crates
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        crate: [huginn-net-db, huginn-net-tls, huginn-net-tcp, huginn-net-http, huginn-net]
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install Rust ${{ env.rust_stable }}
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.rust_stable }}
+      - name: Test ${{ matrix.crate }}
+        run: cargo test -p ${{ matrix.crate }} --all-features
+      - name: Check ${{ matrix.crate }}
+        run: cargo check -p ${{ matrix.crate }} --all-features
+
+  minrust:
+    name: minrust
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install Rust ${{ env.rust_min }}
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.rust_min }}
+      - name: Check MSRV
+        run: cargo check --workspace --all-features
+
+  examples-and-benchmarks:
+    name: Examples and benchmarks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install Rust ${{ env.rust_stable }}
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.rust_stable }}
+      - name: Check examples
+        run: cargo check --examples -p huginn-net
+      - name: Check benchmarks
+        run: cargo check --benches -p huginn-net
+
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    container:
+      image: xd009642/tarpaulin:develop-nightly
+      options: --security-opt seccomp=unconfined
+    steps:
+      - uses: actions/checkout@v6
+      - name: Generate code coverage
+        run: |
+          cargo +nightly tarpaulin --workspace --verbose --all-features --timeout 120 --out xml --output-dir .
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: true
