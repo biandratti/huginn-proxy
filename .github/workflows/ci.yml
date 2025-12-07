@@ -108,22 +108,6 @@ jobs:
       - name: Check MSRV
         run: cargo check --workspace --all-features
 
-  examples-and-benchmarks:
-    name: Examples and benchmarks
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - name: Install Rust ${{ env.rust_stable }}
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: ${{ env.rust_stable }}
-      - name: Check examples
-        run: cargo check --examples -p reverse-proxy || echo "No examples found, skipping"
-        continue-on-error: true
-      - name: Check benchmarks
-        run: cargo check --benches -p reverse-proxy || echo "No benchmarks found, skipping"
-        continue-on-error: true
-
   test:
     runs-on: ubuntu-latest
     permissions:
