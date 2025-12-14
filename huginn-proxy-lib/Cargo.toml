@@ -16,8 +16,8 @@ path = "src/lib.rs"
 [dependencies]
 serde.workspace = true
 thiserror.workspace = true
-toml.workspace = true
 tokio.workspace = true
+toml.workspace = true
 tracing.workspace = true
 
 
