@@ -22,10 +22,13 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        crate:
-          - huginn-proxy
-          - huginn-proxy-lib
-          - huginn-proxy-tls
+        include:
+          - crate: huginn-proxy
+            manifest: ${{ github.workspace }}/huginn-proxy/Cargo.toml
+          - crate: huginn-proxy-lib
+            manifest: ${{ github.workspace }}/huginn-proxy-lib/Cargo.toml
+          - crate: huginn-proxy-tls
+            manifest: ${{ github.workspace }}/huginn-proxy-tls/Cargo.toml
     steps:
       - uses: actions/checkout@v4
       
@@ -53,7 +56,7 @@ jobs:
       - name: Run unsafe code analysis for ${{ matrix.crate }}
         run: |
           echo "Analyzing ${{ matrix.crate }}..."
-          cargo geiger --forbid-only -p ${{ matrix.crate }} --all-features --all-targets
+          cargo geiger --forbid-only --all-features --all-targets --manifest-path ${{ matrix.manifest }}
  # Disabled because the license is not valid in ctrlc crate
   # dependency-review:
   #   name: Dependency Review
