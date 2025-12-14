@@ -1,5 +1,11 @@
 [workspace]
-members = ["reverse-proxy"]
+members = [
+    "examples",
+    "huginn-proxy",
+    "huginn-proxy-bench",
+    "huginn-proxy-lib",
+    "huginn-proxy-tls",
+]
 resolver = "2"
 
 [workspace.package]
@@ -10,3 +16,14 @@ license = "MIT OR Apache-2.0"
 authors = ["Maximiliano Biandratti"]
 repository = "https://github.com/biandratti/huginn-proxy"
 homepage = "https://github.com/biandratti/huginn-proxy"
+
+[workspace.metadata.publish]
+exclude = ["huginn-proxy-bench", "examples"]
+
+[profile.release]
+codegen-units = 1
+incremental = false
+lto = "fat"
+opt-level = 3
+panic = "abort"
+strip = true
