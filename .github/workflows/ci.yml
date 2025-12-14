@@ -84,7 +84,10 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        crate: [reverse-proxy]
+        crate:
+          - huginn-proxy
+          - huginn-proxy-lib
+          - huginn-proxy-tls
     steps:
       - uses: actions/checkout@v6
       - name: Install Rust ${{ env.rust_stable }}
