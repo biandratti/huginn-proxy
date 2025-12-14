@@ -13,5 +13,5 @@ name = "huginn-proxy"
 path = "src/main.rs"
 
 [dependencies]
-huginn-proxy-lib = { path = "../huginn-proxy-lib" }
+huginn-proxy-lib = { path = "../huginn-proxy-lib", version = "0.1.0" }
 
