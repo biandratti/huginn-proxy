@@ -1,5 +1,5 @@
 [package]
-name = "reverse-proxy"
+name = "huginn-proxy-lib"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -7,10 +7,15 @@ authors.workspace = true
 repository.workspace = true
 homepage.workspace = true
 rust-version.workspace = true
+publish = true
 
-[[bin]]
-name = "reverse-proxy"
-path = "src/main.rs"
+[lib]
+name = "huginn_proxy_lib"
+path = "src/lib.rs"
 
 [dependencies]
+serde = { version = "1", features = ["derive"] }
+thiserror = "1"
+toml = "0.8"
+
 
