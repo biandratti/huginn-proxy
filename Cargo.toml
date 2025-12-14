@@ -1,10 +1,10 @@
 [workspace]
 members = [
+    "examples",
     "huginn-proxy",
+    "huginn-proxy-bench",
     "huginn-proxy-lib",
     "huginn-proxy-tls",
-    "huginn-proxy-bench",
-    "examples",
 ]
 resolver = "2"
 
