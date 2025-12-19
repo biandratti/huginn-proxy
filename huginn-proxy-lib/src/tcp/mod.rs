@@ -8,6 +8,7 @@ use tokio::net::TcpListener;
 use tracing::info;
 
 mod handler;
+mod dns;
 
 pub use handler::TcpHandler;
 

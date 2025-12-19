@@ -15,6 +15,7 @@ path = "src/lib.rs"
 
 [dependencies]
 ahash.workspace = true
+dashmap.workspace = true
 rand.workspace = true
 serde.workspace = true
 thiserror.workspace = true
