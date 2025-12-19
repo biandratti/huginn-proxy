@@ -14,12 +14,12 @@ name = "huginn_proxy_lib"
 path = "src/lib.rs"
 
 [dependencies]
+ahash.workspace = true
+rand.workspace = true
 serde.workspace = true
 thiserror.workspace = true
-toml.workspace = true
 tokio.workspace = true
+toml.workspace = true
 tracing.workspace = true
-rand.workspace = true
-ahash.workspace = true
 
 
