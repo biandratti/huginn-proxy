@@ -17,6 +17,15 @@ authors = ["Maximiliano Biandratti"]
 repository = "https://github.com/biandratti/huginn-proxy"
 homepage = "https://github.com/biandratti/huginn-proxy"
 
+[workspace.dependencies]
+serde = { version = "1.0.228", features = ["derive"] }
+thiserror = "2.0.17"
+toml = "0.9.8"
+tokio = { version = "1", features = ["net", "time", "io-util", "macros", "rt-multi-thread", "sync"] }
+tracing = "0.1.44"
+rand = "0.9.2"
+ahash = "0.8.12"
+
 [workspace.metadata.publish]
 exclude = ["huginn-proxy-bench", "examples"]
 

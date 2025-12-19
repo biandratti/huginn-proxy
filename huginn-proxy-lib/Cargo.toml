@@ -14,8 +14,12 @@ name = "huginn_proxy_lib"
 path = "src/lib.rs"
 
 [dependencies]
-serde = { version = "1", features = ["derive"] }
-thiserror = "1"
-toml = "0.8"
+serde.workspace = true
+thiserror.workspace = true
+toml.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+rand.workspace = true
+ahash.workspace = true
 
 
