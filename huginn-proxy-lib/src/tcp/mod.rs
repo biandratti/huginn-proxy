@@ -7,8 +7,9 @@ use thiserror::Error;
 use tokio::net::TcpListener;
 use tracing::info;
 
-mod handler;
 mod dns;
+mod handler;
+mod metrics;
 
 pub use handler::TcpHandler;
 

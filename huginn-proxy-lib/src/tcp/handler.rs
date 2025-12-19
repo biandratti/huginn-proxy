@@ -2,12 +2,12 @@
 
 use std::net::SocketAddr;
 use std::str::FromStr;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
 use crate::config::{Backend, Config, LoadBalance};
 use crate::tcp::dns::{DnsCache, TargetAddr};
+use crate::tcp::metrics::ConnectionCount;
 use ahash::RandomState;
 use rand::{rng, Rng};
 use tokio::io;
@@ -19,8 +19,7 @@ use tracing::{info, warn};
 pub struct TcpHandler {
     config: Arc<Config>,
     rand_state: RandomState,
-    connections_active: Arc<AtomicUsize>,
-    connections_total: Arc<AtomicUsize>,
+    connections: Arc<ConnectionCount>,
     dns_cache: Arc<DnsCache>,
 }
 
@@ -29,8 +28,7 @@ impl TcpHandler {
         Self {
             config,
             rand_state: RandomState::default(),
-            connections_active: Arc::new(AtomicUsize::new(0)),
-            connections_total: Arc::new(AtomicUsize::new(0)),
+            connections: Arc::new(ConnectionCount::default()),
             dns_cache: Arc::new(DnsCache::default()),
         }
     }
@@ -46,27 +44,26 @@ impl TcpHandler {
             };
             // connection limit if configured
             if let Some(max) = self.config.max_connections {
-                let current = self.connections_active.load(Ordering::Relaxed);
+                let current = self.connections.current();
                 if current >= max {
                     warn!(%addr, max, "connection limit reached, dropping");
                     continue;
                 }
             }
-            self.connections_active.fetch_add(1, Ordering::Relaxed);
-            self.connections_total.fetch_add(1, Ordering::Relaxed);
+            self.connections.increment();
 
             let backend = match self.next_backend(&addr) {
                 Ok(b) => b,
                 Err(e) => {
                     warn!(error = %e, "failed to select backend");
-                    self.connections_active.fetch_sub(1, Ordering::Relaxed);
+                    self.connections.decrement();
                     continue;
                 }
             };
             let cfg = self.config.clone();
-            let active = self.connections_active.clone();
+            let counts = self.connections.clone();
             let dns = self.dns_cache.clone();
-            tokio::spawn(handle_conn(cfg, dns, client, backend, addr, active));
+            tokio::spawn(handle_conn(cfg, dns, client, backend, addr, counts));
         }
     }
 
@@ -104,7 +101,7 @@ async fn handle_conn(
     client: TcpStream,
     backend: Backend,
     client_addr: std::net::SocketAddr,
-    connections_active: Arc<AtomicUsize>,
+    connections: Arc<ConnectionCount>,
 ) {
     let connect_timeout = Duration::from_millis(config.timeouts.connect_ms);
 
@@ -114,7 +111,8 @@ async fn handle_conn(
         Ok(t) => t,
         Err(e) => {
             warn!(%client_addr, backend = %backend.address, error = %e, "invalid backend address");
-            connections_active.fetch_sub(1, Ordering::Relaxed);
+            connections.increment_errors();
+            connections.decrement();
             return;
         }
     };
@@ -124,13 +122,15 @@ async fn handle_conn(
             Some(addr) => addr,
             None => {
                 warn!(%client_addr, backend = %backend.address, "no resolved addresses");
-                connections_active.fetch_sub(1, Ordering::Relaxed);
+                connections.increment_errors();
+                connections.decrement();
                 return;
             }
         },
         Err(e) => {
             warn!(%client_addr, backend = %backend.address, error = %e, "dns resolve failed");
-            connections_active.fetch_sub(1, Ordering::Relaxed);
+            connections.increment_errors();
+            connections.decrement();
             return;
         }
     };
@@ -139,22 +139,25 @@ async fn handle_conn(
         Ok(Ok(stream)) => stream,
         Ok(Err(e)) => {
             warn!(%client_addr, backend = %destination, error = %e, "failed to connect to backend");
-            connections_active.fetch_sub(1, Ordering::Relaxed);
+            connections.increment_errors();
+            connections.decrement();
             return;
         }
         Err(_) => {
             warn!(%client_addr, backend = %destination, "connect timeout");
-            connections_active.fetch_sub(1, Ordering::Relaxed);
+            connections.increment_errors();
+            connections.decrement();
             return;
         }
     };
 
     if let Err(e) = bidirectional_copy(client, upstream).await {
         warn!(%client_addr, backend = %backend.address, error = %e, "forwarding ended with error");
+        connections.increment_errors();
     } else {
         info!(%client_addr, backend = %backend.address, "connection closed");
     }
-    connections_active.fetch_sub(1, Ordering::Relaxed);
+    connections.decrement();
 }
 
 async fn bidirectional_copy(mut client: TcpStream, mut upstream: TcpStream) -> io::Result<()> {

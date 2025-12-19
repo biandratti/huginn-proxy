@@ -50,11 +50,7 @@ impl Default for DnsCache {
 
 impl DnsCache {
     pub fn new(min_ttl: Duration, max_ttl: Duration) -> Self {
-        Self {
-            entries: DashMap::new(),
-            min_ttl,
-            max_ttl,
-        }
+        Self { entries: DashMap::new(), min_ttl, max_ttl }
     }
 
     pub async fn get_or_resolve(&self, domain: &str, port: u16) -> Result<Vec<SocketAddr>, String> {
@@ -89,8 +85,11 @@ impl DnsCache {
             return Err(format!("no addresses found for {domain}"));
         }
         // Without TTL info from std lookup, apply bounds directly using clamp.
-        let expires_at = self
-            .clamp_ttl(Instant::now().checked_add(self.max_ttl).unwrap_or_else(Instant::now));
+        let expires_at = self.clamp_ttl(
+            Instant::now()
+                .checked_add(self.max_ttl)
+                .unwrap_or_else(Instant::now),
+        );
 
         let entry = CacheEntry::new(addresses.clone(), expires_at);
         self.entries.insert(domain.to_string(), entry);
@@ -108,7 +107,9 @@ impl DnsCache {
         } else {
             ttl
         };
-        Instant::now().checked_add(clamped).unwrap_or_else(Instant::now)
+        Instant::now()
+            .checked_add(clamped)
+            .unwrap_or_else(Instant::now)
     }
 }
 
@@ -116,7 +117,9 @@ impl TargetAddr {
     fn validate_domain(domain: &str) -> bool {
         !domain.is_empty()
             && domain.len() <= 253
-            && domain.chars().all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-')
+            && domain
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-')
             && !domain.starts_with('.')
             && !domain.ends_with('.')
             && !domain.contains("..")
@@ -162,4 +165,3 @@ impl FromStr for TargetAddr {
         Ok(TargetAddr::Domain(domain.to_string(), port))
     }
 }
-
