@@ -9,6 +9,13 @@ pub struct ConnectionCount {
     errors: AtomicUsize,
 }
 
+#[derive(Debug, Clone, Copy, Default)]
+pub struct ConnectionSnapshot {
+    pub current: usize,
+    pub total: usize,
+    pub errors: usize,
+}
+
 impl ConnectionCount {
     pub fn increment(&self) {
         self.current.fetch_add(1, Ordering::Relaxed);
@@ -25,21 +32,19 @@ impl ConnectionCount {
         self.errors.fetch_add(1, Ordering::Relaxed);
     }
 
-    // TODO: remove this once we have a proper metrics system
-    #[allow(dead_code)]
     pub fn current(&self) -> usize {
         self.current.load(Ordering::Relaxed)
     }
 
-    // TODO: remove this once we have a proper metrics system
-    #[allow(dead_code)]
     pub fn total(&self) -> usize {
         self.total.load(Ordering::Relaxed)
     }
 
-    // TODO: remove this once we have a proper metrics system
-    #[allow(dead_code)]
     pub fn errors(&self) -> usize {
         self.errors.load(Ordering::Relaxed)
+    }
+
+    pub fn snapshot(&self) -> ConnectionSnapshot {
+        ConnectionSnapshot { current: self.current(), total: self.total(), errors: self.errors() }
     }
 }

@@ -38,7 +38,8 @@ impl TcpHandler {
             let (client, addr) = match listener.accept().await {
                 Ok(pair) => pair,
                 Err(e) => {
-                    warn!(error = %e, "failed to accept connection");
+                    let snapshot = self.connections.snapshot();
+                    warn!(error = %e, current = snapshot.current, total = snapshot.total, errors = snapshot.errors, "failed to accept connection");
                     continue;
                 }
             };
@@ -51,11 +52,14 @@ impl TcpHandler {
                 }
             }
             self.connections.increment();
+            let snapshot = self.connections.snapshot();
+            info!(%addr, current = snapshot.current, total = snapshot.total, errors = snapshot.errors, "accepted connection");
 
             let backend = match self.next_backend(&addr) {
                 Ok(b) => b,
                 Err(e) => {
-                    warn!(error = %e, "failed to select backend");
+                    let snapshot = self.connections.snapshot();
+                    warn!(error = %e, current = snapshot.current, total = snapshot.total, errors = snapshot.errors, "failed to select backend");
                     self.connections.decrement();
                     continue;
                 }
@@ -110,7 +114,8 @@ async fn handle_conn(
     let target = match TargetAddr::from_str(&backend.address) {
         Ok(t) => t,
         Err(e) => {
-            warn!(%client_addr, backend = %backend.address, error = %e, "invalid backend address");
+            let snapshot = connections.snapshot();
+            warn!(%client_addr, backend = %backend.address, error = %e, current = snapshot.current, total = snapshot.total, errors = snapshot.errors, "invalid backend address");
             connections.increment_errors();
             connections.decrement();
             return;
@@ -121,14 +126,16 @@ async fn handle_conn(
         Ok(mut addrs) => match addrs.pop() {
             Some(addr) => addr,
             None => {
-                warn!(%client_addr, backend = %backend.address, "no resolved addresses");
+                let snapshot = connections.snapshot();
+                warn!(%client_addr, backend = %backend.address, current = snapshot.current, total = snapshot.total, errors = snapshot.errors, "no resolved addresses");
                 connections.increment_errors();
                 connections.decrement();
                 return;
             }
         },
         Err(e) => {
-            warn!(%client_addr, backend = %backend.address, error = %e, "dns resolve failed");
+            let snapshot = connections.snapshot();
+            warn!(%client_addr, backend = %backend.address, error = %e, current = snapshot.current, total = snapshot.total, errors = snapshot.errors, "dns resolve failed");
             connections.increment_errors();
             connections.decrement();
             return;
@@ -138,13 +145,15 @@ async fn handle_conn(
     let upstream = match timeout(connect_timeout, TcpStream::connect(destination)).await {
         Ok(Ok(stream)) => stream,
         Ok(Err(e)) => {
-            warn!(%client_addr, backend = %destination, error = %e, "failed to connect to backend");
+            let snapshot = connections.snapshot();
+            warn!(%client_addr, backend = %destination, error = %e, current = snapshot.current, total = snapshot.total, errors = snapshot.errors, "failed to connect to backend");
             connections.increment_errors();
             connections.decrement();
             return;
         }
         Err(_) => {
-            warn!(%client_addr, backend = %destination, "connect timeout");
+            let snapshot = connections.snapshot();
+            warn!(%client_addr, backend = %destination, current = snapshot.current, total = snapshot.total, errors = snapshot.errors, "connect timeout");
             connections.increment_errors();
             connections.decrement();
             return;
@@ -152,10 +161,12 @@ async fn handle_conn(
     };
 
     if let Err(e) = bidirectional_copy(client, upstream).await {
-        warn!(%client_addr, backend = %backend.address, error = %e, "forwarding ended with error");
+        let snapshot = connections.snapshot();
+        warn!(%client_addr, backend = %backend.address, error = %e, current = snapshot.current, total = snapshot.total, errors = snapshot.errors, "forwarding ended with error");
         connections.increment_errors();
     } else {
-        info!(%client_addr, backend = %backend.address, "connection closed");
+        let snapshot = connections.snapshot();
+        info!(%client_addr, backend = %backend.address, current = snapshot.current, total = snapshot.total, errors = snapshot.errors, "connection closed");
     }
     connections.decrement();
 }

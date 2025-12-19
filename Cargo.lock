@@ -91,14 +91,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "huginn-proxy-bench"
-version = "0.1.0"
-
-[[package]]
-name = "huginn-proxy-examples"
-version = "0.1.0"
-
-[[package]]
 name = "huginn-proxy-lib"
 version = "0.1.0"
 dependencies = [
