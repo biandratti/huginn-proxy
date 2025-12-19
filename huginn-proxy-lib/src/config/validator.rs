@@ -16,5 +16,15 @@ pub fn validate(config: &Config) -> Result<(), String> {
     if config.timeouts.idle_ms == 0 {
         return Err("idle_ms must be > 0".into());
     }
+    if let Some(max) = config.max_connections {
+        if max == 0 {
+            return Err("max_connections must be > 0 when set".into());
+        }
+    }
+    if let Some(backlog) = config.backlog {
+        if backlog == 0 {
+            return Err("backlog must be > 0 when set".into());
+        }
+    }
     Ok(())
 }

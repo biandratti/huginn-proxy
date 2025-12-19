@@ -8,6 +8,8 @@ pub struct Config {
     #[serde(default)]
     pub mode: Mode,
     #[serde(default)]
+    pub balancing: LoadBalance,
+    #[serde(default)]
     pub peek_http: bool,
     #[serde(default)]
     pub timeouts: Timeouts,
@@ -15,6 +17,12 @@ pub struct Config {
     pub telemetry: Telemetry,
     #[serde(default)]
     pub tls: Option<TlsConfig>,
+    /// Optional maximum concurrent connections across the listener. When None, unbounded.
+    #[serde(default)]
+    pub max_connections: Option<usize>,
+    /// Optional backlog hint when binding. Currently informational; binding uses OS default if None.
+    #[serde(default)]
+    pub backlog: Option<u32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -30,6 +38,16 @@ pub enum Mode {
     #[default]
     Forward,
     TlsTermination,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum LoadBalance {
+    #[default]
+    None,
+    SourceIp,
+    SourceSocket,
+    Random,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
