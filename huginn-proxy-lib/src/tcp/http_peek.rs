@@ -1,7 +1,5 @@
 #![forbid(unsafe_code)]
 
-use std::cmp;
-
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 
@@ -31,12 +29,11 @@ pub async fn peek_request_line(
     let mut buf = Vec::with_capacity(512);
     let mut tmp = [0u8; 512];
     loop {
-        let n = stream.peek(&mut tmp).await?;
-        if n == 0 {
+        let read_n = stream.read(&mut tmp).await?;
+        if read_n == 0 {
             return Ok(PeekOutcome::NotHttp(buf));
         }
-        let take = cmp::min(n, tmp.len());
-        buf.extend_from_slice(&tmp[..take]);
+        buf.extend_from_slice(&tmp[..read_n]);
         if buf.len() >= max_peek {
             return Ok(PeekOutcome::NotHttp(buf));
         }
@@ -48,12 +45,6 @@ pub async fn peek_request_line(
                 return Ok(PeekOutcome::NotHttp(buf));
             }
         }
-        // If not complete, read more
-        let read_n = stream.read(&mut tmp).await?;
-        if read_n == 0 {
-            return Ok(PeekOutcome::NotHttp(buf));
-        }
-        buf.extend_from_slice(&tmp[..read_n]);
     }
 }
 

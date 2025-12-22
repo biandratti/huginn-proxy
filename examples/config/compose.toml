@@ -4,14 +4,14 @@ peek_http = true
 balancing = "none"
 
 backends = [
-  { address = "backend_b:9000" } # default
+  { address = "backend-b:9000" } # default
 ]
 
 [http]
 max_peek_bytes = 8192
 routes = [
-  { prefix = "/api", backend = "backend_a:9000" },
-  { prefix = "/", backend = "backend_b:9000" }
+  { prefix = "/api", backend = "backend-a:9000" },
+  { prefix = "/", backend = "backend-b:9000" }
 ]
 
 [timeouts]

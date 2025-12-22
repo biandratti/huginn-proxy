@@ -12,14 +12,14 @@ services:
       - "7000:7000"
       - "9900:9900"
     depends_on:
-      - backend_a
-      - backend_b
+      - backend-a
+      - backend-b
 
-  backend_a:
+  backend-a:
     image: hashicorp/http-echo:0.2.3
     command: ["-listen=:9000", "-text=backend-a"]
 
-  backend_b:
+  backend-b:
     image: hashicorp/http-echo:0.2.3
     command: ["-listen=:9000", "-text=backend-b"]
 
