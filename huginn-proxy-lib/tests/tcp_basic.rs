@@ -4,6 +4,7 @@ use std::net::{SocketAddr, TcpListener as StdTcpListener};
 use std::sync::Arc;
 use std::time::Duration;
 
+use huginn_proxy_lib::config::types::HttpConfig;
 use huginn_proxy_lib::config::{Backend, Config, LoadBalance, Mode, Telemetry, Timeouts};
 use huginn_proxy_lib::tcp;
 use huginn_proxy_lib::tcp::metrics::ConnectionCount;
@@ -54,6 +55,7 @@ fn make_config(listen: SocketAddr, backend: SocketAddr) -> Config {
         mode: Mode::Forward,
         balancing: LoadBalance::None,
         peek_http: false,
+        http: HttpConfig { routes: vec![], max_peek_bytes: HttpConfig::default_max_peek_bytes() },
         timeouts: Timeouts { connect_ms: 1_000, idle_ms: 5_000 },
         telemetry: Telemetry { access_log: false, basic_metrics: false },
         tls: None,

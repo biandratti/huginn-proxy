@@ -16,6 +16,17 @@ pub fn validate(config: &Config) -> Result<(), String> {
     if config.timeouts.idle_ms == 0 {
         return Err("idle_ms must be > 0".into());
     }
+    for route in &config.http.routes {
+        if route.prefix.is_empty() {
+            return Err("http route prefix cannot be empty".into());
+        }
+        if route.backend.trim().is_empty() {
+            return Err("http route backend cannot be empty".into());
+        }
+    }
+    if config.http.max_peek_bytes == 0 {
+        return Err("http.max_peek_bytes must be > 0".into());
+    }
     if let Some(max) = config.max_connections {
         if max == 0 {
             return Err("max_connections must be > 0 when set".into());

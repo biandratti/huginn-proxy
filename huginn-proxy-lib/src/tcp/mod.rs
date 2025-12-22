@@ -10,6 +10,7 @@ use tracing::info;
 
 mod dns;
 mod handler;
+mod http_peek;
 pub mod metrics;
 
 pub use handler::TcpHandler;

@@ -7,6 +7,7 @@ use std::time::Duration;
 
 use crate::config::{Backend, Config, LoadBalance};
 use crate::tcp::dns::{DnsCache, TargetAddr};
+use crate::tcp::http_peek::{peek_request_line, replay_buffered, PeekOutcome};
 use crate::tcp::metrics::ConnectionCount;
 use ahash::RandomState;
 use rand::{rng, Rng};
@@ -118,6 +119,22 @@ impl TcpHandler {
     }
 }
 
+fn select_route<'a>(
+    path: &str,
+    http_cfg: &'a crate::config::types::HttpConfig,
+) -> Option<&'a crate::config::types::HttpRoute> {
+    http_cfg
+        .routes
+        .iter()
+        .max_by_key(|r| {
+            if path.starts_with(&r.prefix) {
+                r.prefix.len()
+            } else {
+                0
+            }
+        })
+        .filter(|r| path.starts_with(&r.prefix))
+}
 async fn handle_conn(
     config: Arc<Config>,
     dns_cache: Arc<DnsCache>,
@@ -161,23 +178,75 @@ async fn handle_conn(
         }
     };
 
-    let upstream = match timeout(connect_timeout, TcpStream::connect(destination)).await {
+    // Optional HTTP peek
+    let mut client = client;
+    let mut initial_buf = Vec::new();
+    let mut selected_backend_addr = destination;
+    let max_peek = config.http.max_peek_bytes;
+    if config.peek_http || !config.http.routes.is_empty() {
+        match peek_request_line(&mut client, max_peek).await {
+            Ok(PeekOutcome::Http(peeked)) => {
+                initial_buf = peeked.buffered.clone();
+                if let Some(route) = select_route(&peeked.path, &config.http) {
+                    // resolve routed backend
+                    if let Ok(t) = TargetAddr::from_str(&route.backend) {
+                        if let Ok(mut addrs) = t.resolve_cached(&dns_cache).await {
+                            if let Some(addr) = addrs.pop() {
+                                selected_backend_addr = addr;
+                            }
+                        }
+                    }
+                }
+            }
+            Ok(PeekOutcome::NotHttp(buf)) => {
+                initial_buf = buf;
+            }
+            Err(e) => {
+                let snapshot = connections.snapshot();
+                warn!(%client_addr, backend = %backend.address, error = %e, current = snapshot.current, total = snapshot.total, errors = snapshot.errors, "peek failed");
+            }
+        }
+    }
+
+    let upstream = match timeout(connect_timeout, TcpStream::connect(selected_backend_addr)).await {
         Ok(Ok(stream)) => stream,
         Ok(Err(e)) => {
             let snapshot = connections.snapshot();
-            warn!(%client_addr, backend = %destination, error = %e, current = snapshot.current, total = snapshot.total, errors = snapshot.errors, "failed to connect to backend");
+            warn!(%client_addr, backend = %selected_backend_addr, error = %e, current = snapshot.current, total = snapshot.total, errors = snapshot.errors, "failed to connect to backend");
             connections.increment_errors();
             connections.decrement();
             return;
         }
         Err(_) => {
             let snapshot = connections.snapshot();
-            warn!(%client_addr, backend = %destination, current = snapshot.current, total = snapshot.total, errors = snapshot.errors, "connect timeout");
+            warn!(%client_addr, backend = %selected_backend_addr, current = snapshot.current, total = snapshot.total, errors = snapshot.errors, "connect timeout");
             connections.increment_errors();
             connections.decrement();
             return;
         }
     };
+
+    // Replay buffered data if any (HTTP peek)
+    if !initial_buf.is_empty() {
+        let mut upstream = upstream;
+        if let Err(e) = replay_buffered(&mut upstream, &initial_buf).await {
+            let snapshot = connections.snapshot();
+            warn!(%client_addr, backend = %selected_backend_addr, error = %e, current = snapshot.current, total = snapshot.total, errors = snapshot.errors, "failed to replay buffered data");
+            connections.increment_errors();
+            connections.decrement();
+            return;
+        }
+        if let Err(e) = bidirectional_copy(client, upstream).await {
+            let snapshot = connections.snapshot();
+            warn!(%client_addr, backend = %backend.address, error = %e, current = snapshot.current, total = snapshot.total, errors = snapshot.errors, "forwarding ended with error");
+            connections.increment_errors();
+        } else {
+            let snapshot = connections.snapshot();
+            info!(%client_addr, backend = %backend.address, current = snapshot.current, total = snapshot.total, errors = snapshot.errors, "connection closed");
+        }
+        connections.decrement();
+        return;
+    }
 
     if let Err(e) = bidirectional_copy(client, upstream).await {
         let snapshot = connections.snapshot();
