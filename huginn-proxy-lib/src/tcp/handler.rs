@@ -13,6 +13,7 @@ use rand::{rng, Rng};
 use tokio::io;
 use tokio::io::AsyncWriteExt;
 use tokio::net::{TcpListener, TcpStream};
+use tokio::sync::watch;
 use tokio::time::timeout;
 use tracing::{info, warn};
 
@@ -24,18 +25,35 @@ pub struct TcpHandler {
 }
 
 impl TcpHandler {
-    pub fn new(config: Arc<Config>) -> Self {
+    pub fn new(config: Arc<Config>, connections: Arc<ConnectionCount>) -> Self {
         Self {
             config,
             rand_state: RandomState::default(),
-            connections: Arc::new(ConnectionCount::default()),
+            connections,
             dns_cache: Arc::new(DnsCache::default()),
         }
     }
 
-    pub async fn run(&self, listener: TcpListener) -> Result<(), String> {
+    pub async fn run(
+        &self,
+        listener: TcpListener,
+        shutdown: &mut watch::Receiver<bool>,
+    ) -> Result<(), String> {
         loop {
-            let (client, addr) = match listener.accept().await {
+            let accept_fut = listener.accept();
+            let result = tokio::select! {
+                res = accept_fut => res,
+                res = shutdown.changed() => {
+                    if res.is_ok() {
+                        info!("shutdown signal received, stopping accept loop");
+                        break;
+                    } else {
+                        // sender dropped; treat as no shutdown signal
+                        continue;
+                    }
+                }
+            };
+            let (client, addr) = match result {
                 Ok(pair) => pair,
                 Err(e) => {
                     let snapshot = self.connections.snapshot();
@@ -69,6 +87,7 @@ impl TcpHandler {
             let dns = self.dns_cache.clone();
             tokio::spawn(handle_conn(cfg, dns, client, backend, addr, counts));
         }
+        Ok(())
     }
 
     fn next_backend(&self, client_addr: &SocketAddr) -> Result<Backend, String> {

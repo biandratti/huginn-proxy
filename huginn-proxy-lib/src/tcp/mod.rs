@@ -5,6 +5,7 @@ use std::sync::Arc;
 use crate::config::Config;
 use thiserror::Error;
 use tokio::net::TcpListener;
+use tokio::sync::watch;
 use tracing::info;
 
 mod dns;
@@ -12,6 +13,7 @@ mod handler;
 pub mod metrics;
 
 pub use handler::TcpHandler;
+pub use metrics::{ConnectionCount, ConnectionSnapshot};
 
 #[derive(Debug, Error)]
 pub enum TcpError {
@@ -21,12 +23,19 @@ pub enum TcpError {
     Handler(String),
 }
 
-pub async fn run(config: Arc<Config>) -> Result<(), TcpError> {
+pub async fn run(
+    config: Arc<Config>,
+    counters: Arc<ConnectionCount>,
+    mut shutdown: watch::Receiver<bool>,
+) -> Result<(), TcpError> {
     let listener = TcpListener::bind(config.listen)
         .await
         .map_err(TcpError::Bind)?;
     info!(addr = ?config.listen, "tcp listener bound");
 
-    let handler = TcpHandler::new(config);
-    handler.run(listener).await.map_err(TcpError::Handler)
+    let handler = TcpHandler::new(config, counters);
+    handler
+        .run(listener, &mut shutdown)
+        .await
+        .map_err(TcpError::Handler)
 }

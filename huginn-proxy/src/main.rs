@@ -9,7 +9,7 @@ use tokio::signal;
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let counters = Arc::new(ConnectionCount::default());
-    let metrics_addr: SocketAddr = "127.0.0.1:9900".parse()?;
+    let metrics_addr: SocketAddr = "127.0.0.1:9900".parse()?; //TODO: get from settings
 
     let metrics =
         tokio::spawn(serve_prometheus_metrics(metrics_addr, counters.clone(), "huginn_tcp"));
