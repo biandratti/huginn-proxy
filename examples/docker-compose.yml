@@ -1,0 +1,25 @@
+version: "3.9"
+
+services:
+  proxy:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    command: ["/usr/local/bin/huginn-proxy", "/config/compose.toml"]
+    volumes:
+      - ./config/compose.toml:/config/compose.toml:ro
+    ports:
+      - "7000:7000"
+      - "9900:9900"
+    depends_on:
+      - backend_a
+      - backend_b
+
+  backend_a:
+    image: hashicorp/http-echo:0.2.3
+    command: ["-listen=:9000", "-text=backend-a"]
+
+  backend_b:
+    image: hashicorp/http-echo:0.2.3
+    command: ["-listen=:9000", "-text=backend-b"]
+
