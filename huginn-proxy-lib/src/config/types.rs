@@ -12,6 +12,8 @@ pub struct Config {
     #[serde(default)]
     pub peek_http: bool,
     #[serde(default)]
+    pub http: HttpConfig,
+    #[serde(default)]
     pub timeouts: Timeouts,
     #[serde(default)]
     pub telemetry: Telemetry,
@@ -30,6 +32,26 @@ pub struct Backend {
     pub address: String,
     #[serde(default)]
     pub weight: Option<u32>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HttpRoute {
+    pub prefix: String,
+    pub backend: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct HttpConfig {
+    #[serde(default)]
+    pub routes: Vec<HttpRoute>,
+    #[serde(default = "HttpConfig::default_max_peek_bytes")]
+    pub max_peek_bytes: usize,
+}
+
+impl HttpConfig {
+    pub const fn default_max_peek_bytes() -> usize {
+        8 * 1024
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -79,6 +101,10 @@ pub struct Telemetry {
     pub access_log: bool,
     #[serde(default)]
     pub basic_metrics: bool,
+    #[serde(default)]
+    pub metrics_addr: Option<SocketAddr>,
+    #[serde(default)]
+    pub log_level: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

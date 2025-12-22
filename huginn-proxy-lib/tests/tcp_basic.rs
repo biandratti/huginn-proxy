@@ -4,13 +4,14 @@ use std::net::{SocketAddr, TcpListener as StdTcpListener};
 use std::sync::Arc;
 use std::time::Duration;
 
+use huginn_proxy_lib::config::types::{HttpConfig, HttpRoute};
 use huginn_proxy_lib::config::{Backend, Config, LoadBalance, Mode, Telemetry, Timeouts};
 use huginn_proxy_lib::tcp;
 use huginn_proxy_lib::tcp::metrics::ConnectionCount;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
-use tokio::sync::watch;
-use tokio::time::sleep;
+use tokio::sync::{mpsc, watch};
+use tokio::time::{sleep, timeout};
 
 type TestResult<T> = Result<T, Box<dyn std::error::Error + Send + Sync>>;
 
@@ -54,8 +55,14 @@ fn make_config(listen: SocketAddr, backend: SocketAddr) -> Config {
         mode: Mode::Forward,
         balancing: LoadBalance::None,
         peek_http: false,
+        http: HttpConfig { routes: vec![], max_peek_bytes: HttpConfig::default_max_peek_bytes() },
         timeouts: Timeouts { connect_ms: 1_000, idle_ms: 5_000 },
-        telemetry: Telemetry { access_log: false, basic_metrics: false },
+        telemetry: Telemetry {
+            access_log: false,
+            basic_metrics: false,
+            metrics_addr: None,
+            log_level: None,
+        },
         tls: None,
         max_connections: None,
         backlog: None,
@@ -142,6 +149,155 @@ async fn tcp_connection_limit() -> TestResult<()> {
     let mut buf = [0u8; 4];
     let res = c2.read(&mut buf).await;
     assert!(res.is_err() || matches!(res, Ok(0)));
+
+    proxy.abort();
+    Ok(())
+}
+
+async fn spawn_recording_server() -> TestResult<(SocketAddr, mpsc::UnboundedReceiver<Vec<u8>>)> {
+    let addr = pick_free_port()?;
+    let (tx, rx) = mpsc::unbounded_channel();
+    tokio::spawn(async move {
+        let listener = match tokio::net::TcpListener::bind(addr).await {
+            Ok(l) => l,
+            Err(_) => return,
+        };
+        loop {
+            let Ok((mut s, _)) = listener.accept().await else {
+                continue;
+            };
+            let tx = tx.clone();
+            tokio::spawn(async move {
+                let mut buf = Vec::new();
+                if s.read_to_end(&mut buf).await.is_ok() {
+                    let _ = tx.send(buf);
+                }
+            });
+        }
+    });
+    // Give the server a moment to bind.
+    sleep(Duration::from_millis(50)).await;
+    Ok((addr, rx))
+}
+
+#[tokio::test]
+async fn tcp_http_routing_by_prefix() -> TestResult<()> {
+    let (a_addr, mut a_rx) = spawn_recording_server().await?;
+    let (b_addr, mut b_rx) = spawn_recording_server().await?;
+
+    let listen_addr = pick_free_port()?;
+    let mut cfg = make_config(listen_addr, b_addr); // default backend B
+    cfg.peek_http = true;
+    cfg.http.routes = vec![
+        HttpRoute { prefix: "/api".to_string(), backend: a_addr.to_string() },
+        HttpRoute { prefix: "/".to_string(), backend: b_addr.to_string() },
+    ];
+    let cfg = Arc::new(cfg);
+
+    let proxy = tokio::spawn({
+        let cfg = cfg.clone();
+        let counters = Arc::new(ConnectionCount::default());
+        let (_tx, rx) = watch::channel(false);
+        async move { tcp::run(cfg, counters, rx).await }
+    });
+
+    sleep(Duration::from_millis(50)).await;
+
+    // /api goes to backend A
+    {
+        let mut client = TcpStream::connect(listen_addr).await?;
+        client
+            .write_all(b"GET /api/test HTTP/1.1\r\nHost: x\r\n\r\n")
+            .await?;
+        client.shutdown().await?;
+        let buf = timeout(Duration::from_secs(1), a_rx.recv())
+            .await?
+            .ok_or("no data received on backend A")?;
+        let text = std::str::from_utf8(&buf)?;
+        assert!(text.starts_with("GET /api/test"));
+    }
+    // /other goes to backend B
+    {
+        let mut client = TcpStream::connect(listen_addr).await?;
+        client
+            .write_all(b"GET /other HTTP/1.1\r\nHost: x\r\n\r\n")
+            .await?;
+        client.shutdown().await?;
+        let buf = timeout(Duration::from_secs(1), b_rx.recv())
+            .await?
+            .ok_or("no data received on backend B")?;
+        let text = std::str::from_utf8(&buf)?;
+        assert!(text.starts_with("GET /other"));
+    }
+
+    proxy.abort();
+    Ok(())
+}
+
+#[tokio::test]
+async fn tcp_non_http_fallbacks_to_l4() -> TestResult<()> {
+    let (b_addr, mut b_rx) = spawn_recording_server().await?;
+    let listen_addr = pick_free_port()?;
+    let mut cfg = make_config(listen_addr, b_addr);
+    cfg.peek_http = true;
+    cfg.http.routes = vec![];
+    let cfg = Arc::new(cfg);
+
+    let proxy = tokio::spawn({
+        let cfg = cfg.clone();
+        let counters = Arc::new(ConnectionCount::default());
+        let (_tx, rx) = watch::channel(false);
+        async move { tcp::run(cfg, counters, rx).await }
+    });
+
+    sleep(Duration::from_millis(50)).await;
+
+    let mut client = TcpStream::connect(listen_addr).await?;
+    client.write_all(b"\x01\x02\x03\x04payload").await?;
+    client.shutdown().await?;
+    let buf = timeout(Duration::from_secs(1), b_rx.recv())
+        .await?
+        .ok_or("no data received on backend")?;
+    assert!(buf.starts_with(b"\x01\x02\x03\x04payload"));
+
+    proxy.abort();
+    Ok(())
+}
+
+#[tokio::test]
+async fn tcp_peek_disabled_uses_l4_backend() -> TestResult<()> {
+    let (a_addr, mut a_rx) = spawn_recording_server().await?;
+    let (b_addr, mut b_rx) = spawn_recording_server().await?;
+    let listen_addr = pick_free_port()?;
+    let mut cfg = make_config(listen_addr, a_addr); // L4 backend A
+    cfg.peek_http = false;
+    cfg.http.routes = vec![HttpRoute { prefix: "/api".into(), backend: b_addr.to_string() }];
+    let cfg = Arc::new(cfg);
+
+    let proxy = tokio::spawn({
+        let cfg = cfg.clone();
+        let counters = Arc::new(ConnectionCount::default());
+        let (_tx, rx) = watch::channel(false);
+        async move { tcp::run(cfg, counters, rx).await }
+    });
+
+    sleep(Duration::from_millis(50)).await;
+
+    let mut client = TcpStream::connect(listen_addr).await?;
+    client
+        .write_all(b"GET /api HTTP/1.1\r\nHost: x\r\n\r\n")
+        .await?;
+    client.shutdown().await?;
+    let buf = timeout(Duration::from_secs(2), a_rx.recv())
+        .await?
+        .ok_or("no data received on backend A")?;
+    let text = std::str::from_utf8(&buf)?;
+    assert!(text.starts_with("GET /api"));
+
+    // Backend B should not receive anything
+    assert!(timeout(Duration::from_millis(200), b_rx.recv())
+        .await
+        .is_err());
 
     proxy.abort();
     Ok(())
