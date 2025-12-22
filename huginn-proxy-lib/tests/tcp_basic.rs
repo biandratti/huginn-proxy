@@ -6,8 +6,10 @@ use std::time::Duration;
 
 use huginn_proxy_lib::config::{Backend, Config, LoadBalance, Mode, Telemetry, Timeouts};
 use huginn_proxy_lib::tcp;
+use huginn_proxy_lib::tcp::metrics::ConnectionCount;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
+use tokio::sync::watch;
 use tokio::time::sleep;
 
 type TestResult<T> = Result<T, Box<dyn std::error::Error + Send + Sync>>;
@@ -68,7 +70,9 @@ async fn tcp_forward_echo() -> TestResult<()> {
 
     let proxy = tokio::spawn({
         let cfg = cfg.clone();
-        async move { tcp::run(cfg).await }
+        let counters = Arc::new(ConnectionCount::default());
+        let (_tx, rx) = watch::channel(false);
+        async move { tcp::run(cfg, counters, rx).await }
     });
 
     // Give the proxy a moment to bind.
@@ -93,7 +97,9 @@ async fn tcp_backend_down() -> TestResult<()> {
 
     let proxy = tokio::spawn({
         let cfg = cfg.clone();
-        async move { tcp::run(cfg).await }
+        let counters = Arc::new(ConnectionCount::default());
+        let (_tx, rx) = watch::channel(false);
+        async move { tcp::run(cfg, counters, rx).await }
     });
 
     sleep(Duration::from_millis(50)).await;
@@ -119,7 +125,9 @@ async fn tcp_connection_limit() -> TestResult<()> {
 
     let proxy = tokio::spawn({
         let cfg = cfg.clone();
-        async move { tcp::run(cfg).await }
+        let counters = Arc::new(ConnectionCount::default());
+        let (_tx, rx) = watch::channel(false);
+        async move { tcp::run(cfg, counters, rx).await }
     });
 
     sleep(Duration::from_millis(50)).await;
