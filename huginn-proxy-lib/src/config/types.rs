@@ -101,6 +101,10 @@ pub struct Telemetry {
     pub access_log: bool,
     #[serde(default)]
     pub basic_metrics: bool,
+    #[serde(default)]
+    pub metrics_addr: Option<SocketAddr>,
+    #[serde(default)]
+    pub log_level: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

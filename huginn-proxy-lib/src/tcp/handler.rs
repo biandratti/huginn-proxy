@@ -183,7 +183,7 @@ async fn handle_conn(
     let mut initial_buf = Vec::new();
     let mut selected_backend_addr = destination;
     let max_peek = config.http.max_peek_bytes;
-    if config.peek_http || !config.http.routes.is_empty() {
+    if config.peek_http {
         match peek_request_line(&mut client, max_peek).await {
             Ok(PeekOutcome::Http(peeked)) => {
                 initial_buf = peeked.buffered.clone();

@@ -27,6 +27,11 @@ pub fn validate(config: &Config) -> Result<(), String> {
     if config.http.max_peek_bytes == 0 {
         return Err("http.max_peek_bytes must be > 0".into());
     }
+    if let Some(addr) = config.telemetry.metrics_addr {
+        if addr.port() == 0 {
+            return Err("telemetry.metrics_addr port must be > 0".into());
+        }
+    }
     if let Some(max) = config.max_connections {
         if max == 0 {
             return Err("max_connections must be > 0 when set".into());
