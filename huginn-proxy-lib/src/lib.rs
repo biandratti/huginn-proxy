@@ -3,3 +3,4 @@
 
 pub mod config;
 pub mod tcp;
+pub use tcp::metrics::serve_prometheus_metrics;

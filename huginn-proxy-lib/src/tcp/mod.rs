@@ -9,7 +9,7 @@ use tracing::info;
 
 mod dns;
 mod handler;
-mod metrics;
+pub mod metrics;
 
 pub use handler::TcpHandler;
 
