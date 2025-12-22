@@ -57,7 +57,12 @@ fn make_config(listen: SocketAddr, backend: SocketAddr) -> Config {
         peek_http: false,
         http: HttpConfig { routes: vec![], max_peek_bytes: HttpConfig::default_max_peek_bytes() },
         timeouts: Timeouts { connect_ms: 1_000, idle_ms: 5_000 },
-        telemetry: Telemetry { access_log: false, basic_metrics: false, metrics_addr: None, log_level: None },
+        telemetry: Telemetry {
+            access_log: false,
+            basic_metrics: false,
+            metrics_addr: None,
+            log_level: None,
+        },
         tls: None,
         max_connections: None,
         backlog: None,
@@ -201,7 +206,9 @@ async fn tcp_http_routing_by_prefix() -> TestResult<()> {
     // /api goes to backend A
     {
         let mut client = TcpStream::connect(listen_addr).await?;
-        client.write_all(b"GET /api/test HTTP/1.1\r\nHost: x\r\n\r\n").await?;
+        client
+            .write_all(b"GET /api/test HTTP/1.1\r\nHost: x\r\n\r\n")
+            .await?;
         client.shutdown().await?;
         let buf = timeout(Duration::from_secs(1), a_rx.recv())
             .await?
@@ -212,7 +219,9 @@ async fn tcp_http_routing_by_prefix() -> TestResult<()> {
     // /other goes to backend B
     {
         let mut client = TcpStream::connect(listen_addr).await?;
-        client.write_all(b"GET /other HTTP/1.1\r\nHost: x\r\n\r\n").await?;
+        client
+            .write_all(b"GET /other HTTP/1.1\r\nHost: x\r\n\r\n")
+            .await?;
         client.shutdown().await?;
         let buf = timeout(Duration::from_secs(1), b_rx.recv())
             .await?
@@ -275,7 +284,9 @@ async fn tcp_peek_disabled_uses_l4_backend() -> TestResult<()> {
     sleep(Duration::from_millis(50)).await;
 
     let mut client = TcpStream::connect(listen_addr).await?;
-    client.write_all(b"GET /api HTTP/1.1\r\nHost: x\r\n\r\n").await?;
+    client
+        .write_all(b"GET /api HTTP/1.1\r\nHost: x\r\n\r\n")
+        .await?;
     client.shutdown().await?;
     let buf = timeout(Duration::from_secs(2), a_rx.recv())
         .await?
@@ -284,7 +295,9 @@ async fn tcp_peek_disabled_uses_l4_backend() -> TestResult<()> {
     assert!(text.starts_with("GET /api"));
 
     // Backend B should not receive anything
-    assert!(timeout(Duration::from_millis(200), b_rx.recv()).await.is_err());
+    assert!(timeout(Duration::from_millis(200), b_rx.recv())
+        .await
+        .is_err());
 
     proxy.abort();
     Ok(())

@@ -5,8 +5,8 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use huginn_proxy_lib::config::load_from_path;
-use huginn_proxy_lib::tcp::metrics::{serve_prometheus_metrics, ConnectionCount};
 use huginn_proxy_lib::tcp;
+use huginn_proxy_lib::tcp::metrics::{serve_prometheus_metrics, ConnectionCount};
 use tokio::signal;
 use tokio::sync::watch;
 use tracing::info;
