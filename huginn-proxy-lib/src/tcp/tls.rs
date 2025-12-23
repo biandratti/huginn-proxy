@@ -8,9 +8,11 @@ use tokio_rustls::rustls::ServerConfig;
 use tokio_rustls::server::TlsStream;
 use tokio_rustls::TlsAcceptor;
 
+pub type TlsSignature = Option<String>;
+
 pub enum ClientStream {
     Plain(TcpStream),
-    Tls(Box<TlsStream<TcpStream>>),
+    Tls(Box<TlsStream<TcpStream>>, TlsSignature),
 }
 
 pub fn build_tls_acceptor(

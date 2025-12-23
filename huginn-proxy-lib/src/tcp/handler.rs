@@ -7,10 +7,12 @@ use std::time::Duration;
 
 use crate::config::{Backend, Config, LoadBalance};
 use crate::tcp::dns::{DnsCache, TargetAddr};
+use crate::tcp::fingerprint::HDR_TLS_FP;
 use crate::tcp::http_peek::{peek_request_line, replay_buffered, PeekOutcome};
 use crate::tcp::metrics::ConnectionCount;
 use crate::tcp::tls::ClientStream;
 use ahash::RandomState;
+use huginn_net_tls::tls_process::{is_tls_traffic, parse_tls_client_hello};
 use rand::{rng, Rng};
 use tokio::io;
 use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt};
@@ -100,8 +102,18 @@ impl TcpHandler {
             let tls = self.tls_acceptor.clone();
             tokio::spawn(async move {
                 let client_stream = if let Some(acceptor) = tls {
-                    match acceptor.accept(client).await {
-                        Ok(stream) => ClientStream::Tls(Box::new(stream)),
+                    let stream = client;
+                    let mut buf = [0u8; 4096];
+                    let tls_fp = match stream.peek(&mut buf).await {
+                        Ok(n) if n > 0 && is_tls_traffic(&buf[..n]) => {
+                            parse_tls_client_hello(&buf[..n])
+                                .ok()
+                                .map(|sig| sig.generate_ja4().full.value().to_string())
+                        }
+                        _ => None,
+                    };
+                    match acceptor.accept(stream).await {
+                        Ok(s) => ClientStream::Tls(Box::new(s), tls_fp),
                         Err(e) => {
                             let snapshot = counts.snapshot();
                             warn!(%addr, error = %e, current = snapshot.current, total = snapshot.total, errors = snapshot.errors, "tls handshake failed");
@@ -207,16 +219,20 @@ async fn handle_conn(
     };
 
     // Optional HTTP peek
-    let mut client: BoxedIo = match client {
-        ClientStream::Plain(s) => Box::new(s),
-        ClientStream::Tls(s) => Box::new(s),
+    let (mut client, tls_fp) = match client {
+        ClientStream::Plain(s) => (Box::new(s) as BoxedIo, None),
+        ClientStream::Tls(s, fp) => (Box::new(s) as BoxedIo, fp),
     };
     let mut initial_buf = Vec::new();
     let mut selected_backend_addr = destination;
     let max_peek = config.http.max_peek_bytes;
     if config.peek_http {
         match peek_request_line(&mut client, max_peek).await {
-            Ok(PeekOutcome::Http(peeked)) => {
+            Ok(PeekOutcome::Http(mut peeked)) => {
+                if let Some(fp) = tls_fp {
+                    let header = format!("\r\n{HDR_TLS_FP}: {fp}");
+                    peeked.buffered.extend_from_slice(header.as_bytes());
+                }
                 initial_buf = peeked.buffered.clone();
                 if let Some(route) = select_route(&peeked.path, &config.http) {
                     // resolve routed backend
