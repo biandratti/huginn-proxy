@@ -9,29 +9,40 @@ use crate::config::{Backend, Config, LoadBalance};
 use crate::tcp::dns::{DnsCache, TargetAddr};
 use crate::tcp::http_peek::{peek_request_line, replay_buffered, PeekOutcome};
 use crate::tcp::metrics::ConnectionCount;
+use crate::tcp::tls::ClientStream;
 use ahash::RandomState;
 use rand::{rng, Rng};
 use tokio::io;
-use tokio::io::AsyncWriteExt;
+use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::watch;
 use tokio::time::timeout;
 use tracing::{info, warn};
+
+trait IoStream: AsyncRead + AsyncWrite + Unpin + Send {}
+impl<T: AsyncRead + AsyncWrite + Unpin + Send> IoStream for T {}
+type BoxedIo = Box<dyn IoStream>;
 
 pub struct TcpHandler {
     config: Arc<Config>,
     rand_state: RandomState,
     connections: Arc<ConnectionCount>,
     dns_cache: Arc<DnsCache>,
+    tls_acceptor: Option<Arc<tokio_rustls::TlsAcceptor>>,
 }
 
 impl TcpHandler {
-    pub fn new(config: Arc<Config>, connections: Arc<ConnectionCount>) -> Self {
+    pub fn new(
+        config: Arc<Config>,
+        connections: Arc<ConnectionCount>,
+        tls_acceptor: Option<Arc<tokio_rustls::TlsAcceptor>>,
+    ) -> Self {
         Self {
             config,
             rand_state: RandomState::default(),
             connections,
             dns_cache: Arc::new(DnsCache::default()),
+            tls_acceptor,
         }
     }
 
@@ -86,7 +97,24 @@ impl TcpHandler {
             let cfg = self.config.clone();
             let counts = self.connections.clone();
             let dns = self.dns_cache.clone();
-            tokio::spawn(handle_conn(cfg, dns, client, backend, addr, counts));
+            let tls = self.tls_acceptor.clone();
+            tokio::spawn(async move {
+                let client_stream = if let Some(acceptor) = tls {
+                    match acceptor.accept(client).await {
+                        Ok(stream) => ClientStream::Tls(Box::new(stream)),
+                        Err(e) => {
+                            let snapshot = counts.snapshot();
+                            warn!(%addr, error = %e, current = snapshot.current, total = snapshot.total, errors = snapshot.errors, "tls handshake failed");
+                            counts.increment_errors();
+                            counts.decrement();
+                            return;
+                        }
+                    }
+                } else {
+                    ClientStream::Plain(client)
+                };
+                handle_conn(cfg, dns, client_stream, backend, addr, counts).await;
+            });
         }
         Ok(())
     }
@@ -138,7 +166,7 @@ fn select_route<'a>(
 async fn handle_conn(
     config: Arc<Config>,
     dns_cache: Arc<DnsCache>,
-    client: TcpStream,
+    client: ClientStream,
     backend: Backend,
     client_addr: std::net::SocketAddr,
     connections: Arc<ConnectionCount>,
@@ -179,7 +207,10 @@ async fn handle_conn(
     };
 
     // Optional HTTP peek
-    let mut client = client;
+    let mut client: BoxedIo = match client {
+        ClientStream::Plain(s) => Box::new(s),
+        ClientStream::Tls(s) => Box::new(s),
+    };
     let mut initial_buf = Vec::new();
     let mut selected_backend_addr = destination;
     let max_peek = config.http.max_peek_bytes;
@@ -236,7 +267,7 @@ async fn handle_conn(
             connections.decrement();
             return;
         }
-        if let Err(e) = bidirectional_copy(client, upstream).await {
+        if let Err(e) = bidirectional_copy(&mut client, &mut upstream).await {
             let snapshot = connections.snapshot();
             warn!(%client_addr, backend = %backend.address, error = %e, current = snapshot.current, total = snapshot.total, errors = snapshot.errors, "forwarding ended with error");
             connections.increment_errors();
@@ -248,7 +279,8 @@ async fn handle_conn(
         return;
     }
 
-    if let Err(e) = bidirectional_copy(client, upstream).await {
+    let mut upstream = upstream;
+    if let Err(e) = bidirectional_copy(&mut client, &mut upstream).await {
         let snapshot = connections.snapshot();
         warn!(%client_addr, backend = %backend.address, error = %e, current = snapshot.current, total = snapshot.total, errors = snapshot.errors, "forwarding ended with error");
         connections.increment_errors();
@@ -259,9 +291,13 @@ async fn handle_conn(
     connections.decrement();
 }
 
-async fn bidirectional_copy(mut client: TcpStream, mut upstream: TcpStream) -> io::Result<()> {
+async fn bidirectional_copy<C, U>(client: &mut C, upstream: &mut U) -> io::Result<()>
+where
+    C: AsyncRead + AsyncWrite + Unpin,
+    U: AsyncRead + AsyncWrite + Unpin,
+{
     // Simple duplex copy; relies on peer close or error to finish.
-    tokio::io::copy_bidirectional(&mut client, &mut upstream).await?;
+    tokio::io::copy_bidirectional(client, upstream).await?;
 
     // Attempt graceful shutdown
     let _ = client.shutdown().await;

@@ -17,10 +17,14 @@ path = "src/lib.rs"
 ahash.workspace = true
 dashmap.workspace = true
 rand.workspace = true
+rustls.workspace = true
+rustls-pemfile.workspace = true
 serde.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
+tokio-rustls.workspace = true
 toml.workspace = true
 tracing.workspace = true
+tracing-subscriber.workspace = true
 
 

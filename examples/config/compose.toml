@@ -1,10 +1,10 @@
 listen = "0.0.0.0:7000"
-mode = "forward"
+mode = "tls_termination"
 peek_http = true
 balancing = "none"
 
 backends = [
-  { address = "backend-b:9000" } # default
+  { address = "backend-b:9000" }
 ]
 
 [http]
@@ -22,4 +22,10 @@ idle_ms = 5000
 basic_metrics = true
 metrics_addr = "0.0.0.0:9900"
 log_level = "info"
+
+[tls]
+cert_path = "/config/certs/server.crt"
+key_path  = "/config/certs/server.key"
+alpn = ["http/1.1"]
+server_names = ["localhost"]
 
