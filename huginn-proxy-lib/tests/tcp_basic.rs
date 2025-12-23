@@ -1,5 +1,6 @@
 #![forbid(unsafe_code)]
 
+use std::io::Write;
 use std::net::{SocketAddr, TcpListener as StdTcpListener};
 use std::sync::Arc;
 use std::time::Duration;
@@ -8,10 +9,15 @@ use huginn_proxy_lib::config::types::{HttpConfig, HttpRoute};
 use huginn_proxy_lib::config::{Backend, Config, LoadBalance, Mode, Telemetry, Timeouts};
 use huginn_proxy_lib::tcp;
 use huginn_proxy_lib::tcp::metrics::ConnectionCount;
+use rcgen::generate_simple_self_signed;
+use rustls::pki_types::{CertificateDer, ServerName};
+use rustls::{ClientConfig, RootCertStore};
+use tempfile::NamedTempFile;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio::sync::{mpsc, watch};
 use tokio::time::{sleep, timeout};
+use tokio_rustls::TlsConnector;
 
 type TestResult<T> = Result<T, Box<dyn std::error::Error + Send + Sync>>;
 
@@ -180,6 +186,24 @@ async fn spawn_recording_server() -> TestResult<(SocketAddr, mpsc::UnboundedRece
     Ok((addr, rx))
 }
 
+fn write_temp_file(contents: &str) -> TestResult<NamedTempFile> {
+    let mut file = NamedTempFile::new()?;
+    file.write_all(contents.as_bytes())?;
+    Ok(file)
+}
+
+fn make_self_signed_cert() -> TestResult<(NamedTempFile, NamedTempFile, CertificateDer<'static>)> {
+    let cert = generate_simple_self_signed(vec!["localhost".into()])?;
+    let cert_pem = cert.cert.pem();
+    let key_pem = cert.signing_key.serialize_pem();
+
+    let cert_file = write_temp_file(&cert_pem)?;
+    let key_file = write_temp_file(&key_pem)?;
+
+    let cert_der = cert.cert.der().clone();
+    Ok((cert_file, key_file, cert_der))
+}
+
 #[tokio::test]
 async fn tcp_http_routing_by_prefix() -> TestResult<()> {
     let (a_addr, mut a_rx) = spawn_recording_server().await?;
@@ -298,6 +322,78 @@ async fn tcp_peek_disabled_uses_l4_backend() -> TestResult<()> {
     assert!(timeout(Duration::from_millis(200), b_rx.recv())
         .await
         .is_err());
+
+    proxy.abort();
+    Ok(())
+}
+
+#[tokio::test]
+async fn tcp_tls_termination_http_routing() -> TestResult<()> {
+    let (a_addr, mut a_rx) = spawn_recording_server().await?;
+    let (b_addr, mut b_rx) = spawn_recording_server().await?;
+    let listen_addr = pick_free_port()?;
+    let (cert_file, key_file, cert_der) = make_self_signed_cert()?;
+
+    let mut cfg = make_config(listen_addr, b_addr); // default backend B
+    cfg.mode = Mode::TlsTermination;
+    cfg.peek_http = true;
+    cfg.http.routes = vec![
+        HttpRoute { prefix: "/api".to_string(), backend: a_addr.to_string() },
+        HttpRoute { prefix: "/".to_string(), backend: b_addr.to_string() },
+    ];
+    cfg.tls = Some(huginn_proxy_lib::config::types::TlsConfig {
+        cert_path: cert_file.path().to_string_lossy().to_string(),
+        key_path: key_file.path().to_string_lossy().to_string(),
+        alpn: vec!["http/1.1".into()],
+        server_names: vec!["localhost".into()],
+    });
+    let cfg = Arc::new(cfg);
+
+    let proxy = tokio::spawn({
+        let cfg = cfg.clone();
+        let counters = Arc::new(ConnectionCount::default());
+        let (_tx, rx) = watch::channel(false);
+        async move { tcp::run(cfg, counters, rx).await }
+    });
+
+    sleep(Duration::from_millis(50)).await;
+
+    // Build TLS client with self-signed root
+    let mut roots = RootCertStore::empty();
+    let _ = roots.add_parsable_certificates([cert_der]);
+    let client_config = ClientConfig::builder()
+        .with_root_certificates(roots)
+        .with_no_client_auth();
+    let connector = TlsConnector::from(Arc::new(client_config));
+    let server_name = ServerName::try_from("localhost")?;
+
+    // /api goes to backend A
+    {
+        let tcp = TcpStream::connect(listen_addr).await?;
+        let mut tls = connector.connect(server_name.clone(), tcp).await?;
+        tls.write_all(b"GET /api/test HTTP/1.1\r\nHost: localhost\r\n\r\n")
+            .await?;
+        tls.shutdown().await?;
+        let buf = timeout(Duration::from_secs(1), a_rx.recv())
+            .await?
+            .ok_or("no data received on backend A")?;
+        let text = std::str::from_utf8(&buf)?;
+        assert!(text.starts_with("GET /api/test"));
+    }
+
+    // /other goes to backend B
+    {
+        let tcp = TcpStream::connect(listen_addr).await?;
+        let mut tls = connector.connect(server_name.clone(), tcp).await?;
+        tls.write_all(b"GET /other HTTP/1.1\r\nHost: localhost\r\n\r\n")
+            .await?;
+        tls.shutdown().await?;
+        let buf = timeout(Duration::from_secs(1), b_rx.recv())
+            .await?
+            .ok_or("no data received on backend B")?;
+        let text = std::str::from_utf8(&buf)?;
+        assert!(text.starts_with("GET /other"));
+    }
 
     proxy.abort();
     Ok(())
