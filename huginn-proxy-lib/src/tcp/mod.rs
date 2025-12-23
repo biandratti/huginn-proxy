@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use crate::config::Config;
+use crate::config::{Config, Mode};
 use thiserror::Error;
 use tokio::net::TcpListener;
 use tokio::sync::watch;
@@ -12,6 +12,7 @@ mod dns;
 mod handler;
 mod http_peek;
 pub mod metrics;
+mod tls;
 
 pub use handler::TcpHandler;
 pub use metrics::{ConnectionCount, ConnectionSnapshot};
@@ -34,9 +35,19 @@ pub async fn run(
         .map_err(TcpError::Bind)?;
     info!(addr = ?config.listen, "tcp listener bound");
 
-    let handler = TcpHandler::new(config, counters);
-    handler
-        .run(listener, &mut shutdown)
-        .await
-        .map_err(TcpError::Handler)
+    let tls_acceptor = if matches!(config.mode, Mode::TlsTermination) {
+        let tls_cfg = config
+            .tls
+            .as_ref()
+            .ok_or_else(|| TcpError::Handler("tls config required for tls_termination".into()))?;
+        Some(
+            tls::build_tls_acceptor(&tls_cfg.cert_path, &tls_cfg.key_path, &tls_cfg.alpn)
+                .map_err(TcpError::Handler)?,
+        )
+    } else {
+        None
+    };
+
+    let handler = TcpHandler::new(config, counters, tls_acceptor);
+    handler.run(listener, &mut shutdown).await.map_err(TcpError::Handler)
 }
