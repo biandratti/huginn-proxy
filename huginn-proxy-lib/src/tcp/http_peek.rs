@@ -1,6 +1,6 @@
 #![forbid(unsafe_code)]
 
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 
 #[derive(Debug, Clone)]
@@ -23,7 +23,7 @@ pub struct PeekedHttp {
 /// Returns the parsed request-line and the buffered bytes (to be replayed to upstream),
 /// or the buffered bytes if it doesn't look like HTTP.
 pub async fn peek_request_line(
-    stream: &mut TcpStream,
+    stream: &mut (impl AsyncRead + Unpin),
     max_peek: usize,
 ) -> std::io::Result<PeekOutcome> {
     let mut buf = Vec::with_capacity(512);
