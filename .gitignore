@@ -6,3 +6,5 @@ cobertura.xml
 **/Cargo.lock
 !Cargo.lock
 /data
+/examples/certs/
+/examples/certs/*

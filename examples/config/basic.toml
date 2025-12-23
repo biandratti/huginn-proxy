@@ -10,7 +10,6 @@ backends = [
 [http]
 max_peek_bytes = 8192
 routes = [
-  # Optional prefix routing; remove or adjust as needed
   { prefix = "/", backend = "127.0.0.1:9000" }
 ]
 

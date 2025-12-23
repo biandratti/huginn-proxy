@@ -131,7 +131,6 @@ jobs:
         crate:
           - huginn-proxy
           - huginn-proxy-lib
-          - huginn-proxy-tls
     steps:
       - name: Checkout
         uses: actions/checkout@v6

@@ -25,7 +25,6 @@ jobs:
         crate:
           - huginn-proxy
           - huginn-proxy-lib
-          - huginn-proxy-tls
     steps:
       - uses: actions/checkout@v6
       

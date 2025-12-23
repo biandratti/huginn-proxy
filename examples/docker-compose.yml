@@ -8,6 +8,7 @@ services:
     command: ["/usr/local/bin/huginn-proxy", "/config/compose.toml"]
     volumes:
       - ./config/compose.toml:/config/compose.toml:ro
+      - ./certs:/config/certs:ro
     ports:
       - "7000:7000"
       - "9900:9900"

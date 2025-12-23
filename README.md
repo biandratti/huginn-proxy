@@ -27,6 +27,4 @@ Reverse proxy focused on fingerprinting (TCP SYN, HTTP, TLS) with high-performan
   - Prometheus metrics (if `telemetry.basic_metrics` is enabled):
     - `curl http://<metrics_addr>/metrics`
 
-With Docker Compose (includes two backends and Prometheus metrics):
-- `docker compose -f examples/docker-compose.yml up --build`
-- Proxy listens on `localhost:7000`, metrics on `localhost:9900`.
+With Docker Compose (see `examples/`):
