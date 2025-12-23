@@ -49,5 +49,8 @@ pub async fn run(
     };
 
     let handler = TcpHandler::new(config, counters, tls_acceptor);
-    handler.run(listener, &mut shutdown).await.map_err(TcpError::Handler)
+    handler
+        .run(listener, &mut shutdown)
+        .await
+        .map_err(TcpError::Handler)
 }

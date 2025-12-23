@@ -4,6 +4,7 @@ use std::fs::File;
 use std::io::BufReader;
 use std::sync::Arc;
 
+use rustls_pemfile::{certs, pkcs8_private_keys, rsa_private_keys};
 use tokio::net::TcpStream;
 use tokio_rustls::rustls::{
     pki_types::{CertificateDer, PrivateKeyDer},
@@ -11,7 +12,6 @@ use tokio_rustls::rustls::{
 };
 use tokio_rustls::server::TlsStream;
 use tokio_rustls::TlsAcceptor;
-use rustls_pemfile::{certs, pkcs8_private_keys, rsa_private_keys};
 
 pub enum ClientStream {
     Plain(TcpStream),
@@ -71,4 +71,3 @@ fn load_key(path: &str) -> Result<PrivateKeyDer<'static>, String> {
     }
     Err("no private keys found (pkcs8 or rsa)".into())
 }
-
