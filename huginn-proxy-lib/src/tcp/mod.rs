@@ -9,6 +9,7 @@ use tokio::sync::watch;
 use tracing::info;
 
 mod dns;
+pub mod fingerprint;
 mod handler;
 mod http_peek;
 pub mod metrics;

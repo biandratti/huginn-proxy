@@ -17,10 +17,12 @@ services:
       - backend-b
 
   backend-a:
-    image: hashicorp/http-echo:0.2.3
-    command: ["-listen=:9000", "-text=backend-a"]
+    image: ealen/echo-server:latest
+    environment:
+      - PORT=9000
 
   backend-b:
-    image: hashicorp/http-echo:0.2.3
-    command: ["-listen=:9000", "-text=backend-b"]
+    image: ealen/echo-server:latest
+    environment:
+      - PORT=9000
 

@@ -16,6 +16,7 @@ path = "src/lib.rs"
 [dependencies]
 ahash.workspace = true
 dashmap.workspace = true
+huginn-net-tls.workspace = true
 rand.workspace = true
 rustls.workspace = true
 rustls-pki-types.workspace = true
