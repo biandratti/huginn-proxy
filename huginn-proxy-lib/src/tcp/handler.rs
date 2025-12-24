@@ -7,7 +7,7 @@ use std::time::Duration;
 
 use crate::config::{Backend, Config, LoadBalance};
 use crate::tcp::dns::{DnsCache, TargetAddr};
-use crate::tcp::fingerprint::HDR_TLS_FP;
+use crate::tcp::fingerprint::HDR_HUGINN_NET_TLS;
 use crate::tcp::http_peek::{peek_request_line, replay_buffered, PeekOutcome};
 use crate::tcp::metrics::ConnectionCount;
 use crate::tcp::tls::ClientStream;
@@ -218,7 +218,6 @@ async fn handle_conn(
         }
     };
 
-    // Optional HTTP peek
     let (mut client, tls_fp) = match client {
         ClientStream::Plain(s) => (Box::new(s) as BoxedIo, None),
         ClientStream::Tls(s, fp) => (Box::new(s) as BoxedIo, fp),
@@ -230,8 +229,16 @@ async fn handle_conn(
         match peek_request_line(&mut client, max_peek).await {
             Ok(PeekOutcome::Http(mut peeked)) => {
                 if let Some(fp) = tls_fp {
-                    let header = format!("\r\n{HDR_TLS_FP}: {fp}");
-                    peeked.buffered.extend_from_slice(header.as_bytes());
+                    if let Some(delim_start) =
+                        peeked.buffered.windows(4).rposition(|w| w == b"\r\n\r\n")
+                    {
+                        let header = format!("\r\n{HDR_HUGINN_NET_TLS}: {fp}\r\n");
+                        let mut with_fp = Vec::with_capacity(peeked.buffered.len() + header.len());
+                        with_fp.extend_from_slice(&peeked.buffered[..delim_start]);
+                        with_fp.extend_from_slice(header.as_bytes());
+                        with_fp.extend_from_slice(&peeked.buffered[delim_start..]);
+                        peeked.buffered = with_fp;
+                    }
                 }
                 initial_buf = peeked.buffered.clone();
                 if let Some(route) = select_route(&peeked.path, &config.http) {
