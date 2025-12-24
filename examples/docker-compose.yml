@@ -17,12 +17,12 @@ services:
       - backend-b
 
   backend-a:
-    image: ealen/echo-server:latest
+    image: ealen/echo-server:0.9.2
     environment:
       - PORT=9000
 
   backend-b:
-    image: ealen/echo-server:latest
+    image: ealen/echo-server:0.9.2
     environment:
       - PORT=9000
 

@@ -29,3 +29,7 @@ key_path  = "/config/certs/server.key"
 alpn = ["http/1.1"]
 server_names = ["localhost"]
 
+[fingerprint]
+tls_enabled = true
+tcp_enabled = false
+http_enabled = false

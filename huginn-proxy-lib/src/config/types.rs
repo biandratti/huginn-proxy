@@ -18,6 +18,8 @@ pub struct Config {
     #[serde(default)]
     pub telemetry: Telemetry,
     #[serde(default)]
+    pub fingerprint: FingerprintConfig,
+    #[serde(default)]
     pub tls: Option<TlsConfig>,
     /// Optional maximum concurrent connections across the listener. When None, unbounded.
     #[serde(default)]
@@ -107,6 +109,16 @@ pub struct Telemetry {
     pub log_level: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct FingerprintConfig {
+    #[serde(default)]
+    pub tls_enabled: bool,
+    #[serde(default)]
+    pub tcp_enabled: bool,
+    #[serde(default)]
+    pub http_enabled: bool,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TlsConfig {
     pub cert_path: String,
@@ -115,4 +127,6 @@ pub struct TlsConfig {
     pub alpn: Vec<String>,
     #[serde(default)]
     pub server_names: Vec<String>,
+    #[serde(default)]
+    pub enable_fingerprint: bool,
 }

@@ -19,6 +19,10 @@ idle_ms = 5000
 
 [telemetry]
 basic_metrics = true
-metrics_addr = "127.0.0.1:9900" # required when basic_metrics = true
+metrics_addr = "127.0.0.1:9900"
 log_level = "info"
 
+[fingerprint]
+tls_enabled = false
+tcp_enabled = false
+http_enabled = false
