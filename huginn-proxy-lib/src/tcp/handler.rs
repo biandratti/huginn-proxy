@@ -233,7 +233,8 @@ async fn handle_conn(
                         peeked.buffered.windows(4).rposition(|w| w == b"\r\n\r\n")
                     {
                         let header = format!("\r\n{HDR_HUGINN_NET_TLS}: {fp}\r\n");
-                        let mut with_fp = Vec::with_capacity(peeked.buffered.len() + header.len());
+                        let cap = peeked.buffered.len().saturating_add(header.len());
+                        let mut with_fp = Vec::with_capacity(cap);
                         with_fp.extend_from_slice(&peeked.buffered[..delim_start]);
                         with_fp.extend_from_slice(header.as_bytes());
                         with_fp.extend_from_slice(&peeked.buffered[delim_start..]);
