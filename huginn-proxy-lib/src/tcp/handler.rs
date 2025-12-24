@@ -104,13 +104,17 @@ impl TcpHandler {
                 let client_stream = if let Some(acceptor) = tls {
                     let stream = client;
                     let mut buf = [0u8; 4096];
-                    let tls_fp = match stream.peek(&mut buf).await {
-                        Ok(n) if n > 0 && is_tls_traffic(&buf[..n]) => {
-                            parse_tls_client_hello(&buf[..n])
-                                .ok()
-                                .map(|sig| sig.generate_ja4().full.value().to_string())
+                    let tls_fp = if cfg.fingerprint.tls_enabled {
+                        match stream.peek(&mut buf).await {
+                            Ok(n) if n > 0 && is_tls_traffic(&buf[..n]) => {
+                                parse_tls_client_hello(&buf[..n])
+                                    .ok()
+                                    .map(|sig| sig.generate_ja4().full.value().to_string())
+                            }
+                            _ => None,
                         }
-                        _ => None,
+                    } else {
+                        None
                     };
                     match acceptor.accept(stream).await {
                         Ok(s) => ClientStream::Tls(Box::new(s), tls_fp),

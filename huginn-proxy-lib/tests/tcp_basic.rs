@@ -5,7 +5,7 @@ use std::net::{SocketAddr, TcpListener as StdTcpListener};
 use std::sync::Arc;
 use std::time::Duration;
 
-use huginn_proxy_lib::config::types::{HttpConfig, HttpRoute};
+use huginn_proxy_lib::config::types::{FingerprintConfig, HttpConfig, HttpRoute};
 use huginn_proxy_lib::config::{Backend, Config, LoadBalance, Mode, Telemetry, Timeouts};
 use huginn_proxy_lib::tcp;
 use huginn_proxy_lib::tcp::metrics::ConnectionCount;
@@ -69,6 +69,7 @@ fn make_config(listen: SocketAddr, backend: SocketAddr) -> Config {
             metrics_addr: None,
             log_level: None,
         },
+        fingerprint: FingerprintConfig::default(),
         tls: None,
         max_connections: None,
         backlog: None,
@@ -346,6 +347,7 @@ async fn tcp_tls_termination_http_routing() -> TestResult<()> {
         key_path: key_file.path().to_string_lossy().to_string(),
         alpn: vec!["http/1.1".into()],
         server_names: vec!["localhost".into()],
+        enable_fingerprint: true,
     });
     let cfg = Arc::new(cfg);
 
