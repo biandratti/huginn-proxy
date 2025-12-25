@@ -1,35 +1,16 @@
 listen = "0.0.0.0:7000"
-mode = "tls_termination"
-peek_http = true
-balancing = "none"
 
 backends = [
+  { address = "backend-a:9000" },
   { address = "backend-b:9000" }
 ]
 
-[http]
-max_peek_bytes = 8192
 routes = [
   { prefix = "/api", backend = "backend-a:9000" },
-  { prefix = "/", backend = "backend-b:9000" }
+  { prefix = "/",   backend = "backend-b:9000" }
 ]
-
-[timeouts]
-connect_ms = 1000
-idle_ms = 5000
-
-[telemetry]
-basic_metrics = true
-metrics_addr = "0.0.0.0:9900"
-log_level = "info"
 
 [tls]
 cert_path = "/config/certs/server.crt"
 key_path  = "/config/certs/server.key"
-alpn = ["http/1.1"]
-server_names = ["localhost"]
-
-[fingerprint]
-tls_enabled = true
-tcp_enabled = false
-http_enabled = false
+alpn = ["h2"]  # fuerza h2 hacia el cliente
