@@ -30,7 +30,9 @@ pub struct Config {
     pub tls: Option<TlsConfig>,
 }
 
-pub fn load_from_path<P: AsRef<Path>>(p: P) -> Result<Config, Box<dyn std::error::Error + Send + Sync>> {
+pub fn load_from_path<P: AsRef<Path>>(
+    p: P,
+) -> Result<Config, Box<dyn std::error::Error + Send + Sync>> {
     let txt = fs::read_to_string(p)?;
     let cfg: Config = toml::from_str(&txt)?;
     Ok(cfg)

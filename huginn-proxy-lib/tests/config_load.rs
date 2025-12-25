@@ -60,4 +60,3 @@ alpn = ["h2"]
     assert_eq!(tls.alpn, vec!["h2"]);
     Ok(())
 }
-

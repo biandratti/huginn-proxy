@@ -1,16 +1,21 @@
 #![forbid(unsafe_code)]
 
+use std::pin::Pin;
 use std::sync::Arc;
+use std::task::{Context, Poll};
 
 use config::{Config, Route, TlsConfig};
+use http::StatusCode;
+use http_body_util::{combinators::BoxBody, BodyExt, Full};
+use huginn_net_tls::tls_process::parse_tls_client_hello;
 use hyper::body::Incoming;
+use hyper::header::{HeaderName, HeaderValue};
 use hyper::{Request, Response};
 use hyper_util::client::legacy::connect::HttpConnector;
 use hyper_util::client::legacy::Client;
 use hyper_util::rt::{TokioExecutor, TokioIo};
 use hyper_util::server::conn::auto::Builder as ConnBuilder;
-use http_body_util::{combinators::BoxBody, BodyExt, Full};
-use http::StatusCode;
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, ReadBuf};
 use tokio::net::TcpListener;
 use tokio_rustls::rustls::{self, ServerConfig as RustlsServerConfig};
 use tokio_rustls::TlsAcceptor;
@@ -35,6 +40,101 @@ fn bad_gateway() -> Response<RespBody> {
     resp
 }
 
+fn tls_header_value<IO>(
+    ja4: &Option<String>,
+    tls: &tokio_rustls::server::TlsStream<IO>,
+) -> Option<HeaderValue>
+where
+    IO: AsyncRead + AsyncWrite + Unpin,
+{
+    let conn = tls.get_ref().1;
+    let alpn = conn
+        .alpn_protocol()
+        .map(|p| String::from_utf8_lossy(p).into_owned())
+        .unwrap_or_else(|| "-".to_string());
+    let mut parts = Vec::new();
+    if let Some(f) = ja4 {
+        parts.push(format!("ja4={f}"));
+    }
+    parts.push(format!("alpn={alpn}"));
+    HeaderValue::from_str(&parts.join(";")).ok()
+}
+
+struct PrefixedStream<S> {
+    prefix: Vec<u8>,
+    offset: usize,
+    inner: S,
+}
+
+impl<S> PrefixedStream<S> {
+    fn new(prefix: Vec<u8>, inner: S) -> Self {
+        Self { prefix, offset: 0, inner }
+    }
+}
+
+impl<S: AsyncRead + Unpin> AsyncRead for PrefixedStream<S> {
+    fn poll_read(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &mut ReadBuf<'_>,
+    ) -> Poll<std::io::Result<()>> {
+        if self.offset < self.prefix.len() {
+            let remaining = &self.prefix[self.offset..];
+            let to_copy = remaining.len().min(buf.remaining());
+            buf.put_slice(&remaining[..to_copy]);
+            self.offset = self.offset.saturating_add(to_copy);
+            return Poll::Ready(Ok(()));
+        }
+        Pin::new(&mut self.inner).poll_read(cx, buf)
+    }
+}
+
+impl<S: AsyncWrite + Unpin> AsyncWrite for PrefixedStream<S> {
+    fn poll_write(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        data: &[u8],
+    ) -> Poll<std::io::Result<usize>> {
+        Pin::new(&mut self.inner).poll_write(cx, data)
+    }
+
+    fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
+        Pin::new(&mut self.inner).poll_flush(cx)
+    }
+
+    fn poll_shutdown(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
+        Pin::new(&mut self.inner).poll_shutdown(cx)
+    }
+}
+
+async fn read_client_hello(
+    stream: &mut tokio::net::TcpStream,
+) -> std::io::Result<(Vec<u8>, Option<String>)> {
+    let mut buf = Vec::with_capacity(8192);
+    loop {
+        if buf.len() >= 5 {
+            let len = u16::from_be_bytes([buf[3], buf[4]]) as usize;
+            let needed = len.saturating_add(5);
+            if buf.len() >= needed {
+                break;
+            }
+        }
+        let read = stream.read_buf(&mut buf).await?;
+        if read == 0 {
+            break;
+        }
+        if buf.len() > 64 * 1024 {
+            break;
+        }
+    }
+
+    let ja4 = parse_tls_client_hello(&buf)
+        .ok()
+        .map(|sig| sig.generate_ja4().full.value().to_string());
+
+    Ok((buf, ja4))
+}
+
 fn build_rustls(cfg: &TlsConfig) -> Result<TlsAcceptor, BoxError> {
     let certs = {
         let bytes = std::fs::read(&cfg.cert_path)?;
@@ -44,7 +144,8 @@ fn build_rustls(cfg: &TlsConfig) -> Result<TlsAcceptor, BoxError> {
     let key = {
         let bytes = std::fs::read(&cfg.key_path)?;
         let mut reader = std::io::BufReader::new(&bytes[..]);
-        let mut keys = rustls_pemfile::pkcs8_private_keys(&mut reader).collect::<Result<Vec<_>, _>>()?;
+        let mut keys =
+            rustls_pemfile::pkcs8_private_keys(&mut reader).collect::<Result<Vec<_>, _>>()?;
         let Some(k) = keys.pop() else {
             return Err("no private key found".into());
         };
@@ -62,14 +163,24 @@ fn build_rustls(cfg: &TlsConfig) -> Result<TlsAcceptor, BoxError> {
 }
 
 fn pick_route<'a>(path: &str, routes: &'a [Route]) -> Option<&'a str> {
-    routes.iter().find(|r| path.starts_with(&r.prefix)).map(|r| r.backend.as_str())
+    routes
+        .iter()
+        .find(|r| path.starts_with(&r.prefix))
+        .map(|r| r.backend.as_str())
 }
 
-async fn forward(req: Request<Incoming>, client: HttpClient, backend: String) -> Result<Response<RespBody>, BoxError> {
+async fn forward(
+    req: Request<Incoming>,
+    client: HttpClient,
+    backend: String,
+) -> Result<Response<RespBody>, BoxError> {
     let uri = format!(
         "http://{}{}",
         backend,
-        req.uri().path_and_query().map(|pq| pq.as_str()).unwrap_or("")
+        req.uri()
+            .path_and_query()
+            .map(|pq| pq.as_str())
+            .unwrap_or("")
     )
     .parse()?;
     let (mut parts, body) = req.into_parts();
@@ -105,43 +216,58 @@ pub async fn run(config: Arc<Config>) -> Result<(), BoxError> {
         let rr_idx = rr_idx.clone();
         let tls_acceptor = tls_acceptor.clone();
         tokio::spawn(async move {
-            let svc = hyper::service::service_fn(move |req: Request<Incoming>| {
-                let client = client.clone();
-                let routes = routes.clone();
-                let backend_list = backend_list.clone();
-                let rr_idx = rr_idx.clone();
-                async move {
-                    // routing by prefix
-                    let path = req.uri().path();
-                    let backend = if let Some(target) = pick_route(path, &routes) {
-                        target.to_string()
-                    } else {
-                        if backend_list.is_empty() {
-                            let resp = bad_gateway();
-                            return Ok::<_, hyper::Error>(resp);
-                        }
-                        let mut guard = rr_idx.lock().await;
-                        let len = backend_list.len();
-                        let g = *guard;
-                        let idx = g.checked_rem(len).unwrap_or(0);
-                        *guard = guard.wrapping_add(1);
-                        backend_list[idx].address.clone()
-                    };
-
-                    match forward(req, client, backend).await {
-                        Ok(resp) => Ok::<_, hyper::Error>(resp),
-                        Err(_) => {
-                            let resp = bad_gateway();
-                            Ok::<_, hyper::Error>(resp)
-                        }
-                    }
-                }
-            });
-
+            let mut stream = stream;
             // TLS if configured
             if let Some(acc) = tls_acceptor {
-                match acc.accept(stream).await {
+                let (prefix, ja4) = match read_client_hello(&mut stream).await {
+                    Ok(v) => v,
+                    Err(e) => {
+                        warn!(?peer, error = %e, "failed to read client hello");
+                        return;
+                    }
+                };
+                let prefixed = PrefixedStream::new(prefix, stream);
+                match acc.accept(prefixed).await {
                     Ok(tls) => {
+                        let tls_header = tls_header_value(&ja4, &tls);
+                        let svc = hyper::service::service_fn(move |mut req: Request<Incoming>| {
+                            let client = client.clone();
+                            let routes = routes.clone();
+                            let backend_list = backend_list.clone();
+                            let rr_idx = rr_idx.clone();
+                            let tls_header = tls_header.clone();
+                            async move {
+                                if let Some(hv) = tls_header.clone() {
+                                    req.headers_mut()
+                                        .insert(HeaderName::from_static("x-huginn-net-tls"), hv);
+                                }
+                                // routing by prefix
+                                let path = req.uri().path();
+                                let backend = if let Some(target) = pick_route(path, &routes) {
+                                    target.to_string()
+                                } else {
+                                    if backend_list.is_empty() {
+                                        let resp = bad_gateway();
+                                        return Ok::<_, hyper::Error>(resp);
+                                    }
+                                    let mut guard = rr_idx.lock().await;
+                                    let len = backend_list.len();
+                                    let g = *guard;
+                                    let idx = g.checked_rem(len).unwrap_or(0);
+                                    *guard = guard.wrapping_add(1);
+                                    backend_list[idx].address.clone()
+                                };
+
+                                match forward(req, client, backend).await {
+                                    Ok(resp) => Ok::<_, hyper::Error>(resp),
+                                    Err(_) => {
+                                        let resp = bad_gateway();
+                                        Ok::<_, hyper::Error>(resp)
+                                    }
+                                }
+                            }
+                        });
+
                         if let Err(e) = builder.serve_connection(TokioIo::new(tls), svc).await {
                             warn!(?peer, error = %e, "serve_connection error");
                         }
@@ -150,8 +276,41 @@ pub async fn run(config: Arc<Config>) -> Result<(), BoxError> {
                         warn!(?peer, error = %e, "tls accept error");
                     }
                 }
-            } else if let Err(e) = builder.serve_connection(TokioIo::new(stream), svc).await {
-                warn!(?peer, error = %e, "serve_connection error");
+            } else {
+                let svc = hyper::service::service_fn(move |req: Request<Incoming>| {
+                    let client = client.clone();
+                    let routes = routes.clone();
+                    let backend_list = backend_list.clone();
+                    let rr_idx = rr_idx.clone();
+                    async move {
+                        let path = req.uri().path();
+                        let backend = if let Some(target) = pick_route(path, &routes) {
+                            target.to_string()
+                        } else {
+                            if backend_list.is_empty() {
+                                let resp = bad_gateway();
+                                return Ok::<_, hyper::Error>(resp);
+                            }
+                            let mut guard = rr_idx.lock().await;
+                            let len = backend_list.len();
+                            let g = *guard;
+                            let idx = g.checked_rem(len).unwrap_or(0);
+                            *guard = guard.wrapping_add(1);
+                            backend_list[idx].address.clone()
+                        };
+
+                        match forward(req, client, backend).await {
+                            Ok(resp) => Ok::<_, hyper::Error>(resp),
+                            Err(_) => {
+                                let resp = bad_gateway();
+                                Ok::<_, hyper::Error>(resp)
+                            }
+                        }
+                    }
+                });
+                if let Err(e) = builder.serve_connection(TokioIo::new(stream), svc).await {
+                    warn!(?peer, error = %e, "serve_connection error");
+                }
             }
         });
     }
