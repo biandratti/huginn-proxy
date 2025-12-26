@@ -19,9 +19,11 @@ use hyper_util::client::legacy::connect::HttpConnector;
 use hyper_util::client::legacy::Client;
 use hyper_util::rt::{TokioExecutor, TokioIo};
 use hyper_util::server::conn::auto::Builder as ConnBuilder;
+use rustls_pki_types::pem::PemObject;
+use rustls_pki_types::{CertificateDer, PrivateKeyDer};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, ReadBuf};
 use tokio::net::TcpListener;
-use tokio_rustls::rustls::{self, ServerConfig as RustlsServerConfig};
+use tokio_rustls::rustls::ServerConfig as RustlsServerConfig;
 use tokio_rustls::TlsAcceptor;
 use tracing::{debug, info, warn};
 
@@ -311,18 +313,16 @@ async fn read_client_hello(
 fn build_rustls(cfg: &TlsConfig) -> Result<TlsAcceptor, BoxError> {
     let certs = {
         let bytes = std::fs::read(&cfg.cert_path)?;
-        let mut reader = std::io::BufReader::new(&bytes[..]);
-        rustls_pemfile::certs(&mut reader).collect::<Result<Vec<_>, _>>()?
+        CertificateDer::pem_slice_iter(&bytes).collect::<Result<Vec<_>, _>>()?
     };
     let key = {
         let bytes = std::fs::read(&cfg.key_path)?;
-        let mut reader = std::io::BufReader::new(&bytes[..]);
-        let mut keys =
-            rustls_pemfile::pkcs8_private_keys(&mut reader).collect::<Result<Vec<_>, _>>()?;
+        let mut keys: Vec<PrivateKeyDer<'_>> =
+            PrivateKeyDer::pem_slice_iter(&bytes).collect::<Result<Vec<_>, _>>()?;
         let Some(k) = keys.pop() else {
             return Err("no private key found".into());
         };
-        rustls::pki_types::PrivateKeyDer::Pkcs8(k)
+        k
     };
     let mut server = RustlsServerConfig::builder()
         .with_no_client_auth()
@@ -403,17 +403,6 @@ pub async fn run(config: Arc<Config>) -> Result<(), BoxError> {
                 match acc.accept(prefixed).await {
                     Ok(tls) => {
                         let tls_header = header_value(&ja4);
-
-                        // Use CapturingStream to capture HTTP/2 frames while hyper reads them
-                        // Similar to how fingerproxy captures frames during HTTP/2 handshake
-                        // The fingerprint is extracted reactively as data is captured, no delays needed
-                        let alpn = tls
-                            .get_ref()
-                            .1
-                            .alpn_protocol()
-                            .map(|p| String::from_utf8_lossy(p).into_owned())
-                            .unwrap_or_else(|| "-".to_string());
-                        debug!(?peer, ?alpn, "Creating CapturingStream for HTTP/2 fingerprinting");
 
                         // Lock-free watch channel for fingerprint result (allows multiple readers, always has latest value)
                         let (fingerprint_tx, fingerprint_rx) = watch::channel(None::<String>);
