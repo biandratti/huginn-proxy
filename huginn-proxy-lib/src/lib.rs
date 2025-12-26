@@ -10,8 +10,8 @@ use config::{Config, Route, TlsConfig};
 use http::StatusCode;
 use http_body_util::{combinators::BoxBody, BodyExt, Full};
 use huginn_net_http::akamai_extractor::extract_akamai_fingerprint;
-use huginn_net_http::http2_parser::{Http2Parser, HTTP2_CONNECTION_PREFACE};
-use huginn_net_tls::tls_process::parse_tls_client_hello;
+use huginn_net_http::http2_parser::Http2Parser;
+use huginn_net_tls::tls_process::parse_tls_client_hello_ja4;
 use hyper::body::Incoming;
 use hyper::header::{HeaderName, HeaderValue};
 use hyper::{Request, Response};
@@ -105,7 +105,8 @@ struct CapturingStream<S> {
     fingerprint_extracted: Arc<AtomicBool>,
     max_capture: usize,
     captured_len: Arc<AtomicUsize>,
-    buffer: Vec<u8>, // Inline buffer for fast processing
+    buffer: Vec<u8>,              // Inline buffer for fast processing
+    parser: Http2Parser<'static>, // Reused parser for efficiency
     parsed_offset: usize,
 }
 
@@ -126,6 +127,7 @@ impl<S> CapturingStream<S> {
                 max_capture,
                 captured_len: Arc::new(AtomicUsize::new(0)),
                 buffer: Vec::with_capacity(64 * 1024),
+                parser: Http2Parser::new(),
                 parsed_offset: 0,
             },
             receiver,
@@ -164,27 +166,21 @@ impl<S: AsyncRead + Unpin> AsyncRead for CapturingStream<S> {
                 // Process fingerprint INLINE immediately (no waits, no race conditions!)
                 self.buffer.extend_from_slice(data_to_process);
 
-                // Skip HTTP/2 connection preface
-                let start_offset = if self.parsed_offset == 0
-                    && self.buffer.starts_with(HTTP2_CONNECTION_PREFACE)
-                {
-                    HTTP2_CONNECTION_PREFACE.len()
+                // Use parse_frames_skip_preface to handle preface automatically
+                let frame_data = if self.parsed_offset == 0 {
+                    &self.buffer[..]
                 } else {
-                    self.parsed_offset
+                    &self.buffer[self.parsed_offset..]
                 };
 
-                let frame_data = &self.buffer[start_offset..];
-
                 if frame_data.len() >= 9 {
-                    // Create parser inline (cheap operation)
-                    let parser = Http2Parser::new();
-                    match parser.parse_frames(frame_data) {
-                        Ok(frames) => {
+                    // Use parse_frames_skip_preface to get both frames and bytes consumed (handles preface automatically)
+                    match self.parser.parse_frames_skip_preface(frame_data) {
+                        Ok((frames, bytes_consumed)) => {
                             if !frames.is_empty() {
-                                self.parsed_offset = self
-                                    .buffer
-                                    .len()
-                                    .min(start_offset.saturating_add(frame_data.len()));
+                                // Update parsed_offset based on actual bytes consumed (includes preface if present)
+                                self.parsed_offset =
+                                    self.parsed_offset.saturating_add(bytes_consumed);
 
                                 if let Some(fingerprint) = extract_akamai_fingerprint(&frames) {
                                     debug!(
@@ -198,7 +194,7 @@ impl<S: AsyncRead + Unpin> AsyncRead for CapturingStream<S> {
                             }
                         }
                         Err(_) => {
-                            // Parsing error, continue
+                            // Parsing error, continue (might need more data)
                         }
                     }
                 }
@@ -250,24 +246,20 @@ async fn process_captured_bytes(
             buffer.len()
         );
 
-        // Skip HTTP/2 connection preface
-        let start_offset = if parsed_offset == 0 && buffer.starts_with(HTTP2_CONNECTION_PREFACE) {
-            debug!("process_captured_bytes: skipping HTTP/2 connection preface (24 bytes)");
-            HTTP2_CONNECTION_PREFACE.len()
+        // Use parse_frames_skip_preface to handle preface automatically
+        let frame_data = if parsed_offset == 0 {
+            &buffer[..]
         } else {
-            parsed_offset
+            &buffer[parsed_offset..]
         };
 
-        let frame_data = &buffer[start_offset..];
-
         if frame_data.len() >= 9 {
-            match parser.parse_frames(frame_data) {
-                Ok(frames) => {
+            match parser.parse_frames_skip_preface(frame_data) {
+                Ok((frames, bytes_consumed)) => {
                     if !frames.is_empty() {
                         debug!("process_captured_bytes: parsed {} frames", frames.len());
-                        parsed_offset = buffer
-                            .len()
-                            .min(start_offset.saturating_add(frame_data.len()));
+                        // Update parsed_offset based on actual bytes consumed (includes preface if present)
+                        parsed_offset = parsed_offset.saturating_add(bytes_consumed);
 
                         if let Some(fingerprint) = extract_akamai_fingerprint(&frames) {
                             debug!(
@@ -311,9 +303,7 @@ async fn read_client_hello(
         }
     }
 
-    let ja4 = parse_tls_client_hello(&buf)
-        .ok()
-        .map(|sig| sig.generate_ja4().full.value().to_string());
+    let ja4 = parse_tls_client_hello_ja4(&buf);
 
     Ok((buf, ja4))
 }

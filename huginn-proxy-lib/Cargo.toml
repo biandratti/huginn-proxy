@@ -6,25 +6,16 @@ license = "MIT OR Apache-2.0"
 publish = false
 
 [dependencies]
-ahash.workspace = true
-anyhow.workspace = true
-async-trait.workspace = true
 bytes.workspace = true
-futures-util.workspace = true
 http.workspace = true
 http-body-util.workspace = true
 hyper.workspace = true
 hyper-util.workspace = true
-rand.workspace = true
-rustls.workspace = true
 rustls-pemfile.workspace = true
 serde.workspace = true
-thiserror.workspace = true
 tokio.workspace = true
 tokio-rustls.workspace = true
-tokio-util.workspace = true
 toml.workspace = true
 tracing.workspace = true
-h2.workspace = true
-huginn-net-tls = "1.7.0"
+huginn-net-tls.workspace = true
 huginn-net-http.workspace = true

@@ -37,8 +37,10 @@ async fn handle(req: Request<Incoming>) -> Result<Response<Full<bytes::Bytes>>, 
     let body = serde_json::to_vec(&payload).unwrap_or_else(|_| b"{}".to_vec());
     let mut resp = Response::new(Full::new(body.into()));
     *resp.status_mut() = StatusCode::OK;
-    resp.headers_mut()
-        .insert(hyper::header::CONTENT_TYPE, "application/json".parse().unwrap());
+    if let Ok(content_type) = "application/json".parse() {
+        resp.headers_mut()
+            .insert(hyper::header::CONTENT_TYPE, content_type);
+    }
     Ok(resp)
 }
 
@@ -63,4 +65,3 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         });
     }
 }
-

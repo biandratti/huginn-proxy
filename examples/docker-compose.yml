@@ -20,11 +20,11 @@ services:
 
   backend-a:
     build:
-      context: ./backend-http2
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: examples/backend-http2/Dockerfile
 
   backend-b:
     build:
-      context: ./backend-http2
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: examples/backend-http2/Dockerfile
 
