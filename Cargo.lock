@@ -762,6 +762,7 @@ dependencies = [
  "async-trait",
  "bytes",
  "futures-util",
+ "h2",
  "http",
  "http-body-util",
  "huginn-net-http",

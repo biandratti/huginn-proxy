@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 
 use std::pin::Pin;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll};
 
@@ -124,7 +125,10 @@ impl<S: AsyncWrite + Unpin> AsyncWrite for PrefixedStream<S> {
 struct CapturingStream<S> {
     inner: S,
     captured: Arc<Mutex<Vec<u8>>>,
+    parsed_offset: Arc<AtomicUsize>, // Use AtomicUsize instead of Mutex for better performance
+    parser: Arc<Mutex<Http2Parser<'static>>>, // Reuse parser to avoid recreating it
     fingerprint_result: Arc<Mutex<Option<String>>>,
+    fingerprint_extracted: Arc<AtomicBool>,
     max_capture: usize,
 }
 
@@ -136,10 +140,21 @@ impl<S> CapturingStream<S> {
     ) -> (Self, Arc<Mutex<Vec<u8>>>, Arc<Mutex<Option<String>>>) {
         let captured = Arc::new(Mutex::new(Vec::with_capacity(8192))); //TODO
         let captured_clone = captured.clone();
+        let parsed_offset = Arc::new(AtomicUsize::new(0)); // Use AtomicUsize for lock-free reads
+        let parser = Arc::new(Mutex::new(Http2Parser::new())); // Reuse parser
         let fingerprint_result = Arc::new(Mutex::new(None));
         let fingerprint_result_clone = fingerprint_result.clone();
+        let fingerprint_extracted = Arc::new(AtomicBool::new(false));
         (
-            Self { inner, captured, fingerprint_result, max_capture },
+            Self {
+                inner,
+                captured,
+                parsed_offset,
+                parser,
+                fingerprint_result,
+                fingerprint_extracted,
+                max_capture,
+            },
             captured_clone,
             fingerprint_result_clone,
         )
@@ -157,78 +172,112 @@ impl<S: AsyncRead + Unpin> AsyncRead for CapturingStream<S> {
         let after = buf.filled().len();
 
         // Capture the data that was read and try to extract fingerprint immediately
-        if after > before {
+        // Stop capturing once fingerprint is extracted for performance
+        // Use try_lock() to avoid blocking - if lock is contended, skip this iteration
+        if after > before && !self.fingerprint_extracted.load(Ordering::Relaxed) {
             let read_data = &buf.filled()[before..after];
             debug!("CapturingStream: read {} bytes", read_data.len());
-            if let Ok(mut captured) = self.captured.lock() {
-                let old_len = captured.len();
+
+            // Try to get lock without blocking - if contended, skip this iteration
+            if let Ok(mut captured) = self.captured.try_lock() {
                 if captured.len() < self.max_capture {
                     let remaining = self.max_capture.saturating_sub(captured.len());
                     let to_capture = read_data.len().min(remaining);
                     captured.extend_from_slice(&read_data[..to_capture]);
+                    let total_captured = captured.len();
                     debug!(
                         "CapturingStream: captured {} bytes (total: {})",
-                        to_capture,
-                        captured.len()
+                        to_capture, total_captured
                     );
 
-                    // Try to extract fingerprint immediately if we have enough data
-                    // and haven't extracted it yet
-                    let has_fingerprint = self
-                        .fingerprint_result
-                        .lock()
-                        .ok()
-                        .and_then(|r| r.clone())
-                        .is_some();
-                    if !has_fingerprint {
-                        // Skip HTTP/2 connection preface if present
-                        let frame_data = if captured.starts_with(HTTP2_CONNECTION_PREFACE) {
-                            debug!(
-                                "CapturingStream: skipping HTTP/2 connection preface (24 bytes)"
-                            );
-                            &captured[HTTP2_CONNECTION_PREFACE.len()..]
-                        } else {
-                            &captured
-                        };
+                    // Release captured lock before parsing to minimize lock time
+                    drop(captured);
 
-                        if frame_data.len() >= 9 {
-                            debug!("CapturingStream: attempting to parse {} bytes for fingerprint (after skipping preface)", frame_data.len());
-                            let parser = Http2Parser::new();
-                            match parser.parse_frames(frame_data) {
-                                Ok(frames) => {
+                    // Try to extract fingerprint immediately if we have enough data
+                    // Use AtomicBool for fast check without lock
+                    if !self.fingerprint_extracted.load(Ordering::Relaxed) {
+                        // Get parsed offset atomically (lock-free)
+                        let parsed_offset = self.parsed_offset.load(Ordering::Relaxed);
+
+                        // Re-acquire lock to read frame data (minimize time held)
+                        if let Ok(captured) = self.captured.try_lock() {
+                            // Skip HTTP/2 connection preface if present (only on first parse)
+                            let preface_len = if parsed_offset == 0
+                                && captured.starts_with(HTTP2_CONNECTION_PREFACE)
+                            {
+                                debug!("CapturingStream: skipping HTTP/2 connection preface (24 bytes)");
+                                HTTP2_CONNECTION_PREFACE.len()
+                            } else {
+                                0
+                            };
+
+                            let start_offset = parsed_offset.max(preface_len);
+                            let frame_data = &captured[start_offset..];
+
+                            // Copy frame data to avoid holding lock during parsing
+                            let frame_data_copy = frame_data.to_vec();
+                            drop(captured); // Release lock before expensive parsing
+
+                            if frame_data_copy.len() >= 9 {
+                                debug!(
+                                    "CapturingStream: parsing {} new bytes (offset: {}, total: {})",
+                                    frame_data_copy.len(),
+                                    start_offset,
+                                    total_captured
+                                );
+
+                                // Parse frames without holding any locks
+                                let frames = if let Ok(parser) = self.parser.try_lock() {
+                                    parser.parse_frames(&frame_data_copy).ok()
+                                } else {
+                                    None // Skip parsing if parser lock is contended
+                                };
+
+                                if let Some(frames) = frames {
                                     debug!("CapturingStream: parsed {} frames", frames.len());
-                                    if let Some(fingerprint) = extract_akamai_fingerprint(&frames) {
-                                        debug!(
-                                            "CapturingStream: extracted fingerprint: {}",
-                                            fingerprint.fingerprint
+                                    if !frames.is_empty() {
+                                        // Update parsed offset atomically (lock-free)
+                                        let new_offset = total_captured.min(
+                                            start_offset.saturating_add(frame_data_copy.len()),
                                         );
-                                        if let Ok(mut result) = self.fingerprint_result.lock() {
-                                            *result = Some(fingerprint.fingerprint);
+                                        self.parsed_offset.store(new_offset, Ordering::Relaxed);
+
+                                        if let Some(fingerprint) =
+                                            extract_akamai_fingerprint(&frames)
+                                        {
+                                            debug!(
+                                                "CapturingStream: extracted fingerprint: {}",
+                                                fingerprint.fingerprint
+                                            );
+                                            // Try to set fingerprint without blocking
+                                            if let Ok(mut result) =
+                                                self.fingerprint_result.try_lock()
+                                            {
+                                                *result = Some(fingerprint.fingerprint);
+                                            }
+                                            // Mark as extracted to stop capturing
+                                            self.fingerprint_extracted
+                                                .store(true, Ordering::Relaxed);
+                                        } else {
+                                            debug!(
+                                                "CapturingStream: no fingerprint extracted from frames"
+                                            );
                                         }
-                                    } else {
-                                        debug!(
-                                            "CapturingStream: no fingerprint extracted from frames"
-                                        );
                                     }
                                 }
-                                Err(e) => {
-                                    debug!("CapturingStream: failed to parse frames: {:?}", e);
-                                }
+                            } else {
+                                debug!(
+                                    "CapturingStream: not enough data yet ({} < 9, offset: {}, total: {})",
+                                    frame_data_copy.len(),
+                                    start_offset,
+                                    total_captured
+                                );
                             }
-                        } else {
-                            debug!(
-                                "CapturingStream: not enough data yet ({} < 9, total captured: {})",
-                                frame_data.len(),
-                                captured.len()
-                            );
                         }
-                    } else {
-                        debug!("CapturingStream: fingerprint already extracted, skipping");
                     }
-                } else {
-                    debug!("CapturingStream: max capture reached ({}), skipping", old_len);
                 }
             }
+            // If lock is contended, silently skip - we'll try again on next read
         }
 
         result
