@@ -26,3 +26,4 @@ tokio-util.workspace = true
 toml.workspace = true
 tracing.workspace = true
 huginn-net-tls = "1.7.0"
+huginn-net-http.workspace = true
