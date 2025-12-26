@@ -2,8 +2,9 @@
 
 use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::task::{Context, Poll};
+use tokio::sync::{mpsc, watch};
 
 use config::{Config, Route, TlsConfig};
 use http::StatusCode;
@@ -122,41 +123,39 @@ impl<S: AsyncWrite + Unpin> AsyncWrite for PrefixedStream<S> {
 
 /// CapturingStream captures all data read from the inner stream
 /// while passing it through, similar to how fingerproxy captures HTTP/2 frames
+/// Processes fingerprint inline when possible to avoid race conditions
 struct CapturingStream<S> {
     inner: S,
-    captured: Arc<Mutex<Vec<u8>>>,
-    parsed_offset: Arc<AtomicUsize>, // Use AtomicUsize instead of Mutex for better performance
-    parser: Arc<Mutex<Http2Parser<'static>>>, // Reuse parser to avoid recreating it
-    fingerprint_result: Arc<Mutex<Option<String>>>,
+    sender: mpsc::UnboundedSender<Vec<u8>>, // Lock-free channel
+    fingerprint_tx: watch::Sender<Option<String>>, // Direct access to update fingerprint
     fingerprint_extracted: Arc<AtomicBool>,
     max_capture: usize,
+    captured_len: Arc<AtomicUsize>,
+    buffer: Vec<u8>, // Inline buffer for fast processing
+    parsed_offset: usize,
 }
 
 impl<S> CapturingStream<S> {
-    #[allow(clippy::type_complexity)] //TODO
     fn new(
         inner: S,
         max_capture: usize,
-    ) -> (Self, Arc<Mutex<Vec<u8>>>, Arc<Mutex<Option<String>>>) {
-        let captured = Arc::new(Mutex::new(Vec::with_capacity(8192))); //TODO
-        let captured_clone = captured.clone();
-        let parsed_offset = Arc::new(AtomicUsize::new(0)); // Use AtomicUsize for lock-free reads
-        let parser = Arc::new(Mutex::new(Http2Parser::new())); // Reuse parser
-        let fingerprint_result = Arc::new(Mutex::new(None));
-        let fingerprint_result_clone = fingerprint_result.clone();
+        fingerprint_tx: watch::Sender<Option<String>>,
+    ) -> (Self, mpsc::UnboundedReceiver<Vec<u8>>, Arc<AtomicBool>) {
+        let (sender, receiver) = mpsc::unbounded_channel();
         let fingerprint_extracted = Arc::new(AtomicBool::new(false));
         (
             Self {
                 inner,
-                captured,
-                parsed_offset,
-                parser,
-                fingerprint_result,
-                fingerprint_extracted,
+                sender,
+                fingerprint_tx,
+                fingerprint_extracted: fingerprint_extracted.clone(),
                 max_capture,
+                captured_len: Arc::new(AtomicUsize::new(0)),
+                buffer: Vec::with_capacity(64 * 1024),
+                parsed_offset: 0,
             },
-            captured_clone,
-            fingerprint_result_clone,
+            receiver,
+            fingerprint_extracted,
         )
     }
 }
@@ -171,113 +170,65 @@ impl<S: AsyncRead + Unpin> AsyncRead for CapturingStream<S> {
         let result = Pin::new(&mut self.inner).poll_read(cx, buf);
         let after = buf.filled().len();
 
-        // Capture the data that was read and try to extract fingerprint immediately
-        // Stop capturing once fingerprint is extracted for performance
-        // Use try_lock() to avoid blocking - if lock is contended, skip this iteration
+        // Capture bytes and process fingerprint inline when possible (NO WAITS!)
+        // Process fingerprint immediately to avoid race conditions
         if after > before && !self.fingerprint_extracted.load(Ordering::Relaxed) {
             let read_data = &buf.filled()[before..after];
-            debug!("CapturingStream: read {} bytes", read_data.len());
+            let current_len = self.captured_len.load(Ordering::Relaxed);
 
-            // Try to get lock without blocking - if contended, skip this iteration
-            if let Ok(mut captured) = self.captured.try_lock() {
-                if captured.len() < self.max_capture {
-                    let remaining = self.max_capture.saturating_sub(captured.len());
-                    let to_capture = read_data.len().min(remaining);
-                    captured.extend_from_slice(&read_data[..to_capture]);
-                    let total_captured = captured.len();
-                    debug!(
-                        "CapturingStream: captured {} bytes (total: {})",
-                        to_capture, total_captured
-                    );
+            if current_len < self.max_capture {
+                let remaining = self.max_capture.saturating_sub(current_len);
+                let to_capture = read_data.len().min(remaining);
+                let data_to_process = &read_data[..to_capture];
 
-                    // Release captured lock before parsing to minimize lock time
-                    drop(captured);
+                // Send via lock-free channel for background processing
+                if self.sender.send(data_to_process.to_vec()).is_ok() {
+                    self.captured_len
+                        .store(current_len.saturating_add(to_capture), Ordering::Relaxed);
+                }
 
-                    // Try to extract fingerprint immediately if we have enough data
-                    // Use AtomicBool for fast check without lock
-                    if !self.fingerprint_extracted.load(Ordering::Relaxed) {
-                        // Get parsed offset atomically (lock-free)
-                        let parsed_offset = self.parsed_offset.load(Ordering::Relaxed);
+                // Process fingerprint INLINE immediately (no waits, no race conditions!)
+                self.buffer.extend_from_slice(data_to_process);
 
-                        // Re-acquire lock to read frame data (minimize time held)
-                        if let Ok(captured) = self.captured.try_lock() {
-                            // Skip HTTP/2 connection preface if present (only on first parse)
-                            let preface_len = if parsed_offset == 0
-                                && captured.starts_with(HTTP2_CONNECTION_PREFACE)
-                            {
-                                debug!("CapturingStream: skipping HTTP/2 connection preface (24 bytes)");
-                                HTTP2_CONNECTION_PREFACE.len()
-                            } else {
-                                0
-                            };
+                // Skip HTTP/2 connection preface
+                let start_offset = if self.parsed_offset == 0
+                    && self.buffer.starts_with(HTTP2_CONNECTION_PREFACE)
+                {
+                    HTTP2_CONNECTION_PREFACE.len()
+                } else {
+                    self.parsed_offset
+                };
 
-                            let start_offset = parsed_offset.max(preface_len);
-                            let frame_data = &captured[start_offset..];
+                let frame_data = &self.buffer[start_offset..];
 
-                            // Copy frame data to avoid holding lock during parsing
-                            let frame_data_copy = frame_data.to_vec();
-                            drop(captured); // Release lock before expensive parsing
+                if frame_data.len() >= 9 {
+                    // Create parser inline (cheap operation)
+                    let parser = Http2Parser::new();
+                    match parser.parse_frames(frame_data) {
+                        Ok(frames) => {
+                            if !frames.is_empty() {
+                                self.parsed_offset = self
+                                    .buffer
+                                    .len()
+                                    .min(start_offset.saturating_add(frame_data.len()));
 
-                            if frame_data_copy.len() >= 9 {
-                                debug!(
-                                    "CapturingStream: parsing {} new bytes (offset: {}, total: {})",
-                                    frame_data_copy.len(),
-                                    start_offset,
-                                    total_captured
-                                );
-
-                                // Parse frames without holding any locks
-                                let frames = if let Ok(parser) = self.parser.try_lock() {
-                                    parser.parse_frames(&frame_data_copy).ok()
-                                } else {
-                                    None // Skip parsing if parser lock is contended
-                                };
-
-                                if let Some(frames) = frames {
-                                    debug!("CapturingStream: parsed {} frames", frames.len());
-                                    if !frames.is_empty() {
-                                        // Update parsed offset atomically (lock-free)
-                                        let new_offset = total_captured.min(
-                                            start_offset.saturating_add(frame_data_copy.len()),
-                                        );
-                                        self.parsed_offset.store(new_offset, Ordering::Relaxed);
-
-                                        if let Some(fingerprint) =
-                                            extract_akamai_fingerprint(&frames)
-                                        {
-                                            debug!(
-                                                "CapturingStream: extracted fingerprint: {}",
-                                                fingerprint.fingerprint
-                                            );
-                                            // Try to set fingerprint without blocking
-                                            if let Ok(mut result) =
-                                                self.fingerprint_result.try_lock()
-                                            {
-                                                *result = Some(fingerprint.fingerprint);
-                                            }
-                                            // Mark as extracted to stop capturing
-                                            self.fingerprint_extracted
-                                                .store(true, Ordering::Relaxed);
-                                        } else {
-                                            debug!(
-                                                "CapturingStream: no fingerprint extracted from frames"
-                                            );
-                                        }
-                                    }
+                                if let Some(fingerprint) = extract_akamai_fingerprint(&frames) {
+                                    debug!(
+                                        "CapturingStream: extracted fingerprint inline: {}",
+                                        fingerprint.fingerprint
+                                    );
+                                    // Update fingerprint immediately (no waits, no race conditions!)
+                                    let _ = self.fingerprint_tx.send(Some(fingerprint.fingerprint));
+                                    self.fingerprint_extracted.store(true, Ordering::Relaxed);
                                 }
-                            } else {
-                                debug!(
-                                    "CapturingStream: not enough data yet ({} < 9, offset: {}, total: {})",
-                                    frame_data_copy.len(),
-                                    start_offset,
-                                    total_captured
-                                );
                             }
+                        }
+                        Err(_) => {
+                            // Parsing error, continue
                         }
                     }
                 }
             }
-            // If lock is contended, silently skip - we'll try again on next read
         }
 
         result
@@ -299,6 +250,69 @@ impl<S: AsyncWrite + Unpin> AsyncWrite for CapturingStream<S> {
 
     fn poll_shutdown(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
         Pin::new(&mut self.inner).poll_shutdown(cx)
+    }
+}
+
+/// Process captured bytes in a separate task (lock-free)
+/// Similar to how fingerproxy processes frames without locks
+async fn process_captured_bytes(
+    mut receiver: mpsc::UnboundedReceiver<Vec<u8>>,
+    fingerprint_tx: watch::Sender<Option<String>>, // Watch channel for multiple readers
+    fingerprint_extracted: Arc<AtomicBool>,
+) {
+    let mut buffer = Vec::with_capacity(64 * 1024);
+    let parser = Http2Parser::new();
+    let mut parsed_offset = 0;
+
+    while let Some(chunk) = receiver.recv().await {
+        if fingerprint_extracted.load(Ordering::Relaxed) {
+            break;
+        }
+
+        buffer.extend_from_slice(&chunk);
+        debug!(
+            "process_captured_bytes: received {} bytes (total: {})",
+            chunk.len(),
+            buffer.len()
+        );
+
+        // Skip HTTP/2 connection preface
+        let start_offset = if parsed_offset == 0 && buffer.starts_with(HTTP2_CONNECTION_PREFACE) {
+            debug!("process_captured_bytes: skipping HTTP/2 connection preface (24 bytes)");
+            HTTP2_CONNECTION_PREFACE.len()
+        } else {
+            parsed_offset
+        };
+
+        let frame_data = &buffer[start_offset..];
+
+        if frame_data.len() >= 9 {
+            match parser.parse_frames(frame_data) {
+                Ok(frames) => {
+                    if !frames.is_empty() {
+                        debug!("process_captured_bytes: parsed {} frames", frames.len());
+                        parsed_offset = buffer
+                            .len()
+                            .min(start_offset.saturating_add(frame_data.len()));
+
+                        if let Some(fingerprint) = extract_akamai_fingerprint(&frames) {
+                            debug!(
+                                "process_captured_bytes: extracted fingerprint: {}",
+                                fingerprint.fingerprint
+                            );
+                            // Send via watch channel (allows multiple readers, always has latest value)
+                            let _ = fingerprint_tx.send(Some(fingerprint.fingerprint));
+                            fingerprint_extracted.store(true, Ordering::Relaxed);
+                            break;
+                        }
+                    }
+                }
+                Err(e) => {
+                    debug!("process_captured_bytes: parsing error: {:?}", e);
+                    // Continue, might need more data
+                }
+            }
+        }
     }
 }
 
@@ -399,7 +413,7 @@ pub async fn run(config: Arc<Config>) -> Result<(), BoxError> {
         Some(t) => Some(build_rustls(t)?),
         None => None,
     };
-    let rr_idx = Arc::new(tokio::sync::Mutex::new(0usize));
+    let rr_idx = Arc::new(AtomicUsize::new(0)); // Lock-free round-robin
 
     info!(?addr, "starting L7 proxy (h1/h2)");
     loop {
@@ -436,23 +450,37 @@ pub async fn run(config: Arc<Config>) -> Result<(), BoxError> {
                             .map(|p| String::from_utf8_lossy(p).into_owned())
                             .unwrap_or_else(|| "-".to_string());
                         debug!(?peer, ?alpn, "Creating CapturingStream for HTTP/2 fingerprinting");
-                        let (capturing_stream, _captured_buffer, fingerprint_result) =
-                            CapturingStream::new(tls, 64 * 1024);
-                        let fingerprint_result_for_service = fingerprint_result.clone();
+
+                        // Lock-free watch channel for fingerprint result (allows multiple readers, always has latest value)
+                        let (fingerprint_tx, fingerprint_rx) = watch::channel(None::<String>);
+
+                        // Create CapturingStream with direct access to fingerprint_tx for inline processing
+                        let (capturing_stream, receiver, fingerprint_extracted) =
+                            CapturingStream::new(tls, 64 * 1024, fingerprint_tx.clone());
+
+                        // Spawn background task for additional processing (backup, but inline processing is primary)
+                        let fingerprint_extracted_for_task = fingerprint_extracted.clone();
+                        tokio::spawn(process_captured_bytes(
+                            receiver,
+                            fingerprint_tx,
+                            fingerprint_extracted_for_task,
+                        ));
+
                         let svc = hyper::service::service_fn(move |mut req: Request<Incoming>| {
                             let client = client.clone();
                             let routes = routes.clone();
                             let backend_list = backend_list.clone();
                             let rr_idx = rr_idx.clone();
                             let tls_header = tls_header.clone();
-                            let fingerprint_result = fingerprint_result_for_service.clone();
+                            let fingerprint_rx = fingerprint_rx.clone();
                             async move {
                                 if let Some(hv) = tls_header.clone() {
                                     req.headers_mut()
                                         .insert(HeaderName::from_static("x-huginn-net-tls"), hv);
                                 }
-                                // Get fingerprint from CapturingStream (extracted reactively as data arrives)
-                                let akamai = fingerprint_result.lock().ok().and_then(|r| r.clone());
+                                // Get fingerprint from watch channel (always has latest value, no locks, no waits!)
+                                // Fingerprint is processed inline in CapturingStream::poll_read, so it's usually ready
+                                let akamai = fingerprint_rx.borrow().clone();
                                 debug!("Handler: akamai fingerprint: {:?}", akamai);
                                 if let Some(hv) = http_header_value(&akamai) {
                                     debug!("Handler: injecting x-huginn-net-http header: {:?}", hv);
@@ -470,11 +498,12 @@ pub async fn run(config: Arc<Config>) -> Result<(), BoxError> {
                                         let resp = bad_gateway();
                                         return Ok::<_, hyper::Error>(resp);
                                     }
-                                    let mut guard = rr_idx.lock().await;
+                                    // Lock-free round-robin using AtomicUsize
                                     let len = backend_list.len();
-                                    let g = *guard;
-                                    let idx = g.checked_rem(len).unwrap_or(0);
-                                    *guard = guard.wrapping_add(1);
+                                    let idx = rr_idx
+                                        .fetch_add(1, Ordering::Relaxed)
+                                        .checked_rem(len)
+                                        .unwrap_or(0);
                                     backend_list[idx].address.clone()
                                 };
 
@@ -514,11 +543,12 @@ pub async fn run(config: Arc<Config>) -> Result<(), BoxError> {
                                 let resp = bad_gateway();
                                 return Ok::<_, hyper::Error>(resp);
                             }
-                            let mut guard = rr_idx.lock().await;
+                            // Lock-free round-robin using AtomicUsize
                             let len = backend_list.len();
-                            let g = *guard;
-                            let idx = g.checked_rem(len).unwrap_or(0);
-                            *guard = guard.wrapping_add(1);
+                            let idx = rr_idx
+                                .fetch_add(1, Ordering::Relaxed)
+                                .checked_rem(len)
+                                .unwrap_or(0);
                             backend_list[idx].address.clone()
                         };
 
