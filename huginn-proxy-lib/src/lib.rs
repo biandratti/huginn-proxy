@@ -44,34 +44,8 @@ fn bad_gateway() -> Response<RespBody> {
     resp
 }
 
-fn tls_header_value<IO>(
-    ja4: &Option<String>,
-    tls: &tokio_rustls::server::TlsStream<IO>,
-) -> Option<HeaderValue>
-where
-    IO: AsyncRead + AsyncWrite + Unpin,
-{
-    let conn = tls.get_ref().1;
-    let alpn = conn
-        .alpn_protocol()
-        .map(|p| String::from_utf8_lossy(p).into_owned())
-        .unwrap_or_else(|| "-".to_string());
-    let mut parts = Vec::new();
-    if let Some(f) = ja4 {
-        parts.push(format!("ja4={f}"));
-    }
-    parts.push(format!("alpn={alpn}"));
-    HeaderValue::from_str(&parts.join(";")).ok()
-}
-
-fn http_header_value(akamai: &Option<String>) -> Option<HeaderValue> {
-    let mut parts = Vec::new();
-    if let Some(f) = akamai {
-        parts.push(format!("akamai={f}"));
-    } else {
-        parts.push("akamai=-".to_string());
-    }
-    HeaderValue::from_str(&parts.join(";")).ok()
+fn header_value(value: &Option<String>) -> Option<HeaderValue> {
+    value.as_ref().and_then(|f| HeaderValue::from_str(f).ok())
 }
 
 struct PrefixedStream<S> {
@@ -438,7 +412,7 @@ pub async fn run(config: Arc<Config>) -> Result<(), BoxError> {
                 let prefixed = PrefixedStream::new(prefix, stream);
                 match acc.accept(prefixed).await {
                     Ok(tls) => {
-                        let tls_header = tls_header_value(&ja4, &tls);
+                        let tls_header = header_value(&ja4);
 
                         // Use CapturingStream to capture HTTP/2 frames while hyper reads them
                         // Similar to how fingerproxy captures frames during HTTP/2 handshake
@@ -482,7 +456,7 @@ pub async fn run(config: Arc<Config>) -> Result<(), BoxError> {
                                 // Fingerprint is processed inline in CapturingStream::poll_read, so it's usually ready
                                 let akamai = fingerprint_rx.borrow().clone();
                                 debug!("Handler: akamai fingerprint: {:?}", akamai);
-                                if let Some(hv) = http_header_value(&akamai) {
+                                if let Some(hv) = header_value(&akamai) {
                                     debug!("Handler: injecting x-huginn-net-http header: {:?}", hv);
                                     req.headers_mut()
                                         .insert(HeaderName::from_static("x-huginn-net-http"), hv);
