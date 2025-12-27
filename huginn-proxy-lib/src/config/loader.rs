@@ -9,9 +9,9 @@ pub fn load_from_path<P: AsRef<Path>>(p: P) -> Result<Config> {
         .map_err(|e| ProxyError::Config(format!("Failed to read config file: {e}")))?;
     let cfg: Config = toml::from_str(&txt)
         .map_err(|e| ProxyError::Config(format!("Failed to parse config: {e}")))?;
-    
+
     validate_config(&cfg)?;
-    
+
     Ok(cfg)
 }
 
@@ -28,18 +28,12 @@ fn validate_config(cfg: &Config) -> Result<()> {
             )));
         }
         if !Path::new(&tls.key_path).exists() {
-            return Err(ProxyError::Config(format!(
-                "Key file not found: {}",
-                tls.key_path
-            )));
+            return Err(ProxyError::Config(format!("Key file not found: {}", tls.key_path)));
         }
     }
 
-    let backend_addresses: std::collections::HashSet<_> = cfg
-        .backends
-        .iter()
-        .map(|b| b.address.as_str())
-        .collect();
+    let backend_addresses: std::collections::HashSet<_> =
+        cfg.backends.iter().map(|b| b.address.as_str()).collect();
 
     for route in &cfg.routes {
         if !backend_addresses.contains(route.backend.as_str()) {
@@ -52,4 +46,3 @@ fn validate_config(cfg: &Config) -> Result<()> {
 
     Ok(())
 }
-

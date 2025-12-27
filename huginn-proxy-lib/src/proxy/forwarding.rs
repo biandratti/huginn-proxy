@@ -1,8 +1,8 @@
 use http::{Request, Response};
 use http_body_util::{combinators::BoxBody, BodyExt};
 use hyper::body::Incoming;
-use hyper_util::client::legacy::Client;
 use hyper_util::client::legacy::connect::HttpConnector;
+use hyper_util::client::legacy::Client;
 
 use crate::error::Result;
 
@@ -56,4 +56,3 @@ pub fn pick_route<'a>(path: &str, routes: &'a [crate::config::Route]) -> Option<
         .find(|r| path.starts_with(&r.prefix))
         .map(|r| r.backend.as_str())
 }
-

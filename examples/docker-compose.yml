@@ -6,8 +6,6 @@ services:
       context: ..
       dockerfile: Dockerfile
     command: ["/usr/local/bin/huginn-proxy", "/config/compose.toml"]
-    environment:
-      - RUST_LOG=debug
     volumes:
       - ./config/compose.toml:/config/compose.toml:ro
       - ./certs:/config/certs:ro

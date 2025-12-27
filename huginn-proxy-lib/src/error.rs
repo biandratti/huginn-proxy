@@ -26,4 +26,3 @@ pub enum ProxyError {
 }
 
 pub type Result<T> = std::result::Result<T, ProxyError>;
-

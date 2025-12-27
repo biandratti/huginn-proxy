@@ -14,13 +14,13 @@ use tracing::debug;
 /// Processes fingerprint inline when possible to avoid race conditions
 pub struct CapturingStream<S> {
     inner: S,
-    sender: mpsc::UnboundedSender<Vec<u8>>, // Lock-free channel
-    fingerprint_tx: watch::Sender<Option<String>>, // Direct access to update fingerprint
+    sender: mpsc::UnboundedSender<Vec<u8>>,
+    fingerprint_tx: watch::Sender<Option<String>>,
     fingerprint_extracted: Arc<AtomicBool>,
     max_capture: usize,
     captured_len: Arc<AtomicUsize>,
-    buffer: Vec<u8>,              // Inline buffer for fast processing
-    parser: Http2Parser<'static>, // Reused parser for efficiency
+    buffer: Vec<u8>, // Inline buffer for fast processing
+    parser: Http2Parser<'static>,
     parsed_offset: usize,
 }
 
@@ -60,8 +60,6 @@ impl<S: AsyncRead + Unpin> AsyncRead for CapturingStream<S> {
         let result = Pin::new(&mut self.inner).poll_read(cx, buf);
         let after = buf.filled().len();
 
-        // Capture bytes and process fingerprint inline when possible (NO WAITS!)
-        // Process fingerprint immediately to avoid race conditions
         if after > before && !self.fingerprint_extracted.load(Ordering::Relaxed) {
             let read_data = &buf.filled()[before..after];
             let current_len = self.captured_len.load(Ordering::Relaxed);
@@ -71,13 +69,11 @@ impl<S: AsyncRead + Unpin> AsyncRead for CapturingStream<S> {
                 let to_capture = read_data.len().min(remaining);
                 let data_to_process = &read_data[..to_capture];
 
-                // Send via lock-free channel for background processing
                 if self.sender.send(data_to_process.to_vec()).is_ok() {
                     self.captured_len
                         .store(current_len.saturating_add(to_capture), Ordering::Relaxed);
                 }
 
-                // Process fingerprint INLINE immediately (no waits, no race conditions!)
                 self.buffer.extend_from_slice(data_to_process);
 
                 // Use parse_frames_skip_preface to handle preface automatically
@@ -101,7 +97,7 @@ impl<S: AsyncRead + Unpin> AsyncRead for CapturingStream<S> {
                                         "CapturingStream: extracted fingerprint inline: {}",
                                         fingerprint.fingerprint
                                     );
-                                    // Update fingerprint immediately (no waits, no race conditions!)
+                                    // Update fingerprint immediately
                                     let _ = self.fingerprint_tx.send(Some(fingerprint.fingerprint));
                                     self.fingerprint_extracted.store(true, Ordering::Relaxed);
                                 }
@@ -195,4 +191,3 @@ pub async fn process_captured_bytes(
         }
     }
 }
-

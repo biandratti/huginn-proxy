@@ -34,11 +34,7 @@ struct PrefixedStream<S> {
 
 impl<S> PrefixedStream<S> {
     fn new(prefix: Vec<u8>, inner: S) -> Self {
-        Self {
-            prefix,
-            offset: 0,
-            inner,
-        }
+        Self { prefix, offset: 0, inner }
     }
 }
 
@@ -72,10 +68,7 @@ impl<S: AsyncWrite + Unpin> AsyncWrite for PrefixedStream<S> {
         Pin::new(&mut self.inner).poll_flush(cx)
     }
 
-    fn poll_shutdown(
-        mut self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-    ) -> Poll<std::io::Result<()>> {
+    fn poll_shutdown(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
         Pin::new(&mut self.inner).poll_shutdown(cx)
     }
 }
@@ -120,14 +113,16 @@ pub async fn run(config: Arc<Config>) -> Result<()> {
     let shutdown_signal = Arc::new(AtomicUsize::new(0)); // 0 = running, 1 = shutdown requested
 
     // Setup signal handlers
-    let mut sigterm = signal::unix::signal(signal::unix::SignalKind::terminate())
-        .map_err(|e| crate::error::ProxyError::Io(std::io::Error::other(
-            format!("Failed to setup SIGTERM handler: {e}"),
-        )))?;
-    let mut sigint = signal::unix::signal(signal::unix::SignalKind::interrupt())
-        .map_err(|e| crate::error::ProxyError::Io(std::io::Error::other(
-            format!("Failed to setup SIGINT handler: {e}"),
-        )))?;
+    let mut sigterm = signal::unix::signal(signal::unix::SignalKind::terminate()).map_err(|e| {
+        crate::error::ProxyError::Io(std::io::Error::other(format!(
+            "Failed to setup SIGTERM handler: {e}"
+        )))
+    })?;
+    let mut sigint = signal::unix::signal(signal::unix::SignalKind::interrupt()).map_err(|e| {
+        crate::error::ProxyError::Io(std::io::Error::other(format!(
+            "Failed to setup SIGINT handler: {e}"
+        )))
+    })?;
 
     info!(?addr, "starting L7 proxy (h1/h2)");
 
@@ -171,65 +166,150 @@ pub async fn run(config: Arc<Config>) -> Result<()> {
                 let round_robin = round_robin.clone();
                 let tls_acceptor = tls_acceptor.clone();
                 let active_connections = active_connections.clone();
+                let fingerprint_config = config.fingerprint.clone();
 
                 tokio::spawn(async move {
                     // Ensure counter is decremented when connection finishes
                     let _guard = ConnectionGuard(active_connections);
                     let mut stream = stream;
 
-            if let Some(acc) = tls_acceptor {
-                let (prefix, ja4) = match read_client_hello(&mut stream).await {
-                    Ok(v) => v,
-                    Err(e) => {
-                        warn!(?peer, error = %e, "failed to read client hello");
-                        return;
-                    }
-                };
+                    if let Some(acc) = tls_acceptor {
+                        let (prefix, ja4) = match read_client_hello(&mut stream).await {
+                            Ok(v) => v,
+                            Err(e) => {
+                                warn!(?peer, error = %e, "failed to read client hello");
+                                return;
+                            }
+                        };
 
-                let prefixed = PrefixedStream::new(prefix, stream);
-                match acc.accept(prefixed).await {
-                    Ok(tls) => {
-                        let tls_header = header_value(&ja4);
+                        let prefixed = PrefixedStream::new(prefix, stream);
+                        match acc.accept(prefixed).await {
+                            Ok(tls) => {
+                                let tls_header = if fingerprint_config.tls_enabled {
+                                    header_value(&ja4)
+                                } else {
+                                    None
+                                };
 
-                        let (fingerprint_tx, fingerprint_rx) = watch::channel(None::<String>);
+                                if fingerprint_config.http_enabled {
+                                    let (fingerprint_tx, fingerprint_rx) = watch::channel(None::<String>);
 
-                        // Create CapturingStream with direct access to fingerprint_tx for inline processing
-                        let (capturing_stream, receiver, fingerprint_extracted) =
-                            CapturingStream::new(tls, 64 * 1024, fingerprint_tx.clone());
+                                    // Create CapturingStream with direct access to fingerprint_tx for inline processing
+                                    let (capturing_stream, receiver, fingerprint_extracted) =
+                                        CapturingStream::new(tls, 64 * 1024, fingerprint_tx.clone());
 
-                        let fingerprint_extracted_for_task = fingerprint_extracted.clone();
-                        tokio::spawn(process_captured_bytes(
-                            receiver,
-                            fingerprint_tx,
-                            fingerprint_extracted_for_task,
-                        ));
+                                    let fingerprint_extracted_for_task = fingerprint_extracted.clone();
+                                    tokio::spawn(process_captured_bytes(
+                                        receiver,
+                                        fingerprint_tx,
+                                        fingerprint_extracted_for_task,
+                                    ));
 
-                        let svc = hyper::service::service_fn(move |mut req: Request<Incoming>| {
+                                    let svc = hyper::service::service_fn(move |mut req: Request<Incoming>| {
+                                        let client = client.clone();
+                                        let routes = routes.clone();
+                                        let backend_list = backend_list.clone();
+                                        let round_robin = round_robin.clone();
+                                        let tls_header = tls_header.clone();
+                                        let fingerprint_rx = fingerprint_rx.clone();
+
+                                        async move {
+                                            if let Some(hv) = tls_header {
+                                                req.headers_mut()
+                                                    .insert(HeaderName::from_static("x-huginn-net-tls"), hv);
+                                            }
+
+                                            // Get HTTP/2 fingerprint from watch channel
+                                            let akamai = fingerprint_rx.borrow().clone();
+                                            debug!("Handler: akamai fingerprint: {:?}", akamai);
+                                            if let Some(hv) = header_value(&akamai) {
+                                                debug!("Handler: injecting x-huginn-net-http header: {:?}", hv);
+                                                req.headers_mut()
+                                                    .insert(HeaderName::from_static("x-huginn-net-http"), hv);
+                                            } else {
+                                                debug!("Handler: no HTTP fingerprint header to inject");
+                                            }
+
+                                            // Route selection
+                                            let path = req.uri().path();
+                                            let backend = if let Some(target) = pick_route(path, &routes) {
+                                                target.to_string()
+                                            } else {
+                                                if backend_list.is_empty() {
+                                                    return Ok::<_, hyper::Error>(bad_gateway());
+                                                }
+                                                let idx = round_robin.next(backend_list.len());
+                                                backend_list[idx].address.clone()
+                                            };
+
+                                            // Forward request
+                                            match forward(req, client, backend).await {
+                                                Ok(resp) => Ok::<_, hyper::Error>(resp),
+                                                Err(_) => Ok::<_, hyper::Error>(bad_gateway()),
+                                            }
+                                        }
+                                    });
+
+                                    if let Err(e) = builder
+                                        .serve_connection(TokioIo::new(capturing_stream), svc)
+                                        .await
+                                    {
+                                        warn!(?peer, error = %e, "serve_connection error");
+                                    }
+                                } else {
+                                    let svc = hyper::service::service_fn(move |mut req: Request<Incoming>| {
+                                        let client = client.clone();
+                                        let routes = routes.clone();
+                                        let backend_list = backend_list.clone();
+                                        let round_robin = round_robin.clone();
+                                        let tls_header = tls_header.clone();
+
+                                        async move {
+                                            if let Some(hv) = tls_header {
+                                                req.headers_mut()
+                                                    .insert(HeaderName::from_static("x-huginn-net-tls"), hv);
+                                            }
+
+                                            // Route selection
+                                            let path = req.uri().path();
+                                            let backend = if let Some(target) = pick_route(path, &routes) {
+                                                target.to_string()
+                                            } else {
+                                                if backend_list.is_empty() {
+                                                    return Ok::<_, hyper::Error>(bad_gateway());
+                                                }
+                                                let idx = round_robin.next(backend_list.len());
+                                                backend_list[idx].address.clone()
+                                            };
+
+                                            // Forward request
+                                            match forward(req, client, backend).await {
+                                                Ok(resp) => Ok::<_, hyper::Error>(resp),
+                                                Err(_) => Ok::<_, hyper::Error>(bad_gateway()),
+                                            }
+                                        }
+                                    });
+
+                                    if let Err(e) = builder
+                                        .serve_connection(TokioIo::new(tls), svc)
+                                        .await
+                                    {
+                                        warn!(?peer, error = %e, "serve_connection error");
+                                    }
+                                }
+                            }
+                            Err(e) => {
+                                warn!(?peer, error = %e, "tls accept error");
+                            }
+                        }
+                    } else {
+                        let svc = hyper::service::service_fn(move |req: Request<Incoming>| {
                             let client = client.clone();
                             let routes = routes.clone();
                             let backend_list = backend_list.clone();
                             let round_robin = round_robin.clone();
-                            let tls_header = tls_header.clone();
-                            let fingerprint_rx = fingerprint_rx.clone();
 
                             async move {
-                                if let Some(hv) = tls_header.clone() {
-                                    req.headers_mut()
-                                        .insert(HeaderName::from_static("x-huginn-net-tls"), hv);
-                                }
-
-                                // Get HTTP/2 fingerprint from watch channel
-                                let akamai = fingerprint_rx.borrow().clone();
-                                debug!("Handler: akamai fingerprint: {:?}", akamai);
-                                if let Some(hv) = header_value(&akamai) {
-                                    debug!("Handler: injecting x-huginn-net-http header: {:?}", hv);
-                                    req.headers_mut()
-                                        .insert(HeaderName::from_static("x-huginn-net-http"), hv);
-                                } else {
-                                    debug!("Handler: no HTTP fingerprint header to inject");
-                                }
-
-                                // Route selection
                                 let path = req.uri().path();
                                 let backend = if let Some(target) = pick_route(path, &routes) {
                                     target.to_string()
@@ -241,7 +321,6 @@ pub async fn run(config: Arc<Config>) -> Result<()> {
                                     backend_list[idx].address.clone()
                                 };
 
-                                // Forward request
                                 match forward(req, client, backend).await {
                                     Ok(resp) => Ok::<_, hyper::Error>(resp),
                                     Err(_) => Ok::<_, hyper::Error>(bad_gateway()),
@@ -249,54 +328,20 @@ pub async fn run(config: Arc<Config>) -> Result<()> {
                             }
                         });
 
-                        if let Err(e) = builder
-                            .serve_connection(TokioIo::new(capturing_stream), svc)
-                            .await
-                        {
+                        if let Err(e) = builder.serve_connection(TokioIo::new(stream), svc).await {
                             warn!(?peer, error = %e, "serve_connection error");
                         }
                     }
-                    Err(e) => {
-                        warn!(?peer, error = %e, "tls accept error");
-                    }
-                }
-            } else {
-                let svc = hyper::service::service_fn(move |req: Request<Incoming>| {
-                    let client = client.clone();
-                    let routes = routes.clone();
-                    let backend_list = backend_list.clone();
-                    let round_robin = round_robin.clone();
-
-                    async move {
-                        let path = req.uri().path();
-                        let backend = if let Some(target) = pick_route(path, &routes) {
-                            target.to_string()
-                        } else {
-                            if backend_list.is_empty() {
-                                return Ok::<_, hyper::Error>(bad_gateway());
-                            }
-                            let idx = round_robin.next(backend_list.len());
-                            backend_list[idx].address.clone()
-                        };
-
-                        match forward(req, client, backend).await {
-                            Ok(resp) => Ok::<_, hyper::Error>(resp),
-                            Err(_) => Ok::<_, hyper::Error>(bad_gateway()),
-                        }
-                    }
-                });
-
-                if let Err(e) = builder.serve_connection(TokioIo::new(stream), svc).await {
-                    warn!(?peer, error = %e, "serve_connection error");
-                }
-                }
                 });
             }
         }
     }
 
-    info!("Waiting for active connections to finish (timeout: {}s)", config.shutdown_timeout_secs);
-    let shutdown_timeout = Duration::from_secs(config.shutdown_timeout_secs);
+    info!(
+        "Waiting for active connections to finish (timeout: {}s)",
+        config.timeout.shutdown_secs
+    );
+    let shutdown_timeout = Duration::from_secs(config.timeout.shutdown_secs);
     let start = std::time::Instant::now();
 
     loop {
@@ -309,8 +354,7 @@ pub async fn run(config: Arc<Config>) -> Result<()> {
         if start.elapsed() >= shutdown_timeout {
             warn!(
                 active_connections = active,
-                "Shutdown timeout reached, {} connections still active",
-                active
+                "Shutdown timeout reached, {} connections still active", active
             );
             break;
         }
@@ -322,4 +366,3 @@ pub async fn run(config: Arc<Config>) -> Result<()> {
     info!("Proxy server stopped");
     Ok(())
 }
-

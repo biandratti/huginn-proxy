@@ -1,4 +1,3 @@
 pub mod extractor;
 
-pub use extractor::{CapturingStream, process_captured_bytes};
-
+pub use extractor::{process_captured_bytes, CapturingStream};

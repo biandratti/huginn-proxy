@@ -71,4 +71,3 @@ pub fn build_rustls(cfg: &TlsConfig) -> Result<TlsAcceptor> {
 
     Ok(TlsAcceptor::from(Arc::new(server)))
 }
-

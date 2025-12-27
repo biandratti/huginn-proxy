@@ -8,9 +8,7 @@ pub struct RoundRobin {
 
 impl RoundRobin {
     pub fn new() -> Self {
-        Self {
-            index: Arc::new(AtomicUsize::new(0)),
-        }
+        Self { index: Arc::new(AtomicUsize::new(0)) }
     }
 
     /// Get the next index in round-robin fashion
@@ -30,4 +28,3 @@ impl Default for RoundRobin {
         Self::new()
     }
 }
-
