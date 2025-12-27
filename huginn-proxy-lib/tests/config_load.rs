@@ -34,29 +34,42 @@ backends = [
 #[test]
 fn loads_routes_and_tls() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let path = tmp_path("routes");
-    let toml = r#"
+
+    let cert_path = tmp_path("server.crt");
+    let key_path = tmp_path("server.key");
+    fs::write(&cert_path, "dummy cert")?;
+    fs::write(&key_path, "dummy key")?;
+
+    let toml = format!(
+        r#"
 listen = "127.0.0.1:0"
 backends = [
-  { address = "backend-a:9000" },
-  { address = "backend-b:9000" }
+  {{ address = "backend-a:9000" }},
+  {{ address = "backend-b:9000" }}
 ]
 routes = [
-  { prefix = "/api", backend = "backend-a:9000" },
-  { prefix = "/", backend = "backend-b:9000" }
+  {{ prefix = "/api", backend = "backend-a:9000" }},
+  {{ prefix = "/", backend = "backend-b:9000" }}
 ]
 
 [tls]
-cert_path = "/config/certs/server.crt"
-key_path  = "/config/certs/server.key"
+cert_path = "{}"
+key_path  = "{}"
 alpn = ["h2"]
-"#;
+"#,
+        cert_path.display(),
+        key_path.display()
+    );
     fs::write(&path, toml)?;
 
     let cfg = load_from_path(&path)?;
     assert_eq!(cfg.backends.len(), 2);
     assert_eq!(cfg.routes.len(), 2);
     let tls = cfg.tls.ok_or("tls missing")?;
-    assert_eq!(tls.cert_path, "/config/certs/server.crt");
+    assert_eq!(tls.cert_path, cert_path.display().to_string());
     assert_eq!(tls.alpn, vec!["h2"]);
+
+    let _ = fs::remove_file(&cert_path);
+    let _ = fs::remove_file(&key_path);
     Ok(())
 }
