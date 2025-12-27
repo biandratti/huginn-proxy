@@ -17,6 +17,9 @@ confidence-threshold = 1.0
 [bans]
 multiple-versions = "allow"
 wildcards = "deny"
+# Allow wildcards for path dependencies (workspace members)
+# Path dependencies don't have version constraints, so they're considered wildcards
+allow-wildcard-paths = true
 
 [sources]
 allow-registry = ["https://github.com/rust-lang/crates.io-index"]

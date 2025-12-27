@@ -1,0 +1,16 @@
+# Minimal configuration example
+# This is the simplest possible configuration
+
+listen = "0.0.0.0:7000"
+
+# At least one backend is required
+backends = [
+  { address = "backend-1:9000" }
+]
+
+# All other sections use defaults:
+# - No TLS termination (plain HTTP)
+# - Fingerprinting enabled (both TLS and HTTP/2)
+# - Log level: "info"
+# - Default timeouts
+

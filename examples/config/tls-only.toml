@@ -1,0 +1,24 @@
+# TLS-only configuration example
+# Proxy with TLS termination but no fingerprinting
+
+listen = "0.0.0.0:7000"
+
+backends = [
+  { address = "backend-1:9000" },
+  { address = "backend-2:9000" }
+]
+
+[tls]
+cert_path = "/path/to/certificate.pem"
+key_path  = "/path/to/private-key.pem"
+alpn = ["h2", "http/1.1"]
+
+# Disable fingerprinting for better performance
+[fingerprint]
+tls_enabled = false
+http_enabled = false
+
+[logging]
+level = "warn"
+show_target = false
+

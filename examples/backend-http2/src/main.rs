@@ -13,8 +13,6 @@ use tracing::info;
 
 #[derive(Serialize)]
 struct Resp<'a> {
-    message: &'a str,
-    protocol: &'a str,
     path: &'a str,
     headers: serde_json::Value,
 }
@@ -27,12 +25,7 @@ async fn handle(req: Request<Incoming>) -> Result<Response<Full<bytes::Bytes>>, 
     }
     let headers_json = serde_json::Value::Object(headers_json);
 
-    let payload = Resp {
-        message: "HTTP/2 backend",
-        protocol: "HTTP/2",
-        path: req.uri().path(),
-        headers: headers_json,
-    };
+    let payload = Resp { path: req.uri().path(), headers: headers_json };
 
     let body = serde_json::to_vec(&payload).unwrap_or_else(|_| b"{}".to_vec());
     let mut resp = Response::new(Full::new(body.into()));

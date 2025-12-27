@@ -1,0 +1,36 @@
+# Full fingerprinting configuration example
+# Proxy with TLS termination and all fingerprinting features enabled
+
+listen = "0.0.0.0:7000"
+
+backends = [
+  { address = "backend-1:9000" },
+  { address = "backend-2:9000" }
+]
+
+routes = [
+  { prefix = "/api", backend = "backend-1:9000" },
+  { prefix = "/static", backend = "backend-2:9000" },
+  { prefix = "/", backend = "backend-1:9000" }
+]
+
+[tls]
+cert_path = "/path/to/certificate.pem"
+key_path  = "/path/to/private-key.pem"
+alpn = ["h2"]
+
+# Enable all fingerprinting features
+[fingerprint]
+tls_enabled = true   # Extract JA4 TLS fingerprints
+http_enabled = true  # Extract Akamai HTTP/2 fingerprints
+
+# Verbose logging for debugging
+[logging]
+level = "debug"
+show_target = true
+
+[timeout]
+connect_ms = 5000
+idle_ms = 60000
+shutdown_secs = 30
+
