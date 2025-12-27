@@ -362,9 +362,9 @@ checksum = "841d1cc9bed7f9236f321df977030373f4a4163ae1a7dbfe1a51a2c1a51d9100"
 
 [[package]]
 name = "huginn-net-tls"
-version = "1.7.0"
+version = "1.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4eae6c7c454d4d56dce3681b0e14ff959c2c613611fbf9bb11c5d8d96640e9c2"
+checksum = "f88994dc0188914f2d22b9478c1abf37898731c95f596a0ade7655f41bb8dc90"
 dependencies = [
  "crossbeam-channel",
  "pcap-file",
