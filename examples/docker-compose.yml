@@ -6,6 +6,8 @@ services:
       context: ..
       dockerfile: Dockerfile
     command: ["/usr/local/bin/huginn-proxy", "/config/compose.toml"]
+    environment:
+      - RUST_LOG=debug
     volumes:
       - ./config/compose.toml:/config/compose.toml:ro
       - ./certs:/config/certs:ro
@@ -17,12 +19,12 @@ services:
       - backend-b
 
   backend-a:
-    image: ealen/echo-server:0.9.2
-    environment:
-      - PORT=9000
+    build:
+      context: ..
+      dockerfile: examples/backend-http2/Dockerfile
 
   backend-b:
-    image: ealen/echo-server:0.9.2
-    environment:
-      - PORT=9000
+    build:
+      context: ..
+      dockerfile: examples/backend-http2/Dockerfile
 
