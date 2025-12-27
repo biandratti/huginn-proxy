@@ -17,9 +17,11 @@ async fn main() -> Result<(), BoxError> {
 
     let config = Arc::new(load_from_path(&config_path)?);
 
+    let log_level = env::var("RUST_LOG").unwrap_or_else(|_| config.logging.level.clone());
+
     tracing_subscriber::fmt()
-        .with_env_filter(env::var("RUST_LOG").unwrap_or_else(|_| "info".to_string()))
-        .with_target(false)
+        .with_env_filter(log_level)
+        .with_target(config.logging.show_target)
         .init();
 
     info!("huginn-proxy starting");
