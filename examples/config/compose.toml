@@ -13,4 +13,4 @@ routes = [
 [tls]
 cert_path = "/config/certs/server.crt"
 key_path  = "/config/certs/server.key"
-alpn = ["h2"]  # fuerza h2 hacia el cliente
+alpn = ["h2"]

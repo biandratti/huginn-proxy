@@ -1,5 +1,5 @@
 use serde::Deserialize;
-use std::{fs, net::SocketAddr, path::Path};
+use std::net::SocketAddr;
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct Backend {
@@ -28,12 +28,12 @@ pub struct Config {
     pub routes: Vec<Route>,
     #[serde(default)]
     pub tls: Option<TlsConfig>,
+    /// Graceful shutdown timeout in seconds (default: 30) // TODO: make this configurable
+    #[serde(default = "default_shutdown_timeout")]
+    pub shutdown_timeout_secs: u64,
 }
 
-pub fn load_from_path<P: AsRef<Path>>(
-    p: P,
-) -> Result<Config, Box<dyn std::error::Error + Send + Sync>> {
-    let txt = fs::read_to_string(p)?;
-    let cfg: Config = toml::from_str(&txt)?;
-    Ok(cfg)
+fn default_shutdown_timeout() -> u64 {
+    30
 }
+
