@@ -20,7 +20,7 @@ rcgen = "0.14.6"
 rustls = "0.23.35"
 rustls-pki-types = "1.13.2"
 serde = { version = "1.0.228", features = ["derive"] }
-tempfile = "3.23.0"
+tempfile = "3.24.0"
 thiserror = "2.0.17"
 tokio = { version = "1.48.0", features = ["net", "time", "io-util", "macros", "rt-multi-thread", "sync", "signal"] }
 tokio-rustls = "0.26.4"
