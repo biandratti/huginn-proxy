@@ -6,8 +6,6 @@ use std::task::{Context, Poll};
 use hyper::body::Incoming;
 use hyper::header::{HeaderName, HeaderValue};
 use hyper::Request;
-use hyper_util::client::legacy::connect::HttpConnector;
-use hyper_util::client::legacy::Client;
 use hyper_util::rt::{TokioExecutor, TokioIo};
 use hyper_util::server::conn::auto::Builder as ConnBuilder;
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
@@ -23,8 +21,6 @@ use crate::fingerprinting::{process_captured_bytes, CapturingStream};
 use crate::load_balancing::RoundRobin;
 use crate::proxy::forwarding::{bad_gateway, forward, pick_route};
 use crate::tls::{build_rustls, read_client_hello};
-
-type HttpClient = Client<HttpConnector, Incoming>;
 
 struct PrefixedStream<S> {
     prefix: Vec<u8>,
@@ -93,13 +89,10 @@ pub async fn run(config: Arc<Config>) -> Result<()> {
         .await
         .map_err(crate::error::ProxyError::Io)?;
 
-    let connector = HttpConnector::new();
-    let mut client_builder = Client::builder(TokioExecutor::new());
-    client_builder.http2_only(true);
-    let client: HttpClient = client_builder.build(connector);
     let builder = ConnBuilder::new(TokioExecutor::new());
 
-    let backends = config.backends.clone();
+    let backends = Arc::new(config.backends.clone());
+    let backends_for_loop = Arc::clone(&backends);
     let routes = config.routes.clone();
     let tls_acceptor = match &config.tls {
         Some(t) => Some(build_rustls(t)?),
@@ -159,9 +152,8 @@ pub async fn run(config: Arc<Config>) -> Result<()> {
                 // Increment active connections counter
                 active_connections.fetch_add(1, Ordering::Relaxed);
 
-                let client = client.clone();
                 let builder = builder.clone();
-                let backend_list = backends.clone();
+                let backends_clone = Arc::clone(&backends_for_loop);
                 let routes = routes.clone();
                 let round_robin = round_robin.clone();
                 let tls_acceptor = tls_acceptor.clone();
@@ -172,6 +164,7 @@ pub async fn run(config: Arc<Config>) -> Result<()> {
                     // Ensure counter is decremented when connection finishes
                     let _guard = ConnectionGuard(active_connections);
                     let mut stream = stream;
+                    let backend_list = backends_clone.clone();
 
                     if let Some(acc) = tls_acceptor {
                         let (prefix, ja4) = match read_client_hello(&mut stream).await {
@@ -206,9 +199,9 @@ pub async fn run(config: Arc<Config>) -> Result<()> {
                                     ));
 
                                     let svc = hyper::service::service_fn(move |mut req: Request<Incoming>| {
-                                        let client = client.clone();
                                         let routes = routes.clone();
                                         let backend_list = backend_list.clone();
+                                        let backends = backends_clone.clone();
                                         let round_robin = round_robin.clone();
                                         let tls_header = tls_header.clone();
                                         let fingerprint_rx = fingerprint_rx.clone();
@@ -243,7 +236,7 @@ pub async fn run(config: Arc<Config>) -> Result<()> {
                                             };
 
                                             // Forward request
-                                            match forward(req, client, backend).await {
+                                            match forward(req, backend, &backends).await {
                                                 Ok(resp) => Ok::<_, hyper::Error>(resp),
                                                 Err(_) => Ok::<_, hyper::Error>(bad_gateway()),
                                             }
@@ -258,9 +251,9 @@ pub async fn run(config: Arc<Config>) -> Result<()> {
                                     }
                                 } else {
                                     let svc = hyper::service::service_fn(move |mut req: Request<Incoming>| {
-                                        let client = client.clone();
                                         let routes = routes.clone();
                                         let backend_list = backend_list.clone();
+                                        let backends = backends_clone.clone();
                                         let round_robin = round_robin.clone();
                                         let tls_header = tls_header.clone();
 
@@ -283,7 +276,7 @@ pub async fn run(config: Arc<Config>) -> Result<()> {
                                             };
 
                                             // Forward request
-                                            match forward(req, client, backend).await {
+                                            match forward(req, backend, &backends).await {
                                                 Ok(resp) => Ok::<_, hyper::Error>(resp),
                                                 Err(_) => Ok::<_, hyper::Error>(bad_gateway()),
                                             }
@@ -304,9 +297,9 @@ pub async fn run(config: Arc<Config>) -> Result<()> {
                         }
                     } else {
                         let svc = hyper::service::service_fn(move |req: Request<Incoming>| {
-                            let client = client.clone();
                             let routes = routes.clone();
                             let backend_list = backend_list.clone();
+                            let backends = backends_clone.clone();
                             let round_robin = round_robin.clone();
 
                             async move {
@@ -321,7 +314,7 @@ pub async fn run(config: Arc<Config>) -> Result<()> {
                                     backend_list[idx].address.clone()
                                 };
 
-                                match forward(req, client, backend).await {
+                                match forward(req, backend, &backends).await {
                                     Ok(resp) => Ok::<_, hyper::Error>(resp),
                                     Err(_) => Ok::<_, hyper::Error>(bad_gateway()),
                                 }

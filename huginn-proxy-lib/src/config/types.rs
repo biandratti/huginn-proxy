@@ -1,12 +1,26 @@
 use serde::Deserialize;
 use std::net::SocketAddr;
 
+/// HTTP version preference for backend connections
+#[derive(Debug, Deserialize, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum BackendHttpVersion {
+    Http11,
+    Http2,
+    /// Preserve client's HTTP version (default for HTTPS)
+    Preserve,
+}
+
 /// Backend server configuration
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone, PartialEq)]
 pub struct Backend {
     /// Backend server address (host:port format)
     /// Example: "backend-1:9000" or "192.168.1.10:8080"
     pub address: String,
+    /// HTTP version to use when connecting to this backend
+    /// Options: "http11", "http2", "preserve" (default: "preserve" for HTTPS, "http11" for HTTP)
+    #[serde(default)]
+    pub http_version: Option<BackendHttpVersion>,
 }
 
 /// Route configuration for path-based routing

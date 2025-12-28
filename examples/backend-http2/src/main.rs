@@ -43,9 +43,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
     let addr = "0.0.0.0:9000";
     let listener = TcpListener::bind(addr).await?;
-    info!("HTTP/2 server listening on {}", addr);
+    info!("HTTP/1.1 and HTTP/2 server listening on {}", addr);
 
-    let builder = ConnBuilder::new(hyper_util::rt::TokioExecutor::new()).http2_only();
+    let builder = ConnBuilder::new(hyper_util::rt::TokioExecutor::new());
 
     loop {
         let (stream, peer) = listener.accept().await?;
