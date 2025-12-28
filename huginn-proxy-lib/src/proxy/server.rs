@@ -72,17 +72,16 @@ impl<S: AsyncWrite + Unpin> AsyncWrite for PrefixedStream<S> {
     }
 }
 
-/// Convert Akamai fingerprint to HeaderValue
 fn akamai_header_value(value: &Option<AkamaiFingerprint>) -> Option<HeaderValue> {
     value
         .as_ref()
         .and_then(|f| HeaderValue::from_str(&f.fingerprint).ok())
 }
 
-//TODO: Use JA4 fingerprint from huginn-net-tls crate
-/// Convert TLS fingerprint (String) to HeaderValue
-fn tls_header_value(value: &Option<String>) -> Option<HeaderValue> {
-    value.as_ref().and_then(|f| HeaderValue::from_str(f).ok())
+fn tls_header_value(value: &Option<huginn_net_tls::Ja4Payload>) -> Option<HeaderValue> {
+    value
+        .as_ref()
+        .and_then(|f| HeaderValue::from_str(&f.full.to_string()).ok())
 }
 
 /// Guard to decrement active connections counter when dropped

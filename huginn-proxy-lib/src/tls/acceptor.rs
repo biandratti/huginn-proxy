@@ -1,8 +1,8 @@
-use std::sync::Arc;
-
+use huginn_net_tls::Ja4Payload;
 use rustls_pki_types::pem::PemObject;
 use rustls_pki_types::{CertificateDer, PrivateKeyDer};
-use tokio_rustls::rustls::ServerConfig as RustlsServerConfig;
+use std::sync::Arc;
+use tokio_rustls::rustls::ServerConfig;
 use tokio_rustls::TlsAcceptor;
 
 use crate::config::TlsConfig;
@@ -10,8 +10,8 @@ use crate::error::{ProxyError, Result};
 
 pub async fn read_client_hello(
     stream: &mut tokio::net::TcpStream,
-) -> std::io::Result<(Vec<u8>, Option<String>)> {
-    use huginn_net_tls::tls_process::parse_tls_client_hello_ja4;
+) -> std::io::Result<(Vec<u8>, Option<Ja4Payload>)> {
+    use huginn_net_tls::tls_process::parse_tls_client_hello;
     use tokio::io::AsyncReadExt;
 
     let mut buf = Vec::with_capacity(8192);
@@ -32,7 +32,9 @@ pub async fn read_client_hello(
         }
     }
 
-    let ja4 = parse_tls_client_hello_ja4(&buf);
+    let ja4 = parse_tls_client_hello(&buf)
+        .ok()
+        .map(|signature| signature.generate_ja4());
 
     Ok((buf, ja4))
 }
@@ -58,7 +60,7 @@ pub fn build_rustls(cfg: &TlsConfig) -> Result<TlsAcceptor> {
         k
     };
 
-    let mut server = RustlsServerConfig::builder()
+    let mut server = ServerConfig::builder()
         .with_no_client_auth()
         .with_single_cert(certs, key)
         .map_err(|e| ProxyError::Tls(format!("Failed to build TLS config: {e}")))?;
