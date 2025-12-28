@@ -477,8 +477,11 @@ name = "huginn-proxy"
 version = "0.1.0"
 dependencies = [
  "huginn-proxy-lib",
+ "opentelemetry",
+ "opentelemetry_sdk",
  "tokio",
  "tracing",
+ "tracing-opentelemetry",
  "tracing-subscriber",
 ]
 
@@ -506,6 +509,7 @@ dependencies = [
  "toml",
  "tracing",
  "tracing-opentelemetry",
+ "tracing-subscriber",
 ]
 
 [[package]]

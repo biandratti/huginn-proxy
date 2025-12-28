@@ -88,9 +88,7 @@ pub fn init_metrics() -> Result<(Metrics, Registry), Box<dyn std::error::Error +
         .with_registry(registry.clone())
         .build()?;
 
-    let meter_provider = SdkMeterProvider::builder()
-        .with_reader(exporter)
-        .build();
+    let meter_provider = SdkMeterProvider::builder().with_reader(exporter).build();
 
     global::set_meter_provider(meter_provider);
 

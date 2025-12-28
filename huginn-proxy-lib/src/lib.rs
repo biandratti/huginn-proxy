@@ -5,8 +5,8 @@ pub mod error;
 pub mod fingerprinting;
 pub mod load_balancing;
 pub mod proxy;
+pub mod telemetry;
 pub mod tls;
-mod telemetry;
 
 pub use config::{load_from_path, Backend, BackendHttpVersion, Config, Route, TlsConfig};
 pub use error::{ProxyError, Result};
