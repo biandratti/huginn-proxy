@@ -20,6 +20,11 @@ tokio.workspace = true
 tokio-rustls.workspace = true
 toml.workspace = true
 tracing.workspace = true
+opentelemetry.workspace = true
+opentelemetry_sdk.workspace = true
+opentelemetry-prometheus.workspace = true
+prometheus.workspace = true
+tracing-opentelemetry.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true

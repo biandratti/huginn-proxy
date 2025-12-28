@@ -31,6 +31,11 @@ tokio-util = "0.7.17"
 toml = "0.9.8"
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.22", features = ["fmt", "env-filter"] }
+opentelemetry = { version = "0.31", features = ["metrics"] }
+opentelemetry_sdk = { version = "0.31", features = ["metrics"] }
+opentelemetry-prometheus = "0.31"
+prometheus = "0.14"
+tracing-opentelemetry = "0.32"
 
 [profile.release]
 codegen-units = 1
