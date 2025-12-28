@@ -6,7 +6,7 @@ fn test_round_robin_basic() {
     assert_eq!(rr.next(3), 0);
     assert_eq!(rr.next(3), 1);
     assert_eq!(rr.next(3), 2);
-    assert_eq!(rr.next(3), 0); // Wraps around
+    assert_eq!(rr.next(3), 0);
 }
 
 #[test]
@@ -20,7 +20,6 @@ fn test_round_robin_single_backend() {
 #[test]
 fn test_round_robin_empty() {
     let rr = RoundRobin::new();
-    // Should return 0 for empty list (safe default)
     assert_eq!(rr.next(0), 0);
     assert_eq!(rr.next(0), 0);
 }
@@ -73,12 +72,10 @@ fn test_round_robin_concurrent() {
         .flatten()
         .collect();
 
-    // Verify all results are valid indices
     for &idx in &all_results {
         assert!(idx < len, "Index {idx} out of bounds for length {len}");
     }
 
-    // Verify we got all indices (distribution test)
     let mut counts = vec![0; len];
     for &idx in &all_results {
         counts[idx] += 1;

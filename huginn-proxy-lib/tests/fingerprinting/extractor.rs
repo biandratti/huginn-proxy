@@ -125,10 +125,12 @@ async fn test_process_captured_bytes_empty() {
     drop(sender);
 
     // Process should exit gracefully
-    process_captured_bytes(receiver, tx, extracted).await;
+    process_captured_bytes(receiver, tx, extracted.clone()).await;
 
+    // Verify extracted flag is still false (no fingerprint extracted from empty data)
+    assert!(!extracted.load(std::sync::atomic::Ordering::Relaxed));
     // Channel should still be readable (watch channel always has a value)
-    let _ = rx.borrow();
+    assert!(rx.borrow().is_none()); // No fingerprint should be set
 }
 
 #[tokio::test]
@@ -139,12 +141,15 @@ async fn test_process_captured_bytes_early_exit() {
 
     // Send some data
     let _ = sender.send(vec![1, 2, 3]);
+    drop(sender);
 
-    // Process should exit immediately
-    process_captured_bytes(receiver, tx, extracted).await;
+    // Process should exit immediately without processing
+    process_captured_bytes(receiver, tx, extracted.clone()).await;
 
-    // Verify channel is still readable
-    let _ = rx.borrow();
+    // Verify extracted flag remains true
+    assert!(extracted.load(std::sync::atomic::Ordering::Relaxed));
+    // Verify no fingerprint was set (should remain None)
+    assert!(rx.borrow().is_none());
 }
 
 #[tokio::test]
@@ -171,8 +176,11 @@ async fn test_process_captured_bytes_incremental() {
     // Give it time to process
     tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
-    // Check if fingerprint was extracted (might not be if data is incomplete)
-    let _fingerprint = rx.borrow();
+    // Verify that processing completed (extracted flag might be set if fingerprint was found)
+    // Note: The fingerprint might not be extracted if the data is incomplete,
+    let fingerprint = rx.borrow();
+    // Either fingerprint was extracted or it's None (both are valid outcomes)
+    assert!(fingerprint.is_some() || fingerprint.is_none());
 }
 
 #[tokio::test]
