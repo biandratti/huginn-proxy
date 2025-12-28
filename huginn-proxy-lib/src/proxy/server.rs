@@ -3,6 +3,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::task::{Context, Poll};
 
+use http::Version;
 use hyper::body::Incoming;
 use hyper::header::{HeaderName, HeaderValue};
 use hyper::Request;
@@ -18,7 +19,7 @@ use tracing::{debug, info, warn};
 
 use crate::config::Config;
 use crate::error::Result;
-use crate::fingerprinting::{process_captured_bytes, CapturingStream};
+use crate::fingerprinting::CapturingStream;
 use crate::load_balancing::RoundRobin;
 use crate::proxy::forwarding::{bad_gateway, forward, pick_route};
 use crate::telemetry::Metrics;
@@ -117,15 +118,29 @@ async fn handle_proxy_request(
     }
 
     // Handle HTTP/2 fingerprint header
+    // Note: Akamai fingerprinting only works for HTTP/2, not HTTP/1.1
     if let Some(ref rx) = fingerprint_rx {
-        let akamai = rx.borrow().clone();
-        debug!("Handler: akamai fingerprint: {:?}", akamai);
-        if let Some(hv) = akamai_header_value(&akamai) {
-            debug!("Handler: injecting x-huginn-net-http header: {:?}", hv);
-            req.headers_mut()
-                .insert(HeaderName::from_static("x-huginn-net-http"), hv);
+        // Only attempt to extract HTTP/2 fingerprint if this is actually an HTTP/2 request
+        if req.version() == Version::HTTP_2 {
+            let akamai = rx.borrow().clone();
+            debug!("Handler: akamai fingerprint: {:?}", akamai);
+            if let Some(hv) = akamai_header_value(&akamai) {
+                debug!("Handler: injecting x-huginn-net-http header: {:?}", hv);
+                req.headers_mut()
+                    .insert(HeaderName::from_static("x-huginn-net-http"), hv);
+            } else {
+                debug!("Handler: no HTTP fingerprint header to inject (HTTP/2 connection but fingerprint not extracted)");
+                // Record failure metric if metrics available
+                if let Some(ref m) = metrics {
+                    m.http2_fingerprint_failures_total.add(1, &[]);
+                }
+            }
         } else {
-            debug!("Handler: no HTTP fingerprint header to inject");
+            // HTTP/1.1 connection - Akamai fingerprint not applicable
+            debug!("Handler: HTTP/1.1 connection, Akamai fingerprint not applicable");
+            if let Some(ref m) = metrics {
+                m.http2_fingerprint_failures_total.add(1, &[]);
+            }
         }
     }
 
@@ -284,7 +299,7 @@ pub async fn run(config: Arc<Config>, metrics: Option<Arc<Metrics>>) -> Result<(
                     }
 
                     if let Some(acc) = tls_acceptor {
-                        let (prefix, ja4) = match read_client_hello(&mut stream).await {
+                        let (prefix, ja4) = match read_client_hello(&mut stream, metrics_for_connection.clone()).await {
                             Ok(v) => v,
                             Err(e) => {
                                 warn!(?peer, error = %e, "failed to read client hello");
@@ -304,16 +319,9 @@ pub async fn run(config: Arc<Config>, metrics: Option<Arc<Metrics>>) -> Result<(
                                 if fingerprint_config.http_enabled {
                                     let (fingerprint_tx, fingerprint_rx) = watch::channel(None::<huginn_net_http::AkamaiFingerprint>);
 
-                                    // Create CapturingStream with direct access to fingerprint_tx for inline processing
-                                    let (capturing_stream, receiver, fingerprint_extracted) =
-                                        CapturingStream::new(tls, fingerprint_config.max_capture, fingerprint_tx.clone());
-
-                                    let fingerprint_extracted_for_task = fingerprint_extracted.clone();
-                                    tokio::spawn(process_captured_bytes(
-                                        receiver,
-                                        fingerprint_tx,
-                                        fingerprint_extracted_for_task,
-                                    ));
+                                    // Create CapturingStream with inline fingerprint processing
+                                    let (capturing_stream, _fingerprint_extracted) =
+                                        CapturingStream::new(tls, fingerprint_config.max_capture, fingerprint_tx.clone(), metrics_for_connection.clone());
 
                                     let metrics_for_service = metrics_for_connection.clone();
                                     let svc = hyper::service::service_fn(move |req: Request<Incoming>| {

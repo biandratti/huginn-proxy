@@ -2,18 +2,22 @@ use huginn_net_tls::Ja4Payload;
 use rustls_pki_types::pem::PemObject;
 use rustls_pki_types::{CertificateDer, PrivateKeyDer};
 use std::sync::Arc;
+use tokio::time::Instant;
 use tokio_rustls::rustls::ServerConfig;
 use tokio_rustls::TlsAcceptor;
 
 use crate::config::TlsConfig;
 use crate::error::{ProxyError, Result};
+use crate::telemetry::Metrics;
 
 pub async fn read_client_hello(
     stream: &mut tokio::net::TcpStream,
+    metrics: Option<Arc<Metrics>>,
 ) -> std::io::Result<(Vec<u8>, Option<Ja4Payload>)> {
     use huginn_net_tls::tls_process::parse_tls_client_hello;
     use tokio::io::AsyncReadExt;
 
+    let start = Instant::now();
     let mut buf = Vec::with_capacity(8192);
     loop {
         if buf.len() >= 5 {
@@ -35,6 +39,19 @@ pub async fn read_client_hello(
     let ja4 = parse_tls_client_hello(&buf)
         .ok()
         .map(|signature| signature.generate_ja4());
+
+    let duration = start.elapsed().as_secs_f64();
+
+    if let Some(ref m) = metrics {
+        if ja4.is_some() {
+            m.tls_fingerprints_extracted_total.add(1, &[]);
+            m.tls_fingerprint_extraction_duration_seconds
+                .record(duration, &[]);
+        } else {
+            // Failed to extract TLS fingerprint
+            m.tls_fingerprint_failures_total.add(1, &[]);
+        }
+    }
 
     Ok((buf, ja4))
 }

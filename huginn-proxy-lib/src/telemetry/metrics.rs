@@ -22,8 +22,15 @@ pub struct Metrics {
     pub requests_total: Counter<u64>,
     pub requests_duration_seconds: Histogram<f64>,
 
-    pub fingerprints_extracted_total: Counter<u64>,
-    pub fingerprint_extraction_duration_seconds: Histogram<f64>,
+    // TLS fingerprinting metrics (JA4)
+    pub tls_fingerprints_extracted_total: Counter<u64>,
+    pub tls_fingerprint_extraction_duration_seconds: Histogram<f64>,
+    pub tls_fingerprint_failures_total: Counter<u64>,
+
+    // HTTP/2 fingerprinting metrics (Akamai)
+    pub http2_fingerprints_extracted_total: Counter<u64>,
+    pub http2_fingerprint_extraction_duration_seconds: Histogram<f64>,
+    pub http2_fingerprint_failures_total: Counter<u64>,
 
     pub backend_requests_total: Counter<u64>,
     pub backend_errors_total: Counter<u64>,
@@ -54,13 +61,30 @@ impl Metrics {
                 .with_description("Request duration in seconds")
                 .build(),
 
-            fingerprints_extracted_total: meter
-                .u64_counter("huginn_fingerprints_extracted_total")
-                .with_description("Total number of fingerprints extracted")
+            tls_fingerprints_extracted_total: meter
+                .u64_counter("huginn_tls_fingerprints_extracted_total")
+                .with_description("Total number of TLS (JA4) fingerprints extracted")
                 .build(),
-            fingerprint_extraction_duration_seconds: meter
-                .f64_histogram("huginn_fingerprint_extraction_duration_seconds")
-                .with_description("Fingerprint extraction duration in seconds")
+            tls_fingerprint_extraction_duration_seconds: meter
+                .f64_histogram("huginn_tls_fingerprint_extraction_duration_seconds")
+                .with_description("TLS fingerprint extraction duration in seconds")
+                .build(),
+            tls_fingerprint_failures_total: meter
+                .u64_counter("huginn_tls_fingerprint_failures_total")
+                .with_description("Total number of TLS fingerprint extraction failures")
+                .build(),
+
+            http2_fingerprints_extracted_total: meter
+                .u64_counter("huginn_http2_fingerprints_extracted_total")
+                .with_description("Total number of HTTP/2 (Akamai) fingerprints extracted")
+                .build(),
+            http2_fingerprint_extraction_duration_seconds: meter
+                .f64_histogram("huginn_http2_fingerprint_extraction_duration_seconds")
+                .with_description("HTTP/2 fingerprint extraction duration in seconds")
+                .build(),
+            http2_fingerprint_failures_total: meter
+                .u64_counter("huginn_http2_fingerprint_failures_total")
+                .with_description("Total number of HTTP/2 fingerprint extraction failures (includes HTTP/1.1 connections)")
                 .build(),
 
             backend_requests_total: meter

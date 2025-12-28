@@ -1,8 +1,6 @@
-use huginn_proxy_lib::fingerprinting::{process_captured_bytes, CapturingStream};
-use std::sync::atomic::AtomicBool;
-use std::sync::Arc;
+use huginn_proxy_lib::fingerprinting::CapturingStream;
 use tokio::io::{AsyncRead, AsyncWrite};
-use tokio::sync::{mpsc, watch};
+use tokio::sync::watch;
 
 // Mock stream for testing
 struct MockStream {
@@ -74,8 +72,7 @@ fn http2_preface_and_settings() -> Vec<u8> {
 async fn test_capturing_stream_basic() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let (tx, _rx) = watch::channel(None);
     let mock_stream = MockStream::new(http2_preface_and_settings());
-    let (mut capturing, mut receiver, _extracted) =
-        CapturingStream::new(mock_stream, 64 * 1024, tx);
+    let (mut capturing, _extracted) = CapturingStream::new(mock_stream, 64 * 1024, tx, None);
 
     let mut buf = vec![0u8; 1024];
     let mut read_buf = tokio::io::ReadBuf::new(&mut buf);
@@ -84,9 +81,7 @@ async fn test_capturing_stream_basic() -> Result<(), Box<dyn std::error::Error +
     use tokio::io::AsyncReadExt;
     capturing.read_buf(&mut read_buf).await?;
 
-    // Verify data was captured
-    let captured = receiver.try_recv();
-    assert!(captured.is_ok() || captured.is_err()); // Channel might be empty if processed inline
+    // Fingerprint extraction happens inline, no need to check receiver
 
     Ok(())
 }
@@ -98,7 +93,7 @@ async fn test_capturing_stream_max_capture() -> Result<(), Box<dyn std::error::E
     let large_data = vec![0u8; 100 * 1024]; // 100KB
     let mock_stream = MockStream::new(large_data);
     let max_capture = 64 * 1024; // 64KB limit
-    let (mut capturing, _receiver, _extracted) = CapturingStream::new(mock_stream, max_capture, tx);
+    let (mut capturing, _extracted) = CapturingStream::new(mock_stream, max_capture, tx, None);
 
     let mut buf = vec![0u8; 1024];
     let mut read_buf = tokio::io::ReadBuf::new(&mut buf);
@@ -115,80 +110,15 @@ async fn test_capturing_stream_max_capture() -> Result<(), Box<dyn std::error::E
     Ok(())
 }
 
-#[tokio::test]
-async fn test_process_captured_bytes_empty() {
-    let (tx, rx) = watch::channel(None);
-    let (sender, receiver) = mpsc::unbounded_channel();
-    let extracted = Arc::new(AtomicBool::new(false));
-
-    // Close the sender immediately
-    drop(sender);
-
-    // Process should exit gracefully
-    process_captured_bytes(receiver, tx, extracted.clone()).await;
-
-    // Verify extracted flag is still false (no fingerprint extracted from empty data)
-    assert!(!extracted.load(std::sync::atomic::Ordering::Relaxed));
-    // Channel should still be readable (watch channel always has a value)
-    assert!(rx.borrow().is_none()); // No fingerprint should be set
-}
-
-#[tokio::test]
-async fn test_process_captured_bytes_early_exit() {
-    let (tx, rx) = watch::channel(None);
-    let (sender, receiver) = mpsc::unbounded_channel();
-    let extracted = Arc::new(AtomicBool::new(true)); // Already extracted
-
-    // Send some data
-    let _ = sender.send(vec![1, 2, 3]);
-    drop(sender);
-
-    // Process should exit immediately without processing
-    process_captured_bytes(receiver, tx, extracted.clone()).await;
-
-    // Verify extracted flag remains true
-    assert!(extracted.load(std::sync::atomic::Ordering::Relaxed));
-    // Verify no fingerprint was set (should remain None)
-    assert!(rx.borrow().is_none());
-}
-
-#[tokio::test]
-async fn test_process_captured_bytes_incremental() {
-    let (tx, rx) = watch::channel(None);
-    let (sender, receiver) = mpsc::unbounded_channel();
-    let extracted = Arc::new(AtomicBool::new(false));
-
-    let http2_data = http2_preface_and_settings();
-
-    // Send data in chunks
-    let chunk_size = 10;
-    for chunk in http2_data.chunks(chunk_size) {
-        let _ = sender.send(chunk.to_vec());
-    }
-    drop(sender);
-
-    // Process in background
-    let extracted_clone = extracted.clone();
-    tokio::spawn(async move {
-        process_captured_bytes(receiver, tx, extracted_clone).await;
-    });
-
-    // Give it time to process
-    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-
-    // Verify that processing completed (extracted flag might be set if fingerprint was found)
-    // Note: The fingerprint might not be extracted if the data is incomplete,
-    let fingerprint = rx.borrow();
-    // Either fingerprint was extracted or it's None (both are valid outcomes)
-    assert!(fingerprint.is_some() || fingerprint.is_none());
-}
+// Note: process_captured_bytes has been removed - fingerprint extraction now happens inline in CapturingStream
+// These tests are no longer needed as the functionality is tested through CapturingStream tests
 
 #[tokio::test]
 async fn test_capturing_stream_write_passthrough(
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let (tx, _rx) = watch::channel(None);
     let mock_stream = MockStream::new(vec![]);
-    let (mut capturing, _receiver, _extracted) = CapturingStream::new(mock_stream, 64 * 1024, tx);
+    let (mut capturing, _extracted) = CapturingStream::new(mock_stream, 64 * 1024, tx, None);
 
     // Write should pass through
     use tokio::io::AsyncWriteExt;
