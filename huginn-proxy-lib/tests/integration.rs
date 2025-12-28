@@ -6,7 +6,9 @@ use tempfile::NamedTempFile;
 
 fn create_test_config(listen: &str, backends: Vec<Backend>) -> Config {
     Config {
-        listen: listen.parse().expect("Invalid listen address"),
+        listen: listen
+            .parse()
+            .unwrap_or_else(|_| panic!("Invalid listen address: {listen}")),
         backends,
         routes: vec![],
         tls: None,
