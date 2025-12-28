@@ -7,8 +7,6 @@ pub fn init_tracing_with_otel(
     show_target: bool,
     otel_log_level: String,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    // Build env filter from configuration
-    // Note: log_level already includes RUST_LOG override from main.rs if set
     let filter_str = format!("{log_level},opentelemetry={otel_log_level}");
     let env_filter = tracing_subscriber::EnvFilter::try_from_default_env()
         .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new(filter_str));

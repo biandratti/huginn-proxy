@@ -19,11 +19,11 @@ use tracing::{debug, info, warn};
 
 use crate::config::Config;
 use crate::error::Result;
-use crate::fingerprinting::CapturingStream;
+use crate::fingerprinting::{read_client_hello, CapturingStream};
 use crate::load_balancing::RoundRobin;
 use crate::proxy::forwarding::{bad_gateway, forward, pick_route};
 use crate::telemetry::Metrics;
-use crate::tls::{build_rustls, read_client_hello};
+use crate::tls::build_rustls;
 use huginn_net_http::AkamaiFingerprint;
 
 struct PrefixedStream<S> {
