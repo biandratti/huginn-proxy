@@ -111,22 +111,6 @@ fn test_build_rustls_custom_alpn() -> Result<(), Box<dyn std::error::Error + Sen
     Ok(())
 }
 
-#[tokio::test]
-async fn test_read_client_hello_function_exists(
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    // Test that the function exists and can be called
-    // In a real test, we'd use a mock TCP stream or testcontainers
-    // For now, we just verify the function is accessible
-    use tokio::net::TcpStream;
-
-    // Try to connect to an invalid address to verify function signature
-    let result = TcpStream::connect("127.0.0.1:0").await;
-
-    // This will fail to connect, but we're just testing the function exists
-    assert!(result.is_err());
-    Ok(())
-}
-
 #[test]
 fn test_build_rustls_invalid_pem() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let cert_path = tmp_path("invalid.crt");

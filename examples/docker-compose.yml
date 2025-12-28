@@ -10,8 +10,8 @@ services:
       - ./config/compose.toml:/config/compose.toml:ro
       - ./certs:/config/certs:ro
     ports:
-      - "7000:7000"
-      - "9900:9900"
+      - "7000:7000"   # Proxy server (HTTPS/HTTP)
+      - "9090:9090"   # Metrics server (Prometheus)
     depends_on:
       - backend-a
       - backend-b

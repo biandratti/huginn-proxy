@@ -1,8 +1,6 @@
-use huginn_proxy_lib::fingerprinting::{process_captured_bytes, CapturingStream};
-use std::sync::atomic::AtomicBool;
-use std::sync::Arc;
+use huginn_proxy_lib::fingerprinting::CapturingStream;
 use tokio::io::{AsyncRead, AsyncWrite};
-use tokio::sync::{mpsc, watch};
+use tokio::sync::watch;
 
 struct MockStream {
     data: Vec<u8>,
@@ -78,7 +76,7 @@ async fn test_incomplete_http2_preface() -> Result<(), Box<dyn std::error::Error
     // Only partial preface (missing last bytes)
     let incomplete_preface = b"PRI * HTTP/2.0\r\n\r\nSM\r\n\r";
     let mock_stream = MockStream::new(incomplete_preface.to_vec());
-    let (mut capturing, mut receiver, extracted) = CapturingStream::new(mock_stream, 64 * 1024, tx);
+    let (mut capturing, extracted) = CapturingStream::new(mock_stream, 64 * 1024, tx, None);
 
     let mut buf = vec![0u8; 1024];
     let mut read_buf = tokio::io::ReadBuf::new(&mut buf);
@@ -89,8 +87,6 @@ async fn test_incomplete_http2_preface() -> Result<(), Box<dyn std::error::Error
     // Should not crash, fingerprint should not be extracted from incomplete data
     assert!(!extracted.load(std::sync::atomic::Ordering::Relaxed));
     assert!(rx.borrow().is_none());
-    // Data should have been captured
-    assert!(receiver.try_recv().is_ok() || receiver.try_recv().is_err());
 
     Ok(())
 }
@@ -99,7 +95,7 @@ async fn test_incomplete_http2_preface() -> Result<(), Box<dyn std::error::Error
 async fn test_empty_stream() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let (tx, rx) = watch::channel(None);
     let mock_stream = MockStream::new(vec![]);
-    let (mut capturing, mut receiver, extracted) = CapturingStream::new(mock_stream, 64 * 1024, tx);
+    let (mut capturing, extracted) = CapturingStream::new(mock_stream, 64 * 1024, tx, None);
 
     let mut buf = vec![0u8; 1024];
     let mut read_buf = tokio::io::ReadBuf::new(&mut buf);
@@ -110,8 +106,6 @@ async fn test_empty_stream() -> Result<(), Box<dyn std::error::Error + Send + Sy
     // Should handle empty stream gracefully
     assert!(!extracted.load(std::sync::atomic::Ordering::Relaxed));
     assert!(rx.borrow().is_none());
-    // No data should be captured from empty stream
-    assert!(receiver.try_recv().is_err());
 
     Ok(())
 }
@@ -122,7 +116,7 @@ async fn test_invalid_frame_data() -> Result<(), Box<dyn std::error::Error + Sen
     // Invalid frame data (too short to be a valid frame)
     let invalid_data = vec![0x00, 0x01, 0x02];
     let mock_stream = MockStream::new(invalid_data);
-    let (mut capturing, mut receiver, extracted) = CapturingStream::new(mock_stream, 64 * 1024, tx);
+    let (mut capturing, extracted) = CapturingStream::new(mock_stream, 64 * 1024, tx, None);
 
     let mut buf = vec![0u8; 1024];
     let mut read_buf = tokio::io::ReadBuf::new(&mut buf);
@@ -133,8 +127,6 @@ async fn test_invalid_frame_data() -> Result<(), Box<dyn std::error::Error + Sen
     // Should not panic on invalid data, no fingerprint should be extracted
     assert!(!extracted.load(std::sync::atomic::Ordering::Relaxed));
     assert!(rx.borrow().is_none());
-    // Data should still be captured even if invalid
-    assert!(receiver.try_recv().is_ok() || receiver.try_recv().is_err());
 
     Ok(())
 }
@@ -146,7 +138,7 @@ async fn test_connection_failure_during_read(
     let http2_preface = b"PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n";
     // Set failure at position 5 to ensure it happens during first read
     let mock_stream = MockStream::new(http2_preface.to_vec()).with_failure_at(5);
-    let (mut capturing, mut receiver, extracted) = CapturingStream::new(mock_stream, 64 * 1024, tx);
+    let (mut capturing, extracted) = CapturingStream::new(mock_stream, 64 * 1024, tx, None);
 
     let mut buf = vec![0u8; 1024];
     let mut read_buf = tokio::io::ReadBuf::new(&mut buf);
@@ -164,65 +156,6 @@ async fn test_connection_failure_during_read(
     // No fingerprint should be extracted from failed connection
     assert!(!extracted.load(std::sync::atomic::Ordering::Relaxed));
     assert!(rx.borrow().is_none());
-    // Some data might have been captured before failure
-    let _captured = receiver.try_recv();
 
     Ok(())
-}
-
-#[tokio::test]
-async fn test_process_captured_bytes_invalid_data() {
-    let (tx, rx) = watch::channel(None);
-    let (sender, receiver) = mpsc::unbounded_channel();
-    let extracted = Arc::new(AtomicBool::new(false));
-
-    // Send invalid HTTP/2 data
-    let _ = sender.send(vec![0xFF, 0xFF, 0xFF, 0xFF]);
-    drop(sender);
-
-    // Process should handle invalid data without panicking
-    process_captured_bytes(receiver, tx, extracted.clone()).await;
-
-    // Verify no fingerprint was extracted from invalid data
-    assert!(!extracted.load(std::sync::atomic::Ordering::Relaxed));
-    assert!(rx.borrow().is_none());
-}
-
-#[tokio::test]
-async fn test_process_captured_bytes_very_large_chunk() {
-    let (tx, rx) = watch::channel(None);
-    let (sender, receiver) = mpsc::unbounded_channel();
-    let extracted = Arc::new(AtomicBool::new(false));
-
-    // Send a very large chunk (larger than typical buffer)
-    let large_data = vec![0u8; 200 * 1024]; // 200KB
-    let _ = sender.send(large_data);
-    drop(sender);
-
-    // Process should handle large chunks without panicking
-    process_captured_bytes(receiver, tx, extracted.clone()).await;
-
-    // Verify processing completed (no fingerprint expected from random data)
-    assert!(!extracted.load(std::sync::atomic::Ordering::Relaxed));
-    assert!(rx.borrow().is_none());
-}
-
-#[tokio::test]
-async fn test_process_captured_bytes_multiple_empty_chunks() {
-    let (tx, rx) = watch::channel(None);
-    let (sender, receiver) = mpsc::unbounded_channel();
-    let extracted = Arc::new(AtomicBool::new(false));
-
-    // Send multiple empty chunks
-    for _ in 0..10 {
-        let _ = sender.send(vec![]);
-    }
-    drop(sender);
-
-    // Process should handle empty chunks gracefully
-    process_captured_bytes(receiver, tx, extracted.clone()).await;
-
-    // Verify no fingerprint extracted from empty data
-    assert!(!extracted.load(std::sync::atomic::Ordering::Relaxed));
-    assert!(rx.borrow().is_none());
 }

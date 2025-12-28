@@ -5,46 +5,48 @@ use std::task::{Context, Poll};
 
 use huginn_net_http::akamai_extractor::extract_akamai_fingerprint;
 use huginn_net_http::http2_parser::Http2Parser;
+use huginn_net_http::AkamaiFingerprint;
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
-use tokio::sync::{mpsc, watch};
+use tokio::sync::watch;
+use tokio::time::Instant;
 use tracing::debug;
 
 /// CapturingStream captures all data read from the inner stream
-/// while passing it through, similar to how fingerproxy captures HTTP/2 frames
-/// Processes fingerprint inline when possible to avoid race conditions
+/// while passing it through. Processes fingerprint inline for optimal performance
 pub struct CapturingStream<S> {
     inner: S,
-    sender: mpsc::UnboundedSender<Vec<u8>>,
-    fingerprint_tx: watch::Sender<Option<String>>,
+    fingerprint_tx: watch::Sender<Option<AkamaiFingerprint>>,
     fingerprint_extracted: Arc<AtomicBool>,
     max_capture: usize,
     captured_len: Arc<AtomicUsize>,
     buffer: Vec<u8>, // Inline buffer for fast processing
     parser: Http2Parser<'static>,
     parsed_offset: usize,
+    extraction_start: Option<Instant>,
+    metrics: Option<Arc<crate::telemetry::Metrics>>,
 }
 
 impl<S> CapturingStream<S> {
     pub fn new(
         inner: S,
         max_capture: usize,
-        fingerprint_tx: watch::Sender<Option<String>>,
-    ) -> (Self, mpsc::UnboundedReceiver<Vec<u8>>, Arc<AtomicBool>) {
-        let (sender, receiver) = mpsc::unbounded_channel();
+        fingerprint_tx: watch::Sender<Option<AkamaiFingerprint>>,
+        metrics: Option<Arc<crate::telemetry::Metrics>>,
+    ) -> (Self, Arc<AtomicBool>) {
         let fingerprint_extracted = Arc::new(AtomicBool::new(false));
         (
             Self {
                 inner,
-                sender,
                 fingerprint_tx,
                 fingerprint_extracted: fingerprint_extracted.clone(),
                 max_capture,
                 captured_len: Arc::new(AtomicUsize::new(0)),
-                buffer: Vec::with_capacity(64 * 1024),
+                buffer: Vec::with_capacity(max_capture),
                 parser: Http2Parser::new(),
                 parsed_offset: 0,
+                extraction_start: Some(Instant::now()),
+                metrics,
             },
-            receiver,
             fingerprint_extracted,
         )
     }
@@ -69,10 +71,8 @@ impl<S: AsyncRead + Unpin> AsyncRead for CapturingStream<S> {
                 let to_capture = read_data.len().min(remaining);
                 let data_to_process = &read_data[..to_capture];
 
-                if self.sender.send(data_to_process.to_vec()).is_ok() {
-                    self.captured_len
-                        .store(current_len.saturating_add(to_capture), Ordering::Relaxed);
-                }
+                self.captured_len
+                    .store(current_len.saturating_add(to_capture), Ordering::Relaxed);
 
                 self.buffer.extend_from_slice(data_to_process);
 
@@ -98,13 +98,25 @@ impl<S: AsyncRead + Unpin> AsyncRead for CapturingStream<S> {
                                         fingerprint.fingerprint
                                     );
                                     // Update fingerprint immediately
-                                    let _ = self.fingerprint_tx.send(Some(fingerprint.fingerprint));
+                                    let _ = self.fingerprint_tx.send(Some(fingerprint));
                                     self.fingerprint_extracted.store(true, Ordering::Relaxed);
+
+                                    let start = self.extraction_start.take();
+                                    if let Some(ref m) = &self.metrics {
+                                        if let Some(start_time) = start {
+                                            let duration = start_time.elapsed().as_secs_f64();
+                                            m.http2_fingerprints_extracted_total.add(1, &[]);
+                                            m.http2_fingerprint_extraction_duration_seconds
+                                                .record(duration, &[]);
+                                        }
+                                    }
                                 }
                             }
                         }
                         Err(_) => {
                             // Parsing error, continue (might need more data)
+                            // Note: HTTP/1.1 detection happens in handle_proxy_request
+                            // when req.version() != HTTP_2
                         }
                     }
                 }
@@ -129,65 +141,12 @@ impl<S: AsyncWrite + Unpin> AsyncWrite for CapturingStream<S> {
     }
 
     fn poll_shutdown(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
-        Pin::new(&mut self.inner).poll_shutdown(cx)
-    }
-}
-
-/// Process captured bytes in a separate task (lock-free)
-/// Similar to how fingerproxy processes frames without locks
-pub async fn process_captured_bytes(
-    mut receiver: mpsc::UnboundedReceiver<Vec<u8>>,
-    fingerprint_tx: watch::Sender<Option<String>>, // Watch channel for multiple readers
-    fingerprint_extracted: Arc<AtomicBool>,
-) {
-    let mut buffer = Vec::with_capacity(64 * 1024);
-    let parser = Http2Parser::new();
-    let mut parsed_offset = 0;
-
-    while let Some(chunk) = receiver.recv().await {
-        if fingerprint_extracted.load(Ordering::Relaxed) {
-            break;
-        }
-
-        buffer.extend_from_slice(&chunk);
-        debug!(
-            "process_captured_bytes: received {} bytes (total: {})",
-            chunk.len(),
-            buffer.len()
-        );
-
-        // Use parse_frames_skip_preface to handle preface automatically
-        let frame_data = if parsed_offset == 0 {
-            &buffer[..]
-        } else {
-            &buffer[parsed_offset..]
-        };
-
-        if frame_data.len() >= 9 {
-            match parser.parse_frames_skip_preface(frame_data) {
-                Ok((frames, bytes_consumed)) => {
-                    if !frames.is_empty() {
-                        debug!("process_captured_bytes: parsed {} frames", frames.len());
-                        // Update parsed_offset based on actual bytes consumed (includes preface if present)
-                        parsed_offset = parsed_offset.saturating_add(bytes_consumed);
-
-                        if let Some(fingerprint) = extract_akamai_fingerprint(&frames) {
-                            debug!(
-                                "process_captured_bytes: extracted fingerprint: {}",
-                                fingerprint.fingerprint
-                            );
-                            // Send via watch channel (allows multiple readers, always has latest value)
-                            let _ = fingerprint_tx.send(Some(fingerprint.fingerprint));
-                            fingerprint_extracted.store(true, Ordering::Relaxed);
-                            break;
-                        }
-                    }
-                }
-                Err(e) => {
-                    debug!("process_captured_bytes: parsing error: {:?}", e);
-                    // Continue, might need more data
-                }
+        // If connection closes before fingerprint extracted, record failure
+        if !self.fingerprint_extracted.load(Ordering::Relaxed) {
+            if let Some(ref m) = &self.metrics {
+                m.http2_fingerprint_failures_total.add(1, &[]);
             }
         }
+        Pin::new(&mut self.inner).poll_shutdown(cx)
     }
 }

@@ -1,42 +1,13 @@
-use std::sync::Arc;
-
 use rustls_pki_types::pem::PemObject;
 use rustls_pki_types::{CertificateDer, PrivateKeyDer};
-use tokio_rustls::rustls::ServerConfig as RustlsServerConfig;
+use std::sync::Arc;
+use tokio_rustls::rustls::ServerConfig;
 use tokio_rustls::TlsAcceptor;
 
 use crate::config::TlsConfig;
 use crate::error::{ProxyError, Result};
 
-pub async fn read_client_hello(
-    stream: &mut tokio::net::TcpStream,
-) -> std::io::Result<(Vec<u8>, Option<String>)> {
-    use huginn_net_tls::tls_process::parse_tls_client_hello_ja4;
-    use tokio::io::AsyncReadExt;
-
-    let mut buf = Vec::with_capacity(8192);
-    loop {
-        if buf.len() >= 5 {
-            let len = u16::from_be_bytes([buf[3], buf[4]]) as usize;
-            let needed = len.saturating_add(5);
-            if buf.len() >= needed {
-                break;
-            }
-        }
-        let read = stream.read_buf(&mut buf).await?;
-        if read == 0 {
-            break;
-        }
-        if buf.len() > 64 * 1024 {
-            break;
-        }
-    }
-
-    let ja4 = parse_tls_client_hello_ja4(&buf);
-
-    Ok((buf, ja4))
-}
-
+/// Builds a TLS acceptor from configuration
 pub fn build_rustls(cfg: &TlsConfig) -> Result<TlsAcceptor> {
     let certs = {
         let bytes = std::fs::read(&cfg.cert_path)
@@ -58,7 +29,7 @@ pub fn build_rustls(cfg: &TlsConfig) -> Result<TlsAcceptor> {
         k
     };
 
-    let mut server = RustlsServerConfig::builder()
+    let mut server = ServerConfig::builder()
         .with_no_client_auth()
         .with_single_cert(certs, key)
         .map_err(|e| ProxyError::Tls(format!("Failed to build TLS config: {e}")))?;

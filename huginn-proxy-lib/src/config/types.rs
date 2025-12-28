@@ -51,7 +51,7 @@ pub struct TlsConfig {
 }
 
 /// Fingerprinting configuration
-#[derive(Debug, Deserialize, Clone, Default)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct FingerprintConfig {
     /// Enable TLS fingerprinting (JA4)
     /// Default: true
@@ -62,13 +62,34 @@ pub struct FingerprintConfig {
     /// Default: true
     #[serde(default = "default_true")]
     pub http_enabled: bool,
+    /// Maximum bytes to capture for HTTP/2 fingerprinting
+    /// This limits the amount of data buffered for fingerprint extraction
+    /// Default: 65536 (64 KB)
+    #[serde(default = "default_max_capture")]
+    pub max_capture: usize,
+}
+
+fn default_max_capture() -> usize {
+    64 * 1024 // 64 KB
+}
+
+impl Default for FingerprintConfig {
+    fn default() -> Self {
+        Self {
+            tls_enabled: default_true(),
+            http_enabled: default_true(),
+            max_capture: default_max_capture(),
+        }
+    }
 }
 
 /// Logging configuration
+/// Controls application-level structured logging (stdout/stderr)
 #[derive(Debug, Deserialize, Clone, Default)]
 pub struct LoggingConfig {
     /// Log level: "trace", "debug", "info", "warn", "error"
     /// Default: "info"
+    /// Can be overridden at runtime via RUST_LOG environment variable
     #[serde(default = "default_log_level")]
     pub level: String,
     /// Show module path (target) in log messages
@@ -92,6 +113,29 @@ pub struct TimeoutConfig {
     /// Default: 30
     #[serde(default = "default_shutdown_timeout")]
     pub shutdown_secs: u64,
+}
+
+/// Telemetry configuration
+/// Controls observability features: metrics, tracing, and OpenTelemetry integration
+#[derive(Debug, Deserialize, Clone, Default)]
+pub struct TelemetryConfig {
+    /// Metrics server port (optional)
+    /// If provided, starts a separate HTTP server on this port for Prometheus metrics
+    /// This is the recommended production approach, similar to how Traefik handles metrics
+    /// Default: None (metrics disabled)
+    #[serde(default)]
+    pub metrics_port: Option<u16>,
+    /// OpenTelemetry internal log level
+    /// Controls verbosity of OpenTelemetry SDK internal logs (not application logs)
+    /// This is separate from the main application log level in [logging]
+    /// Options: "trace", "debug", "info", "warn", "error"
+    /// Default: "warn" (suppress informational logs from OpenTelemetry SDK)
+    #[serde(default = "default_otel_log_level")]
+    pub otel_log_level: String,
+}
+
+fn default_otel_log_level() -> String {
+    "warn".to_string()
 }
 
 /// Main configuration structure
@@ -123,6 +167,10 @@ pub struct Config {
     /// Timeout configuration
     #[serde(default)]
     pub timeout: TimeoutConfig,
+    /// Telemetry configuration
+    /// Controls metrics, tracing, and observability features
+    #[serde(default)]
+    pub telemetry: TelemetryConfig,
 }
 
 fn default_true() -> bool {

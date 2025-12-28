@@ -3,24 +3,28 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::task::{Context, Poll};
 
+use http::Version;
 use hyper::body::Incoming;
 use hyper::header::{HeaderName, HeaderValue};
 use hyper::Request;
 use hyper_util::rt::{TokioExecutor, TokioIo};
 use hyper_util::server::conn::auto::Builder as ConnBuilder;
+use opentelemetry::KeyValue;
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 use tokio::net::TcpListener;
 use tokio::signal;
 use tokio::sync::watch;
-use tokio::time::{sleep, Duration};
+use tokio::time::{sleep, Duration, Instant};
 use tracing::{debug, info, warn};
 
 use crate::config::Config;
 use crate::error::Result;
-use crate::fingerprinting::{process_captured_bytes, CapturingStream};
+use crate::fingerprinting::{read_client_hello, CapturingStream};
 use crate::load_balancing::RoundRobin;
 use crate::proxy::forwarding::{bad_gateway, forward, pick_route};
-use crate::tls::{build_rustls, read_client_hello};
+use crate::telemetry::Metrics;
+use crate::tls::build_rustls;
+use huginn_net_http::AkamaiFingerprint;
 
 struct PrefixedStream<S> {
     prefix: Vec<u8>,
@@ -69,9 +73,16 @@ impl<S: AsyncWrite + Unpin> AsyncWrite for PrefixedStream<S> {
     }
 }
 
-/// Convert fingerprint value to HeaderValue
-fn header_value(value: &Option<String>) -> Option<HeaderValue> {
-    value.as_ref().and_then(|f| HeaderValue::from_str(f).ok())
+fn akamai_header_value(value: &Option<AkamaiFingerprint>) -> Option<HeaderValue> {
+    value
+        .as_ref()
+        .and_then(|f| HeaderValue::from_str(&f.fingerprint).ok())
+}
+
+fn tls_header_value(value: &Option<huginn_net_tls::Ja4Payload>) -> Option<HeaderValue> {
+    value
+        .as_ref()
+        .and_then(|f| HeaderValue::from_str(&f.full.to_string()).ok())
 }
 
 /// Guard to decrement active connections counter when dropped
@@ -83,7 +94,117 @@ impl Drop for ConnectionGuard {
     }
 }
 
-pub async fn run(config: Arc<Config>) -> Result<()> {
+type RespBody = http_body_util::combinators::BoxBody<bytes::Bytes, hyper::Error>;
+
+/// Handle request routing and forwarding
+#[allow(clippy::too_many_arguments)]
+async fn handle_proxy_request(
+    mut req: Request<Incoming>,
+    routes: Vec<crate::config::Route>,
+    backend_list: Arc<Vec<crate::config::Backend>>,
+    backends: Arc<Vec<crate::config::Backend>>,
+    round_robin: RoundRobin,
+    tls_header: Option<HeaderValue>,
+    fingerprint_rx: Option<watch::Receiver<Option<huginn_net_http::AkamaiFingerprint>>>,
+    metrics: Option<Arc<Metrics>>,
+) -> std::result::Result<hyper::Response<RespBody>, hyper::Error> {
+    let start = Instant::now();
+    let method = req.method().to_string();
+    let protocol = format!("{:?}", req.version());
+    // Handle TLS fingerprint header
+    if let Some(hv) = tls_header {
+        req.headers_mut()
+            .insert(HeaderName::from_static("x-huginn-net-tls"), hv);
+    }
+
+    // Handle HTTP/2 fingerprint header
+    // Note: Akamai fingerprinting only works for HTTP/2, not HTTP/1.1
+    if let Some(ref rx) = fingerprint_rx {
+        // Only attempt to extract HTTP/2 fingerprint if this is actually an HTTP/2 request
+        if req.version() == Version::HTTP_2 {
+            let akamai = rx.borrow().clone();
+            debug!("Handler: akamai fingerprint: {:?}", akamai);
+            if let Some(hv) = akamai_header_value(&akamai) {
+                debug!("Handler: injecting x-huginn-net-http header: {:?}", hv);
+                req.headers_mut()
+                    .insert(HeaderName::from_static("x-huginn-net-http"), hv);
+            } else {
+                debug!("Handler: no HTTP fingerprint header to inject (HTTP/2 connection but fingerprint not extracted)");
+                // Record failure metric if metrics available
+                if let Some(ref m) = metrics {
+                    m.http2_fingerprint_failures_total.add(1, &[]);
+                }
+            }
+        } else {
+            // HTTP/1.1 connection - Akamai fingerprint not applicable
+            debug!("Handler: HTTP/1.1 connection, Akamai fingerprint not applicable");
+            if let Some(ref m) = metrics {
+                m.http2_fingerprint_failures_total.add(1, &[]);
+            }
+        }
+    }
+
+    // Route selection
+    let path = req.uri().path();
+    let backend = if let Some(target) = pick_route(path, &routes) {
+        let backend_str = target.to_string();
+        if let Some(ref m) = metrics {
+            m.backend_selections_total
+                .add(1, &[KeyValue::new("backend", backend_str.clone())]);
+        }
+        backend_str
+    } else {
+        if backend_list.is_empty() {
+            if let Some(ref m) = metrics {
+                m.errors_total
+                    .add(1, &[KeyValue::new("error_type", "no_backends")]);
+            }
+            return Ok(bad_gateway());
+        }
+        let idx = round_robin.next(backend_list.len());
+        let selected_backend = backend_list[idx].address.clone();
+        if let Some(ref m) = metrics {
+            m.backend_selections_total
+                .add(1, &[KeyValue::new("backend", selected_backend.clone())]);
+        }
+        selected_backend
+    };
+
+    // Forward request
+    let result = forward(req, backend.clone(), &backends, metrics.clone()).await;
+
+    let duration = start.elapsed().as_secs_f64();
+    let status_code = match &result {
+        Ok(resp) => resp.status().as_u16(),
+        Err(_) => 502, // Bad Gateway
+    };
+
+    if let Some(ref m) = metrics {
+        m.requests_total.add(
+            1,
+            &[
+                KeyValue::new("method", method.clone()),
+                KeyValue::new("status_code", status_code.to_string()),
+                KeyValue::new("protocol", protocol.clone()),
+            ],
+        );
+        m.requests_duration_seconds.record(
+            duration,
+            &[
+                KeyValue::new("method", method),
+                KeyValue::new("status_code", status_code.to_string()),
+                KeyValue::new("protocol", protocol),
+            ],
+        );
+    }
+
+    match result {
+        Ok(resp) => Ok(resp),
+        Err(_) => Ok(bad_gateway()),
+    }
+}
+
+pub async fn run(config: Arc<Config>, metrics: Option<Arc<Metrics>>) -> Result<()> {
     let addr = config.listen;
     let listener = TcpListener::bind(addr)
         .await
@@ -152,6 +273,11 @@ pub async fn run(config: Arc<Config>) -> Result<()> {
                 // Increment active connections counter
                 active_connections.fetch_add(1, Ordering::Relaxed);
 
+                if let Some(ref m) = metrics {
+                    m.connections_total.add(1, &[]);
+                    m.connections_active.add(1, &[]);
+                }
+
                 let builder = builder.clone();
                 let backends_clone = Arc::clone(&backends_for_loop);
                 let routes = routes.clone();
@@ -159,15 +285,21 @@ pub async fn run(config: Arc<Config>) -> Result<()> {
                 let tls_acceptor = tls_acceptor.clone();
                 let active_connections = active_connections.clone();
                 let fingerprint_config = config.fingerprint.clone();
+                let metrics_clone = metrics.clone();
 
+                let metrics_for_connection = metrics_clone.clone();
                 tokio::spawn(async move {
                     // Ensure counter is decremented when connection finishes
                     let _guard = ConnectionGuard(active_connections);
                     let mut stream = stream;
                     let backend_list = backends_clone.clone();
 
+                    if let Some(ref m) = metrics_for_connection {
+                        m.connections_active.add(-1, &[]);
+                    }
+
                     if let Some(acc) = tls_acceptor {
-                        let (prefix, ja4) = match read_client_hello(&mut stream).await {
+                        let (prefix, ja4) = match read_client_hello(&mut stream, metrics_for_connection.clone()).await {
                             Ok(v) => v,
                             Err(e) => {
                                 warn!(?peer, error = %e, "failed to read client hello");
@@ -179,67 +311,39 @@ pub async fn run(config: Arc<Config>) -> Result<()> {
                         match acc.accept(prefixed).await {
                             Ok(tls) => {
                                 let tls_header = if fingerprint_config.tls_enabled {
-                                    header_value(&ja4)
+                                    tls_header_value(&ja4)
                                 } else {
                                     None
                                 };
 
                                 if fingerprint_config.http_enabled {
-                                    let (fingerprint_tx, fingerprint_rx) = watch::channel(None::<String>);
+                                    let (fingerprint_tx, fingerprint_rx) = watch::channel(None::<huginn_net_http::AkamaiFingerprint>);
 
-                                    // Create CapturingStream with direct access to fingerprint_tx for inline processing
-                                    let (capturing_stream, receiver, fingerprint_extracted) =
-                                        CapturingStream::new(tls, 64 * 1024, fingerprint_tx.clone());
+                                    // Create CapturingStream with inline fingerprint processing
+                                    let (capturing_stream, _fingerprint_extracted) =
+                                        CapturingStream::new(tls, fingerprint_config.max_capture, fingerprint_tx.clone(), metrics_for_connection.clone());
 
-                                    let fingerprint_extracted_for_task = fingerprint_extracted.clone();
-                                    tokio::spawn(process_captured_bytes(
-                                        receiver,
-                                        fingerprint_tx,
-                                        fingerprint_extracted_for_task,
-                                    ));
-
-                                    let svc = hyper::service::service_fn(move |mut req: Request<Incoming>| {
+                                    let metrics_for_service = metrics_for_connection.clone();
+                                    let svc = hyper::service::service_fn(move |req: Request<Incoming>| {
                                         let routes = routes.clone();
                                         let backend_list = backend_list.clone();
                                         let backends = backends_clone.clone();
                                         let round_robin = round_robin.clone();
                                         let tls_header = tls_header.clone();
                                         let fingerprint_rx = fingerprint_rx.clone();
+                                        let metrics = metrics_for_service.clone();
 
                                         async move {
-                                            if let Some(hv) = tls_header {
-                                                req.headers_mut()
-                                                    .insert(HeaderName::from_static("x-huginn-net-tls"), hv);
-                                            }
-
-                                            // Get HTTP/2 fingerprint from watch channel
-                                            let akamai = fingerprint_rx.borrow().clone();
-                                            debug!("Handler: akamai fingerprint: {:?}", akamai);
-                                            if let Some(hv) = header_value(&akamai) {
-                                                debug!("Handler: injecting x-huginn-net-http header: {:?}", hv);
-                                                req.headers_mut()
-                                                    .insert(HeaderName::from_static("x-huginn-net-http"), hv);
-                                            } else {
-                                                debug!("Handler: no HTTP fingerprint header to inject");
-                                            }
-
-                                            // Route selection
-                                            let path = req.uri().path();
-                                            let backend = if let Some(target) = pick_route(path, &routes) {
-                                                target.to_string()
-                                            } else {
-                                                if backend_list.is_empty() {
-                                                    return Ok::<_, hyper::Error>(bad_gateway());
-                                                }
-                                                let idx = round_robin.next(backend_list.len());
-                                                backend_list[idx].address.clone()
-                                            };
-
-                                            // Forward request
-                                            match forward(req, backend, &backends).await {
-                                                Ok(resp) => Ok::<_, hyper::Error>(resp),
-                                                Err(_) => Ok::<_, hyper::Error>(bad_gateway()),
-                                            }
+                                            handle_proxy_request(
+                                                req,
+                                                routes,
+                                                backend_list,
+                                                backends,
+                                                round_robin,
+                                                tls_header,
+                                                Some(fingerprint_rx),
+                                                metrics,
+                                            ).await
                                         }
                                     });
 
@@ -250,36 +354,26 @@ pub async fn run(config: Arc<Config>) -> Result<()> {
                                         warn!(?peer, error = %e, "serve_connection error");
                                     }
                                 } else {
-                                    let svc = hyper::service::service_fn(move |mut req: Request<Incoming>| {
+                                    let metrics_for_service = metrics_for_connection.clone();
+                                    let svc = hyper::service::service_fn(move |req: Request<Incoming>| {
                                         let routes = routes.clone();
                                         let backend_list = backend_list.clone();
                                         let backends = backends_clone.clone();
                                         let round_robin = round_robin.clone();
                                         let tls_header = tls_header.clone();
+                                        let metrics = metrics_for_service.clone();
 
                                         async move {
-                                            if let Some(hv) = tls_header {
-                                                req.headers_mut()
-                                                    .insert(HeaderName::from_static("x-huginn-net-tls"), hv);
-                                            }
-
-                                            // Route selection
-                                            let path = req.uri().path();
-                                            let backend = if let Some(target) = pick_route(path, &routes) {
-                                                target.to_string()
-                                            } else {
-                                                if backend_list.is_empty() {
-                                                    return Ok::<_, hyper::Error>(bad_gateway());
-                                                }
-                                                let idx = round_robin.next(backend_list.len());
-                                                backend_list[idx].address.clone()
-                                            };
-
-                                            // Forward request
-                                            match forward(req, backend, &backends).await {
-                                                Ok(resp) => Ok::<_, hyper::Error>(resp),
-                                                Err(_) => Ok::<_, hyper::Error>(bad_gateway()),
-                                            }
+                                            handle_proxy_request(
+                                                req,
+                                                routes,
+                                                backend_list,
+                                                backends,
+                                                round_robin,
+                                                tls_header,
+                                                None,
+                                                metrics,
+                                            ).await
                                         }
                                     });
 
@@ -296,28 +390,25 @@ pub async fn run(config: Arc<Config>) -> Result<()> {
                             }
                         }
                     } else {
+                        let metrics_for_service = metrics_for_connection.clone();
                         let svc = hyper::service::service_fn(move |req: Request<Incoming>| {
                             let routes = routes.clone();
                             let backend_list = backend_list.clone();
                             let backends = backends_clone.clone();
                             let round_robin = round_robin.clone();
+                            let metrics = metrics_for_service.clone();
 
                             async move {
-                                let path = req.uri().path();
-                                let backend = if let Some(target) = pick_route(path, &routes) {
-                                    target.to_string()
-                                } else {
-                                    if backend_list.is_empty() {
-                                        return Ok::<_, hyper::Error>(bad_gateway());
-                                    }
-                                    let idx = round_robin.next(backend_list.len());
-                                    backend_list[idx].address.clone()
-                                };
-
-                                match forward(req, backend, &backends).await {
-                                    Ok(resp) => Ok::<_, hyper::Error>(resp),
-                                    Err(_) => Ok::<_, hyper::Error>(bad_gateway()),
-                                }
+                                handle_proxy_request(
+                                    req,
+                                    routes,
+                                    backend_list,
+                                    backends,
+                                    round_robin,
+                                    None,
+                                    None,
+                                    metrics,
+                                ).await
                             }
                         });
 
