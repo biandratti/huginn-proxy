@@ -23,6 +23,7 @@ use crate::load_balancing::RoundRobin;
 use crate::proxy::forwarding::{bad_gateway, forward, pick_route};
 use crate::telemetry::Metrics;
 use crate::tls::{build_rustls, read_client_hello};
+use huginn_net_http::AkamaiFingerprint;
 
 struct PrefixedStream<S> {
     prefix: Vec<u8>,
@@ -71,8 +72,16 @@ impl<S: AsyncWrite + Unpin> AsyncWrite for PrefixedStream<S> {
     }
 }
 
-/// Convert fingerprint value to HeaderValue
-fn header_value(value: &Option<String>) -> Option<HeaderValue> {
+/// Convert Akamai fingerprint to HeaderValue
+fn akamai_header_value(value: &Option<AkamaiFingerprint>) -> Option<HeaderValue> {
+    value
+        .as_ref()
+        .and_then(|f| HeaderValue::from_str(&f.fingerprint).ok())
+}
+
+//TODO: Use JA4 fingerprint from huginn-net-tls crate
+/// Convert TLS fingerprint (String) to HeaderValue
+fn tls_header_value(value: &Option<String>) -> Option<HeaderValue> {
     value.as_ref().and_then(|f| HeaderValue::from_str(f).ok())
 }
 
@@ -96,7 +105,7 @@ async fn handle_proxy_request(
     backends: Arc<Vec<crate::config::Backend>>,
     round_robin: RoundRobin,
     tls_header: Option<HeaderValue>,
-    fingerprint_rx: Option<watch::Receiver<Option<String>>>,
+    fingerprint_rx: Option<watch::Receiver<Option<huginn_net_http::AkamaiFingerprint>>>,
     metrics: Option<Arc<Metrics>>,
 ) -> std::result::Result<hyper::Response<RespBody>, hyper::Error> {
     let start = Instant::now();
@@ -112,7 +121,7 @@ async fn handle_proxy_request(
     if let Some(ref rx) = fingerprint_rx {
         let akamai = rx.borrow().clone();
         debug!("Handler: akamai fingerprint: {:?}", akamai);
-        if let Some(hv) = header_value(&akamai) {
+        if let Some(hv) = akamai_header_value(&akamai) {
             debug!("Handler: injecting x-huginn-net-http header: {:?}", hv);
             req.headers_mut()
                 .insert(HeaderName::from_static("x-huginn-net-http"), hv);
@@ -288,18 +297,17 @@ pub async fn run(config: Arc<Config>, metrics: Option<Arc<Metrics>>) -> Result<(
                         match acc.accept(prefixed).await {
                             Ok(tls) => {
                                 let tls_header = if fingerprint_config.tls_enabled {
-                                    header_value(&ja4)
+                                    tls_header_value(&ja4)
                                 } else {
                                     None
                                 };
 
                                 if fingerprint_config.http_enabled {
-                                    let (fingerprint_tx, fingerprint_rx) = watch::channel(None::<String>);
+                                    let (fingerprint_tx, fingerprint_rx) = watch::channel(None::<huginn_net_http::AkamaiFingerprint>);
 
-                                    //TODO: WIP
                                     // Create CapturingStream with direct access to fingerprint_tx for inline processing
                                     let (capturing_stream, receiver, fingerprint_extracted) =
-                                        CapturingStream::new(tls, 64 * 1024, fingerprint_tx.clone());
+                                        CapturingStream::new(tls, fingerprint_config.max_capture, fingerprint_tx.clone());
 
                                     let fingerprint_extracted_for_task = fingerprint_extracted.clone();
                                     tokio::spawn(process_captured_bytes(

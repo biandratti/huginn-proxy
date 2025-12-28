@@ -5,6 +5,7 @@ use std::task::{Context, Poll};
 
 use huginn_net_http::akamai_extractor::extract_akamai_fingerprint;
 use huginn_net_http::http2_parser::Http2Parser;
+use huginn_net_http::AkamaiFingerprint;
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 use tokio::sync::{mpsc, watch};
 use tracing::debug;
@@ -15,7 +16,7 @@ use tracing::debug;
 pub struct CapturingStream<S> {
     inner: S,
     sender: mpsc::UnboundedSender<Vec<u8>>,
-    fingerprint_tx: watch::Sender<Option<String>>,
+    fingerprint_tx: watch::Sender<Option<AkamaiFingerprint>>,
     fingerprint_extracted: Arc<AtomicBool>,
     max_capture: usize,
     captured_len: Arc<AtomicUsize>,
@@ -28,7 +29,7 @@ impl<S> CapturingStream<S> {
     pub fn new(
         inner: S,
         max_capture: usize,
-        fingerprint_tx: watch::Sender<Option<String>>,
+        fingerprint_tx: watch::Sender<Option<AkamaiFingerprint>>,
     ) -> (Self, mpsc::UnboundedReceiver<Vec<u8>>, Arc<AtomicBool>) {
         let (sender, receiver) = mpsc::unbounded_channel();
         let fingerprint_extracted = Arc::new(AtomicBool::new(false));
@@ -40,7 +41,7 @@ impl<S> CapturingStream<S> {
                 fingerprint_extracted: fingerprint_extracted.clone(),
                 max_capture,
                 captured_len: Arc::new(AtomicUsize::new(0)),
-                buffer: Vec::with_capacity(64 * 1024),
+                buffer: Vec::with_capacity(max_capture),
                 parser: Http2Parser::new(),
                 parsed_offset: 0,
             },
@@ -98,7 +99,7 @@ impl<S: AsyncRead + Unpin> AsyncRead for CapturingStream<S> {
                                         fingerprint.fingerprint
                                     );
                                     // Update fingerprint immediately
-                                    let _ = self.fingerprint_tx.send(Some(fingerprint.fingerprint));
+                                    let _ = self.fingerprint_tx.send(Some(fingerprint));
                                     self.fingerprint_extracted.store(true, Ordering::Relaxed);
                                 }
                             }
@@ -133,11 +134,9 @@ impl<S: AsyncWrite + Unpin> AsyncWrite for CapturingStream<S> {
     }
 }
 
-/// Process captured bytes in a separate task (lock-free)
-/// Similar to how fingerproxy processes frames without locks
 pub async fn process_captured_bytes(
     mut receiver: mpsc::UnboundedReceiver<Vec<u8>>,
-    fingerprint_tx: watch::Sender<Option<String>>, // Watch channel for multiple readers
+    fingerprint_tx: watch::Sender<Option<AkamaiFingerprint>>, // Watch channel for multiple readers
     fingerprint_extracted: Arc<AtomicBool>,
 ) {
     let mut buffer = Vec::with_capacity(64 * 1024);
@@ -177,7 +176,7 @@ pub async fn process_captured_bytes(
                                 fingerprint.fingerprint
                             );
                             // Send via watch channel (allows multiple readers, always has latest value)
-                            let _ = fingerprint_tx.send(Some(fingerprint.fingerprint));
+                            let _ = fingerprint_tx.send(Some(fingerprint));
                             fingerprint_extracted.store(true, Ordering::Relaxed);
                             break;
                         }

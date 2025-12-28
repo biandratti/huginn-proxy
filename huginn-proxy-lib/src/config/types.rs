@@ -51,7 +51,7 @@ pub struct TlsConfig {
 }
 
 /// Fingerprinting configuration
-#[derive(Debug, Deserialize, Clone, Default)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct FingerprintConfig {
     /// Enable TLS fingerprinting (JA4)
     /// Default: true
@@ -62,6 +62,25 @@ pub struct FingerprintConfig {
     /// Default: true
     #[serde(default = "default_true")]
     pub http_enabled: bool,
+    /// Maximum bytes to capture for HTTP/2 fingerprinting
+    /// This limits the amount of data buffered for fingerprint extraction
+    /// Default: 65536 (64 KB)
+    #[serde(default = "default_max_capture")]
+    pub max_capture: usize,
+}
+
+fn default_max_capture() -> usize {
+    64 * 1024 // 64 KB
+}
+
+impl Default for FingerprintConfig {
+    fn default() -> Self {
+        Self {
+            tls_enabled: default_true(),
+            http_enabled: default_true(),
+            max_capture: default_max_capture(),
+        }
+    }
 }
 
 /// Logging configuration

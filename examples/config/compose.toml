@@ -18,6 +18,7 @@ alpn = ["h2", "http/1.1"]
 [fingerprint]
 tls_enabled = true
 http_enabled = true
+max_capture = 65536  # 64 KB - maximum bytes to capture for HTTP/2 fingerprinting
 
 [logging]
 level = "info"

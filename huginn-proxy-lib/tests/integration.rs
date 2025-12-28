@@ -13,7 +13,11 @@ fn create_test_config(listen: &str, backends: Vec<Backend>) -> Config {
         backends,
         routes: vec![],
         tls: None,
-        fingerprint: FingerprintConfig { tls_enabled: true, http_enabled: true },
+        fingerprint: FingerprintConfig {
+            tls_enabled: true,
+            http_enabled: true,
+            max_capture: 64 * 1024,
+        },
         logging: LoggingConfig { level: "info".to_string(), show_target: false },
         timeout: TimeoutConfig { connect_ms: 5000, idle_ms: 60000, shutdown_secs: 30 },
         telemetry: TelemetryConfig { metrics_port: None, otel_log_level: "warn".to_string() },
