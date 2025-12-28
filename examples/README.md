@@ -14,7 +14,27 @@ openssl req -x509 -newkey rsa:2048 -nodes \
 ```bash
 docker compose -f examples/docker-compose.yml up --build
 ```
-- Proxy: `https://localhost:7000/` (use `-k` for curl with the self-signed cert)
-- Backend: `http://localhost:9000/`
 
-Edit `examples/config/compose.toml` to customize the configuration.
+### Endpoints
+
+#### Proxy Server
+- **HTTPS Proxy**: `https://localhost:7000/` (use `-k` for curl with the self-signed cert)
+- **HTTP Proxy**: `http://localhost:7000/` (if TLS is disabled)
+
+#### Metrics Server
+- **Prometheus Metrics**: `http://localhost:9090/metrics`
+
+#### Backend Services
+- **Backend A**: `http://localhost:9000/` (routes matching `/api`)
+- **Backend B**: `http://localhost:9001/` (default routes)
+
+
+### Example Requests
+
+```bash
+# Proxy request (HTTPS)
+curl -k https://localhost:7000/api/test
+
+# Metrics endpoint
+curl http://localhost:9090/metrics
+```

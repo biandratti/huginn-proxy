@@ -1,5 +1,6 @@
 use huginn_proxy_lib::config::{
-    load_from_path, Backend, Config, FingerprintConfig, LoggingConfig, TimeoutConfig,
+    load_from_path, Backend, Config, FingerprintConfig, LoggingConfig, TelemetryConfig,
+    TimeoutConfig,
 };
 use std::io::Write;
 use tempfile::NamedTempFile;
@@ -15,6 +16,7 @@ fn create_test_config(listen: &str, backends: Vec<Backend>) -> Config {
         fingerprint: FingerprintConfig { tls_enabled: true, http_enabled: true },
         logging: LoggingConfig { level: "info".to_string(), show_target: false },
         timeout: TimeoutConfig { connect_ms: 5000, idle_ms: 60000, shutdown_secs: 30 },
+        telemetry: TelemetryConfig { metrics_port: None, otel_log_level: "warn".to_string() },
     }
 }
 

@@ -83,6 +83,56 @@ impl Drop for ConnectionGuard {
     }
 }
 
+type RespBody = http_body_util::combinators::BoxBody<bytes::Bytes, hyper::Error>;
+
+/// Handle request routing and forwarding
+async fn handle_proxy_request(
+    mut req: Request<Incoming>,
+    routes: Vec<crate::config::Route>,
+    backend_list: Arc<Vec<crate::config::Backend>>,
+    backends: Arc<Vec<crate::config::Backend>>,
+    round_robin: RoundRobin,
+    tls_header: Option<HeaderValue>,
+    fingerprint_rx: Option<watch::Receiver<Option<String>>>,
+) -> std::result::Result<hyper::Response<RespBody>, hyper::Error> {
+    // Handle TLS fingerprint header
+    if let Some(hv) = tls_header {
+        req.headers_mut()
+            .insert(HeaderName::from_static("x-huginn-net-tls"), hv);
+    }
+
+    // Handle HTTP/2 fingerprint header
+    if let Some(ref rx) = fingerprint_rx {
+        let akamai = rx.borrow().clone();
+        debug!("Handler: akamai fingerprint: {:?}", akamai);
+        if let Some(hv) = header_value(&akamai) {
+            debug!("Handler: injecting x-huginn-net-http header: {:?}", hv);
+            req.headers_mut()
+                .insert(HeaderName::from_static("x-huginn-net-http"), hv);
+        } else {
+            debug!("Handler: no HTTP fingerprint header to inject");
+        }
+    }
+
+    // Route selection
+    let path = req.uri().path();
+    let backend = if let Some(target) = pick_route(path, &routes) {
+        target.to_string()
+    } else {
+        if backend_list.is_empty() {
+            return Ok(bad_gateway());
+        }
+        let idx = round_robin.next(backend_list.len());
+        backend_list[idx].address.clone()
+    };
+
+    // Forward request
+    match forward(req, backend, &backends).await {
+        Ok(resp) => Ok(resp),
+        Err(_) => Ok(bad_gateway()),
+    }
+}
+
 pub async fn run(config: Arc<Config>) -> Result<()> {
     let addr = config.listen;
     let listener = TcpListener::bind(addr)
@@ -198,7 +248,7 @@ pub async fn run(config: Arc<Config>) -> Result<()> {
                                         fingerprint_extracted_for_task,
                                     ));
 
-                                    let svc = hyper::service::service_fn(move |mut req: Request<Incoming>| {
+                                    let svc = hyper::service::service_fn(move |req: Request<Incoming>| {
                                         let routes = routes.clone();
                                         let backend_list = backend_list.clone();
                                         let backends = backends_clone.clone();
@@ -207,39 +257,15 @@ pub async fn run(config: Arc<Config>) -> Result<()> {
                                         let fingerprint_rx = fingerprint_rx.clone();
 
                                         async move {
-                                            if let Some(hv) = tls_header {
-                                                req.headers_mut()
-                                                    .insert(HeaderName::from_static("x-huginn-net-tls"), hv);
-                                            }
-
-                                            // Get HTTP/2 fingerprint from watch channel
-                                            let akamai = fingerprint_rx.borrow().clone();
-                                            debug!("Handler: akamai fingerprint: {:?}", akamai);
-                                            if let Some(hv) = header_value(&akamai) {
-                                                debug!("Handler: injecting x-huginn-net-http header: {:?}", hv);
-                                                req.headers_mut()
-                                                    .insert(HeaderName::from_static("x-huginn-net-http"), hv);
-                                            } else {
-                                                debug!("Handler: no HTTP fingerprint header to inject");
-                                            }
-
-                                            // Route selection
-                                            let path = req.uri().path();
-                                            let backend = if let Some(target) = pick_route(path, &routes) {
-                                                target.to_string()
-                                            } else {
-                                                if backend_list.is_empty() {
-                                                    return Ok::<_, hyper::Error>(bad_gateway());
-                                                }
-                                                let idx = round_robin.next(backend_list.len());
-                                                backend_list[idx].address.clone()
-                                            };
-
-                                            // Forward request
-                                            match forward(req, backend, &backends).await {
-                                                Ok(resp) => Ok::<_, hyper::Error>(resp),
-                                                Err(_) => Ok::<_, hyper::Error>(bad_gateway()),
-                                            }
+                                            handle_proxy_request(
+                                                req,
+                                                routes,
+                                                backend_list,
+                                                backends,
+                                                round_robin,
+                                                tls_header,
+                                                Some(fingerprint_rx),
+                                            ).await
                                         }
                                     });
 
@@ -250,7 +276,7 @@ pub async fn run(config: Arc<Config>) -> Result<()> {
                                         warn!(?peer, error = %e, "serve_connection error");
                                     }
                                 } else {
-                                    let svc = hyper::service::service_fn(move |mut req: Request<Incoming>| {
+                                    let svc = hyper::service::service_fn(move |req: Request<Incoming>| {
                                         let routes = routes.clone();
                                         let backend_list = backend_list.clone();
                                         let backends = backends_clone.clone();
@@ -258,28 +284,15 @@ pub async fn run(config: Arc<Config>) -> Result<()> {
                                         let tls_header = tls_header.clone();
 
                                         async move {
-                                            if let Some(hv) = tls_header {
-                                                req.headers_mut()
-                                                    .insert(HeaderName::from_static("x-huginn-net-tls"), hv);
-                                            }
-
-                                            // Route selection
-                                            let path = req.uri().path();
-                                            let backend = if let Some(target) = pick_route(path, &routes) {
-                                                target.to_string()
-                                            } else {
-                                                if backend_list.is_empty() {
-                                                    return Ok::<_, hyper::Error>(bad_gateway());
-                                                }
-                                                let idx = round_robin.next(backend_list.len());
-                                                backend_list[idx].address.clone()
-                                            };
-
-                                            // Forward request
-                                            match forward(req, backend, &backends).await {
-                                                Ok(resp) => Ok::<_, hyper::Error>(resp),
-                                                Err(_) => Ok::<_, hyper::Error>(bad_gateway()),
-                                            }
+                                            handle_proxy_request(
+                                                req,
+                                                routes,
+                                                backend_list,
+                                                backends,
+                                                round_robin,
+                                                tls_header,
+                                                None,
+                                            ).await
                                         }
                                     });
 
@@ -303,21 +316,15 @@ pub async fn run(config: Arc<Config>) -> Result<()> {
                             let round_robin = round_robin.clone();
 
                             async move {
-                                let path = req.uri().path();
-                                let backend = if let Some(target) = pick_route(path, &routes) {
-                                    target.to_string()
-                                } else {
-                                    if backend_list.is_empty() {
-                                        return Ok::<_, hyper::Error>(bad_gateway());
-                                    }
-                                    let idx = round_robin.next(backend_list.len());
-                                    backend_list[idx].address.clone()
-                                };
-
-                                match forward(req, backend, &backends).await {
-                                    Ok(resp) => Ok::<_, hyper::Error>(resp),
-                                    Err(_) => Ok::<_, hyper::Error>(bad_gateway()),
-                                }
+                                handle_proxy_request(
+                                    req,
+                                    routes,
+                                    backend_list,
+                                    backends,
+                                    round_robin,
+                                    None,
+                                    None,
+                                ).await
                             }
                         });
 

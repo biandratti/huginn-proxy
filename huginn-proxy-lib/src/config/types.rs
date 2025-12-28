@@ -94,6 +94,26 @@ pub struct TimeoutConfig {
     pub shutdown_secs: u64,
 }
 
+/// Telemetry configuration
+#[derive(Debug, Deserialize, Clone, Default)]
+pub struct TelemetryConfig {
+    /// Metrics server port (optional)
+    /// If provided, starts a separate HTTP server on this port for Prometheus metrics
+    /// This is the recommended production approach, similar to how Traefik handles metrics
+    /// Default: None (metrics disabled)
+    #[serde(default)]
+    pub metrics_port: Option<u16>,
+    /// OpenTelemetry log level
+    /// Controls verbosity of OpenTelemetry internal logs
+    /// Options: "trace", "debug", "info", "warn", "error"
+    #[serde(default = "default_otel_log_level")]
+    pub otel_log_level: String,
+}
+
+fn default_otel_log_level() -> String {
+    "warn".to_string()
+}
+
 /// Main configuration structure
 #[derive(Debug, Deserialize, Clone)]
 pub struct Config {
@@ -123,6 +143,10 @@ pub struct Config {
     /// Timeout configuration
     #[serde(default)]
     pub timeout: TimeoutConfig,
+    /// Telemetry configuration
+    /// Controls metrics, tracing, and observability features
+    #[serde(default)]
+    pub telemetry: TelemetryConfig,
 }
 
 fn default_true() -> bool {
