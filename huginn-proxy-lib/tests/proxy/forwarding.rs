@@ -43,6 +43,7 @@ fn test_determine_http_version_with_config() {
         http_version: Some(BackendHttpVersion::Preserve),
     };
 
+    // Test with explicit http2 config
     assert_eq!(
         determine_http_version(Some(&backend_http2), Version::HTTP_11, false),
         Version::HTTP_2
@@ -52,6 +53,7 @@ fn test_determine_http_version_with_config() {
         Version::HTTP_2
     );
 
+    // Test with explicit http11 config
     assert_eq!(
         determine_http_version(Some(&backend_http11), Version::HTTP_2, false),
         Version::HTTP_11
@@ -61,6 +63,7 @@ fn test_determine_http_version_with_config() {
         Version::HTTP_11
     );
 
+    // Test with preserve config
     assert_eq!(
         determine_http_version(Some(&backend_preserve), Version::HTTP_2, false),
         Version::HTTP_2
@@ -69,6 +72,7 @@ fn test_determine_http_version_with_config() {
         determine_http_version(Some(&backend_preserve), Version::HTTP_11, false),
         Version::HTTP_11
     );
+    // HTTP/3 should be converted to HTTP/2
     assert_eq!(
         determine_http_version(Some(&backend_preserve), Version::HTTP_3, false),
         Version::HTTP_2
@@ -79,6 +83,7 @@ fn test_determine_http_version_with_config() {
 fn test_determine_http_version_defaults() {
     let backend_no_config = Backend { address: "backend:9000".to_string(), http_version: None };
 
+    // Default for HTTP (non-HTTPS): HTTP/1.1
     assert_eq!(
         determine_http_version(Some(&backend_no_config), Version::HTTP_2, false),
         Version::HTTP_11
@@ -88,6 +93,7 @@ fn test_determine_http_version_defaults() {
         Version::HTTP_11
     );
 
+    // Default for HTTPS: preserve
     assert_eq!(
         determine_http_version(Some(&backend_no_config), Version::HTTP_2, true),
         Version::HTTP_2
