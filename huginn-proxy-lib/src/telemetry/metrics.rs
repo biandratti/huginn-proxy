@@ -89,8 +89,8 @@ impl Metrics {
     }
 }
 
-#[allow(dead_code)]
-pub fn init_metrics() -> Result<(Metrics, Registry), Box<dyn std::error::Error + Send + Sync>> {
+pub fn init_metrics() -> Result<(Arc<Metrics>, Registry), Box<dyn std::error::Error + Send + Sync>>
+{
     let registry = Registry::default();
 
     let exporter = opentelemetry_prometheus::exporter()
@@ -102,7 +102,7 @@ pub fn init_metrics() -> Result<(Metrics, Registry), Box<dyn std::error::Error +
     global::set_meter_provider(meter_provider);
 
     let meter = global::meter("huginn-proxy");
-    let metrics = Metrics::new(meter);
+    let metrics = Arc::new(Metrics::new(meter));
 
     Ok((metrics, registry))
 }

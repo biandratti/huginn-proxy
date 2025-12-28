@@ -1,11 +1,15 @@
 use crate::config::BackendHttpVersion;
 use crate::error::Result;
+use crate::telemetry::Metrics;
 use http::{Request, Response, Version};
 use http_body_util::{combinators::BoxBody, BodyExt};
 use hyper::body::Incoming;
 use hyper_util::client::legacy::connect::HttpConnector;
 use hyper_util::client::legacy::Client;
 use hyper_util::rt::TokioExecutor;
+use opentelemetry::KeyValue;
+use std::sync::Arc;
+use tokio::time::Instant;
 
 type HttpClient = Client<HttpConnector, Incoming>;
 type RespBody = BoxBody<bytes::Bytes, hyper::Error>;
@@ -67,7 +71,10 @@ pub async fn forward(
     mut req: Request<Incoming>,
     backend: String,
     backends: &[crate::config::Backend],
+    metrics: Option<Arc<Metrics>>,
 ) -> Result<Response<RespBody>> {
+    let start = Instant::now();
+    let protocol = format!("{:?}", req.version());
     let uri = format!(
         "http://{}{}",
         backend,
@@ -92,11 +99,46 @@ pub async fn forward(
     let out_req = Request::from_parts(parts, body);
 
     let client = create_client(target_version);
-    let resp = client
-        .request(out_req)
-        .await
-        .map_err(|e| crate::error::ProxyError::Http(format!("Request failed: {e}")))?;
-    Ok(resp.map(|b| b.boxed()))
+    let result = client.request(out_req).await;
+
+    let duration = start.elapsed().as_secs_f64();
+
+    match result {
+        Ok(resp) => {
+            let status_code = resp.status().as_u16();
+            if let Some(ref m) = metrics {
+                m.backend_requests_total.add(
+                    1,
+                    &[
+                        KeyValue::new("backend_address", backend.clone()),
+                        KeyValue::new("status_code", status_code.to_string()),
+                        KeyValue::new("protocol", protocol.clone()),
+                    ],
+                );
+                m.backend_duration_seconds.record(
+                    duration,
+                    &[
+                        KeyValue::new("backend_address", backend.clone()),
+                        KeyValue::new("status_code", status_code.to_string()),
+                        KeyValue::new("protocol", protocol),
+                    ],
+                );
+            }
+            Ok(resp.map(|b| b.boxed()))
+        }
+        Err(e) => {
+            if let Some(ref m) = metrics {
+                m.backend_errors_total.add(
+                    1,
+                    &[
+                        KeyValue::new("backend_address", backend.clone()),
+                        KeyValue::new("error_type", "request_failed"),
+                    ],
+                );
+            }
+            Err(crate::error::ProxyError::Http(format!("Request failed: {e}")))
+        }
+    }
 }
 
 pub fn empty_body() -> RespBody {

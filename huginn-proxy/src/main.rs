@@ -20,6 +20,8 @@ async fn main() -> Result<(), BoxError> {
 
     let config = Arc::new(load_from_path(&config_path)?);
 
+    // Use config file log level as default
+    // RUST_LOG environment variable can override at runtime (e.g., docker run -e RUST_LOG=debug)
     let log_level = env::var("RUST_LOG").unwrap_or_else(|_| config.logging.level.clone());
 
     init_tracing_with_otel(
@@ -28,29 +30,25 @@ async fn main() -> Result<(), BoxError> {
         config.telemetry.otel_log_level.clone(),
     )?;
 
-    let metrics_handle = if let Some(metrics_port) = config.telemetry.metrics_port {
-        match init_metrics() {
-            Ok((_metrics, registry)) => {
-                info!(port = metrics_port, "Metrics initialized, starting metrics server");
-                Some(tokio::spawn(async move {
-                    if let Err(e) = start_metrics_server(metrics_port, registry).await {
-                        tracing::error!(error = %e, "Metrics server error");
-                    }
-                }))
+    let (metrics, metrics_handle) = if let Some(metrics_port) = config.telemetry.metrics_port {
+        let (metrics, registry) =
+            init_metrics().map_err(|e| format!("Failed to initialize metrics: {e}"))?;
+
+        info!(port = metrics_port, "Metrics initialized, starting metrics server");
+        let handle = tokio::spawn(async move {
+            if let Err(e) = start_metrics_server(metrics_port, registry).await {
+                tracing::error!(error = %e, "Metrics server error");
             }
-            Err(e) => {
-                tracing::warn!(error = %e, "Failed to initialize metrics, continuing without metrics");
-                None
-            }
-        }
+        });
+        (Some(metrics), Some(handle))
     } else {
         info!("Metrics disabled (no metrics_port configured)");
-        None
+        (None, None)
     };
 
     info!("huginn-proxy starting");
 
-    let result = run(config).await;
+    let result = run(config, metrics).await;
 
     if let Some(handle) = metrics_handle {
         tracing::info!("Shutting down metrics server");

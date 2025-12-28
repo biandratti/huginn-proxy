@@ -7,16 +7,11 @@ pub fn init_tracing_with_otel(
     show_target: bool,
     otel_log_level: String,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    // For now, we'll use a simple fmt subscriber
-    // OpenTelemetry tracing can be added later when we need full trace export
-    // The metrics are already set up separately via init_metrics()
-
-    //TODO: unified logging with otel
-    // Build env filter: use RUST_LOG if set, otherwise use configured levels
-    // RUST_LOG can override both the main log level and OpenTelemetry log level
-    let env_filter = tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| {
-        tracing_subscriber::EnvFilter::new(format!("{log_level},opentelemetry={otel_log_level}"))
-    });
+    // Build env filter from configuration
+    // Note: log_level already includes RUST_LOG override from main.rs if set
+    let filter_str = format!("{log_level},opentelemetry={otel_log_level}");
+    let env_filter = tracing_subscriber::EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new(filter_str));
     let fmt_layer = tracing_subscriber::fmt::layer().with_target(show_target);
 
     let subscriber = Registry::default().with(env_filter).with(fmt_layer);
@@ -27,9 +22,18 @@ pub fn init_tracing_with_otel(
     Ok(())
 }
 
-//TODO: Implement this once we have a proper implementation
-/// Shutdown OpenTelemetry tracing
-/// Note: Currently a no-op, but can be extended when full tracing is implemented
+/// Shutdown tracing and flush any pending logs
+///
+/// Currently flushes stdout/stderr to ensure all logs are written.
+/// When OpenTelemetry tracing is added, this will also shutdown the tracer provider.
 pub fn shutdown_tracing() {
-    // No-op for now
+    use std::io::Write;
+
+    // Flush stdout and stderr to ensure all logs are written
+    // This is important for logs that might be buffered
+    let _ = std::io::stdout().flush();
+    let _ = std::io::stderr().flush();
+
+    // TODO: When OpenTelemetry tracing is implemented, add:
+    // opentelemetry::global::shutdown_tracer_provider();
 }
