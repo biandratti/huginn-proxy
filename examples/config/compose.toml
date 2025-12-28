@@ -1,8 +1,8 @@
 listen = "0.0.0.0:7000"
 
 backends = [
-  { address = "backend-a:9000" },
-  { address = "backend-b:9000" }
+  { address = "backend-a:9000", http_version = "preserve" },
+  { address = "backend-b:9000", http_version = "preserve" }
 ]
 
 routes = [
@@ -13,7 +13,7 @@ routes = [
 [tls]
 cert_path = "/config/certs/server.crt"
 key_path  = "/config/certs/server.key"
-alpn = ["h2"]
+alpn = ["h2", "http/1.1"]
 
 [fingerprint]
 tls_enabled = true

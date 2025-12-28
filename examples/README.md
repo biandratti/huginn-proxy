@@ -14,8 +14,7 @@ openssl req -x509 -newkey rsa:2048 -nodes \
 ```bash
 docker compose -f examples/docker-compose.yml up --build
 ```
-- Proxy: `http://localhost:7000/` (or `https://localhost:7000/` if `mode = "tls_termination"`, use `-k` for curl with the self-signed cert).
-- Metrics: `http://localhost:9900/metrics`.
+- Proxy: `https://localhost:7000/` (use `-k` for curl with the self-signed cert)
+- Backend: `http://localhost:9000/`
 
-Edit `examples/config/compose.toml` to switch between `mode = "forward"` and `mode = "tls_termination"`, and to point to the generated cert/key.
-
+Edit `examples/config/compose.toml` to customize the configuration.
