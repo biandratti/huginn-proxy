@@ -38,6 +38,12 @@ pub struct Metrics {
 
     pub backend_selections_total: Counter<u64>,
     pub errors_total: Counter<u64>,
+
+    // TLS handshake metrics
+    pub tls_handshakes_total: Counter<u64>,
+    pub tls_handshake_duration_seconds: Histogram<f64>,
+    pub tls_handshake_errors_total: Counter<u64>,
+    pub tls_connections_active: UpDownCounter<i64>,
 }
 
 impl Metrics {
@@ -108,6 +114,23 @@ impl Metrics {
             errors_total: meter
                 .u64_counter("huginn_errors_total")
                 .with_description("Total number of errors")
+                .build(),
+
+            tls_handshakes_total: meter
+                .u64_counter("huginn_tls_handshakes_total")
+                .with_description("Total number of TLS handshakes completed")
+                .build(),
+            tls_handshake_duration_seconds: meter
+                .f64_histogram("huginn_tls_handshake_duration_seconds")
+                .with_description("TLS handshake duration in seconds")
+                .build(),
+            tls_handshake_errors_total: meter
+                .u64_counter("huginn_tls_handshake_errors_total")
+                .with_description("Total number of TLS handshake errors")
+                .build(),
+            tls_connections_active: meter
+                .i64_up_down_counter("huginn_tls_connections_active")
+                .with_description("Number of active TLS connections")
                 .build(),
         }
     }
