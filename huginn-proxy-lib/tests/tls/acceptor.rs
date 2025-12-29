@@ -35,6 +35,7 @@ fn test_build_rustls_success() -> Result<(), Box<dyn std::error::Error + Send + 
     let (cert_path, key_path) = create_test_cert()?;
 
     let config = TlsConfig {
+        watch_delay_secs: 60,
         cert_path: cert_path.display().to_string(),
         key_path: key_path.display().to_string(),
         alpn: vec!["h2".to_string(), "http/1.1".to_string()],
@@ -55,6 +56,7 @@ fn test_build_rustls_success() -> Result<(), Box<dyn std::error::Error + Send + 
 #[test]
 fn test_build_rustls_missing_cert() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let config = TlsConfig {
+        watch_delay_secs: 60,
         cert_path: "/nonexistent/cert.pem".to_string(),
         key_path: "/nonexistent/key.pem".to_string(),
         alpn: vec![],
@@ -74,6 +76,7 @@ fn test_build_rustls_empty_alpn() -> Result<(), Box<dyn std::error::Error + Send
     let (cert_path, key_path) = create_test_cert()?;
 
     let config = TlsConfig {
+        watch_delay_secs: 60,
         cert_path: cert_path.display().to_string(),
         key_path: key_path.display().to_string(),
         alpn: vec![], // Empty ALPN should use defaults
@@ -95,6 +98,7 @@ fn test_build_rustls_custom_alpn() -> Result<(), Box<dyn std::error::Error + Sen
     let (cert_path, key_path) = create_test_cert()?;
 
     let config = TlsConfig {
+        watch_delay_secs: 60,
         cert_path: cert_path.display().to_string(),
         key_path: key_path.display().to_string(),
         alpn: vec!["h2".to_string()],
@@ -121,6 +125,7 @@ fn test_build_rustls_invalid_pem() -> Result<(), Box<dyn std::error::Error + Sen
     fs::write(&key_path, b"not a valid PEM file")?;
 
     let config = TlsConfig {
+        watch_delay_secs: 60,
         cert_path: cert_path.display().to_string(),
         key_path: key_path.display().to_string(),
         alpn: vec![],

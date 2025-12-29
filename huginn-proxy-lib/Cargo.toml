@@ -6,7 +6,9 @@ license = "MIT OR Apache-2.0"
 publish = false
 
 [dependencies]
+async-trait.workspace = true
 bytes.workspace = true
+hot_reload.workspace = true
 http.workspace = true
 http-body-util.workspace = true
 huginn-net-http.workspace = true

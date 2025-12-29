@@ -12,6 +12,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "anyhow"
+version = "1.0.100"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a23eb6b1614318a8071c9b2521f36b424b2c83db5eb3a0fead4a6c0809af6e61"
+
+[[package]]
+name = "async-trait"
+version = "0.1.89"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9035ad2d096bed7955a320ee7e2230574d28fd3c3a0f186cbea1ff3c7eed5dbb"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.111",
+]
+
+[[package]]
 name = "atomic-waker"
 version = "1.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -375,6 +392,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "841d1cc9bed7f9236f321df977030373f4a4163ae1a7dbfe1a51a2c1a51d9100"
 
 [[package]]
+name = "hot_reload"
+version = "0.3.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7e24f4b0953a93e73492835a75fa6149cd160665fa7301ecd7de0a7041f0be9c"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "thiserror 2.0.17",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "hpack-patched"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -489,7 +519,9 @@ dependencies = [
 name = "huginn-proxy-lib"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "bytes",
+ "hot_reload",
  "http",
  "http-body-util",
  "huginn-net-http",

@@ -25,7 +25,7 @@ use crate::proxy::forwarding::{forward, pick_route};
 use crate::proxy::http_result::{HttpError, HttpResult};
 use crate::proxy::synthetic_response::synthetic_error_response;
 use crate::telemetry::Metrics;
-use crate::tls::{build_rustls, record_tls_handshake_metrics};
+use crate::tls::{record_tls_handshake_metrics, setup_tls_with_hot_reload};
 use http::StatusCode;
 use huginn_net_http::AkamaiFingerprint;
 
@@ -229,8 +229,13 @@ pub async fn run(config: Arc<Config>, metrics: Option<Arc<Metrics>>) -> Result<(
     let backends = Arc::new(config.backends.clone());
     let backends_for_loop = Arc::clone(&backends);
     let routes = config.routes.clone();
+
+    // Setup TLS with hot reload support
     let tls_acceptor = match &config.tls {
-        Some(t) => Some(build_rustls(t)?),
+        Some(tls_config) => {
+            let tls_setup = setup_tls_with_hot_reload(tls_config).await?;
+            Some(tls_setup.acceptor)
+        }
         None => None,
     };
 
@@ -313,7 +318,9 @@ pub async fn run(config: Arc<Config>, metrics: Option<Arc<Metrics>>) -> Result<(
                         m.connections_active.add(-1, &[]);
                     }
 
-                    if let Some(acc) = tls_acceptor {
+                    if let Some(ref tls_acceptor_lock) = tls_acceptor {
+                        let acc_opt = tls_acceptor_lock.read().await.clone();
+                        if let Some(acc) = acc_opt {
                         let handshake_start = Instant::now();
                         let (prefix, ja4) = match read_client_hello(&mut stream, metrics_for_connection.clone()).await {
                             Ok(v) => v,
@@ -509,6 +516,7 @@ pub async fn run(config: Arc<Config>, metrics: Option<Arc<Metrics>>) -> Result<(
                                 }
                             }
                         }
+                        }
                     } else {
                         let metrics_for_service = metrics_for_connection.clone();
                         let svc = hyper::service::service_fn(move |req: Request<Incoming>| {
@@ -604,7 +612,7 @@ pub async fn run(config: Arc<Config>, metrics: Option<Arc<Metrics>>) -> Result<(
         }
 
         info!(active_connections = active, "Waiting for connections to close");
-        sleep(Duration::from_millis(100)).await;
+        sleep(Duration::from_millis(100)).await; // TODO: WIP...
     }
 
     info!("Proxy server stopped");
