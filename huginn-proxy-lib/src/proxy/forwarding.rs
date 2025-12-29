@@ -1,5 +1,5 @@
 use crate::config::BackendHttpVersion;
-use crate::error::Result;
+use crate::proxy::http_result::{HttpError, HttpResult};
 use crate::telemetry::Metrics;
 use http::{Request, Response, Version};
 use http_body_util::{combinators::BoxBody, BodyExt};
@@ -72,7 +72,7 @@ pub async fn forward(
     backend: String,
     backends: &[crate::config::Backend],
     metrics: Option<Arc<Metrics>>,
-) -> Result<Response<RespBody>> {
+) -> HttpResult<Response<RespBody>> {
     let start = Instant::now();
     let protocol = format!("{:?}", req.version());
     let uri = format!(
@@ -83,8 +83,8 @@ pub async fn forward(
             .map(|pq| pq.as_str())
             .unwrap_or("")
     )
-    .parse()
-    .map_err(crate::error::ProxyError::InvalidUri)?;
+    .parse::<http::Uri>()
+    .map_err(|e| HttpError::InvalidUri(e.to_string()))?;
 
     let client_version = req.version();
     let backend_config = find_backend_config(&backend, backends);
@@ -127,33 +127,19 @@ pub async fn forward(
             Ok(resp.map(|b| b.boxed()))
         }
         Err(e) => {
+            let error = HttpError::FailedToGetResponseFromBackend(e.to_string());
             if let Some(ref m) = metrics {
                 m.backend_errors_total.add(
                     1,
                     &[
                         KeyValue::new("backend_address", backend.clone()),
-                        KeyValue::new("error_type", "request_failed"),
+                        KeyValue::new("error_type", error.error_type()),
                     ],
                 );
             }
-            Err(crate::error::ProxyError::Http(format!("Request failed: {e}")))
+            Err(error)
         }
     }
-}
-
-pub fn empty_body() -> RespBody {
-    use http_body_util::Full;
-    Full::new(bytes::Bytes::new())
-        .map_err(|never| match never {})
-        .boxed()
-}
-
-pub fn bad_gateway() -> Response<RespBody> {
-    use http::Response;
-    use http::StatusCode;
-    let mut resp = Response::new(empty_body());
-    *resp.status_mut() = StatusCode::BAD_GATEWAY;
-    resp
 }
 
 pub fn pick_route<'a>(path: &str, routes: &'a [crate::config::Route]) -> Option<&'a str> {

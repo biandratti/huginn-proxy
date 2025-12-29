@@ -21,9 +21,12 @@ use crate::config::Config;
 use crate::error::Result;
 use crate::fingerprinting::{read_client_hello, CapturingStream};
 use crate::load_balancing::RoundRobin;
-use crate::proxy::forwarding::{bad_gateway, forward, pick_route};
+use crate::proxy::forwarding::{forward, pick_route};
+use crate::proxy::http_result::{HttpError, HttpResult};
+use crate::proxy::synthetic_response::synthetic_error_response;
 use crate::telemetry::Metrics;
 use crate::tls::build_rustls;
+use http::StatusCode;
 use huginn_net_http::AkamaiFingerprint;
 
 struct PrefixedStream<S> {
@@ -107,7 +110,7 @@ async fn handle_proxy_request(
     tls_header: Option<HeaderValue>,
     fingerprint_rx: Option<watch::Receiver<Option<huginn_net_http::AkamaiFingerprint>>>,
     metrics: Option<Arc<Metrics>>,
-) -> std::result::Result<hyper::Response<RespBody>, hyper::Error> {
+) -> HttpResult<hyper::Response<RespBody>> {
     let start = Instant::now();
     let method = req.method().to_string();
     let protocol = format!("{:?}", req.version());
@@ -155,11 +158,12 @@ async fn handle_proxy_request(
         backend_str
     } else {
         if backend_list.is_empty() {
+            let error = HttpError::NoUpstreamCandidates;
             if let Some(ref m) = metrics {
                 m.errors_total
-                    .add(1, &[KeyValue::new("error_type", "no_backends")]);
+                    .add(1, &[KeyValue::new("error_type", error.error_type())]);
             }
-            return Ok(bad_gateway());
+            return Err(error);
         }
         let idx = round_robin.next(backend_list.len());
         let selected_backend = backend_list[idx].address.clone();
@@ -176,7 +180,10 @@ async fn handle_proxy_request(
     let duration = start.elapsed().as_secs_f64();
     let status_code = match &result {
         Ok(resp) => resp.status().as_u16(),
-        Err(_) => 502, // Bad Gateway
+        Err(e) => {
+            let code: StatusCode = (*e).clone().into();
+            code.as_u16()
+        }
     };
 
     if let Some(ref m) = metrics {
@@ -198,10 +205,7 @@ async fn handle_proxy_request(
         );
     }
 
-    match result {
-        Ok(resp) => Ok(resp),
-        Err(_) => Ok(bad_gateway()),
-    }
+    result
 }
 
 pub async fn run(config: Arc<Config>, metrics: Option<Arc<Metrics>>) -> Result<()> {
@@ -334,7 +338,7 @@ pub async fn run(config: Arc<Config>, metrics: Option<Arc<Metrics>>) -> Result<(
                                         let metrics = metrics_for_service.clone();
 
                                         async move {
-                                            handle_proxy_request(
+                                            let http_result = handle_proxy_request(
                                                 req,
                                                 routes,
                                                 backend_list,
@@ -342,8 +346,48 @@ pub async fn run(config: Arc<Config>, metrics: Option<Arc<Metrics>>) -> Result<(
                                                 round_robin,
                                                 tls_header,
                                                 Some(fingerprint_rx),
-                                                metrics,
-                                            ).await
+                                                metrics.clone(),
+                                            )
+                                            .await;
+
+                                            match http_result {
+                                                Ok(v) => {
+                                                    if let Some(ref m) = metrics {
+                                                        m.requests_total.add(
+                                                            1,
+                                                            &[KeyValue::new(
+                                                                "status_code",
+                                                                v.status().as_u16().to_string(),
+                                                            )],
+                                                        );
+                                                    }
+                                                    Ok::<_, hyper::Error>(v)
+                                                }
+                                                Err(e) => {
+                                                    tracing::error!("{e}");
+                                                    let code = StatusCode::from(e.clone());
+                                                    if let Some(ref m) = metrics {
+                                                        m.errors_total.add(
+                                                            1,
+                                                            &[KeyValue::new("error_type", e.error_type())],
+                                                        );
+                                                    }
+                                                    match synthetic_error_response(code) {
+                                                        Ok(resp) => Ok(resp),
+                                                        Err(e) => {
+                                                            use http_body_util::BodyExt;
+                                                            let body = http_body_util::Full::new(
+                                                                bytes::Bytes::from(format!("Failed to create error response: {e}"))
+                                                            )
+                                                            .map_err(|never| match never {})
+                                                            .boxed();
+                                                            let mut resp = hyper::Response::new(body);
+                                                            *resp.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
+                                                            Ok(resp)
+                                                        }
+                                                    }
+                                                }
+                                            }
                                         }
                                     });
 
@@ -364,7 +408,7 @@ pub async fn run(config: Arc<Config>, metrics: Option<Arc<Metrics>>) -> Result<(
                                         let metrics = metrics_for_service.clone();
 
                                         async move {
-                                            handle_proxy_request(
+                                            let http_result = handle_proxy_request(
                                                 req,
                                                 routes,
                                                 backend_list,
@@ -372,8 +416,48 @@ pub async fn run(config: Arc<Config>, metrics: Option<Arc<Metrics>>) -> Result<(
                                                 round_robin,
                                                 tls_header,
                                                 None,
-                                                metrics,
-                                            ).await
+                                                metrics.clone(),
+                                            )
+                                            .await;
+
+                                            match http_result {
+                                                Ok(v) => {
+                                                    if let Some(ref m) = metrics {
+                                                        m.requests_total.add(
+                                                            1,
+                                                            &[KeyValue::new(
+                                                                "status_code",
+                                                                v.status().as_u16().to_string(),
+                                                            )],
+                                                        );
+                                                    }
+                                                    Ok::<_, hyper::Error>(v)
+                                                }
+                                                Err(e) => {
+                                                    tracing::error!("{e}");
+                                                    let code = StatusCode::from(e.clone());
+                                                    if let Some(ref m) = metrics {
+                                                        m.errors_total.add(
+                                                            1,
+                                                            &[KeyValue::new("error_type", e.error_type())],
+                                                        );
+                                                    }
+                                                    match synthetic_error_response(code) {
+                                                        Ok(resp) => Ok(resp),
+                                                        Err(e) => {
+                                                            use http_body_util::BodyExt;
+                                                            let body = http_body_util::Full::new(
+                                                                bytes::Bytes::from(format!("Failed to create error response: {e}"))
+                                                            )
+                                                            .map_err(|never| match never {})
+                                                            .boxed();
+                                                            let mut resp = hyper::Response::new(body);
+                                                            *resp.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
+                                                            Ok(resp)
+                                                        }
+                                                    }
+                                                }
+                                            }
                                         }
                                     });
 
@@ -399,7 +483,7 @@ pub async fn run(config: Arc<Config>, metrics: Option<Arc<Metrics>>) -> Result<(
                             let metrics = metrics_for_service.clone();
 
                             async move {
-                                handle_proxy_request(
+                                let http_result = handle_proxy_request(
                                     req,
                                     routes,
                                     backend_list,
@@ -407,8 +491,48 @@ pub async fn run(config: Arc<Config>, metrics: Option<Arc<Metrics>>) -> Result<(
                                     round_robin,
                                     None,
                                     None,
-                                    metrics,
-                                ).await
+                                    metrics.clone(),
+                                )
+                                .await;
+
+                                            match http_result {
+                                                Ok(v) => {
+                                                    if let Some(ref m) = metrics {
+                                                        m.requests_total.add(
+                                                            1,
+                                                            &[KeyValue::new(
+                                                                "status_code",
+                                                                v.status().as_u16().to_string(),
+                                                            )],
+                                                        );
+                                                    }
+                                                    Ok::<_, hyper::Error>(v)
+                                                }
+                                    Err(e) => {
+                                        tracing::error!("{e}");
+                                        let code = StatusCode::from(e.clone());
+                                        if let Some(ref m) = metrics {
+                                            m.errors_total.add(
+                                                1,
+                                                &[KeyValue::new("error_type", e.error_type())],
+                                            );
+                                        }
+                                        match synthetic_error_response(code) {
+                                            Ok(resp) => Ok(resp),
+                                            Err(e) => {
+                                                use http_body_util::BodyExt;
+                                                let body = http_body_util::Full::new(
+                                                    bytes::Bytes::from(format!("Failed to create error response: {e}"))
+                                                )
+                                                .map_err(|never| match never {})
+                                                .boxed();
+                                                let mut resp = hyper::Response::new(body);
+                                                *resp.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
+                                                Ok(resp)
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         });
 
