@@ -11,10 +11,18 @@ services:
       - ./certs:/config/certs:ro
     ports:
       - "7000:7000"   # Proxy server (HTTPS/HTTP)
-      - "9090:9090"   # Metrics server (Prometheus)
+      - "9090:9090"   # Observability server (Metrics + Health checks)
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:9090/health || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
     depends_on:
-      - backend-a
-      - backend-b
+      backend-a:
+        condition: service_started
+      backend-b:
+        condition: service_started
 
   backend-a:
     build:

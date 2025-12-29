@@ -6,7 +6,7 @@ use std::sync::Arc;
 use huginn_proxy_lib::config::load_from_path;
 use huginn_proxy_lib::run;
 use huginn_proxy_lib::telemetry::{
-    init_metrics, init_tracing_with_otel, shutdown_tracing, start_metrics_server,
+    init_metrics, init_tracing_with_otel, shutdown_tracing, start_observability_server,
 };
 use tracing::info;
 
@@ -34,10 +34,13 @@ async fn main() -> Result<(), BoxError> {
         let (metrics, registry) =
             init_metrics().map_err(|e| format!("Failed to initialize metrics: {e}"))?;
 
-        info!(port = metrics_port, "Metrics initialized, starting metrics server");
+        info!(port = metrics_port, "Metrics initialized, starting observability server");
+        let backends_for_observability = Arc::new(config.backends.clone());
         let handle = tokio::spawn(async move {
-            if let Err(e) = start_metrics_server(metrics_port, registry).await {
-                tracing::error!(error = %e, "Metrics server error");
+            if let Err(e) =
+                start_observability_server(metrics_port, registry, backends_for_observability).await
+            {
+                tracing::error!(error = %e, "Observability server error");
             }
         });
         (Some(metrics), Some(handle))
@@ -51,7 +54,7 @@ async fn main() -> Result<(), BoxError> {
     let result = run(config, metrics).await;
 
     if let Some(handle) = metrics_handle {
-        tracing::info!("Shutting down metrics server");
+        tracing::info!("Shutting down observability server");
         handle.abort();
     }
 

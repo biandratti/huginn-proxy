@@ -25,7 +25,7 @@ use crate::proxy::forwarding::{forward, pick_route};
 use crate::proxy::http_result::{HttpError, HttpResult};
 use crate::proxy::synthetic_response::synthetic_error_response;
 use crate::telemetry::Metrics;
-use crate::tls::build_rustls;
+use crate::tls::{build_rustls, record_tls_handshake_metrics};
 use http::StatusCode;
 use huginn_net_http::AkamaiFingerprint;
 
@@ -97,6 +97,20 @@ impl Drop for ConnectionGuard {
     }
 }
 
+struct TlsConnectionGuard {
+    active_connections: Arc<AtomicUsize>,
+    tls_active: Option<opentelemetry::metrics::UpDownCounter<i64>>,
+}
+
+impl Drop for TlsConnectionGuard {
+    fn drop(&mut self) {
+        self.active_connections.fetch_sub(1, Ordering::Relaxed);
+        if let Some(ref counter) = self.tls_active {
+            counter.add(-1, &[]);
+        }
+    }
+}
+
 type RespBody = http_body_util::combinators::BoxBody<bytes::Bytes, hyper::Error>;
 
 /// Handle request routing and forwarding
@@ -114,14 +128,10 @@ async fn handle_proxy_request(
     let start = Instant::now();
     let method = req.method().to_string();
     let protocol = format!("{:?}", req.version());
-    // Handle TLS fingerprint header
     if let Some(hv) = tls_header {
         req.headers_mut()
             .insert(HeaderName::from_static("x-huginn-net-tls"), hv);
     }
-
-    // Handle HTTP/2 fingerprint header
-    // Note: Akamai fingerprinting only works for HTTP/2, not HTTP/1.1
     if let Some(ref rx) = fingerprint_rx {
         // Only attempt to extract HTTP/2 fingerprint if this is actually an HTTP/2 request
         if req.version() == Version::HTTP_2 {
@@ -294,7 +304,8 @@ pub async fn run(config: Arc<Config>, metrics: Option<Arc<Metrics>>) -> Result<(
                 let metrics_for_connection = metrics_clone.clone();
                 tokio::spawn(async move {
                     // Ensure counter is decremented when connection finishes
-                    let _guard = ConnectionGuard(active_connections);
+                    let active_connections_clone = active_connections.clone();
+                    let _guard = ConnectionGuard(active_connections_clone.clone());
                     let mut stream = stream;
                     let backend_list = backends_clone.clone();
 
@@ -303,10 +314,14 @@ pub async fn run(config: Arc<Config>, metrics: Option<Arc<Metrics>>) -> Result<(
                     }
 
                     if let Some(acc) = tls_acceptor {
+                        let handshake_start = Instant::now();
                         let (prefix, ja4) = match read_client_hello(&mut stream, metrics_for_connection.clone()).await {
                             Ok(v) => v,
                             Err(e) => {
                                 warn!(?peer, error = %e, "failed to read client hello");
+                                if let Some(ref m) = metrics_for_connection {
+                                    m.tls_handshake_errors_total.add(1, &[]);
+                                }
                                 return;
                             }
                         };
@@ -314,11 +329,29 @@ pub async fn run(config: Arc<Config>, metrics: Option<Arc<Metrics>>) -> Result<(
                         let prefixed = PrefixedStream::new(prefix, stream);
                         match acc.accept(prefixed).await {
                             Ok(tls) => {
+                                let handshake_duration = handshake_start.elapsed().as_secs_f64();
+                                record_tls_handshake_metrics(&tls, handshake_duration, metrics_for_connection.clone());
+
+                                // Create guard to decrement TLS connection counter when connection closes
+                                let tls_connection_guard = if let Some(ref m) = metrics_for_connection {
+                                    TlsConnectionGuard {
+                                        active_connections: active_connections_clone.clone(),
+                                        tls_active: Some(m.tls_connections_active.clone()),
+                                    }
+                                } else {
+                                    TlsConnectionGuard {
+                                        active_connections: active_connections_clone.clone(),
+                                        tls_active: None,
+                                    }
+                                };
+
                                 let tls_header = if fingerprint_config.tls_enabled {
                                     tls_header_value(&ja4)
                                 } else {
                                     None
                                 };
+
+                                let _tls_guard = tls_connection_guard;
 
                                 if fingerprint_config.http_enabled {
                                     let (fingerprint_tx, fingerprint_rx) = watch::channel(None::<huginn_net_http::AkamaiFingerprint>);
@@ -471,6 +504,9 @@ pub async fn run(config: Arc<Config>, metrics: Option<Arc<Metrics>>) -> Result<(
                             }
                             Err(e) => {
                                 warn!(?peer, error = %e, "tls accept error");
+                                if let Some(ref m) = metrics_for_connection {
+                                    m.tls_handshake_errors_total.add(1, &[]);
+                                }
                             }
                         }
                     } else {
