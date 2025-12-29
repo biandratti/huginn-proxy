@@ -127,16 +127,17 @@ pub async fn forward(
             Ok(resp.map(|b| b.boxed()))
         }
         Err(e) => {
+            let error = HttpError::FailedToGetResponseFromBackend(e.to_string());
             if let Some(ref m) = metrics {
                 m.backend_errors_total.add(
                     1,
                     &[
                         KeyValue::new("backend_address", backend.clone()),
-                        KeyValue::new("error_type", "request_failed"),
+                        KeyValue::new("error_type", error.error_type()),
                     ],
                 );
             }
-            Err(HttpError::FailedToGetResponseFromBackend(e.to_string()))
+            Err(error)
         }
     }
 }

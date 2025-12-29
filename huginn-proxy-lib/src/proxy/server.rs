@@ -158,11 +158,12 @@ async fn handle_proxy_request(
         backend_str
     } else {
         if backend_list.is_empty() {
+            let error = HttpError::NoUpstreamCandidates;
             if let Some(ref m) = metrics {
                 m.errors_total
-                    .add(1, &[KeyValue::new("error_type", "no_backends")]);
+                    .add(1, &[KeyValue::new("error_type", error.error_type())]);
             }
-            return Err(HttpError::NoUpstreamCandidates);
+            return Err(error);
         }
         let idx = round_robin.next(backend_list.len());
         let selected_backend = backend_list[idx].address.clone();
@@ -364,11 +365,11 @@ pub async fn run(config: Arc<Config>, metrics: Option<Arc<Metrics>>) -> Result<(
                                                 }
                                                 Err(e) => {
                                                     tracing::error!("{e}");
-                                                    let code = StatusCode::from(e);
+                                                    let code = StatusCode::from(e.clone());
                                                     if let Some(ref m) = metrics {
                                                         m.errors_total.add(
                                                             1,
-                                                            &[KeyValue::new("error_type", "http_error")],
+                                                            &[KeyValue::new("error_type", e.error_type())],
                                                         );
                                                     }
                                                     match synthetic_error_response(code) {
@@ -434,11 +435,11 @@ pub async fn run(config: Arc<Config>, metrics: Option<Arc<Metrics>>) -> Result<(
                                                 }
                                                 Err(e) => {
                                                     tracing::error!("{e}");
-                                                    let code = StatusCode::from(e);
+                                                    let code = StatusCode::from(e.clone());
                                                     if let Some(ref m) = metrics {
                                                         m.errors_total.add(
                                                             1,
-                                                            &[KeyValue::new("error_type", "http_error")],
+                                                            &[KeyValue::new("error_type", e.error_type())],
                                                         );
                                                     }
                                                     match synthetic_error_response(code) {
@@ -509,11 +510,11 @@ pub async fn run(config: Arc<Config>, metrics: Option<Arc<Metrics>>) -> Result<(
                                                 }
                                     Err(e) => {
                                         tracing::error!("{e}");
-                                        let code = StatusCode::from(e);
+                                        let code = StatusCode::from(e.clone());
                                         if let Some(ref m) = metrics {
                                             m.errors_total.add(
                                                 1,
-                                                &[KeyValue::new("error_type", "http_error")],
+                                                &[KeyValue::new("error_type", e.error_type())],
                                             );
                                         }
                                         match synthetic_error_response(code) {

@@ -47,3 +47,19 @@ impl From<HttpError> for StatusCode {
         }
     }
 }
+
+impl HttpError {
+    /// Returns a string identifier for the error type, useful for metrics and logging
+    pub fn error_type(&self) -> &'static str {
+        match self {
+            HttpError::InvalidHostInRequestHeader => "invalid_host",
+            HttpError::NoMatchingBackend => "no_matching_backend",
+            HttpError::NoUpstreamCandidates => "no_upstream_candidates",
+            HttpError::FailedToGenerateUpstreamRequest(_) => "upstream_request_failed",
+            HttpError::FailedToGetResponseFromBackend(_) => "backend_error",
+            HttpError::FailedToGenerateDownstreamResponse(_) => "downstream_response_failed",
+            HttpError::InvalidUri(_) => "invalid_uri",
+            HttpError::BackendError(_) => "backend_error",
+        }
+    }
+}
