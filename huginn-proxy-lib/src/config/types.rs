@@ -48,6 +48,13 @@ pub struct TlsConfig {
     /// Default: empty (no ALPN)
     #[serde(default)]
     pub alpn: Vec<String>,
+    /// Certificate watch delay in seconds for hot reload
+    #[serde(default = "default_cert_watch_delay_secs")]
+    pub watch_delay_secs: u32,
+}
+
+fn default_cert_watch_delay_secs() -> u32 {
+    60
 }
 
 /// Fingerprinting configuration

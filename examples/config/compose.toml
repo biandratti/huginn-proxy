@@ -14,11 +14,12 @@ routes = [
 cert_path = "/config/certs/server.crt"
 key_path  = "/config/certs/server.key"
 alpn = ["h2", "http/1.1"]
+watch_delay_secs = 60
 
 [fingerprint]
 tls_enabled = true
 http_enabled = true
-max_capture = 65536  # 64 KB - maximum bytes to capture for HTTP/2 fingerprinting
+max_capture = 65536
 
 [logging]
 level = "info"

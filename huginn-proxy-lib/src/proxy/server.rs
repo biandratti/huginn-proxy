@@ -14,7 +14,7 @@ use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 use tokio::net::TcpListener;
 use tokio::signal;
 use tokio::sync::watch;
-use tokio::time::{sleep, Duration, Instant};
+use tokio::time::{Duration, Instant};
 use tracing::{debug, info, warn};
 
 use crate::config::Config;
@@ -25,7 +25,7 @@ use crate::proxy::forwarding::{forward, pick_route};
 use crate::proxy::http_result::{HttpError, HttpResult};
 use crate::proxy::synthetic_response::synthetic_error_response;
 use crate::telemetry::Metrics;
-use crate::tls::{build_rustls, record_tls_handshake_metrics};
+use crate::tls::{record_tls_handshake_metrics, setup_tls_with_hot_reload};
 use http::StatusCode;
 use huginn_net_http::AkamaiFingerprint;
 
@@ -89,11 +89,26 @@ fn tls_header_value(value: &Option<huginn_net_tls::Ja4Payload>) -> Option<Header
 }
 
 /// Guard to decrement active connections counter when dropped
-struct ConnectionGuard(Arc<AtomicUsize>);
+struct ConnectionGuard {
+    counter: Arc<AtomicUsize>,
+    notifier: Option<watch::Sender<()>>,
+}
+
+impl ConnectionGuard {
+    fn new(counter: Arc<AtomicUsize>, notifier: watch::Sender<()>) -> Self {
+        Self { counter, notifier: Some(notifier) }
+    }
+}
 
 impl Drop for ConnectionGuard {
     fn drop(&mut self) {
-        self.0.fetch_sub(1, Ordering::Relaxed);
+        let remaining = self.counter.fetch_sub(1, Ordering::Relaxed);
+        // Notify when the last connection closes
+        if remaining == 1 {
+            if let Some(ref tx) = self.notifier {
+                let _ = tx.send(());
+            }
+        }
     }
 }
 
@@ -229,8 +244,13 @@ pub async fn run(config: Arc<Config>, metrics: Option<Arc<Metrics>>) -> Result<(
     let backends = Arc::new(config.backends.clone());
     let backends_for_loop = Arc::clone(&backends);
     let routes = config.routes.clone();
+
+    // Setup TLS with hot reload support
     let tls_acceptor = match &config.tls {
-        Some(t) => Some(build_rustls(t)?),
+        Some(tls_config) => {
+            let tls_setup = setup_tls_with_hot_reload(tls_config).await?;
+            Some(tls_setup.acceptor)
+        }
         None => None,
     };
 
@@ -239,6 +259,8 @@ pub async fn run(config: Arc<Config>, metrics: Option<Arc<Metrics>>) -> Result<(
     // Track active connections for graceful shutdown
     let active_connections = Arc::new(AtomicUsize::new(0));
     let shutdown_signal = Arc::new(AtomicUsize::new(0)); // 0 = running, 1 = shutdown requested
+                                                         // Channel to notify when all connections are closed
+    let (connections_closed_tx, mut connections_closed_rx) = watch::channel(());
 
     // Setup signal handlers
     let mut sigterm = signal::unix::signal(signal::unix::SignalKind::terminate()).map_err(|e| {
@@ -302,10 +324,11 @@ pub async fn run(config: Arc<Config>, metrics: Option<Arc<Metrics>>) -> Result<(
                 let metrics_clone = metrics.clone();
 
                 let metrics_for_connection = metrics_clone.clone();
+                let connections_closed_tx = connections_closed_tx.clone();
                 tokio::spawn(async move {
                     // Ensure counter is decremented when connection finishes
                     let active_connections_clone = active_connections.clone();
-                    let _guard = ConnectionGuard(active_connections_clone.clone());
+                    let _guard = ConnectionGuard::new(active_connections_clone.clone(), connections_closed_tx);
                     let mut stream = stream;
                     let backend_list = backends_clone.clone();
 
@@ -313,7 +336,9 @@ pub async fn run(config: Arc<Config>, metrics: Option<Arc<Metrics>>) -> Result<(
                         m.connections_active.add(-1, &[]);
                     }
 
-                    if let Some(acc) = tls_acceptor {
+                    if let Some(ref tls_acceptor_lock) = tls_acceptor {
+                        let acc_opt = tls_acceptor_lock.read().await.clone();
+                        if let Some(acc) = acc_opt {
                         let handshake_start = Instant::now();
                         let (prefix, ja4) = match read_client_hello(&mut stream, metrics_for_connection.clone()).await {
                             Ok(v) => v,
@@ -509,6 +534,7 @@ pub async fn run(config: Arc<Config>, metrics: Option<Arc<Metrics>>) -> Result<(
                                 }
                             }
                         }
+                        }
                     } else {
                         let metrics_for_service = metrics_for_connection.clone();
                         let svc = hyper::service::service_fn(move |req: Request<Incoming>| {
@@ -586,25 +612,36 @@ pub async fn run(config: Arc<Config>, metrics: Option<Arc<Metrics>>) -> Result<(
         config.timeout.shutdown_secs
     );
     let shutdown_timeout = Duration::from_secs(config.timeout.shutdown_secs);
-    let start = std::time::Instant::now();
+    let start = Instant::now();
 
-    loop {
-        let active = active_connections.load(Ordering::Relaxed);
-        if active == 0 {
-            info!("All connections closed, shutdown complete");
-            break;
+    // Wait for either all connections to close or timeout
+    let deadline = start
+        .checked_add(shutdown_timeout)
+        .unwrap_or_else(|| start.checked_add(Duration::from_secs(60)).unwrap_or(start));
+    tokio::select! {
+        _ = connections_closed_rx.changed() => {
+            let active = active_connections.load(Ordering::Relaxed);
+            if active == 0 {
+                info!("All connections closed, shutdown complete");
+            } else {
+                warn!(
+                    active_connections = active,
+                    "Connection closed notification received but {} connections still active",
+                    active
+                );
+            }
         }
-
-        if start.elapsed() >= shutdown_timeout {
-            warn!(
-                active_connections = active,
-                "Shutdown timeout reached, {} connections still active", active
-            );
-            break;
+        _ = tokio::time::sleep_until(deadline) => {
+            let active = active_connections.load(Ordering::Relaxed);
+            if active > 0 {
+                warn!(
+                    active_connections = active,
+                    "Shutdown timeout reached, {} connections still active", active
+                );
+            } else {
+                info!("All connections closed, shutdown complete");
+            }
         }
-
-        info!(active_connections = active, "Waiting for connections to close");
-        sleep(Duration::from_millis(100)).await;
     }
 
     info!("Proxy server stopped");
