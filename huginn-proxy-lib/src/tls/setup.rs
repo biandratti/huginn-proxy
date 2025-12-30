@@ -25,26 +25,17 @@ pub async fn setup_tls_with_hot_reload(tls_config: &TlsConfig) -> Result<TlsSetu
     let initial_acceptor = build_rustls(tls_config)?;
     let tls_acceptor = Arc::new(RwLock::new(Some(initial_acceptor)));
 
-    // Setup certificate reloader (async - initializes ReloaderService with filesystem watcher)
-    let (reloader_service, reloader_rx) = build_cert_reloader(tls_config).await?;
+    // Setup certificate reloader (async - initializes filesystem watcher)
+    let mut reloader_rx = build_cert_reloader(tls_config).await?;
     let alpn = tls_config.alpn.clone();
 
-    let reloader_service_arc = Arc::new(reloader_service);
-    let reloader_service_for_spawn = Arc::clone(&reloader_service_arc);
-    tokio::spawn(async move {
-        if let Err(e) = reloader_service_for_spawn.start().await {
-            warn!(error = %e, "Certificate reloader service exited");
-        }
-    });
-
     let tls_acceptor_for_update = Arc::clone(&tls_acceptor);
-    let mut reloader_rx_for_spawn = reloader_rx.clone();
     tokio::spawn(async move {
         loop {
-            let _ = reloader_rx_for_spawn.changed().await;
-            let server_crypto_base = reloader_rx_for_spawn.borrow().clone();
-            if let Some(server_crypto_base) = server_crypto_base {
-                match server_crypto_base.get_tls_acceptor(&alpn) {
+            let _ = reloader_rx.changed().await;
+            let certs_keys = reloader_rx.borrow().clone();
+            if let Some(certs_keys) = certs_keys {
+                match certs_keys.build_tls_acceptor(&alpn) {
                     Ok(new_acceptor) => {
                         info!("Certificate reloaded successfully");
                         *tls_acceptor_for_update.write().await = Some(new_acceptor);

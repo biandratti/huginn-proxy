@@ -79,7 +79,7 @@ fn test_build_rustls_empty_alpn() -> Result<(), Box<dyn std::error::Error + Send
         watch_delay_secs: 60,
         cert_path: cert_path.display().to_string(),
         key_path: key_path.display().to_string(),
-        alpn: vec![], // Empty ALPN should use defaults
+        alpn: vec![], // Empty ALPN means no ALPN
     };
 
     let result = build_rustls(&config);

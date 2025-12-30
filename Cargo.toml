@@ -14,7 +14,6 @@ homepage = "https://github.com/biandratti/huginn-proxy"
 [workspace.dependencies]
 async-trait = "0.1.89"
 bytes = "1.11.0"
-hot_reload = "0.3.5"
 http = "1.4.0"
 http-body-util = "0.1.3"
 huginn-net-db = "1.7.1"
@@ -22,6 +21,7 @@ huginn-net-http = "1.7.1"
 huginn-net-tls = "1.7.1"
 hyper = { version = "1.8.1", features = ["full"] }
 hyper-util = { version = "0.1.19", features = ["full"] }
+notify = "8.2.0"
 opentelemetry = { version = "0.31.0", features = ["metrics"] }
 opentelemetry-prometheus = "0.31.0"
 opentelemetry_sdk = { version = "0.31.0", features = ["metrics", "trace"] }

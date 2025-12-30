@@ -36,9 +36,8 @@ pub fn build_rustls(cfg: &TlsConfig) -> Result<TlsAcceptor> {
 
     if !cfg.alpn.is_empty() {
         server.alpn_protocols = cfg.alpn.iter().map(|s| s.as_bytes().to_vec()).collect();
-    } else {
-        server.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec()];
     }
+    // If alpn is empty, leave server.alpn_protocols as default (empty = no ALPN)
 
     Ok(TlsAcceptor::from(Arc::new(server)))
 }
