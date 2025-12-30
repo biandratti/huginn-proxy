@@ -1,15 +1,20 @@
 FROM rust:1.82-alpine AS builder
 RUN apk add --no-cache musl-dev pkgconfig openssl-dev
 WORKDIR /app
+# Copy workspace configuration
 COPY Cargo.toml Cargo.lock ./
+# Copy only the backend package (what we actually need to build)
 COPY examples/backend ./examples/backend
-# Copy workspace members Cargo.toml (needed for workspace structure)
+# Copy Cargo.toml of other workspace members (required by Cargo workspace resolution)
 COPY huginn-proxy/Cargo.toml ./huginn-proxy/
 COPY huginn-proxy-lib/Cargo.toml ./huginn-proxy-lib/
-# Create minimal source files
-RUN mkdir -p huginn-proxy/src huginn-proxy-lib/src && \
+COPY tests-e2e/Cargo.toml ./tests-e2e/
+# Create minimal source files for other workspace members (Cargo requires valid packages)
+# These are not built, but Cargo needs them to resolve the workspace
+RUN mkdir -p huginn-proxy/src huginn-proxy-lib/src tests-e2e/src && \
     echo 'fn main() {}' > huginn-proxy/src/main.rs && \
-    echo '' > huginn-proxy-lib/src/lib.rs
+    echo '' > huginn-proxy-lib/src/lib.rs && \
+    echo '' > tests-e2e/src/lib.rs
 RUN cargo build --release --package backend
 
 FROM alpine:3.23.2

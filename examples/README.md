@@ -10,6 +10,12 @@ openssl req -x509 -newkey rsa:2048 -nodes \
   -subj "/CN=localhost"
 ```
 
+**Note:** The proxy runs as a non-root user (`app`) inside the container. Ensure the certificate files are readable:
+```bash
+chmod 644 examples/certs/server.key
+chmod 644 examples/certs/server.crt
+```
+
 ### Docker Compose smoke
 ```bash
 docker compose -f examples/docker-compose.yml up --build
@@ -35,6 +41,7 @@ docker compose -f examples/docker-compose.yml up --build
 # Proxy request (HTTPS)
 curl -k https://localhost:7000/api/test
 
-# Metrics endpoint
+# Metrics and health endpoints
 curl http://localhost:9090/metrics
+curl http://localhost:9090/health
 ```
