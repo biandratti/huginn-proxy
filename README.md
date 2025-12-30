@@ -38,44 +38,6 @@
 - **Header Injection** - Fingerprints automatically injected as `x-huginn-net-tls` and `x-huginn-net-http` headers
 - **Configurable** - Enable/disable fingerprinting per protocol via configuration
 
-## Quick Start
-
-### Basic Configuration
-
-Create a `config.toml` file:
-
-```toml
-listen = "0.0.0.0:7000"
-
-backends = [
-  { address = "backend-1:9000" },
-  { address = "backend-2:9000" }
-]
-
-routes = [
-  { prefix = "/api", backend = "backend-1:9000" },
-  { prefix = "/",   backend = "backend-2:9000" }
-]
-
-[tls]
-cert_path = "/path/to/cert.pem"
-key_path  = "/path/to/key.pem"
-alpn = ["h2"]
-
-[fingerprint]
-tls_enabled = true
-http_enabled = true
-
-[logging]
-level = "info"
-show_target = false
-
-[timeout]
-connect_ms = 5000
-idle_ms = 60000
-shutdown_secs = 30
-```
-
 ## Fingerprinting Details
 
 ### TLS Fingerprinting (JA4)
@@ -117,18 +79,7 @@ See [`examples/docker-compose.yml`](examples/docker-compose.yml) for a complete 
 
 ## Roadmap
 
-The following features are planned for future releases:
-
-- [ ] Health checks for backends
-- [ ] Metrics and observability (Prometheus)
-- [ ] Advanced load balancing algorithms (least connections, weighted)
-- [ ] Rate limiting
-- [ ] Request/response transformation
-- [ ] Circuit breakers
-- [ ] Comprehensive test coverage
-- [ ] Performance benchmarking and optimization
-- [ ] Production hardening and security audit
-- [ ] TCP fingerprint
+See [ROADMAP.md](ROADMAP.md) for a detailed list of planned features and upcoming phases.
 
 ## Related Projects
 
