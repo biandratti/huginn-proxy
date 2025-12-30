@@ -1,11 +1,11 @@
 [workspace]
-members = ["examples/backend", "huginn-proxy", "huginn-proxy-lib"]
+members = ["examples/backend", "huginn-proxy", "huginn-proxy-lib", "tests-e2e"]
 resolver = "2"
 
 [workspace.package]
 version = "0.1.0"
 edition = "2021"
-rust-version = "1.82"
+rust-version = "1.83"
 license = "MIT OR Apache-2.0"
 authors = ["Maximiliano Biandratti"]
 repository = "https://github.com/biandratti/huginn-proxy"
@@ -26,6 +26,7 @@ opentelemetry = { version = "0.31.0", features = ["metrics"] }
 opentelemetry-prometheus = "0.31.0"
 opentelemetry_sdk = { version = "0.31.0", features = ["metrics", "trace"] }
 prometheus = "0.14.0"
+reqwest = { version = "0.12.28", features = ["json", "http2"] }
 rustls-pki-types = "1.13.2"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.148"
