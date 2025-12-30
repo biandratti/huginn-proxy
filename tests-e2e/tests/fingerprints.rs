@@ -41,7 +41,7 @@ async fn test_tls_fingerprint_injection() -> Result<(), Box<dyn std::error::Erro
         .ok_or("TLS fingerprint header should be a string")?;
     assert!(!tls_fp.is_empty(), "TLS fingerprint should not be empty");
 
-    println!("TLS fingerprint (x-huginn-net-tls): {}", tls_fp);
+    println!("TLS fingerprint (x-huginn-net-tls): {tls_fp}");
 
     assert!(tls_fp.starts_with('t'), "TLS fingerprint should start with 't'");
     assert!(tls_fp.contains('_'), "TLS fingerprint should contain underscore separators");
@@ -133,7 +133,7 @@ async fn test_http2_fingerprint_injection() -> Result<(), Box<dyn std::error::Er
         .ok_or("HTTP/2 fingerprint header should be a string")?;
     assert!(!http2_fp.is_empty(), "HTTP/2 fingerprint should not be empty");
 
-    println!("HTTP/2 fingerprint (x-huginn-net-http): {}", http2_fp);
+    println!("HTTP/2 fingerprint (x-huginn-net-http): {http2_fp}");
 
     assert!(http2_fp.contains('|'), "HTTP/2 fingerprint should contain pipe separator");
 
@@ -156,7 +156,7 @@ async fn test_http2_fingerprint_injection() -> Result<(), Box<dyn std::error::Er
         .ok_or("TLS fingerprint header should be a string")?;
     assert!(!tls_fp.is_empty(), "TLS fingerprint should not be empty");
 
-    println!("TLS fingerprint (x-huginn-net-tls): {}", tls_fp);
+    println!("TLS fingerprint (x-huginn-net-tls): {tls_fp}");
 
     // Expected TLS fingerprint for reqwest client (same for HTTP/1.1 and HTTP/2)
     const EXPECTED_TLS_FINGERPRINT_HTTP2: &str = "t13d311100_e8f1e7e78f70_d41ae481755e";
