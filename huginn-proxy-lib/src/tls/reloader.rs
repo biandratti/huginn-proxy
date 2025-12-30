@@ -40,7 +40,6 @@ impl ServerCertsKeys {
     }
 }
 
-
 pub async fn read_certs_and_keys(
     cert_path: &Path,
     key_path: &Path,

@@ -80,7 +80,6 @@ async fn test_build_cert_reloader_missing_files(
     Ok(())
 }
 
-
 #[test]
 fn test_server_certs_keys_build_tls_acceptor(
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
