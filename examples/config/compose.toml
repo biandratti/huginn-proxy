@@ -6,7 +6,8 @@ backends = [
 ]
 
 routes = [
-  { prefix = "/api", backend = "backend-a:9000" },
+  { prefix = "/api", backend = "backend-a:9000", fingerprinting = true },
+  { prefix = "/static", backend = "backend-b:9000", fingerprinting = false },
   { prefix = "/",   backend = "backend-b:9000" }
 ]
 

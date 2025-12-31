@@ -14,6 +14,9 @@ pub enum HttpError {
     #[error("No matching backend")]
     NoMatchingBackend,
 
+    #[error("No matching route")]
+    NoMatchingRoute,
+
     #[error("No upstream candidates")]
     NoUpstreamCandidates,
 
@@ -38,6 +41,7 @@ impl From<HttpError> for StatusCode {
         match e {
             HttpError::InvalidHostInRequestHeader => StatusCode::BAD_REQUEST,
             HttpError::NoMatchingBackend => StatusCode::SERVICE_UNAVAILABLE,
+            HttpError::NoMatchingRoute => StatusCode::NOT_FOUND,
             HttpError::NoUpstreamCandidates => StatusCode::NOT_FOUND,
             HttpError::FailedToGenerateUpstreamRequest(_) => StatusCode::INTERNAL_SERVER_ERROR,
             HttpError::FailedToGetResponseFromBackend(_) => StatusCode::BAD_GATEWAY,
@@ -54,6 +58,7 @@ impl HttpError {
         match self {
             HttpError::InvalidHostInRequestHeader => "invalid_host",
             HttpError::NoMatchingBackend => "no_matching_backend",
+            HttpError::NoMatchingRoute => "no_matching_route",
             HttpError::NoUpstreamCandidates => "no_upstream_candidates",
             HttpError::FailedToGenerateUpstreamRequest(_) => "upstream_request_failed",
             HttpError::FailedToGetResponseFromBackend(_) => "backend_error",

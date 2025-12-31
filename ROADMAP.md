@@ -3,11 +3,7 @@
 ## Upcoming Features
 
 ### Testing & Quality
-- [ ] E2E tests with Docker Compose
-- [ ] Integration tests with real backends
 - [ ] Stress tests (multiple concurrent connections)
-- [ ] Fingerprint injection validation
-- [ ] Health checks tests
 - [ ] Performance benchmarking and optimization
 
 ### Documentation
