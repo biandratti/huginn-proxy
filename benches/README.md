@@ -73,12 +73,10 @@ cd examples && docker compose down
 
 **Note:** The docker-compose setup includes:
 - `proxy`: Single proxy instance with fingerprinting configurable per route
-  - `/api` route: Fingerprinting enabled (default)
+  - `/api` route: Fingerprinting enabled
   - `/static` route: Fingerprinting disabled
   - Default route `/`: Fingerprinting enabled (catch-all)
 - `backend-a` and `backend-b`: Backend services
-
-**Important:** Routes must be explicitly defined. If no route matches, the proxy returns 404 (consistent with rust-rpxy and Traefik). Always include a catch-all route (`prefix = "/"`) if you want to handle all requests.
 
 ## Benchmark Details
 

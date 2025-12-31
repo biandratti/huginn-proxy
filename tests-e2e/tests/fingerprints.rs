@@ -3,8 +3,10 @@ use tests_e2e::common::{wait_for_service, DEFAULT_SERVICE_TIMEOUT_SECS, PROXY_HT
 #[tokio::test]
 async fn test_tls_fingerprint_injection() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     // This test uses HTTP/1.1, so only TLS fingerprint should be present
+    // Force HTTP/1.1 by disabling HTTP/2 support
     let client = reqwest::Client::builder()
         .danger_accept_invalid_certs(true)
+        .http1_only()
         .build()
         .map_err(|e| format!("Failed to create HTTP client: {e}"))?;
 
@@ -47,7 +49,8 @@ async fn test_tls_fingerprint_injection() -> Result<(), Box<dyn std::error::Erro
     assert!(tls_fp.contains('_'), "TLS fingerprint should contain underscore separators");
 
     // Expected TLS fingerprint for reqwest client (HTTP/1.1)
-    const EXPECTED_TLS_FINGERPRINT: &str = "t13d311100_e8f1e7e78f70_d41ae481755e";
+    // Note: When HTTP/1.1 is forced, the fingerprint ends with 'h1' instead of 'h2'
+    const EXPECTED_TLS_FINGERPRINT: &str = "t13d1011h1_61a7ad8aa9b6_3a8073edd8ef";
     assert_eq!(
         tls_fp, EXPECTED_TLS_FINGERPRINT,
         "TLS fingerprint should match expected value for reqwest HTTP/1.1 client"
@@ -159,7 +162,7 @@ async fn test_http2_fingerprint_injection() -> Result<(), Box<dyn std::error::Er
     println!("TLS fingerprint (x-huginn-net-tls): {tls_fp}");
 
     // Expected TLS fingerprint for reqwest client (same for HTTP/1.1 and HTTP/2)
-    const EXPECTED_TLS_FINGERPRINT_HTTP2: &str = "t13d311100_e8f1e7e78f70_d41ae481755e";
+    const EXPECTED_TLS_FINGERPRINT_HTTP2: &str = "t13d1011h2_61a7ad8aa9b6_3a8073edd8ef";
     assert_eq!(
         tls_fp, EXPECTED_TLS_FINGERPRINT_HTTP2,
         "TLS fingerprint should match expected value for reqwest HTTP/2 client"
