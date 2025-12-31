@@ -20,8 +20,7 @@ use tracing::{debug, info, warn};
 use crate::config::Config;
 use crate::error::Result;
 use crate::fingerprinting::{read_client_hello, CapturingStream};
-use crate::load_balancing::RoundRobin;
-use crate::proxy::forwarding::{forward, pick_route};
+use crate::proxy::forwarding::forward;
 use crate::proxy::http_result::{HttpError, HttpResult};
 use crate::proxy::synthetic_response::synthetic_error_response;
 use crate::telemetry::Metrics;
@@ -133,9 +132,7 @@ type RespBody = http_body_util::combinators::BoxBody<bytes::Bytes, hyper::Error>
 async fn handle_proxy_request(
     mut req: Request<Incoming>,
     routes: Vec<crate::config::Route>,
-    backend_list: Arc<Vec<crate::config::Backend>>,
     backends: Arc<Vec<crate::config::Backend>>,
-    round_robin: RoundRobin,
     tls_header: Option<HeaderValue>,
     fingerprint_rx: Option<watch::Receiver<Option<huginn_net_http::AkamaiFingerprint>>>,
     metrics: Option<Arc<Metrics>>,
@@ -143,61 +140,58 @@ async fn handle_proxy_request(
     let start = Instant::now();
     let method = req.method().to_string();
     let protocol = format!("{:?}", req.version());
-    if let Some(hv) = tls_header {
-        req.headers_mut()
-            .insert(HeaderName::from_static("x-huginn-net-tls"), hv);
-    }
-    if let Some(ref rx) = fingerprint_rx {
-        // Only attempt to extract HTTP/2 fingerprint if this is actually an HTTP/2 request
-        if req.version() == Version::HTTP_2 {
-            let akamai = rx.borrow().clone();
-            debug!("Handler: akamai fingerprint: {:?}", akamai);
-            if let Some(hv) = akamai_header_value(&akamai) {
-                debug!("Handler: injecting x-huginn-net-http header: {:?}", hv);
-                req.headers_mut()
-                    .insert(HeaderName::from_static("x-huginn-net-http"), hv);
-            } else {
-                debug!("Handler: no HTTP fingerprint header to inject (HTTP/2 connection but fingerprint not extracted)");
-                // Record failure metric if metrics available
-                if let Some(ref m) = metrics {
-                    m.http2_fingerprint_failures_total.add(1, &[]);
-                }
-            }
-        } else {
-            // HTTP/1.1 connection - Akamai fingerprint not applicable
-            debug!("Handler: HTTP/1.1 connection, Akamai fingerprint not applicable");
-            if let Some(ref m) = metrics {
-                m.http2_fingerprint_failures_total.add(1, &[]);
-            }
-        }
-    }
 
-    // Route selection
+    // Route selection (determine backend and fingerprinting configuration)
     let path = req.uri().path();
-    let backend = if let Some(target) = pick_route(path, &routes) {
+    let (backend, should_fingerprint) = if let Some((target, fingerprinting)) =
+        crate::proxy::forwarding::pick_route_with_fingerprinting(path, &routes)
+    {
+        // Route matched: use route's fingerprinting configuration
         let backend_str = target.to_string();
         if let Some(ref m) = metrics {
             m.backend_selections_total
                 .add(1, &[KeyValue::new("backend", backend_str.clone())]);
         }
-        backend_str
+        (backend_str, fingerprinting)
     } else {
-        if backend_list.is_empty() {
-            let error = HttpError::NoUpstreamCandidates;
-            if let Some(ref m) = metrics {
-                m.errors_total
-                    .add(1, &[KeyValue::new("error_type", error.error_type())]);
-            }
-            return Err(error);
-        }
-        let idx = round_robin.next(backend_list.len());
-        let selected_backend = backend_list[idx].address.clone();
+        // No route matched: return 404 (consistent with rust-rpxy and Traefik)
+        let error = HttpError::NoMatchingRoute;
         if let Some(ref m) = metrics {
-            m.backend_selections_total
-                .add(1, &[KeyValue::new("backend", selected_backend.clone())]);
+            m.errors_total
+                .add(1, &[KeyValue::new("error_type", error.error_type())]);
         }
-        selected_backend
+        return Err(error);
     };
+
+    if should_fingerprint {
+        if let Some(hv) = tls_header {
+            req.headers_mut()
+                .insert(HeaderName::from_static("x-huginn-net-tls"), hv);
+        }
+        if let Some(ref rx) = fingerprint_rx {
+            if req.version() == Version::HTTP_2 {
+                let akamai = rx.borrow().clone();
+                debug!("Handler: akamai fingerprint: {:?}", akamai);
+                if let Some(hv) = akamai_header_value(&akamai) {
+                    debug!("Handler: injecting x-huginn-net-http header: {:?}", hv);
+                    req.headers_mut()
+                        .insert(HeaderName::from_static("x-huginn-net-http"), hv);
+                } else {
+                    debug!("Handler: no HTTP fingerprint header to inject (HTTP/2 connection but fingerprint not extracted)");
+                    // Record failure metric if metrics available
+                    if let Some(ref m) = metrics {
+                        m.http2_fingerprint_failures_total.add(1, &[]);
+                    }
+                }
+            } else {
+                // HTTP/1.1 connection - Akamai fingerprint not applicable
+                debug!("Handler: HTTP/1.1 connection, Akamai fingerprint not applicable");
+                if let Some(ref m) = metrics {
+                    m.http2_fingerprint_failures_total.add(1, &[]);
+                }
+            }
+        }
+    }
 
     // Forward request
     let result = forward(req, backend.clone(), &backends, metrics.clone()).await;
@@ -253,8 +247,6 @@ pub async fn run(config: Arc<Config>, metrics: Option<Arc<Metrics>>) -> Result<(
         }
         None => None,
     };
-
-    let round_robin = RoundRobin::new();
 
     // Track active connections for graceful shutdown
     let active_connections = Arc::new(AtomicUsize::new(0));
@@ -317,7 +309,6 @@ pub async fn run(config: Arc<Config>, metrics: Option<Arc<Metrics>>) -> Result<(
                 let builder = builder.clone();
                 let backends_clone = Arc::clone(&backends_for_loop);
                 let routes = routes.clone();
-                let round_robin = round_robin.clone();
                 let tls_acceptor = tls_acceptor.clone();
                 let active_connections = active_connections.clone();
                 let fingerprint_config = config.fingerprint.clone();
@@ -330,7 +321,6 @@ pub async fn run(config: Arc<Config>, metrics: Option<Arc<Metrics>>) -> Result<(
                     let active_connections_clone = active_connections.clone();
                     let _guard = ConnectionGuard::new(active_connections_clone.clone(), connections_closed_tx);
                     let mut stream = stream;
-                    let backend_list = backends_clone.clone();
 
                     if let Some(ref m) = metrics_for_connection {
                         m.connections_active.add(-1, &[]);
@@ -388,9 +378,7 @@ pub async fn run(config: Arc<Config>, metrics: Option<Arc<Metrics>>) -> Result<(
                                     let metrics_for_service = metrics_for_connection.clone();
                                     let svc = hyper::service::service_fn(move |req: Request<Incoming>| {
                                         let routes = routes.clone();
-                                        let backend_list = backend_list.clone();
                                         let backends = backends_clone.clone();
-                                        let round_robin = round_robin.clone();
                                         let tls_header = tls_header.clone();
                                         let fingerprint_rx = fingerprint_rx.clone();
                                         let metrics = metrics_for_service.clone();
@@ -399,9 +387,7 @@ pub async fn run(config: Arc<Config>, metrics: Option<Arc<Metrics>>) -> Result<(
                                             let http_result = handle_proxy_request(
                                                 req,
                                                 routes,
-                                                backend_list,
                                                 backends,
-                                                round_robin,
                                                 tls_header,
                                                 Some(fingerprint_rx),
                                                 metrics.clone(),
@@ -459,9 +445,7 @@ pub async fn run(config: Arc<Config>, metrics: Option<Arc<Metrics>>) -> Result<(
                                     let metrics_for_service = metrics_for_connection.clone();
                                     let svc = hyper::service::service_fn(move |req: Request<Incoming>| {
                                         let routes = routes.clone();
-                                        let backend_list = backend_list.clone();
                                         let backends = backends_clone.clone();
-                                        let round_robin = round_robin.clone();
                                         let tls_header = tls_header.clone();
                                         let metrics = metrics_for_service.clone();
 
@@ -469,9 +453,7 @@ pub async fn run(config: Arc<Config>, metrics: Option<Arc<Metrics>>) -> Result<(
                                             let http_result = handle_proxy_request(
                                                 req,
                                                 routes,
-                                                backend_list,
                                                 backends,
-                                                round_robin,
                                                 tls_header,
                                                 None,
                                                 metrics.clone(),
@@ -539,18 +521,14 @@ pub async fn run(config: Arc<Config>, metrics: Option<Arc<Metrics>>) -> Result<(
                         let metrics_for_service = metrics_for_connection.clone();
                         let svc = hyper::service::service_fn(move |req: Request<Incoming>| {
                             let routes = routes.clone();
-                            let backend_list = backend_list.clone();
                             let backends = backends_clone.clone();
-                            let round_robin = round_robin.clone();
                             let metrics = metrics_for_service.clone();
 
                             async move {
                                 let http_result = handle_proxy_request(
                                     req,
                                     routes,
-                                    backend_list,
                                     backends,
-                                    round_robin,
                                     None,
                                     None,
                                     metrics.clone(),

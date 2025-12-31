@@ -148,3 +148,13 @@ pub fn pick_route<'a>(path: &str, routes: &'a [crate::config::Route]) -> Option<
         .find(|r| path.starts_with(&r.prefix))
         .map(|r| r.backend.as_str())
 }
+
+pub fn pick_route_with_fingerprinting<'a>(
+    path: &str,
+    routes: &'a [crate::config::Route],
+) -> Option<(&'a str, bool)> {
+    routes
+        .iter()
+        .find(|r| path.starts_with(&r.prefix))
+        .map(|r| (r.backend.as_str(), r.fingerprinting))
+}

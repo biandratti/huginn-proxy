@@ -113,9 +113,21 @@ fn test_determine_http_version_no_backend() {
 #[test]
 fn test_pick_route() {
     let routes = vec![
-        Route { prefix: "/api".to_string(), backend: "backend-a:9000".to_string() },
-        Route { prefix: "/static".to_string(), backend: "backend-b:9000".to_string() },
-        Route { prefix: "/".to_string(), backend: "backend-c:9000".to_string() },
+        Route {
+            prefix: "/api".to_string(),
+            backend: "backend-a:9000".to_string(),
+            fingerprinting: true,
+        },
+        Route {
+            prefix: "/static".to_string(),
+            backend: "backend-b:9000".to_string(),
+            fingerprinting: true,
+        },
+        Route {
+            prefix: "/".to_string(),
+            backend: "backend-c:9000".to_string(),
+            fingerprinting: true,
+        },
     ];
 
     assert_eq!(pick_route("/api/users", &routes), Some("backend-a:9000"));

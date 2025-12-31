@@ -7,8 +7,16 @@ use huginn_proxy_lib::proxy::forwarding::{
 #[test]
 fn test_pick_route_no_match() {
     let routes = vec![
-        Route { prefix: "/api".to_string(), backend: "backend-a:9000".to_string() },
-        Route { prefix: "/static".to_string(), backend: "backend-b:9000".to_string() },
+        Route {
+            prefix: "/api".to_string(),
+            backend: "backend-a:9000".to_string(),
+            fingerprinting: true,
+        },
+        Route {
+            prefix: "/static".to_string(),
+            backend: "backend-b:9000".to_string(),
+            fingerprinting: true,
+        },
     ];
 
     assert_eq!(pick_route("/unknown/path", &routes), None);
@@ -17,8 +25,16 @@ fn test_pick_route_no_match() {
 #[test]
 fn test_pick_route_exact_match() {
     let routes = vec![
-        Route { prefix: "/api".to_string(), backend: "backend-a:9000".to_string() },
-        Route { prefix: "/".to_string(), backend: "backend-b:9000".to_string() },
+        Route {
+            prefix: "/api".to_string(),
+            backend: "backend-a:9000".to_string(),
+            fingerprinting: true,
+        },
+        Route {
+            prefix: "/".to_string(),
+            backend: "backend-b:9000".to_string(),
+            fingerprinting: true,
+        },
     ];
 
     // Exact match should work
@@ -28,9 +44,21 @@ fn test_pick_route_exact_match() {
 #[test]
 fn test_pick_route_longest_prefix() {
     let routes = vec![
-        Route { prefix: "/api/v1".to_string(), backend: "backend-v1:9000".to_string() },
-        Route { prefix: "/api".to_string(), backend: "backend-api:9000".to_string() },
-        Route { prefix: "/".to_string(), backend: "backend-default:9000".to_string() },
+        Route {
+            prefix: "/api/v1".to_string(),
+            backend: "backend-v1:9000".to_string(),
+            fingerprinting: true,
+        },
+        Route {
+            prefix: "/api".to_string(),
+            backend: "backend-api:9000".to_string(),
+            fingerprinting: true,
+        },
+        Route {
+            prefix: "/".to_string(),
+            backend: "backend-default:9000".to_string(),
+            fingerprinting: true,
+        },
     ];
 
     assert_eq!(pick_route("/api/v1/users", &routes), Some("backend-v1:9000"));
@@ -80,8 +108,11 @@ fn test_determine_http_version_unknown_version() {
 
 #[test]
 fn test_pick_route_with_empty_prefix() {
-    let routes =
-        vec![Route { prefix: "".to_string(), backend: "backend-default:9000".to_string() }];
+    let routes = vec![Route {
+        prefix: "".to_string(),
+        backend: "backend-default:9000".to_string(),
+        fingerprinting: true,
+    }];
 
     assert_eq!(pick_route("/any/path", &routes), Some("backend-default:9000"));
     assert_eq!(pick_route("/", &routes), Some("backend-default:9000"));

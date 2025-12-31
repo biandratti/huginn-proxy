@@ -207,3 +207,69 @@ async fn test_http2_fingerprint_injection() -> Result<(), Box<dyn std::error::Er
 
     Ok(())
 }
+
+#[tokio::test]
+async fn test_fingerprinting_disabled_per_route(
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let client = reqwest::Client::builder()
+        .danger_accept_invalid_certs(true)
+        .build()
+        .map_err(|e| format!("Failed to create HTTP client: {e}"))?;
+
+    assert!(
+        wait_for_service(PROXY_HTTPS_URL, DEFAULT_SERVICE_TIMEOUT_SECS).await?,
+        "HTTPS proxy should be ready"
+    );
+
+    // Request to /static route (fingerprinting disabled)
+    let response = client
+        .get(format!("{PROXY_HTTPS_URL}/static/test"))
+        .send()
+        .await
+        .map_err(|e| format!("Failed to send request: {e}"))?;
+    assert_eq!(response.status(), reqwest::StatusCode::OK);
+
+    let body: serde_json::Value = response
+        .json()
+        .await
+        .map_err(|e| format!("Failed to parse response as JSON: {e}"))?;
+    let headers = body
+        .get("headers")
+        .and_then(|h| h.as_object())
+        .ok_or("Response should contain headers object")?;
+
+    // Fingerprint headers should NOT be present for /static route
+    assert!(
+        !headers.contains_key("x-huginn-net-tls"),
+        "TLS fingerprint header should NOT be present when fingerprinting is disabled for route"
+    );
+    assert!(
+        !headers.contains_key("x-huginn-net-http"),
+        "HTTP/2 fingerprint header should NOT be present when fingerprinting is disabled for route"
+    );
+
+    // Request to /api route (fingerprinting enabled)
+    let response2 = client
+        .get(format!("{PROXY_HTTPS_URL}/api/test"))
+        .send()
+        .await
+        .map_err(|e| format!("Failed to send request to /api: {e}"))?;
+    assert_eq!(response2.status(), reqwest::StatusCode::OK);
+
+    let body2: serde_json::Value = response2
+        .json()
+        .await
+        .map_err(|e| format!("Failed to parse /api response as JSON: {e}"))?;
+    let headers2 = body2
+        .get("headers")
+        .and_then(|h| h.as_object())
+        .ok_or("/api response should contain headers object")?;
+
+    // Fingerprint headers SHOULD be present for /api route
+    assert!(
+        headers2.contains_key("x-huginn-net-tls"),
+        "TLS fingerprint header should be present when fingerprinting is enabled for route"
+    );
+
+    Ok(())
+}

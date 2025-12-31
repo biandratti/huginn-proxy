@@ -32,6 +32,11 @@ pub struct Route {
     /// Backend address to route matching requests to
     /// Must match one of the backend addresses defined in `backends`
     pub backend: String,
+    /// Enable fingerprinting for this route
+    /// If true, TLS and HTTP/2 fingerprints will be injected as headers
+    /// Default: true (fingerprinting enabled)
+    #[serde(default = "default_true")]
+    pub fingerprinting: bool,
 }
 
 /// TLS termination configuration
@@ -155,8 +160,7 @@ pub struct Config {
     /// At least one backend is required
     pub backends: Vec<Backend>,
     /// Path-based routing rules (optional)
-    /// If no routes match, requests are distributed using round-robin
-    /// Default: empty (all requests use round-robin)
+    /// If no routes match, requests return 404
     #[serde(default)]
     pub routes: Vec<Route>,
     /// TLS termination configuration (optional)
