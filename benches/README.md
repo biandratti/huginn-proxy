@@ -152,6 +152,8 @@ When adding new benchmarks:
 
 ## Current Results
 
+**Note:** These benchmarks were executed on a development laptop (not production hardware). Results are provided for reference and may vary significantly in production environments.
+
 ### Performance Overview
 
 | Metric | Value |
@@ -187,4 +189,4 @@ When adding new benchmarks:
 | Reverse proxy with fingerprinting | ~1,200-1,700 req/s | ~2,000-16,000 req/s |
 | Simple HTTP server | N/A | ~29,650 req/s |
 
-**Note**: Current benchmarks are running against a real proxy with TLS termination, which adds significant overhead compared to in-memory packet processing benchmarks. Results are averaged across multiple iterations and benchmark runs for reliability.
+**Note**: These benchmarks were executed on a development laptop (not production hardware). They measure end-to-end performance of the full proxy stack (TLS handshake, HTTP parsing, fingerprint extraction, backend forwarding), which includes all real-world overhead. Results are averaged across multiple iterations and benchmark runs for reliability. Performance in production environments may vary significantly.

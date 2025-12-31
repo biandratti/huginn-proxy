@@ -4,7 +4,11 @@
   # Huginn Proxy
 
   [![License](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg)](https://github.com/biandratti/huginn-proxy#license)
-  [![Pure Rust](https://img.shields.io/badge/pure-Rust-brightgreen.svg)](https://www.rust-lang.org/)
+  [![CI](https://github.com/biandratti/huginn-proxy/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/biandratti/huginn-proxy/actions/workflows/ci.yml)
+  [![Security](https://github.com/biandratti/huginn-proxy/actions/workflows/security.yml/badge.svg?branch=master)](https://github.com/biandratti/huginn-proxy/actions/workflows/security.yml)
+  [![Audit](https://github.com/biandratti/huginn-proxy/actions/workflows/audit.yml/badge.svg?branch=master)](https://github.com/biandratti/huginn-proxy/actions/workflows/audit.yml)
+  [![Pure Rust](https://img.shields.io/badge/pure-Rust-brightgreen.svg)](https://deps.rs/repo/github/biandratti/huginn-proxy)
+  [![codecov](https://codecov.io/gh/biandratti/huginn-proxy/graph/badge.svg)](https://codecov.io/gh/biandratti/huginn-proxy)
 
   **High-performance reverse proxy with passive fingerprinting capabilities powered by Huginn Net.**
 </div>
@@ -14,6 +18,56 @@
 **Huginn Proxy** is a reverse proxy built in Rust that combines traditional load balancing and request forwarding with advanced passive fingerprinting capabilities. It leverages the [Huginn Net](https://github.com/biandratti/huginn-net) fingerprinting libraries to extract TLS (JA4) and HTTP/2 (Akamai) fingerprints from client connections, injecting them as headers for downstream services.
 
 > **Note:** This project is currently in active development.
+
+## Quick Start
+
+### Build
+
+```bash
+cargo build --release
+```
+
+### Minimal Configuration
+
+Create `config.toml`:
+
+```toml
+listen = "0.0.0.0:7000"
+
+backends = [
+  { address = "backend:8080", http_version = "preserve" }
+]
+
+routes = [
+  { prefix = "/", backend = "backend:8080" }
+]
+
+[tls]
+cert_path = "/path/to/cert.pem"
+key_path = "/path/to/key.pem"
+alpn = ["h2", "http/1.1"]
+
+[fingerprint]
+tls_enabled = true
+http_enabled = true
+```
+
+## Installation
+
+### From Source
+
+```bash
+git clone https://github.com/biandratti/huginn-proxy.git
+cd huginn-proxy
+cargo build --release
+```
+
+### Docker
+
+```bash
+docker build -t huginn-proxy .
+docker run -v /path/to/config.toml:/config.toml huginn-proxy /config.toml
+```
 
 ### Why choose Huginn Proxy?
 
@@ -38,44 +92,55 @@
 - **Header Injection** - Fingerprints automatically injected as `x-huginn-net-tls` and `x-huginn-net-http` headers
 - **Configurable** - Enable/disable fingerprinting per protocol via configuration
 
-## Fingerprinting Details
+## Fingerprinting
 
-### TLS Fingerprinting (JA4)
+Fingerprints are automatically extracted and injected as headers:
 
-Huginn Proxy extracts JA4 fingerprints from TLS ClientHello messages using the [huginn-net-tls](https://crates.io/crates/huginn-net-tls) library. The fingerprint follows the [official JA4 specification](https://github.com/FoxIO-LLC/ja4) and is injected as the `x-huginn-net-tls` header.
+- **TLS (JA4)**: `x-huginn-net-tls` - Extracted from all TLS connections using [huginn-net-tls](https://crates.io/crates/huginn-net-tls)
+- **HTTP/2 (Akamai)**: `x-huginn-net-http` - Extracted from HTTP/2 connections only using [huginn-net-http](https://crates.io/crates/huginn-net-http)
 
-**Example:**
+**Examples:**
 ```
 x-huginn-net-tls: t13d1516h2_8afaf4b9491c_00_0403040303030103010302_01
-```
-
-### HTTP/2 Fingerprinting (Akamai)
-
-HTTP/2 fingerprints are extracted from the initial HTTP/2 frames (SETTINGS, WINDOW_UPDATE, PRIORITY, HEADERS) following the [Blackhat EU 2017 specification](https://www.blackhat.com/docs/eu-17/materials/eu-17-Shuster-Passive-Fingerprinting-Of-HTTP2-Clients-wp.pdf). The fingerprint is injected as the `x-huginn-net-http` header.
-
-**Note:** Akamai fingerprinting only works for HTTP/2 connections. HTTP/1.x connections will not have the `x-huginn-net-http` header injected.
-
-**Example:**
-```
 x-huginn-net-http: 1:65536,2:0,3:1000,4:6291456,6:262144|15663105|0|m,p,a,s
 ```
 
+See [JA4 specification](https://github.com/FoxIO-LLC/ja4) and [Blackhat EU 2017](https://www.blackhat.com/docs/eu-17/materials/eu-17-Shuster-Passive-Fingerprinting-Of-HTTP2-Clients-wp.pdf) for details.
+
 ## Examples
 
-### Docker Compose Example
+### Basic Configuration
 
-See [`examples/docker-compose.yml`](examples/docker-compose.yml) for a complete setup with:
-- Huginn Proxy with TLS termination
-- Multiple backend servers
-- Path-based routing
-- Fingerprinting enabled
+```toml
+listen = "0.0.0.0:7000"
+
+backends = [
+  { address = "backend-a:8080", http_version = "preserve" },
+  { address = "backend-b:8080", http_version = "preserve" }
+]
+
+routes = [
+  { prefix = "/api", backend = "backend-a:8080", fingerprinting = true },
+  { prefix = "/static", backend = "backend-b:8080", fingerprinting = false }
+]
+
+[tls]
+cert_path = "/path/to/cert.pem"
+key_path = "/path/to/key.pem"
+alpn = ["h2", "http/1.1"]
+```
+
+### Docker Compose
+
+See [`examples/docker-compose.yml`](examples/docker-compose.yml) for a complete setup with TLS termination, multiple backends, and path-based routing.
 
 ## Performance
 
-- **Throughput**: Handles thousands of concurrent connections
-- **Latency**: Sub-millisecond overhead for fingerprinting
-- **Memory**: Efficient zero-copy processing
-- **CPU**: Minimal overhead (~1-2%) for fingerprint extraction
+- **Fingerprinting Overhead**: ~2.2% (minimal impact)
+- **Concurrent Connections**: Handles thousands of concurrent connections
+- **Latency**: Sub-millisecond overhead for fingerprint extraction
+
+See [`benches/README.md`](benches/README.md) for detailed benchmark results from development environment.
 
 ## Roadmap
 

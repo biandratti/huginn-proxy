@@ -4,12 +4,8 @@
 
 ### Testing & Quality
 - [ ] Stress tests (multiple concurrent connections)
-- [ ] Performance benchmarking and optimization
 
 ### Documentation
-- [ ] Improved README (quick start, features, configuration)
-- [ ] Architecture documentation
-- [ ] Complete configuration guide
 - [ ] Usage examples (Kubernetes, Docker)
 - [ ] Metrics documentation
 
