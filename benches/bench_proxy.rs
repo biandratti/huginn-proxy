@@ -582,8 +582,10 @@ fn bench_proxy_load_test_comparison(c: &mut Criterion) {
     let proxy_url_disabled = format!("{proxy_url}/static/test");
 
     // Number of requests for load test (higher than regular benchmarks)
-    const LOAD_TEST_REQUESTS: usize = 1000;
-    const LOAD_TEST_CONCURRENT: usize = 10; // 10 concurrent connections
+    // Increased for more reliable measurements
+    const LOAD_TEST_REQUESTS: usize = 10000;
+    const LOAD_TEST_CONCURRENT: usize = 50; // 50 concurrent connections for better load simulation
+    const LOAD_TEST_ITERATIONS: usize = 5; // Run 5 iterations and average
 
     let mut group = c.benchmark_group("load_test_comparison");
     group.sample_size(10); // Minimum 10 samples required by criterion
@@ -752,31 +754,50 @@ fn bench_proxy_load_test_comparison(c: &mut Criterion) {
         }
     };
 
-    // Measure HTTP/1.1 with fingerprinting enabled
-    let start = std::time::Instant::now();
-    let enabled_success = rt.block_on(async {
-        let mut handles = Vec::new();
-        for _ in 0..LOAD_TEST_CONCURRENT {
-            let client = client.clone();
-            let url = proxy_url_enabled.clone();
-            handles.push(tokio::spawn(async move {
-                let mut success: usize = 0;
-                for _ in 0..(LOAD_TEST_REQUESTS / LOAD_TEST_CONCURRENT) {
-                    if client.get(&url).send().await.is_ok() {
-                        success = success.saturating_add(1);
+    // Measure HTTP/1.1 with fingerprinting enabled (multiple iterations for accuracy)
+    let mut enabled_rps_values = Vec::new();
+    for iteration in 0..LOAD_TEST_ITERATIONS {
+        // Warm-up on first iteration
+        if iteration == 0 {
+            rt.block_on(async {
+                let _ = client.get(&proxy_url_enabled).send().await;
+            });
+            std::thread::sleep(Duration::from_millis(100));
+        }
+
+        let start = std::time::Instant::now();
+        let enabled_success = rt.block_on(async {
+            let mut handles = Vec::new();
+            for _ in 0..LOAD_TEST_CONCURRENT {
+                let client = client.clone();
+                let url = proxy_url_enabled.clone();
+                handles.push(tokio::spawn(async move {
+                    let mut success: usize = 0;
+                    for _ in 0..(LOAD_TEST_REQUESTS / LOAD_TEST_CONCURRENT) {
+                        if client.get(&url).send().await.is_ok() {
+                            success = success.saturating_add(1);
+                        }
                     }
-                }
-                success
-            }));
+                    success
+                }));
+            }
+            let mut total: usize = 0;
+            for handle in handles {
+                total = total.saturating_add(handle.await.unwrap_or(0));
+            }
+            total
+        });
+        let enabled_duration = start.elapsed();
+        let rps = calculate_throughput_rps(enabled_duration, enabled_success);
+        enabled_rps_values.push(rps);
+
+        // Small delay between iterations
+        if iteration < LOAD_TEST_ITERATIONS - 1 {
+            std::thread::sleep(Duration::from_millis(200));
         }
-        let mut total: usize = 0;
-        for handle in handles {
-            total = total.saturating_add(handle.await.unwrap_or(0));
-        }
-        total
-    });
-    let enabled_duration = start.elapsed();
-    let enabled_rps = calculate_throughput_rps(enabled_duration, enabled_success);
+    }
+    // Average RPS across iterations
+    let enabled_rps = enabled_rps_values.iter().sum::<f64>() / enabled_rps_values.len() as f64;
 
     if let Ok(mut guard) = BENCHMARK_RESULTS.lock() {
         if let Some(ref mut report) = *guard {
@@ -789,7 +810,7 @@ fn bench_proxy_load_test_comparison(c: &mut Criterion) {
         }
     }
 
-    // Measure HTTP/2 with fingerprinting enabled (TLS + HTTP/2)
+    // Measure HTTP/2 with fingerprinting enabled (TLS + HTTP/2) (multiple iterations)
     let client_h2 = match setup_client_h2() {
         Ok(client) => client,
         Err(e) => {
@@ -798,30 +819,50 @@ fn bench_proxy_load_test_comparison(c: &mut Criterion) {
         }
     };
 
-    let start = std::time::Instant::now();
-    let enabled_h2_success = rt.block_on(async {
-        let mut handles = Vec::new();
-        for _ in 0..LOAD_TEST_CONCURRENT {
-            let client = client_h2.clone();
-            let url = proxy_url_enabled.clone();
-            handles.push(tokio::spawn(async move {
-                let mut success: usize = 0;
-                for _ in 0..(LOAD_TEST_REQUESTS / LOAD_TEST_CONCURRENT) {
-                    if client.get(&url).send().await.is_ok() {
-                        success = success.saturating_add(1);
+    let mut enabled_h2_rps_values = Vec::new();
+    for iteration in 0..LOAD_TEST_ITERATIONS {
+        // Warm-up on first iteration
+        if iteration == 0 {
+            rt.block_on(async {
+                let _ = client_h2.get(&proxy_url_enabled).send().await;
+            });
+            std::thread::sleep(Duration::from_millis(100));
+        }
+
+        let start = std::time::Instant::now();
+        let enabled_h2_success = rt.block_on(async {
+            let mut handles = Vec::new();
+            for _ in 0..LOAD_TEST_CONCURRENT {
+                let client = client_h2.clone();
+                let url = proxy_url_enabled.clone();
+                handles.push(tokio::spawn(async move {
+                    let mut success: usize = 0;
+                    for _ in 0..(LOAD_TEST_REQUESTS / LOAD_TEST_CONCURRENT) {
+                        if client.get(&url).send().await.is_ok() {
+                            success = success.saturating_add(1);
+                        }
                     }
-                }
-                success
-            }));
+                    success
+                }));
+            }
+            let mut total: usize = 0;
+            for handle in handles {
+                total = total.saturating_add(handle.await.unwrap_or(0));
+            }
+            total
+        });
+        let enabled_h2_duration = start.elapsed();
+        let rps = calculate_throughput_rps(enabled_h2_duration, enabled_h2_success);
+        enabled_h2_rps_values.push(rps);
+
+        // Small delay between iterations
+        if iteration < LOAD_TEST_ITERATIONS - 1 {
+            std::thread::sleep(Duration::from_millis(200));
         }
-        let mut total: usize = 0;
-        for handle in handles {
-            total = total.saturating_add(handle.await.unwrap_or(0));
-        }
-        total
-    });
-    let enabled_h2_duration = start.elapsed();
-    let enabled_h2_rps = calculate_throughput_rps(enabled_h2_duration, enabled_h2_success);
+    }
+    // Average RPS across iterations
+    let enabled_h2_rps =
+        enabled_h2_rps_values.iter().sum::<f64>() / enabled_h2_rps_values.len() as f64;
 
     if let Ok(mut guard) = BENCHMARK_RESULTS.lock() {
         if let Some(ref mut report) = *guard {
@@ -843,30 +884,51 @@ fn bench_proxy_load_test_comparison(c: &mut Criterion) {
                 return;
             }
         };
-        let start = std::time::Instant::now();
-        let disabled_success = rt.block_on(async {
-            let mut handles = Vec::new();
-            for _ in 0..LOAD_TEST_CONCURRENT {
-                let client = client_disabled.clone();
-                let url = proxy_url_disabled.clone();
-                handles.push(tokio::spawn(async move {
-                    let mut success: usize = 0;
-                    for _ in 0..(LOAD_TEST_REQUESTS / LOAD_TEST_CONCURRENT) {
-                        if client.get(&url).send().await.is_ok() {
-                            success = success.saturating_add(1);
+        // Measure HTTP/1.1 without fingerprinting (multiple iterations)
+        let mut disabled_rps_values = Vec::new();
+        for iteration in 0..LOAD_TEST_ITERATIONS {
+            // Warm-up on first iteration
+            if iteration == 0 {
+                rt.block_on(async {
+                    let _ = client_disabled.get(&proxy_url_disabled).send().await;
+                });
+                std::thread::sleep(Duration::from_millis(100));
+            }
+
+            let start = std::time::Instant::now();
+            let disabled_success = rt.block_on(async {
+                let mut handles = Vec::new();
+                for _ in 0..LOAD_TEST_CONCURRENT {
+                    let client = client_disabled.clone();
+                    let url = proxy_url_disabled.clone();
+                    handles.push(tokio::spawn(async move {
+                        let mut success: usize = 0;
+                        for _ in 0..(LOAD_TEST_REQUESTS / LOAD_TEST_CONCURRENT) {
+                            if client.get(&url).send().await.is_ok() {
+                                success = success.saturating_add(1);
+                            }
                         }
-                    }
-                    success
-                }));
+                        success
+                    }));
+                }
+                let mut total: usize = 0;
+                for handle in handles {
+                    total = total.saturating_add(handle.await.unwrap_or(0));
+                }
+                total
+            });
+            let disabled_duration = start.elapsed();
+            let rps = calculate_throughput_rps(disabled_duration, disabled_success);
+            disabled_rps_values.push(rps);
+
+            // Small delay between iterations
+            if iteration < LOAD_TEST_ITERATIONS - 1 {
+                std::thread::sleep(Duration::from_millis(200));
             }
-            let mut total: usize = 0;
-            for handle in handles {
-                total = total.saturating_add(handle.await.unwrap_or(0));
-            }
-            total
-        });
-        let disabled_duration = start.elapsed();
-        let disabled_rps = calculate_throughput_rps(disabled_duration, disabled_success);
+        }
+        // Average RPS across iterations
+        let disabled_rps =
+            disabled_rps_values.iter().sum::<f64>() / disabled_rps_values.len() as f64;
 
         if let Ok(mut guard) = BENCHMARK_RESULTS.lock() {
             if let Some(ref mut report) = *guard {
@@ -879,7 +941,7 @@ fn bench_proxy_load_test_comparison(c: &mut Criterion) {
             }
         }
 
-        // Measure HTTP/2 without fingerprinting
+        // Measure HTTP/2 without fingerprinting (multiple iterations)
         let client_h2_disabled = match setup_client_h2() {
             Ok(client) => client,
             Err(e) => {
@@ -888,30 +950,50 @@ fn bench_proxy_load_test_comparison(c: &mut Criterion) {
             }
         };
 
-        let start = std::time::Instant::now();
-        let disabled_h2_success = rt.block_on(async {
-            let mut handles = Vec::new();
-            for _ in 0..LOAD_TEST_CONCURRENT {
-                let client = client_h2_disabled.clone();
-                let url = proxy_url_disabled.clone();
-                handles.push(tokio::spawn(async move {
-                    let mut success: usize = 0;
-                    for _ in 0..(LOAD_TEST_REQUESTS / LOAD_TEST_CONCURRENT) {
-                        if client.get(&url).send().await.is_ok() {
-                            success = success.saturating_add(1);
+        let mut disabled_h2_rps_values = Vec::new();
+        for iteration in 0..LOAD_TEST_ITERATIONS {
+            // Warm-up on first iteration
+            if iteration == 0 {
+                rt.block_on(async {
+                    let _ = client_h2_disabled.get(&proxy_url_disabled).send().await;
+                });
+                std::thread::sleep(Duration::from_millis(100));
+            }
+
+            let start = std::time::Instant::now();
+            let disabled_h2_success = rt.block_on(async {
+                let mut handles = Vec::new();
+                for _ in 0..LOAD_TEST_CONCURRENT {
+                    let client = client_h2_disabled.clone();
+                    let url = proxy_url_disabled.clone();
+                    handles.push(tokio::spawn(async move {
+                        let mut success: usize = 0;
+                        for _ in 0..(LOAD_TEST_REQUESTS / LOAD_TEST_CONCURRENT) {
+                            if client.get(&url).send().await.is_ok() {
+                                success = success.saturating_add(1);
+                            }
                         }
-                    }
-                    success
-                }));
+                        success
+                    }));
+                }
+                let mut total: usize = 0;
+                for handle in handles {
+                    total = total.saturating_add(handle.await.unwrap_or(0));
+                }
+                total
+            });
+            let disabled_h2_duration = start.elapsed();
+            let rps = calculate_throughput_rps(disabled_h2_duration, disabled_h2_success);
+            disabled_h2_rps_values.push(rps);
+
+            // Small delay between iterations
+            if iteration < LOAD_TEST_ITERATIONS - 1 {
+                std::thread::sleep(Duration::from_millis(200));
             }
-            let mut total: usize = 0;
-            for handle in handles {
-                total = total.saturating_add(handle.await.unwrap_or(0));
-            }
-            total
-        });
-        let disabled_h2_duration = start.elapsed();
-        let disabled_h2_rps = calculate_throughput_rps(disabled_h2_duration, disabled_h2_success);
+        }
+        // Average RPS across iterations
+        let disabled_h2_rps =
+            disabled_h2_rps_values.iter().sum::<f64>() / disabled_h2_rps_values.len() as f64;
 
         if let Ok(mut guard) = BENCHMARK_RESULTS.lock() {
             if let Some(ref mut report) = *guard {

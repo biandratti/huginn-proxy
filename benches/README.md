@@ -150,3 +150,41 @@ When adding new benchmarks:
 4. Document any new optimization techniques or insights
 5. Update this README with new benchmark descriptions
 
+## Current Results
+
+### Performance Overview
+
+| Metric | Value |
+|--------|-------|
+| **HTTP/1.1 Throughput** | ~60 req/s |
+| **HTTP/2 Throughput** | ~47 req/s |
+| **Concurrent Connections (10)** | ~72 ms |
+| **Concurrent Connections (100)** | ~187 ms |
+| **Concurrent Connections (1000)** | ~1.8 s |
+
+### Fingerprinting Overhead
+
+| Configuration | Throughput (req/s) | Overhead |
+|---------------|-------------------|----------|
+| **HTTP/1.1 with fingerprinting** | ~1,601 | -2.7% |
+| **HTTP/1.1 without fingerprinting** | ~1,646 | baseline |
+| **HTTP/2 with fingerprinting** | ~1,271 | -1.7% |
+| **HTTP/2 without fingerprinting** | ~1,293 | baseline |
+
+### Notes
+
+- **Measurement method**: 5 iterations averaged, 10,000 requests per iteration, 50 concurrent connections
+- **Overall overhead**: ~-2.2% (minimal impact)
+- **HTTP/1.1**: Fingerprinting adds ~2.7% overhead (TLS fingerprint extraction)
+- **HTTP/2**: Fingerprinting adds ~1.7% overhead (TLS + HTTP/2 fingerprint extraction)
+- **Success rate**: 100% (all requests successful)
+- **Results**: Averaged across 2 benchmark runs for consistency
+
+### Comparison with Reference Values
+
+| Benchmark | Huginn Proxy | Reference |
+|-----------|--------------|-----------|
+| Reverse proxy with fingerprinting | ~1,200-1,700 req/s | ~2,000-16,000 req/s |
+| Simple HTTP server | N/A | ~29,650 req/s |
+
+**Note**: Current benchmarks are running against a real proxy with TLS termination, which adds significant overhead compared to in-memory packet processing benchmarks. Results are averaged across multiple iterations and benchmark runs for reliability.
