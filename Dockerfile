@@ -13,4 +13,3 @@ COPY --from=builder /app/target/release/huginn-proxy /usr/local/bin/huginn-proxy
 # The volumes are mounted as 'ro' (read-only), so ensure proper permissions on host
 USER app
 CMD ["/usr/local/bin/huginn-proxy", "/config/compose.toml"]
-
