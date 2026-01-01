@@ -1,4 +1,6 @@
+pub mod connection;
 pub mod forwarding;
+pub mod handler;
 pub mod http_result;
 pub mod server;
 pub mod synthetic_response;

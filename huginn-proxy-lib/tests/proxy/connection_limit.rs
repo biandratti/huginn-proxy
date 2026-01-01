@@ -10,10 +10,7 @@ fn test_connection_limit_check() {
         let current = active_connections.fetch_add(1, Ordering::Relaxed);
         assert!(
             current < max_connections,
-            "Connection {} should be accepted (current: {}, limit: {})",
-            i,
-            current,
-            max_connections
+            "Connection {i} should be accepted (current: {current}, limit: {max_connections})"
         );
     }
 
@@ -21,9 +18,7 @@ fn test_connection_limit_check() {
     assert_eq!(current, max_connections);
     assert!(
         current >= max_connections,
-        "Connection should be rejected when at limit (current: {}, limit: {})",
-        current,
-        max_connections
+        "Connection should be rejected when at limit (current: {current}, limit: {max_connections})"
     );
 
     active_connections.fetch_sub(1, Ordering::Relaxed);
@@ -31,9 +26,7 @@ fn test_connection_limit_check() {
     assert_eq!(current, max_connections - 1);
     assert!(
         current < max_connections,
-        "After closing a connection, new ones should be accepted (current: {}, limit: {})",
-        current,
-        max_connections
+        "After closing a connection, new ones should be accepted (current: {current}, limit: {max_connections})"
     );
 }
 
