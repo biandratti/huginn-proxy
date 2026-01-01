@@ -154,7 +154,7 @@ jobs:
         run: cargo check -p ${{ matrix.crate }} --all-features
 
   test-msrv:
-    name: Test MSRV (${{ env.rust_min }})
+    name: Test MSRV
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
