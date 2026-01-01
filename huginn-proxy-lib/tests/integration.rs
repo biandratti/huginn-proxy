@@ -1,6 +1,6 @@
 use huginn_proxy_lib::config::{
-    load_from_path, Backend, Config, FingerprintConfig, LoggingConfig, TelemetryConfig,
-    TimeoutConfig,
+    load_from_path, Backend, Config, FingerprintConfig, LoggingConfig, SecurityConfig,
+    TelemetryConfig, TimeoutConfig,
 };
 use std::io::Write;
 use tempfile::NamedTempFile;
@@ -20,6 +20,7 @@ fn create_test_config(listen: &str, backends: Vec<Backend>) -> Config {
         },
         logging: LoggingConfig { level: "info".to_string(), show_target: false },
         timeout: TimeoutConfig { connect_ms: 5000, idle_ms: 60000, shutdown_secs: 30 },
+        security: SecurityConfig::default(),
         telemetry: TelemetryConfig { metrics_port: None, otel_log_level: "warn".to_string() },
     }
 }
@@ -106,4 +107,44 @@ fn test_config_with_custom_timeouts() {
     assert_eq!(config.timeout.connect_ms, 10000);
     assert_eq!(config.timeout.idle_ms, 120000);
     assert_eq!(config.timeout.shutdown_secs, 60);
+}
+
+#[test]
+fn test_config_security_defaults() {
+    let security = SecurityConfig::default();
+    assert_eq!(security.max_connections, 512);
+
+    let config = create_test_config("127.0.0.1:0", vec![]);
+    assert_eq!(config.security.max_connections, 512);
+}
+
+#[test]
+fn test_config_with_custom_max_connections() {
+    let mut config = create_test_config("127.0.0.1:0", vec![]);
+    config.security.max_connections = 1000;
+
+    assert_eq!(config.security.max_connections, 1000);
+}
+
+#[tokio::test]
+async fn test_config_loads_security_settings(
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let mut file = NamedTempFile::new()?;
+    writeln!(
+        file,
+        r#"
+listen = "127.0.0.1:0"
+backends = [
+    {{ address = "localhost:9000" }}
+]
+
+[security]
+max_connections = 256
+"#
+    )?;
+
+    let config = load_from_path(file.path())?;
+    assert_eq!(config.security.max_connections, 256);
+
+    Ok(())
 }

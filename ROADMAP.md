@@ -17,15 +17,15 @@
 - [ ] Connection pooling for backends
 
 ### Security & TLS
-- [ ] Connection limits (DoS protection)
+- [x] Connection limits (DoS protection)
+- [ ] Configurable keep-alive (HTTP/1.1)
+- [ ] IP filtering
 - [ ] Advanced TLS (tls.options) configuration (versions, cipher suites)
 - [ ] Rate limiting
-- [ ] Configurable keep-alive (HTTP/1.1)
 - [ ] Security headers (HSTS, CSP, etc.)
 - [ ] mTLS support
 - [ ] OCSP stapling
 - [ ] Session resumption
-- [ ] IP filtering
 
 ### Advanced Features
 - [ ] Advanced load balancing algorithms (least connections, weighted)

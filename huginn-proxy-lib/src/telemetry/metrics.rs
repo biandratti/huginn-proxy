@@ -34,6 +34,9 @@ pub struct Metrics {
     pub tls_handshake_duration_seconds: Histogram<f64>,
     pub tls_handshake_errors_total: Counter<u64>,
     pub tls_connections_active: UpDownCounter<i64>,
+
+    // Connection limit metrics
+    pub connections_rejected_total: Counter<u64>,
 }
 
 impl Metrics {
@@ -121,6 +124,11 @@ impl Metrics {
             tls_connections_active: meter
                 .i64_up_down_counter("huginn_tls_connections_active")
                 .with_description("Number of active TLS connections")
+                .build(),
+
+            connections_rejected_total: meter
+                .u64_counter("huginn_connections_rejected_total")
+                .with_description("Total number of connections rejected due to connection limit")
                 .build(),
         }
     }
