@@ -266,7 +266,7 @@ pub async fn run(config: Arc<Config>, metrics: Option<Arc<Metrics>>) -> Result<(
         )))
     })?;
 
-    info!(?addr, "starting L7 proxy (h1/h2)");
+    info!(?addr, "starting proxy");
 
     loop {
         tokio::select! {
@@ -294,6 +294,22 @@ pub async fn run(config: Arc<Config>, metrics: Option<Arc<Metrics>>) -> Result<(
                 // Check if shutdown was requested
                 if shutdown_signal.load(Ordering::Relaxed) == 1 {
                     info!("Shutdown requested, rejecting new connection");
+                    drop(stream); // Close the connection
+                    continue;
+                }
+
+                // Check connection limit (DoS protection)
+                let current_connections = active_connections.load(Ordering::Relaxed);
+                if current_connections >= config.security.max_connections {
+                    if let Some(ref m) = metrics {
+                        m.connections_rejected_total.add(1, &[]);
+                    }
+                    warn!(
+                        current = current_connections,
+                        limit = config.security.max_connections,
+                        peer = %peer,
+                        "Connection limit exceeded, rejecting connection"
+                    );
                     drop(stream); // Close the connection
                     continue;
                 }

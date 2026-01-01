@@ -20,7 +20,6 @@ async fn main() -> Result<(), BoxError> {
 
     let config = Arc::new(load_from_path(&config_path)?);
 
-    // Use config file log level as default
     // RUST_LOG environment variable can override at runtime (e.g., docker run -e RUST_LOG=debug)
     let log_level = env::var("RUST_LOG").unwrap_or_else(|_| config.logging.level.clone());
 
@@ -54,7 +53,7 @@ async fn main() -> Result<(), BoxError> {
     let result = run(config, metrics).await;
 
     if let Some(handle) = metrics_handle {
-        tracing::info!("Shutting down observability server");
+        info!("Shutting down observability server");
         handle.abort();
     }
 

@@ -127,6 +127,24 @@ pub struct TimeoutConfig {
     pub shutdown_secs: u64,
 }
 
+/// Security configuration
+#[derive(Debug, Deserialize, Clone)]
+pub struct SecurityConfig {
+    /// Maximum number of concurrent connections allowed
+    #[serde(default = "default_max_connections")]
+    pub max_connections: usize,
+}
+
+impl Default for SecurityConfig {
+    fn default() -> Self {
+        Self { max_connections: default_max_connections() }
+    }
+}
+
+fn default_max_connections() -> usize {
+    512
+}
+
 /// Telemetry configuration
 /// Controls observability features: metrics, tracing, and OpenTelemetry integration
 #[derive(Debug, Deserialize, Clone, Default)]
@@ -178,6 +196,9 @@ pub struct Config {
     /// Timeout configuration
     #[serde(default)]
     pub timeout: TimeoutConfig,
+    /// Security configuration
+    #[serde(default)]
+    pub security: SecurityConfig,
     /// Telemetry configuration
     /// Controls metrics, tracing, and observability features
     #[serde(default)]

@@ -31,6 +31,9 @@ connect_ms = 5000
 idle_ms = 60000
 shutdown_secs = 30
 
+[security]
+max_connections = 512
+
 [telemetry]
 metrics_port = 9090
 otel_log_level = "warn"
