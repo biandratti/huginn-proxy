@@ -11,9 +11,9 @@
 
 ### CI/CD
 - [ ] Tests across multiple Rust versions
-- [ ] Multi-target builds (linux-x86_64, linux-arm64)
-- [ ] Automated releases
-- [ ] Published Docker images
+- [x] Multi-target builds (linux-x86_64, linux-arm64)
+- [x] Automated releases
+- [x] Published Docker images
 
 ### Operational Features
 - [ ] Kubernetes probe support

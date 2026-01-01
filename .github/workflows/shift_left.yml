@@ -1,0 +1,30 @@
+name: ShiftLeft Scan
+
+on:
+  push:
+  pull_request:
+    types: [synchronize, opened]
+
+concurrency:
+  group: ${{ github.ref }}-${{ github.workflow }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  Scan-Build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Perform ShiftLeft Scan
+        uses: ShiftLeftSecurity/scan-action@master
+        env:
+          WORKSPACE: ""
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          output: reports
+
