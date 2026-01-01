@@ -6,8 +6,9 @@ RUN cargo build --release -p huginn-proxy
 
 FROM alpine:3.23.2
 # Update package index and install only essential packages
+# wget is needed for Docker Compose healthcheck
 RUN apk update && \
-    apk add --no-cache ca-certificates && \
+    apk add --no-cache ca-certificates wget && \
     adduser -D -u 1000 app && \
     rm -rf /var/cache/apk/*
 

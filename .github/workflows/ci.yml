@@ -153,8 +153,8 @@ jobs:
       - name: Check ${{ matrix.crate }}
         run: cargo check -p ${{ matrix.crate }} --all-features
 
-  minrust:
-    name: minrust
+  test-msrv:
+    name: Test MSRV (${{ env.rust_min }})
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -166,15 +166,41 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-cargo-msrv-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
-            ${{ runner.os }}-cargo-
+            ${{ runner.os }}-cargo-msrv-
       - name: Install Rust ${{ env.rust_min }}
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: ${{ env.rust_min }}
       - name: Check MSRV
         run: cargo check --workspace --all-features
+      - name: Test MSRV
+        run: cargo test --workspace --all-features
+
+  test-beta:
+    name: Test Beta
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-beta-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-beta-
+      - name: Install Rust beta
+        uses: dtolnay/rust-toolchain@beta
+        with:
+          toolchain: beta
+      - name: Test Beta
+        run: cargo test --workspace --all-features
 
   test:
     runs-on: ubuntu-latest
