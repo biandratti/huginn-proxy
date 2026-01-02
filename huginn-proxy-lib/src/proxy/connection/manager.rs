@@ -80,7 +80,6 @@ impl ConnectionManager {
             });
         }
 
-        // Increment active connections counter
         self.active_connections.fetch_add(1, Ordering::Relaxed);
 
         if let Some(m) = metrics {

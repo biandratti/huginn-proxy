@@ -9,6 +9,7 @@ use tokio::time::Instant;
 use tracing::debug;
 
 use crate::config::{Backend, KeepAliveConfig, Route};
+use crate::fingerprinting::names;
 use crate::proxy::forwarding::forward;
 use crate::proxy::handler::headers::akamai_header_value;
 use crate::proxy::http_result::{HttpError, HttpResult};
@@ -56,16 +57,16 @@ pub async fn handle_proxy_request(
     if should_fingerprint {
         if let Some(hv) = tls_header {
             req.headers_mut()
-                .insert(HeaderName::from_static("x-huginn-net-tls"), hv);
+                .insert(HeaderName::from_static(names::TLS_JA4), hv);
         }
         if let Some(ref rx) = fingerprint_rx {
             if req.version() == Version::HTTP_2 {
                 let akamai = rx.borrow().clone();
                 debug!("Handler: akamai fingerprint: {:?}", akamai);
                 if let Some(hv) = akamai_header_value(&akamai) {
-                    debug!("Handler: injecting x-huginn-net-http header: {:?}", hv);
+                    debug!("Handler: injecting {} header: {:?}", names::HTTP2_AKAMAI, hv);
                     req.headers_mut()
-                        .insert(HeaderName::from_static("x-huginn-net-http"), hv);
+                        .insert(HeaderName::from_static(names::HTTP2_AKAMAI), hv);
                 } else {
                     debug!("Handler: no HTTP fingerprint header to inject (HTTP/2 connection but fingerprint not extracted)");
                     // Record failure metric if metrics available
