@@ -1,6 +1,6 @@
 use huginn_proxy_lib::config::{
-    load_from_path, Backend, Config, FingerprintConfig, LoggingConfig, SecurityConfig,
-    TelemetryConfig, TimeoutConfig,
+    load_from_path, Backend, Config, FingerprintConfig, KeepAliveConfig, LoggingConfig,
+    SecurityConfig, TelemetryConfig, TimeoutConfig,
 };
 use std::io::Write;
 use tempfile::NamedTempFile;
@@ -19,7 +19,12 @@ fn create_test_config(listen: &str, backends: Vec<Backend>) -> Config {
             max_capture: 64 * 1024,
         },
         logging: LoggingConfig { level: "info".to_string(), show_target: false },
-        timeout: TimeoutConfig { connect_ms: 5000, idle_ms: 60000, shutdown_secs: 30 },
+        timeout: TimeoutConfig {
+            connect_ms: 5000,
+            idle_ms: 60000,
+            shutdown_secs: 30,
+            keep_alive: KeepAliveConfig::default(),
+        },
         security: SecurityConfig::default(),
         telemetry: TelemetryConfig { metrics_port: None, otel_log_level: "warn".to_string() },
     }
@@ -145,6 +150,42 @@ max_connections = 256
 
     let config = load_from_path(file.path())?;
     assert_eq!(config.security.max_connections, 256);
+
+    Ok(())
+}
+
+#[test]
+fn test_config_keep_alive_defaults() {
+    let keep_alive = KeepAliveConfig::default();
+    assert!(keep_alive.enabled);
+    assert_eq!(keep_alive.timeout_secs, 60);
+
+    let config = create_test_config("127.0.0.1:0", vec![]);
+    assert!(config.timeout.keep_alive.enabled);
+    assert_eq!(config.timeout.keep_alive.timeout_secs, 60);
+}
+
+#[tokio::test]
+async fn test_config_loads_keep_alive_settings(
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let mut file = NamedTempFile::new()?;
+    writeln!(
+        file,
+        r#"
+listen = "127.0.0.1:0"
+backends = [
+    {{ address = "localhost:9000" }}
+]
+
+[timeout.keep_alive]
+enabled = false
+timeout_secs = 120
+"#
+    )?;
+
+    let config = load_from_path(file.path())?;
+    assert!(!config.timeout.keep_alive.enabled);
+    assert_eq!(config.timeout.keep_alive.timeout_secs, 120);
 
     Ok(())
 }

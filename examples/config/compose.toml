@@ -31,6 +31,10 @@ connect_ms = 5000
 idle_ms = 60000
 shutdown_secs = 30
 
+[timeout.keep_alive]
+enabled = true
+timeout_secs = 60
+
 [security]
 max_connections = 512
 

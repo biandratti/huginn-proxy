@@ -17,8 +17,6 @@
 - [ ] Connection pooling for backends
 
 ### Security & TLS
-- [x] Connection limits (DoS protection)
-- [ ] Configurable keep-alive (HTTP/1.1)
 - [ ] IP filtering
 - [ ] Advanced TLS (tls.options) configuration (versions, cipher suites)
 - [ ] Rate limiting
@@ -26,6 +24,11 @@
 - [ ] mTLS support
 - [ ] OCSP stapling
 - [ ] Session resumption
+
+### Routing & Path Handling
+- [ ] Path stripping (remove prefix before forwarding to backend)
+- [ ] Regex-based route matching (optional, for advanced use cases)
+- [ ] Path rewriting (modify path before forwarding)
 
 ### Advanced Features
 - [ ] Advanced load balancing algorithms (least connections, weighted)

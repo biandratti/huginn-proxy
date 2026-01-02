@@ -1,4 +1,4 @@
-use crate::config::BackendHttpVersion;
+use crate::config::{BackendHttpVersion, KeepAliveConfig};
 use crate::proxy::http_result::{HttpError, HttpResult};
 use crate::telemetry::Metrics;
 use http::{Request, Response, Version};
@@ -9,6 +9,7 @@ use hyper_util::client::legacy::Client;
 use hyper_util::rt::TokioExecutor;
 use opentelemetry::KeyValue;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::time::Instant;
 
 type HttpClient = Client<HttpConnector, Incoming>;
@@ -48,19 +49,27 @@ pub fn determine_http_version(
     }
 }
 
-fn create_client(http_version: Version) -> HttpClient {
-    let connector = HttpConnector::new();
+fn create_client(http_version: Version, keep_alive: &KeepAliveConfig) -> HttpClient {
+    let mut connector = HttpConnector::new();
+    // This sets the TCP keep-alive timeout for idle connections
+    if keep_alive.enabled {
+        connector.set_keepalive(Some(Duration::from_secs(keep_alive.timeout_secs)));
+    } else {
+        connector.set_keepalive(None);
+    }
+
     let mut builder = Client::builder(TokioExecutor::new());
 
     match http_version {
         Version::HTTP_2 => {
+            // HTTP/2 uses persistent connections by default with native multiplexing
             builder.http2_only(true);
         }
         Version::HTTP_11 => {
-            // HTTP/1.1 is the default, no special configuration needed
+            // HTTP/1.1 keep-alive is configured via connector.set_keepalive() above
         }
         _ => {
-            // For other versions, default to HTTP/1.1
+            // For other versions, default to HTTP/1.1 (keep-alive configured above)
         }
     }
 
@@ -71,6 +80,7 @@ pub async fn forward(
     mut req: Request<Incoming>,
     backend: String,
     backends: &[crate::config::Backend],
+    keep_alive: &KeepAliveConfig,
     metrics: Option<Arc<Metrics>>,
 ) -> HttpResult<Response<RespBody>> {
     let start = Instant::now();
@@ -98,7 +108,7 @@ pub async fn forward(
     parts.uri = uri;
     let out_req = Request::from_parts(parts, body);
 
-    let client = create_client(target_version);
+    let client = create_client(target_version, keep_alive);
     let result = client.request(out_req).await;
 
     let duration = start.elapsed().as_secs_f64();
