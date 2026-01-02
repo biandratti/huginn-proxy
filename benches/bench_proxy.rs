@@ -19,6 +19,7 @@
 //! ```
 
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
+use huginn_proxy_lib::fingerprinting::names;
 use std::sync::Mutex;
 use std::time::Duration;
 
@@ -394,7 +395,7 @@ fn bench_proxy_fingerprinting_overhead(c: &mut Criterion) {
                 for _ in 0..REQUESTS_PER_ITERATION {
                     if let Ok(response) = client.get(&proxy_url).send().await {
                         // Check if fingerprint headers are present
-                        if response.headers().contains_key("x-huginn-net-tls") {
+                        if response.headers().contains_key(names::TLS_JA4) {
                             success_count = success_count.saturating_add(1);
                         }
                     }
@@ -420,7 +421,7 @@ fn bench_proxy_fingerprinting_overhead(c: &mut Criterion) {
                 for _ in 0..REQUESTS_PER_ITERATION {
                     if let Ok(response) = client_h2.get(&proxy_url).send().await {
                         // Check if HTTP/2 fingerprint headers are present
-                        if response.headers().contains_key("x-huginn-net-http") {
+                        if response.headers().contains_key(names::HTTP2_AKAMAI) {
                             success_count = success_count.saturating_add(1);
                         }
                     }

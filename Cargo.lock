@@ -2223,6 +2223,7 @@ dependencies = [
 name = "tests-e2e"
 version = "0.1.0"
 dependencies = [
+ "huginn-proxy-lib",
  "reqwest",
  "serde_json",
  "tokio",

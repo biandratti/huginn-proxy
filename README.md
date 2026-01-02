@@ -89,20 +89,20 @@ docker run -v /path/to/config.toml:/config.toml huginn-proxy /config.toml
 
 - **TLS Fingerprinting (JA4)** - Automatic extraction of JA4 fingerprints from TLS ClientHello messages (works for all TLS connections)
 - **HTTP/2 Fingerprinting (Akamai)** - Extraction of Akamai-style fingerprints from HTTP/2 frames (HTTP/2 only)
-- **Header Injection** - Fingerprints automatically injected as `x-huginn-net-tls` and `x-huginn-net-http` headers
+- **Header Injection** - Fingerprints automatically injected as `x-huginn-net-ja4` and `x-huginn-net-akamai` headers
 - **Configurable** - Enable/disable fingerprinting per protocol via configuration
 
 ## Fingerprinting
 
 Fingerprints are automatically extracted and injected as headers:
 
-- **TLS (JA4)**: `x-huginn-net-tls` - Extracted from all TLS connections using [huginn-net-tls](https://crates.io/crates/huginn-net-tls)
-- **HTTP/2 (Akamai)**: `x-huginn-net-http` - Extracted from HTTP/2 connections only using [huginn-net-http](https://crates.io/crates/huginn-net-http)
+- **TLS (JA4)**: `x-huginn-net-ja4` - Extracted from all TLS connections using [huginn-net-tls](https://crates.io/crates/huginn-net-tls)
+- **HTTP/2 (Akamai)**: `x-huginn-net-akamai` - Extracted from HTTP/2 connections only using [huginn-net-http](https://crates.io/crates/huginn-net-http)
 
 **Examples:**
 ```
-x-huginn-net-tls: t13d1516h2_8afaf4b9491c_00_0403040303030103010302_01
-x-huginn-net-http: 1:65536,2:0,3:1000,4:6291456,6:262144|15663105|0|m,p,a,s
+x-huginn-net-ja4: t13d1516h2_8afaf4b9491c_00_0403040303030103010302_01
+x-huginn-net-akamai: 1:65536,2:0,3:1000,4:6291456,6:262144|15663105|0|m,p,a,s
 ```
 
 See [JA4 specification](https://github.com/FoxIO-LLC/ja4) and [Blackhat EU 2017](https://www.blackhat.com/docs/eu-17/materials/eu-17-Shuster-Passive-Fingerprinting-Of-HTTP2-Clients-wp.pdf) for details.

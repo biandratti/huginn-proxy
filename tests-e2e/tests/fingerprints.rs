@@ -1,3 +1,4 @@
+use huginn_proxy_lib::fingerprinting::names;
 use tests_e2e::common::{wait_for_service, DEFAULT_SERVICE_TIMEOUT_SECS, PROXY_HTTPS_URL};
 
 #[tokio::test]
@@ -32,18 +33,15 @@ async fn test_tls_fingerprint_injection() -> Result<(), Box<dyn std::error::Erro
         .ok_or("Response should contain headers object")?;
 
     // Check for TLS fingerprint header (should be present for all TLS connections)
-    assert!(
-        headers.contains_key("x-huginn-net-tls"),
-        "TLS fingerprint header should be present"
-    );
+    assert!(headers.contains_key(names::TLS_JA4), "TLS fingerprint header should be present");
 
     let tls_fp = headers
-        .get("x-huginn-net-tls")
+        .get(names::TLS_JA4)
         .and_then(|v| v.as_str())
         .ok_or("TLS fingerprint header should be a string")?;
     assert!(!tls_fp.is_empty(), "TLS fingerprint should not be empty");
 
-    println!("TLS fingerprint (x-huginn-net-tls): {tls_fp}");
+    println!("TLS fingerprint ({}): {tls_fp}", names::TLS_JA4);
 
     assert!(tls_fp.starts_with('t'), "TLS fingerprint should start with 't'");
     assert!(tls_fp.contains('_'), "TLS fingerprint should contain underscore separators");
@@ -71,7 +69,7 @@ async fn test_tls_fingerprint_injection() -> Result<(), Box<dyn std::error::Erro
         .and_then(|h| h.as_object())
         .ok_or("Second response should contain headers object")?;
     let tls_fp2 = headers2
-        .get("x-huginn-net-tls")
+        .get(names::TLS_JA4)
         .and_then(|v| v.as_str())
         .ok_or("TLS fingerprint header should be a string in second request")?;
 
@@ -86,7 +84,7 @@ async fn test_tls_fingerprint_injection() -> Result<(), Box<dyn std::error::Erro
 
     // HTTP/2 fingerprint should NOT be present for HTTP/1.1 connections
     assert!(
-        !headers.contains_key("x-huginn-net-http"),
+        !headers.contains_key(names::HTTP2_AKAMAI),
         "HTTP/2 fingerprint header should NOT be present in HTTP/1.1 connection"
     );
 
@@ -126,17 +124,17 @@ async fn test_http2_fingerprint_injection() -> Result<(), Box<dyn std::error::Er
 
     // Check for HTTP/2 fingerprint header
     assert!(
-        headers.contains_key("x-huginn-net-http"),
+        headers.contains_key(names::HTTP2_AKAMAI),
         "HTTP/2 fingerprint header should be present"
     );
 
     let http2_fp = headers
-        .get("x-huginn-net-http")
+        .get(names::HTTP2_AKAMAI)
         .and_then(|v| v.as_str())
         .ok_or("HTTP/2 fingerprint header should be a string")?;
     assert!(!http2_fp.is_empty(), "HTTP/2 fingerprint should not be empty");
 
-    println!("HTTP/2 fingerprint (x-huginn-net-http): {http2_fp}");
+    println!("HTTP/2 fingerprint ({}): {http2_fp}", names::HTTP2_AKAMAI);
 
     assert!(http2_fp.contains('|'), "HTTP/2 fingerprint should contain pipe separator");
 
@@ -149,17 +147,17 @@ async fn test_http2_fingerprint_injection() -> Result<(), Box<dyn std::error::Er
 
     // Also verify TLS fingerprint is present (all TLS connections should have it)
     assert!(
-        headers.contains_key("x-huginn-net-tls"),
+        headers.contains_key(names::TLS_JA4),
         "TLS fingerprint header should be present in HTTP/2 connection"
     );
 
     let tls_fp = headers
-        .get("x-huginn-net-tls")
+        .get(names::TLS_JA4)
         .and_then(|v| v.as_str())
         .ok_or("TLS fingerprint header should be a string")?;
     assert!(!tls_fp.is_empty(), "TLS fingerprint should not be empty");
 
-    println!("TLS fingerprint (x-huginn-net-tls): {tls_fp}");
+    println!("TLS fingerprint ({}): {tls_fp}", names::TLS_JA4);
 
     // Expected TLS fingerprint for reqwest client (same for HTTP/1.1 and HTTP/2)
     const EXPECTED_TLS_FINGERPRINT_HTTP2: &str = "t13d1011h2_61a7ad8aa9b6_3a8073edd8ef";
@@ -183,11 +181,11 @@ async fn test_http2_fingerprint_injection() -> Result<(), Box<dyn std::error::Er
         .and_then(|h| h.as_object())
         .ok_or("Second HTTP/2 response should contain headers object")?;
     let http2_fp2 = headers2
-        .get("x-huginn-net-http")
+        .get(names::HTTP2_AKAMAI)
         .and_then(|v| v.as_str())
         .ok_or("HTTP/2 fingerprint header should be a string in second request")?;
     let tls_fp2 = headers2
-        .get("x-huginn-net-tls")
+        .get(names::TLS_JA4)
         .and_then(|v| v.as_str())
         .ok_or("TLS fingerprint header should be a string in second request")?;
 
@@ -243,11 +241,11 @@ async fn test_fingerprinting_disabled_per_route(
 
     // Fingerprint headers should NOT be present for /static route
     assert!(
-        !headers.contains_key("x-huginn-net-tls"),
+        !headers.contains_key(names::TLS_JA4),
         "TLS fingerprint header should NOT be present when fingerprinting is disabled for route"
     );
     assert!(
-        !headers.contains_key("x-huginn-net-http"),
+        !headers.contains_key(names::HTTP2_AKAMAI),
         "HTTP/2 fingerprint header should NOT be present when fingerprinting is disabled for route"
     );
 
@@ -270,7 +268,7 @@ async fn test_fingerprinting_disabled_per_route(
 
     // Fingerprint headers SHOULD be present for /api route
     assert!(
-        headers2.contains_key("x-huginn-net-tls"),
+        headers2.contains_key(names::TLS_JA4),
         "TLS fingerprint header should be present when fingerprinting is enabled for route"
     );
 
