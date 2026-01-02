@@ -125,6 +125,53 @@ pub struct TimeoutConfig {
     /// Default: 30
     #[serde(default = "default_shutdown_timeout")]
     pub shutdown_secs: u64,
+    /// HTTP/1.1 keep-alive configuration
+    ///
+    /// Note: This configuration only applies to HTTP/1.1 connections.
+    /// HTTP/2 uses persistent connections by default with native multiplexing,
+    /// so keep-alive headers are not used (and are prohibited by the HTTP/2 spec).
+    #[serde(default)]
+    pub keep_alive: KeepAliveConfig,
+}
+
+/// HTTP/1.1 keep-alive configuration
+///
+/// Keep-alive allows reusing the same TCP connection for multiple HTTP requests,
+/// reducing the overhead of establishing new connections for each request.
+///
+/// **HTTP/1.1**: Keep-alive is configurable and uses the `Connection: keep-alive` header.
+///
+/// **HTTP/2**: Connections are always persistent by default with native multiplexing.
+/// Multiple streams can share the same connection, so keep-alive headers are not needed
+/// (and are prohibited by the HTTP/2 specification).
+#[derive(Debug, Deserialize, Clone)]
+pub struct KeepAliveConfig {
+    /// Enable HTTP/1.1 keep-alive (persistent connections)
+    /// Allows reusing the same TCP connection for multiple HTTP requests
+    /// Default: true
+    ///
+    /// Note: HTTP/2 connections are always persistent and use multiplexing,
+    /// so this setting only affects HTTP/1.1 connections.
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    /// Keep-alive timeout in seconds
+    /// How long to keep idle HTTP/1.1 connections open before closing them
+    /// Default: 60 seconds
+    ///
+    /// Note: For HTTP/2, connection management is handled automatically
+    /// by the protocol's multiplexing and flow control mechanisms.
+    #[serde(default = "default_keep_alive_timeout")]
+    pub timeout_secs: u64,
+}
+
+fn default_keep_alive_timeout() -> u64 {
+    60
+}
+
+impl Default for KeepAliveConfig {
+    fn default() -> Self {
+        Self { enabled: true, timeout_secs: default_keep_alive_timeout() }
+    }
 }
 
 /// Security configuration

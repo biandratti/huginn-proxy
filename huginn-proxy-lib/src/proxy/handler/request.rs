@@ -8,7 +8,7 @@ use tokio::sync::watch;
 use tokio::time::Instant;
 use tracing::debug;
 
-use crate::config::{Backend, Route};
+use crate::config::{Backend, KeepAliveConfig, Route};
 use crate::proxy::forwarding::forward;
 use crate::proxy::handler::headers::akamai_header_value;
 use crate::proxy::http_result::{HttpError, HttpResult};
@@ -24,6 +24,7 @@ pub async fn handle_proxy_request(
     backends: Arc<Vec<Backend>>,
     tls_header: Option<hyper::header::HeaderValue>,
     fingerprint_rx: Option<watch::Receiver<Option<huginn_net_http::AkamaiFingerprint>>>,
+    keep_alive: &KeepAliveConfig,
     metrics: Option<Arc<Metrics>>,
 ) -> HttpResult<hyper::Response<RespBody>> {
     let start = Instant::now();
@@ -83,7 +84,7 @@ pub async fn handle_proxy_request(
     }
 
     // Forward request
-    let result = forward(req, backend.clone(), &backends, metrics.clone()).await;
+    let result = forward(req, backend.clone(), &backends, keep_alive, metrics.clone()).await;
 
     let duration = start.elapsed().as_secs_f64();
     let status_code = match &result {

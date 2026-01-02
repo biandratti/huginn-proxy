@@ -30,6 +30,7 @@ struct TlsConnectionConfig {
     fingerprint_config: crate::config::FingerprintConfig,
     routes: Vec<crate::config::Route>,
     backends: Arc<Vec<crate::config::Backend>>,
+    keep_alive: crate::config::KeepAliveConfig,
     metrics: Option<Arc<Metrics>>,
     builder: ConnBuilder<TokioExecutor>,
 }
@@ -38,6 +39,7 @@ struct TlsConnectionConfig {
 struct PlainConnectionConfig {
     routes: Vec<crate::config::Route>,
     backends: Arc<Vec<crate::config::Backend>>,
+    keep_alive: crate::config::KeepAliveConfig,
     metrics: Option<Arc<Metrics>>,
     builder: ConnBuilder<TokioExecutor>,
 }
@@ -106,6 +108,7 @@ async fn handle_tls_connection(
                     let backends_for_service = config.backends.clone();
                     let tls_header_for_service = tls_header.clone();
                     let fingerprint_rx_for_service = fingerprint_rx.clone();
+                    let keep_alive_for_service = config.keep_alive.clone();
                     let metrics_for_service = metrics_for_connection.clone();
 
                     let svc = hyper::service::service_fn(
@@ -114,6 +117,7 @@ async fn handle_tls_connection(
                             let backends = backends_for_service.clone();
                             let tls_header = tls_header_for_service.clone();
                             let fingerprint_rx = fingerprint_rx_for_service.clone();
+                            let keep_alive = keep_alive_for_service.clone();
                             let metrics = metrics_for_service.clone();
 
                             async move {
@@ -124,6 +128,7 @@ async fn handle_tls_connection(
                                         backends,
                                         tls_header,
                                         Some(fingerprint_rx),
+                                        &keep_alive,
                                         metrics.clone(),
                                     )
                                     .await;
@@ -183,6 +188,7 @@ async fn handle_tls_connection(
                     let routes_for_service = config.routes.clone();
                     let backends_for_service = config.backends.clone();
                     let tls_header_for_service = tls_header.clone();
+                    let keep_alive_for_service = config.keep_alive.clone();
                     let metrics_for_service = metrics_for_connection.clone();
 
                     let svc = hyper::service::service_fn(
@@ -190,6 +196,7 @@ async fn handle_tls_connection(
                             let routes = routes_for_service.clone();
                             let backends = backends_for_service.clone();
                             let tls_header = tls_header_for_service.clone();
+                            let keep_alive = keep_alive_for_service.clone();
                             let metrics = metrics_for_service.clone();
 
                             async move {
@@ -200,6 +207,7 @@ async fn handle_tls_connection(
                                         backends,
                                         tls_header,
                                         None,
+                                        &keep_alive,
                                         metrics.clone(),
                                     )
                                     .await;
@@ -275,11 +283,13 @@ async fn handle_plain_connection(
 ) {
     let routes_for_service = config.routes.clone();
     let backends_for_service = config.backends.clone();
+    let keep_alive_for_service = config.keep_alive.clone();
     let metrics_for_service = config.metrics.clone();
 
     let svc = hyper::service::service_fn(move |req: hyper::Request<hyper::body::Incoming>| {
         let routes = routes_for_service.clone();
         let backends = backends_for_service.clone();
+        let keep_alive = keep_alive_for_service.clone();
         let metrics = metrics_for_service.clone();
 
         async move {
@@ -289,6 +299,7 @@ async fn handle_plain_connection(
                 backends,
                 None,
                 None,
+                &keep_alive,
                 metrics.clone(),
             )
             .await;
@@ -423,6 +434,7 @@ pub async fn run(config: Arc<Config>, metrics: Option<Arc<Metrics>>) -> Result<(
                 let routes_clone = routes.clone();
                 let tls_acceptor_clone = tls_acceptor.clone();
                 let fingerprint_config = config.fingerprint.clone();
+                let keep_alive_config = config.timeout.keep_alive.clone();
                 let metrics_clone = metrics.clone();
 
                 let metrics_for_connection = metrics_clone.clone();
@@ -438,6 +450,7 @@ pub async fn run(config: Arc<Config>, metrics: Option<Arc<Metrics>>) -> Result<(
                                 fingerprint_config,
                                 routes: routes_clone,
                                 backends: backends_clone,
+                                keep_alive: keep_alive_config.clone(),
                                 metrics: metrics_for_connection,
                                 builder: builder_clone,
                             },
@@ -450,6 +463,7 @@ pub async fn run(config: Arc<Config>, metrics: Option<Arc<Metrics>>) -> Result<(
                             PlainConnectionConfig {
                                 routes: routes_clone,
                                 backends: backends_clone,
+                                keep_alive: keep_alive_config,
                                 metrics: metrics_for_connection,
                                 builder: builder_clone,
                             },
