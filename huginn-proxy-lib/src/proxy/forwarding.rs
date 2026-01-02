@@ -49,7 +49,7 @@ pub fn determine_http_version(
     }
 }
 
-fn create_client(http_version: Version, keep_alive: &KeepAliveConfig) -> HttpClient {
+pub fn create_client(http_version: Version, keep_alive: &KeepAliveConfig) -> HttpClient {
     let mut connector = HttpConnector::new();
     // This sets the TCP keep-alive timeout for idle connections
     if keep_alive.enabled {
