@@ -11,7 +11,7 @@ use tracing::debug;
 use crate::config::{Backend, KeepAliveConfig, Route};
 use crate::fingerprinting::names;
 use crate::proxy::forwarding::forward;
-use crate::proxy::handler::headers::akamai_header_value;
+use crate::proxy::handler::headers::{add_forwarded_headers, akamai_header_value};
 use crate::proxy::http_result::{HttpError, HttpResult};
 use crate::telemetry::Metrics;
 use http::StatusCode;
@@ -19,6 +19,7 @@ use http::StatusCode;
 type RespBody = http_body_util::combinators::BoxBody<bytes::Bytes, hyper::Error>;
 
 /// Handle request routing and forwarding
+#[allow(clippy::too_many_arguments)]
 pub async fn handle_proxy_request(
     mut req: Request<Incoming>,
     routes: Vec<Route>,
@@ -27,6 +28,8 @@ pub async fn handle_proxy_request(
     fingerprint_rx: Option<watch::Receiver<Option<huginn_net_http::AkamaiFingerprint>>>,
     keep_alive: &KeepAliveConfig,
     metrics: Option<Arc<Metrics>>,
+    peer: std::net::SocketAddr,
+    is_https: bool,
 ) -> HttpResult<hyper::Response<RespBody>> {
     let start = Instant::now();
     let method = req.method().to_string();
@@ -45,7 +48,7 @@ pub async fn handle_proxy_request(
         }
         (backend_str, fingerprinting)
     } else {
-        // No route matched: return 404 (consistent with rust-rpxy and Traefik)
+        // No route matched: return 404
         let error = HttpError::NoMatchingRoute;
         if let Some(ref m) = metrics {
             m.errors_total
@@ -54,6 +57,8 @@ pub async fn handle_proxy_request(
         return Err(error);
     };
 
+    // Extract and inject fingerprints first (fingerprints are extracted from TLS handshake/HTTP2 frames,
+    // not from HTTP headers, so adding X-Forwarded-* headers won't affect fingerprint generation)
     if should_fingerprint {
         if let Some(hv) = tls_header {
             req.headers_mut()
@@ -83,6 +88,11 @@ pub async fn handle_proxy_request(
             }
         }
     }
+
+    // Add X-Forwarded-* headers after fingerprinting
+    // Note: Fingerprints are extracted from TLS handshake/HTTP2 frames (before HTTP request parsing),
+    // so adding these headers doesn't affect fingerprint generation
+    add_forwarded_headers(&mut req, peer, is_https);
 
     // Forward request
     let result = forward(req, backend.clone(), &backends, keep_alive, metrics.clone()).await;

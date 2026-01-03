@@ -9,7 +9,9 @@
 //! 2. Run tests: `cargo test --package tests-e2e --test e2e`
 
 mod basic;
+mod fingerprint_isolation;
 mod fingerprints;
+mod header_override;
 mod health_checks;
 mod load_balancing;
 mod tls;
