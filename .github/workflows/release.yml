@@ -206,7 +206,7 @@ jobs:
           ls -lh /tmp/${BINARY_NAME}
 
       - name: Upload binary artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: ${{ matrix.target }}${{ matrix.suffix }}
           path: /tmp/huginn-proxy-${{ steps.version.outputs.tag }}-${{ matrix.target }}
