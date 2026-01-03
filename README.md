@@ -69,28 +69,16 @@ docker build -t huginn-proxy .
 docker run -v /path/to/config.toml:/config.toml huginn-proxy /config.toml
 ```
 
-### Why choose Huginn Proxy?
-
-- **Reverse Proxy** - HTTP/1.x and HTTP/2 reverse proxy with load balancing
-- **Passive Fingerprinting** - Automatic TLS (JA4) fingerprint extraction for all TLS connections, and HTTP/2 (Akamai) fingerprint extraction for HTTP/2 connections
-- **High Performance** - Built on Tokio and Hyper for maximum throughput
-- **Easy Deployment** - Single binary, Docker-ready, minimal dependencies
-
 ## Features
-
-### Core Proxy Capabilities
 
 - **HTTP/1.x & HTTP/2** - Full support for both protocol versions
 - **Load Balancing** - Round-robin load balancing across multiple backends
-- **Route Matching** - Path-based routing with prefix matching
-- **TLS Termination** - Server-side TLS with configurable ALPN, supports PEM certificates (PKCS#8/RSA keys), hot reload for zero-downtime certificate updates, single certificate per instance (no SNI/mTLS)
-
-### Fingerprinting Integration
-
-- **TLS Fingerprinting (JA4)** - Automatic extraction of JA4 fingerprints from TLS ClientHello messages (works for all TLS connections)
-- **HTTP/2 Fingerprinting (Akamai)** - Extraction of Akamai-style fingerprints from HTTP/2 frames (HTTP/2 only)
-- **Header Injection** - Fingerprints automatically injected as `x-huginn-net-ja4` and `x-huginn-net-akamai` headers
-- **Configurable** - Enable/disable fingerprinting per protocol via configuration
+- **Path-based Routing** - Route matching with prefix support
+- **TLS Termination** - Server-side TLS with ALPN, certificate hot reload
+- **Passive Fingerprinting** - Automatic TLS (JA4) and HTTP/2 (Akamai) fingerprint extraction
+- **X-Forwarded-* Headers** - Automatic injection of proxy forwarding headers
+- **High Performance** - Built on Tokio and Hyper
+- **Easy Deployment** - Single binary, Docker-ready
 
 ## Fingerprinting
 
@@ -106,6 +94,17 @@ x-huginn-net-akamai: 1:65536,2:0,3:1000,4:6291456,6:262144|15663105|0|m,p,a,s
 ```
 
 See [JA4 specification](https://github.com/FoxIO-LLC/ja4) and [Blackhat EU 2017](https://www.blackhat.com/docs/eu-17/materials/eu-17-Shuster-Passive-Fingerprinting-Of-HTTP2-Clients-wp.pdf) for details.
+
+## Proxy Headers
+
+The proxy automatically injects standard `X-Forwarded-*` headers to inform backends about the original client request:
+
+- **X-Forwarded-For**: Client IP address (appended if already present)
+- **X-Forwarded-Host**: Original Host header value
+- **X-Forwarded-Port**: Client port number
+- **X-Forwarded-Proto**: Protocol used (`http` or `https`)
+
+These headers always override any client-provided values to prevent spoofing.
 
 ## Examples
 
