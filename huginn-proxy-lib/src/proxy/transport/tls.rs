@@ -88,23 +88,22 @@ pub async fn handle_tls_connection(
                         metrics_for_connection.clone(),
                     );
 
-                    let routes_for_service = config.routes.clone();
-                    let backends_for_service = config.backends.clone();
-                    let tls_header_for_service = tls_header.clone();
-                    let fingerprint_rx_for_service = fingerprint_rx.clone();
-                    let keep_alive_for_service = config.keep_alive.clone();
-                    let metrics_for_service = metrics_for_connection.clone();
+                    let backends = config.backends.clone();
+                    let metrics = metrics_for_connection.clone();
+                    let routes_template = config.routes.clone();
+                    let keep_alive = config.keep_alive.clone();
 
                     let svc = hyper::service::service_fn(
                         move |req: hyper::Request<hyper::body::Incoming>| {
-                            let routes = routes_for_service.clone();
-                            let backends = backends_for_service.clone();
-                            let tls_header = tls_header_for_service.clone();
-                            let fingerprint_rx = fingerprint_rx_for_service.clone();
-                            let keep_alive = keep_alive_for_service.clone();
-                            let metrics = metrics_for_service.clone();
+                            let routes = routes_template.clone();
+                            let backends = backends.clone();
+                            let tls_header = tls_header.clone();
+                            let fingerprint_rx = fingerprint_rx.clone();
+                            let metrics = metrics.clone();
+                            let keep_alive = keep_alive.clone();
 
                             async move {
+                                let metrics_for_match = metrics.clone();
                                 let http_result =
                                     crate::proxy::handler::request::handle_proxy_request(
                                         req,
@@ -112,14 +111,16 @@ pub async fn handle_tls_connection(
                                         backends,
                                         tls_header,
                                         Some(fingerprint_rx),
-                                        &keep_alive,
-                                        metrics.clone(),
+                                        &keep_alive, // Pass by reference
+                                        metrics,
+                                        peer,
+                                        true,
                                     )
                                     .await;
 
                                 match http_result {
                                     Ok(v) => {
-                                        if let Some(ref m) = metrics {
+                                        if let Some(ref m) = metrics_for_match {
                                             m.requests_total.add(
                                                 1,
                                                 &[KeyValue::new(
@@ -133,7 +134,7 @@ pub async fn handle_tls_connection(
                                     Err(e) => {
                                         tracing::error!("{e}");
                                         let code = StatusCode::from(e.clone());
-                                        if let Some(ref m) = metrics {
+                                        if let Some(ref m) = metrics_for_match {
                                             m.errors_total.add(
                                                 1,
                                                 &[KeyValue::new("error_type", e.error_type())],
@@ -169,21 +170,21 @@ pub async fn handle_tls_connection(
                         warn!(?peer, error = %e, "serve_connection error");
                     }
                 } else {
-                    let routes_for_service = config.routes.clone();
-                    let backends_for_service = config.backends.clone();
-                    let tls_header_for_service = tls_header.clone();
-                    let keep_alive_for_service = config.keep_alive.clone();
-                    let metrics_for_service = metrics_for_connection.clone();
+                    let backends = config.backends.clone();
+                    let metrics = metrics_for_connection.clone();
+                    let routes_template = config.routes.clone();
+                    let keep_alive = config.keep_alive.clone();
 
                     let svc = hyper::service::service_fn(
                         move |req: hyper::Request<hyper::body::Incoming>| {
-                            let routes = routes_for_service.clone();
-                            let backends = backends_for_service.clone();
-                            let tls_header = tls_header_for_service.clone();
-                            let keep_alive = keep_alive_for_service.clone();
-                            let metrics = metrics_for_service.clone();
+                            let routes = routes_template.clone();
+                            let backends = backends.clone();
+                            let tls_header = tls_header.clone();
+                            let metrics = metrics.clone();
+                            let keep_alive = keep_alive.clone();
 
                             async move {
+                                let metrics_for_match = metrics.clone();
                                 let http_result =
                                     crate::proxy::handler::request::handle_proxy_request(
                                         req,
@@ -191,14 +192,16 @@ pub async fn handle_tls_connection(
                                         backends,
                                         tls_header,
                                         None,
-                                        &keep_alive,
-                                        metrics.clone(),
+                                        &keep_alive, // Pass by reference
+                                        metrics,
+                                        peer,
+                                        true,
                                     )
                                     .await;
 
                                 match http_result {
                                     Ok(v) => {
-                                        if let Some(ref m) = metrics {
+                                        if let Some(ref m) = metrics_for_match {
                                             m.requests_total.add(
                                                 1,
                                                 &[KeyValue::new(
@@ -212,7 +215,7 @@ pub async fn handle_tls_connection(
                                     Err(e) => {
                                         tracing::error!("{e}");
                                         let code = StatusCode::from(e.clone());
-                                        if let Some(ref m) = metrics {
+                                        if let Some(ref m) = metrics_for_match {
                                             m.errors_total.add(
                                                 1,
                                                 &[KeyValue::new("error_type", e.error_type())],

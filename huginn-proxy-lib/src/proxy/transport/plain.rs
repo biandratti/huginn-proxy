@@ -26,32 +26,35 @@ pub async fn handle_plain_connection(
     peer: std::net::SocketAddr,
     config: PlainConnectionConfig,
 ) {
-    let routes_for_service = config.routes.clone();
-    let backends_for_service = config.backends.clone();
-    let keep_alive_for_service = config.keep_alive.clone();
-    let metrics_for_service = config.metrics.clone();
+    let backends = config.backends.clone();
+    let metrics = config.metrics.clone();
+    let routes_template = config.routes.clone();
+    let keep_alive = config.keep_alive.clone();
 
     let svc = hyper::service::service_fn(move |req: hyper::Request<hyper::body::Incoming>| {
-        let routes = routes_for_service.clone();
-        let backends = backends_for_service.clone();
-        let keep_alive = keep_alive_for_service.clone();
-        let metrics = metrics_for_service.clone();
+        let routes = routes_template.clone();
+        let backends = backends.clone();
+        let metrics = metrics.clone();
+        let keep_alive = keep_alive.clone();
 
         async move {
+            let metrics_for_match = metrics.clone();
             let http_result = crate::proxy::handler::request::handle_proxy_request(
                 req,
                 routes,
                 backends,
                 None,
                 None,
-                &keep_alive,
-                metrics.clone(),
+                &keep_alive, // Pass by reference
+                metrics,
+                peer,
+                false, // is_https = false for plain HTTP connections
             )
             .await;
 
             match http_result {
                 Ok(v) => {
-                    if let Some(ref m) = metrics {
+                    if let Some(ref m) = metrics_for_match {
                         m.requests_total.add(
                             1,
                             &[KeyValue::new("status_code", v.status().as_u16().to_string())],
@@ -62,7 +65,7 @@ pub async fn handle_plain_connection(
                 Err(e) => {
                     tracing::error!("{e}");
                     let code = StatusCode::from(e.clone());
-                    if let Some(ref m) = metrics {
+                    if let Some(ref m) = metrics_for_match {
                         m.errors_total
                             .add(1, &[KeyValue::new("error_type", e.error_type())]);
                     }
