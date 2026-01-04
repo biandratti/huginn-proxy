@@ -2,9 +2,6 @@
 
 ## Upcoming Features
 
-### Testing & Quality
-- [ ] Stress tests (multiple concurrent connections)
-
 ### Documentation
 - [ ] Usage examples (Kubernetes, Docker)
 - [ ] Metrics documentation
@@ -18,7 +15,6 @@
 
 ### Security & TLS
 - [ ] IP filtering
-- [ ] Advanced TLS (tls.options) configuration (versions, cipher suites)
 - [ ] Rate limiting
 - [ ] Security headers (HSTS, CSP, etc.)
 - [ ] mTLS support

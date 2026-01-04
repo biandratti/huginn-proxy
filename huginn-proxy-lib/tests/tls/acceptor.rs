@@ -39,6 +39,7 @@ fn test_build_rustls_success() -> Result<(), Box<dyn std::error::Error + Send + 
         cert_path: cert_path.display().to_string(),
         key_path: key_path.display().to_string(),
         alpn: vec!["h2".to_string(), "http/1.1".to_string()],
+        options: Default::default(),
     };
 
     // This will fail with invalid cert/key, but we can test the error handling
@@ -60,6 +61,7 @@ fn test_build_rustls_missing_cert() -> Result<(), Box<dyn std::error::Error + Se
         cert_path: "/nonexistent/cert.pem".to_string(),
         key_path: "/nonexistent/key.pem".to_string(),
         alpn: vec![],
+        options: Default::default(),
     };
 
     let result = build_rustls(&config);
@@ -80,6 +82,7 @@ fn test_build_rustls_empty_alpn() -> Result<(), Box<dyn std::error::Error + Send
         cert_path: cert_path.display().to_string(),
         key_path: key_path.display().to_string(),
         alpn: vec![], // Empty ALPN means no ALPN
+        options: Default::default(),
     };
 
     let result = build_rustls(&config);
@@ -102,6 +105,7 @@ fn test_build_rustls_custom_alpn() -> Result<(), Box<dyn std::error::Error + Sen
         cert_path: cert_path.display().to_string(),
         key_path: key_path.display().to_string(),
         alpn: vec!["h2".to_string()],
+        options: Default::default(),
     };
 
     let result = build_rustls(&config);
@@ -129,6 +133,7 @@ fn test_build_rustls_invalid_pem() -> Result<(), Box<dyn std::error::Error + Sen
         cert_path: cert_path.display().to_string(),
         key_path: key_path.display().to_string(),
         alpn: vec![],
+        options: Default::default(),
     };
 
     let result = build_rustls(&config);

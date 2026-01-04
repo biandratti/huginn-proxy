@@ -1,4 +1,4 @@
-use huginn_proxy_lib::config::TlsConfig;
+use huginn_proxy_lib::config::{TlsConfig, TlsOptions};
 use huginn_proxy_lib::tls::build_cert_reloader;
 use std::fs;
 use std::path::PathBuf;
@@ -39,6 +39,7 @@ async fn test_build_cert_reloader() -> Result<(), Box<dyn std::error::Error + Se
         key_path: key_path.display().to_string(),
         alpn: vec!["h2".to_string()],
         watch_delay_secs: 60,
+        options: TlsOptions::default(),
     };
 
     // This should succeed in creating the reloader service with valid PEM format
@@ -53,8 +54,9 @@ async fn test_build_cert_reloader() -> Result<(), Box<dyn std::error::Error + Se
         let initial_value = rx.borrow();
         if let Some(certs_keys) = initial_value.as_ref() {
             let alpn = vec!["h2".to_string()];
+            let options = TlsOptions::default();
             // This may fail due to invalid certs, but the structure should be correct
-            let _ = certs_keys.build_tls_acceptor(&alpn);
+            let _ = certs_keys.build_tls_acceptor(&alpn, &options);
         } else {
             panic!("initial value should be Some");
         }
@@ -72,6 +74,7 @@ async fn test_build_cert_reloader_missing_files(
         key_path: "/nonexistent/key.pem".to_string(),
         alpn: vec![],
         watch_delay_secs: 60,
+        options: TlsOptions::default(),
     };
 
     // Should fail because certificates must exist at startup
@@ -92,9 +95,10 @@ fn test_server_certs_keys_build_tls_acceptor(
 
     let server_certs_keys = ServerCertsKeys { certs, key };
     let alpn = vec!["h2".to_string()];
+    let options = TlsOptions::default();
 
     // This will fail because certs/key are invalid, but we test the function exists
-    let result = server_certs_keys.build_tls_acceptor(&alpn);
+    let result = server_certs_keys.build_tls_acceptor(&alpn, &options);
     assert!(result.is_err());
     Ok(())
 }
