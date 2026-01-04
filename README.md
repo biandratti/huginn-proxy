@@ -74,7 +74,7 @@ docker run -v /path/to/config.toml:/config.toml huginn-proxy /config.toml
 - **HTTP/1.x & HTTP/2** - Full support for both protocol versions
 - **Load Balancing** - Round-robin load balancing across multiple backends
 - **Path-based Routing** - Route matching with prefix support
-- **TLS Termination** - Server-side TLS with ALPN, certificate hot reload
+- **TLS Termination** - Server-side TLS with ALPN, certificate hot reload (single certificate per configuration)
 - **Passive Fingerprinting** - Automatic TLS (JA4) and HTTP/2 (Akamai) fingerprint extraction
 - **X-Forwarded-* Headers** - Automatic injection of proxy forwarding headers
 - **High Performance** - Built on Tokio and Hyper

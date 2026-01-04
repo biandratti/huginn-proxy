@@ -59,13 +59,14 @@ pub fn build_rustls(cfg: &TlsConfig) -> Result<TlsAcceptor> {
         server.alpn_protocols = cfg.alpn.iter().map(|s| s.as_bytes().to_vec()).collect();
     }
     // If alpn is empty, leave server.alpn_protocols as default (empty = no ALPN)
-
     Ok(TlsAcceptor::from(Arc::new(server)))
 }
 
-/// Validate TLS options
-pub(crate) fn validate_tls_options(options: &TlsOptions) -> Result<()> {
-    // Validate min_version <= max_version if both are specified
+pub fn validate_tls_options(options: &TlsOptions) -> Result<()> {
+    validate_tls_options_impl(options)
+}
+
+fn validate_tls_options_impl(options: &TlsOptions) -> Result<()> {
     if let (Some(min), Some(max)) = (&options.min_version, &options.max_version) {
         if matches!((min, max), (TlsVersion::V1_3, TlsVersion::V1_2)) {
             return Err(ProxyError::Tls(
@@ -74,7 +75,6 @@ pub(crate) fn validate_tls_options(options: &TlsOptions) -> Result<()> {
         }
     }
 
-    // Validate versions list doesn't conflict with min/max
     if !options.versions.is_empty()
         && (options.min_version.is_some() || options.max_version.is_some())
     {
@@ -85,13 +85,10 @@ pub(crate) fn validate_tls_options(options: &TlsOptions) -> Result<()> {
         ));
     }
 
-    // Validate cipher suite names
     for suite_name in &options.cipher_suites {
         if suite_name.is_empty() {
             return Err(ProxyError::Tls("Cipher suite name cannot be empty".to_string()));
         }
-
-        // Check if the cipher suite is supported by rustls
         if !is_cipher_suite_supported(suite_name) {
             return Err(ProxyError::Tls(format!(
                 "Cipher suite '{}' is not supported by rustls. \
@@ -102,13 +99,10 @@ pub(crate) fn validate_tls_options(options: &TlsOptions) -> Result<()> {
         }
     }
 
-    // Validate curve preferences
     for curve_name in &options.curve_preferences {
         if curve_name.is_empty() {
             return Err(ProxyError::Tls("Curve name cannot be empty".to_string()));
         }
-
-        // Check if the curve is supported by rustls
         if !is_curve_supported(curve_name) {
             return Err(ProxyError::Tls(format!(
                 "Curve '{}' is not supported by rustls. \

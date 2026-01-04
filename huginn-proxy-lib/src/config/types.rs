@@ -56,8 +56,7 @@ pub enum TlsVersion {
 pub struct TlsOptions {
     /// Allowed TLS versions
     /// Options: ["1.2"], ["1.3"], or ["1.2", "1.3"]
-    /// Default: empty (allows all supported versions: TLS 1.2 and 1.3)
-    /// If empty, uses rustls safe defaults (TLS 1.2 and 1.3)
+    /// Default: ["1.2", "1.3"] (all supported versions)
     #[serde(default = "default_tls_versions")]
     pub versions: Vec<TlsVersion>,
     /// Minimum TLS version
@@ -330,7 +329,7 @@ fn default_shutdown_timeout() -> u64 {
 }
 
 fn default_tls_versions() -> Vec<TlsVersion> {
-    vec![]
+    vec![TlsVersion::V1_2, TlsVersion::V1_3]
 }
 
 fn default_min_version() -> Option<TlsVersion> {
