@@ -28,6 +28,7 @@ pub async fn setup_tls_with_hot_reload(tls_config: &TlsConfig) -> Result<TlsSetu
     // Setup certificate reloader (async - initializes filesystem watcher)
     let mut reloader_rx = build_cert_reloader(tls_config).await?;
     let alpn = tls_config.alpn.clone();
+    let tls_options = tls_config.options.clone();
 
     let tls_acceptor_for_update = Arc::clone(&tls_acceptor);
     tokio::spawn(async move {
@@ -35,7 +36,7 @@ pub async fn setup_tls_with_hot_reload(tls_config: &TlsConfig) -> Result<TlsSetu
             let _ = reloader_rx.changed().await;
             let certs_keys = reloader_rx.borrow().clone();
             if let Some(certs_keys) = certs_keys {
-                match certs_keys.build_tls_acceptor(&alpn) {
+                match certs_keys.build_tls_acceptor(&alpn, &tls_options) {
                     Ok(new_acceptor) => {
                         info!("Certificate reloaded successfully");
                         *tls_acceptor_for_update.write().await = Some(new_acceptor);

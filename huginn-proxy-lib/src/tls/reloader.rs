@@ -1,5 +1,6 @@
-use crate::config::TlsConfig;
+use crate::config::{TlsConfig, TlsOptions};
 use crate::error::ProxyError;
+use crate::tls::acceptor::validate_tls_options;
 use notify::{Config, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use rustls_pki_types::pem::PemObject;
 use rustls_pki_types::{CertificateDer, PrivateKeyDer};
@@ -25,11 +26,25 @@ impl Clone for ServerCertsKeys {
 }
 
 impl ServerCertsKeys {
-    pub fn build_tls_acceptor(&self, alpn: &[String]) -> crate::error::Result<TlsAcceptor> {
+    pub fn build_tls_acceptor(
+        &self,
+        alpn: &[String],
+        options: &TlsOptions,
+    ) -> crate::error::Result<TlsAcceptor> {
+        validate_tls_options(options)?;
+
         let mut server = ServerConfig::builder()
             .with_no_client_auth()
             .with_single_cert(self.certs.to_vec(), self.key.clone_key())
             .map_err(|e| ProxyError::Tls(format!("Failed to build TLS config: {e}")))?;
+
+        if !options.cipher_suites.is_empty() {
+            warn!(
+                "Cipher suite specification is not yet fully supported in rustls 0.23. \
+                Using safe defaults. Specified cipher suites: {:?}",
+                options.cipher_suites
+            );
+        }
 
         if !alpn.is_empty() {
             server.alpn_protocols = alpn.iter().map(|s| s.as_bytes().to_vec()).collect();

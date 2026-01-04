@@ -39,6 +39,55 @@ pub struct Route {
     pub fingerprinting: bool,
 }
 
+/// TLS version configuration
+#[derive(Debug, Deserialize, Clone, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum TlsVersion {
+    /// TLS 1.2
+    #[serde(rename = "1.2")]
+    V1_2,
+    /// TLS 1.3
+    #[serde(rename = "1.3")]
+    V1_3,
+}
+
+/// Advanced TLS configuration options
+#[derive(Debug, Deserialize, Clone)]
+pub struct TlsOptions {
+    /// Allowed TLS versions
+    /// Options: ["1.2"], ["1.3"], or ["1.2", "1.3"]
+    /// Default: ["1.2", "1.3"] (all supported versions)
+    #[serde(default = "default_tls_versions")]
+    pub versions: Vec<TlsVersion>,
+    /// Minimum TLS version
+    /// Options: "1.2" or "1.3"
+    /// Default: None (no minimum enforced)
+    /// If specified, overrides `versions` to enforce minimum version
+    #[serde(default = "default_min_version")]
+    pub min_version: Option<TlsVersion>,
+    /// Maximum TLS version
+    /// Options: "1.2" or "1.3"
+    /// Default: None (no maximum enforced)
+    /// If specified, overrides `versions` to enforce maximum version
+    #[serde(default = "default_max_version")]
+    pub max_version: Option<TlsVersion>,
+    /// Allowed cipher suites (by name)
+    ///
+    /// Default: uses rustls safe defaults (all supported cipher suites)
+    /// See `supported_cipher_suites()` for the complete list.
+
+    #[serde(default = "default_cipher_suites")]
+    pub cipher_suites: Vec<String>,
+    /// Elliptic curve preferences (key exchange groups)
+    ///
+    /// Specifies the order of preference for elliptic curves used in ECDHE key exchange.
+    /// The first curve in the list is preferred.
+    ///
+    /// Default: empty (uses rustls safe defaults)
+    #[serde(default = "default_curve_preferences")]
+    pub curve_preferences: Vec<String>,
+}
+
 /// TLS termination configuration
 #[derive(Debug, Deserialize, Clone)]
 pub struct TlsConfig {
@@ -56,6 +105,9 @@ pub struct TlsConfig {
     /// Certificate watch delay in seconds for hot reload
     #[serde(default = "default_cert_watch_delay_secs")]
     pub watch_delay_secs: u32,
+    /// Controls TLS versions and cipher suites
+    #[serde(default)]
+    pub options: TlsOptions,
 }
 
 fn default_cert_watch_delay_secs() -> u32 {
@@ -274,4 +326,42 @@ fn default_idle_timeout() -> u64 {
 
 fn default_shutdown_timeout() -> u64 {
     30
+}
+
+fn default_tls_versions() -> Vec<TlsVersion> {
+    vec![TlsVersion::V1_2, TlsVersion::V1_3]
+}
+
+fn default_min_version() -> Option<TlsVersion> {
+    None
+}
+
+fn default_max_version() -> Option<TlsVersion> {
+    None
+}
+
+fn default_cipher_suites() -> Vec<String> {
+    crate::tls::cipher_suites::supported_cipher_suites()
+        .into_iter()
+        .map(|s| s.to_string())
+        .collect()
+}
+
+fn default_curve_preferences() -> Vec<String> {
+    crate::tls::curves::supported_curves()
+        .into_iter()
+        .map(|s| s.to_string())
+        .collect()
+}
+
+impl Default for TlsOptions {
+    fn default() -> Self {
+        Self {
+            versions: default_tls_versions(),
+            min_version: default_min_version(),
+            max_version: default_max_version(),
+            cipher_suites: default_cipher_suites(),
+            curve_preferences: default_curve_preferences(),
+        }
+    }
 }
