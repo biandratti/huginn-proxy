@@ -7,7 +7,7 @@
 - [ ] Metrics documentation
 
 ### Operational Features
-- [ ] Kubernetes probe support
+- [x] Kubernetes probe support (via dedicated health check endpoints: `/health`, `/ready`, `/live`)
 - [ ] Granular timeouts (read/write/TLS handshake)
 - [ ] Preserve Host header (configurable)
 - [ ] Backend health checks (active polling)
