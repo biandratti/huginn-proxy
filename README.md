@@ -106,6 +106,17 @@ The proxy automatically injects standard `X-Forwarded-*` headers to inform backe
 
 These headers always override any client-provided values to prevent spoofing.
 
+## Health Check Endpoints
+
+When `telemetry.metrics_port` is configured, Huginn Proxy exposes health check endpoints on the observability server (separate from the main proxy port):
+
+- **`/health`** - General health check (`200 OK` if process is running)
+- **`/ready`** - Readiness check (`200 OK` if backends configured, `503` otherwise) - for Kubernetes readiness probes
+- **`/live`** - Liveness check (`200 OK` if process is running) - for Kubernetes liveness probes
+- **`/metrics`** - Prometheus metrics endpoint
+
+All endpoints return JSON responses (except `/metrics` which returns Prometheus format) and follow Kubernetes health check conventions.
+
 ## Examples
 
 ### Basic Configuration
