@@ -33,7 +33,7 @@ pub async fn read_client_hello(
 
     let ja4 = parse_tls_client_hello(&buf)
         .ok()
-        .map(|signature| signature.generate_ja4());
+        .and_then(|opt_signature| opt_signature.map(|signature| signature.generate_ja4()));
 
     let duration = start.elapsed().as_secs_f64();
 
