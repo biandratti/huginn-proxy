@@ -7,7 +7,6 @@
 - [ ] Metrics documentation
 
 ### Operational Features
-- [x] Kubernetes probe support (via dedicated health check endpoints: `/health`, `/ready`, `/live`)
 - [ ] Granular timeouts (read/write/TLS handshake)
 - [ ] Preserve Host header (configurable)
 - [ ] Backend health checks (active polling)
@@ -22,9 +21,7 @@
 - [ ] Session resumption
 
 ### Routing & Path Handling
-- [ ] Path stripping (remove prefix before forwarding to backend)
 - [ ] Regex-based route matching (optional, for advanced use cases)
-- [ ] Path rewriting (modify path before forwarding)
 
 ### Advanced Features
 - [ ] Advanced load balancing algorithms (least connections, weighted)

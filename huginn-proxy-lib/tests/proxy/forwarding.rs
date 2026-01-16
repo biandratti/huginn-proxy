@@ -117,16 +117,19 @@ fn test_pick_route() {
             prefix: "/api".to_string(),
             backend: "backend-a:9000".to_string(),
             fingerprinting: true,
+            replace_path: None,
         },
         Route {
             prefix: "/static".to_string(),
             backend: "backend-b:9000".to_string(),
             fingerprinting: true,
+            replace_path: None,
         },
         Route {
             prefix: "/".to_string(),
             backend: "backend-c:9000".to_string(),
             fingerprinting: true,
+            replace_path: None,
         },
     ];
 
@@ -189,4 +192,68 @@ fn test_create_client_with_custom_timeout() {
     let keep_alive_long = KeepAliveConfig { enabled: true, timeout_secs: 3600 };
     let client_long = create_client(Version::HTTP_11, &keep_alive_long);
     assert!(!std::ptr::eq(&client_long as *const _, std::ptr::null()));
+}
+
+#[test]
+fn test_pick_route_with_fingerprinting_basic() {
+    use huginn_proxy_lib::proxy::forwarding::pick_route_with_fingerprinting;
+
+    let routes = vec![Route {
+        prefix: "/api".to_string(),
+        backend: "backend-a:9000".to_string(),
+        fingerprinting: true,
+        replace_path: None,
+    }];
+
+    let result = pick_route_with_fingerprinting("/api/users", &routes);
+    assert!(result.is_some());
+    if let Some(route) = result {
+        assert_eq!(route.backend, "backend-a:9000");
+        assert!(route.fingerprinting);
+        assert_eq!(route.matched_prefix, "/api");
+        assert!(route.replace_path.is_none());
+    }
+}
+
+#[test]
+fn test_pick_route_with_fingerprinting_with_replace_path() {
+    use huginn_proxy_lib::proxy::forwarding::pick_route_with_fingerprinting;
+
+    let routes = vec![Route {
+        prefix: "/api".to_string(),
+        backend: "backend-a:9000".to_string(),
+        fingerprinting: true,
+        replace_path: Some("/v1".to_string()),
+    }];
+
+    let result = pick_route_with_fingerprinting("/api/users", &routes);
+    assert!(result.is_some());
+    if let Some(route) = result {
+        assert_eq!(route.backend, "backend-a:9000");
+        assert!(route.fingerprinting);
+        assert_eq!(route.matched_prefix, "/api");
+        assert_eq!(route.replace_path, Some("/v1"));
+    }
+}
+
+#[test]
+fn test_pick_route_with_fingerprinting_path_stripping() {
+    use huginn_proxy_lib::proxy::forwarding::pick_route_with_fingerprinting;
+
+    // Path stripping: replace_path = "" or "/"
+    let routes = vec![Route {
+        prefix: "/api".to_string(),
+        backend: "backend-a:9000".to_string(),
+        fingerprinting: false,
+        replace_path: Some("".to_string()), // Strip prefix
+    }];
+
+    let result = pick_route_with_fingerprinting("/api/users", &routes);
+    assert!(result.is_some());
+    if let Some(route) = result {
+        assert_eq!(route.backend, "backend-a:9000");
+        assert!(!route.fingerprinting);
+        assert_eq!(route.matched_prefix, "/api");
+        assert_eq!(route.replace_path, Some(""));
+    }
 }

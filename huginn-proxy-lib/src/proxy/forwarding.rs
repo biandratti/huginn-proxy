@@ -15,6 +15,14 @@ use tokio::time::Instant;
 type HttpClient = Client<HttpConnector, Incoming>;
 type RespBody = BoxBody<bytes::Bytes, hyper::Error>;
 
+#[derive(Debug, Clone)]
+pub struct RouteMatch<'a> {
+    pub backend: &'a str,
+    pub fingerprinting: bool,
+    pub matched_prefix: &'a str,
+    pub replace_path: Option<&'a str>,
+}
+
 pub fn find_backend_config<'a>(
     address: &str,
     backends: &'a [crate::config::Backend],
@@ -82,19 +90,42 @@ pub async fn forward(
     backends: &[crate::config::Backend],
     keep_alive: &KeepAliveConfig,
     metrics: Option<Arc<Metrics>>,
+    matched_prefix: &str,
+    replace_path: Option<&str>,
 ) -> HttpResult<Response<RespBody>> {
     let start = Instant::now();
     let protocol = format!("{:?}", req.version());
-    let uri = format!(
-        "http://{}{}",
-        backend,
-        req.uri()
-            .path_and_query()
-            .map(|pq| pq.as_str())
-            .unwrap_or("")
-    )
-    .parse::<http::Uri>()
-    .map_err(|e| HttpError::InvalidUri(e.to_string()))?;
+
+    let org_pq = req
+        .uri()
+        .path_and_query()
+        .map(|pq| pq.as_str())
+        .unwrap_or("/")
+        .as_bytes();
+
+    // Replace some parts of path if replace_path is enabled for chosen upstream
+    let new_pq = match replace_path {
+        Some(new_path) => {
+            let matched_path: &[u8] = matched_prefix.as_bytes();
+            if matched_path.is_empty() || org_pq.len() < matched_path.len() {
+                return Err(HttpError::InvalidUri("Path and query is broken".to_string()));
+            }
+            let remaining_len = org_pq.len().saturating_sub(matched_path.len());
+            let capacity = remaining_len.saturating_add(new_path.len());
+            let mut new_pq = Vec::<u8>::with_capacity(capacity);
+            new_pq.extend_from_slice(new_path.as_bytes());
+            new_pq.extend_from_slice(&org_pq[matched_path.len()..]);
+            new_pq
+        }
+        None => org_pq.to_vec(),
+    };
+
+    let new_path_str = String::from_utf8(new_pq)
+        .map_err(|e| HttpError::InvalidUri(format!("Invalid UTF-8 in path: {}", e)))?;
+
+    let uri = format!("http://{}{}", backend, new_path_str)
+        .parse::<http::Uri>()
+        .map_err(|e| HttpError::InvalidUri(e.to_string()))?;
 
     let client_version = req.version();
     let backend_config = find_backend_config(&backend, backends);
@@ -162,9 +193,14 @@ pub fn pick_route<'a>(path: &str, routes: &'a [crate::config::Route]) -> Option<
 pub fn pick_route_with_fingerprinting<'a>(
     path: &str,
     routes: &'a [crate::config::Route],
-) -> Option<(&'a str, bool)> {
+) -> Option<RouteMatch<'a>> {
     routes
         .iter()
         .find(|r| path.starts_with(&r.prefix))
-        .map(|r| (r.backend.as_str(), r.fingerprinting))
+        .map(|r| RouteMatch {
+            backend: r.backend.as_str(),
+            fingerprinting: r.fingerprinting,
+            matched_prefix: r.prefix.as_str(),
+            replace_path: r.replace_path.as_deref(),
+        })
 }

@@ -6,9 +6,26 @@ backends = [
 ]
 
 routes = [
+  # Basic route without path manipulation
   { prefix = "/api", backend = "backend-a:9000", fingerprinting = true },
+  
+  # Route without fingerprinting (for fingerprint tests)
   { prefix = "/static", backend = "backend-b:9000", fingerprinting = false },
-  { prefix = "/",   backend = "backend-b:9000" }
+  
+  # Path stripping: removes matched prefix
+  # Request: /strip/users → Backend: /users
+  { prefix = "/strip", backend = "backend-a:9000", fingerprinting = true, replace_path = "" },
+  
+  # Path rewriting: replaces prefix with new path
+  # Request: /old/data → Backend: /new/data
+  { prefix = "/old", backend = "backend-b:9000", fingerprinting = true, replace_path = "/new" },
+  
+  # Path rewriting to versioned API
+  # Request: /v1/endpoint → Backend: /api/v1/endpoint
+  { prefix = "/v1", backend = "backend-a:9000", fingerprinting = true, replace_path = "/api/v1" },
+  
+  # Default route (no path manipulation)
+  { prefix = "/", backend = "backend-b:9000" }
 ]
 
 [tls]

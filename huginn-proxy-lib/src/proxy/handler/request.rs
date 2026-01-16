@@ -37,16 +37,15 @@ pub async fn handle_proxy_request(
 
     // Route selection (determine backend and fingerprinting configuration)
     let path = req.uri().path();
-    let (backend, should_fingerprint) = if let Some((target, fingerprinting)) =
+    let route_match = if let Some(route) =
         crate::proxy::forwarding::pick_route_with_fingerprinting(path, &routes)
     {
         // Route matched: use route's fingerprinting configuration
-        let backend_str = target.to_string();
         if let Some(ref m) = metrics {
             m.backend_selections_total
-                .add(1, &[KeyValue::new("backend", backend_str.clone())]);
+                .add(1, &[KeyValue::new("backend", route.backend.to_string())]);
         }
-        (backend_str, fingerprinting)
+        route
     } else {
         // No route matched: return 404
         let error = HttpError::NoMatchingRoute;
@@ -59,7 +58,7 @@ pub async fn handle_proxy_request(
 
     // Extract and inject fingerprints first (fingerprints are extracted from TLS handshake/HTTP2 frames,
     // not from HTTP headers, so adding X-Forwarded-* headers won't affect fingerprint generation)
-    if should_fingerprint {
+    if route_match.fingerprinting {
         if let Some(hv) = tls_header {
             req.headers_mut()
                 .insert(HeaderName::from_static(names::TLS_JA4), hv);
@@ -68,7 +67,7 @@ pub async fn handle_proxy_request(
             if req.version() == Version::HTTP_2 {
                 let akamai = rx.borrow().clone();
                 debug!("Handler: akamai fingerprint: {:?}", akamai);
-                if let Some(hv) = akamai_header_value(&akamai) {
+                if let Some(hv) = akamai_header_value(akamai.as_ref()) {
                     debug!("Handler: injecting {} header: {:?}", names::HTTP2_AKAMAI, hv);
                     req.headers_mut()
                         .insert(HeaderName::from_static(names::HTTP2_AKAMAI), hv);
@@ -95,7 +94,16 @@ pub async fn handle_proxy_request(
     add_forwarded_headers(&mut req, peer, is_https);
 
     // Forward request
-    let result = forward(req, backend.clone(), &backends, keep_alive, metrics.clone()).await;
+    let result = forward(
+        req,
+        route_match.backend.to_string(),
+        &backends,
+        keep_alive,
+        metrics.clone(),
+        route_match.matched_prefix,
+        route_match.replace_path,
+    )
+    .await;
 
     let duration = start.elapsed().as_secs_f64();
     let status_code = match &result {
