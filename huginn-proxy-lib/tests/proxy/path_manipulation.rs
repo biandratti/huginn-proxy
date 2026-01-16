@@ -16,9 +16,9 @@ fn test_path_stripping_basic() {
     let result = pick_route_with_fingerprinting("/api/users", &routes);
     assert!(result.is_some());
 
-    if let Some((_backend, _fingerprinting, prefix, replace_path)) = result {
-        assert_eq!(prefix, "/api");
-        assert_eq!(replace_path, &Some("".to_string()));
+    if let Some(route) = result {
+        assert_eq!(route.matched_prefix, "/api");
+        assert_eq!(route.replace_path, Some(""));
     }
 }
 
@@ -36,9 +36,9 @@ fn test_path_stripping_with_query_params() {
     let result = pick_route_with_fingerprinting("/api/users?id=123&name=test", &routes);
     assert!(result.is_some());
 
-    if let Some((_backend, _fingerprinting, prefix, replace_path)) = result {
-        assert_eq!(prefix, "/api");
-        assert_eq!(replace_path, &Some("".to_string()));
+    if let Some(route) = result {
+        assert_eq!(route.matched_prefix, "/api");
+        assert_eq!(route.replace_path, Some(""));
         // Note: Query parameter preservation is tested in integration tests
     }
 }
@@ -58,9 +58,9 @@ fn test_path_rewriting_basic() {
     let result = pick_route_with_fingerprinting("/maps/org/any.ext", &routes);
     assert!(result.is_some());
 
-    if let Some((_backend, _fingerprinting, prefix, replace_path)) = result {
-        assert_eq!(prefix, "/maps");
-        assert_eq!(replace_path, &Some("/replacing/path1".to_string()));
+    if let Some(route) = result {
+        assert_eq!(route.matched_prefix, "/maps");
+        assert_eq!(route.replace_path, Some("/replacing/path1"));
     }
 }
 
@@ -78,9 +78,9 @@ fn test_path_rewriting_with_versioned_api() {
     let result = pick_route_with_fingerprinting("/api/users", &routes);
     assert!(result.is_some());
 
-    if let Some((_backend, _fingerprinting, prefix, replace_path)) = result {
-        assert_eq!(prefix, "/api");
-        assert_eq!(replace_path, &Some("/v1/api".to_string()));
+    if let Some(route) = result {
+        assert_eq!(route.matched_prefix, "/api");
+        assert_eq!(route.replace_path, Some("/v1/api"));
     }
 }
 
@@ -98,9 +98,9 @@ fn test_no_path_manipulation() {
     let result = pick_route_with_fingerprinting("/api/users", &routes);
     assert!(result.is_some());
 
-    if let Some((_backend, _fingerprinting, prefix, replace_path)) = result {
-        assert_eq!(prefix, "/api");
-        assert!(replace_path.is_none());
+    if let Some(route) = result {
+        assert_eq!(route.matched_prefix, "/api");
+        assert!(route.replace_path.is_none());
     }
 }
 
@@ -117,9 +117,9 @@ fn test_path_manipulation_with_nested_paths() {
     let result = pick_route_with_fingerprinting("/api/v1/users/123", &routes);
     assert!(result.is_some());
 
-    if let Some((_backend, _fingerprinting, prefix, replace_path)) = result {
-        assert_eq!(prefix, "/api/v1");
-        assert_eq!(replace_path, &Some("/backend/v1".to_string()));
+    if let Some(route) = result {
+        assert_eq!(route.matched_prefix, "/api/v1");
+        assert_eq!(route.replace_path, Some("/backend/v1"));
     }
 }
 
@@ -136,9 +136,9 @@ fn test_path_manipulation_root_path() {
     let result = pick_route_with_fingerprinting("/users", &routes);
     assert!(result.is_some());
 
-    if let Some((_backend, _fingerprinting, prefix, replace_path)) = result {
-        assert_eq!(prefix, "/");
-        assert_eq!(replace_path, &Some("/api".to_string()));
+    if let Some(route) = result {
+        assert_eq!(route.matched_prefix, "/");
+        assert_eq!(route.replace_path, Some("/api"));
     }
 }
 
@@ -165,10 +165,10 @@ fn test_multiple_routes_matching_priority() {
     let result = pick_route_with_fingerprinting("/api/v1/users", &routes);
     assert!(result.is_some());
 
-    if let Some((backend, _fingerprinting, prefix, replace_path)) = result {
-        assert_eq!(backend, "backend-v1:9000");
-        assert_eq!(prefix, "/api/v1");
-        assert_eq!(replace_path, &Some("/v1".to_string()));
+    if let Some(route) = result {
+        assert_eq!(route.backend, "backend-v1:9000");
+        assert_eq!(route.matched_prefix, "/api/v1");
+        assert_eq!(route.replace_path, Some("/v1"));
     }
 }
 
@@ -186,9 +186,9 @@ fn test_path_manipulation_exact_prefix_match() {
     let result = pick_route_with_fingerprinting("/api", &routes);
     assert!(result.is_some());
 
-    if let Some((_backend, _fingerprinting, prefix, replace_path)) = result {
-        assert_eq!(prefix, "/api");
-        assert_eq!(replace_path, &Some("/v1".to_string()));
+    if let Some(route) = result {
+        assert_eq!(route.matched_prefix, "/api");
+        assert_eq!(route.replace_path, Some("/v1"));
     }
 }
 
@@ -206,9 +206,9 @@ fn test_path_stripping_to_root() {
     let result = pick_route_with_fingerprinting("/api/health", &routes);
     assert!(result.is_some());
 
-    if let Some((_backend, _fingerprinting, prefix, replace_path)) = result {
-        assert_eq!(prefix, "/api");
-        assert_eq!(replace_path, &Some("".to_string()));
+    if let Some(route) = result {
+        assert_eq!(route.matched_prefix, "/api");
+        assert_eq!(route.replace_path, Some(""));
     }
 }
 
@@ -226,8 +226,8 @@ fn test_path_manipulation_with_special_characters() {
     let result = pick_route_with_fingerprinting("/api/users%20info", &routes);
     assert!(result.is_some());
 
-    if let Some((_backend, _fingerprinting, prefix, replace_path)) = result {
-        assert_eq!(prefix, "/api");
-        assert_eq!(replace_path, &Some("/v1".to_string()));
+    if let Some(route) = result {
+        assert_eq!(route.matched_prefix, "/api");
+        assert_eq!(route.replace_path, Some("/v1"));
     }
 }

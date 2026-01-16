@@ -73,7 +73,7 @@ docker run -v /path/to/config.toml:/config.toml huginn-proxy /config.toml
 
 - **HTTP/1.x & HTTP/2** - Full support for both protocol versions
 - **Load Balancing** - Round-robin load balancing across multiple backends
-- **Path-based Routing** - Route matching with prefix support
+- **Path-based Routing** - Route matching with prefix support, path stripping, and path rewriting
 - **TLS Termination** - Server-side TLS with ALPN, certificate hot reload (single certificate per configuration)
 - **Passive Fingerprinting** - Automatic TLS (JA4) and HTTP/2 (Akamai) fingerprint extraction
 - **X-Forwarded-* Headers** - Automatic injection of proxy forwarding headers
@@ -130,8 +130,14 @@ backends = [
 ]
 
 routes = [
+  # Basic routing with fingerprinting
   { prefix = "/api", backend = "backend-a:8080", fingerprinting = true },
-  { prefix = "/static", backend = "backend-b:8080", fingerprinting = false }
+  
+  # Path stripping: /static/css/style.css → backend receives /css/style.css
+  { prefix = "/static", backend = "backend-b:8080", fingerprinting = false, replace_path = "" },
+  
+  # Path rewriting: /old/path/file.txt → backend receives /new/path/file.txt
+  { prefix = "/old", backend = "backend-a:8080", replace_path = "/new" }
 ]
 
 [tls]

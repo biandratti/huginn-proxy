@@ -21,9 +21,7 @@
 - [ ] Session resumption
 
 ### Routing & Path Handling
-- [ ] Path stripping (remove prefix before forwarding to backend)
 - [ ] Regex-based route matching (optional, for advanced use cases)
-- [ ] Path rewriting (modify path before forwarding)
 
 ### Advanced Features
 - [ ] Advanced load balancing algorithms (least connections, weighted)

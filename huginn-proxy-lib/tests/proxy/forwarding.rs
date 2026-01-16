@@ -207,11 +207,11 @@ fn test_pick_route_with_fingerprinting_basic() {
 
     let result = pick_route_with_fingerprinting("/api/users", &routes);
     assert!(result.is_some());
-    if let Some((backend, fingerprinting, prefix, replace_path)) = result {
-        assert_eq!(backend, "backend-a:9000");
-        assert!(fingerprinting);
-        assert_eq!(prefix, "/api");
-        assert!(replace_path.is_none());
+    if let Some(route) = result {
+        assert_eq!(route.backend, "backend-a:9000");
+        assert!(route.fingerprinting);
+        assert_eq!(route.matched_prefix, "/api");
+        assert!(route.replace_path.is_none());
     }
 }
 
@@ -228,11 +228,11 @@ fn test_pick_route_with_fingerprinting_with_replace_path() {
 
     let result = pick_route_with_fingerprinting("/api/users", &routes);
     assert!(result.is_some());
-    if let Some((backend, fingerprinting, prefix, replace_path)) = result {
-        assert_eq!(backend, "backend-a:9000");
-        assert!(fingerprinting);
-        assert_eq!(prefix, "/api");
-        assert_eq!(replace_path, &Some("/v1".to_string()));
+    if let Some(route) = result {
+        assert_eq!(route.backend, "backend-a:9000");
+        assert!(route.fingerprinting);
+        assert_eq!(route.matched_prefix, "/api");
+        assert_eq!(route.replace_path, Some("/v1"));
     }
 }
 
@@ -250,10 +250,10 @@ fn test_pick_route_with_fingerprinting_path_stripping() {
 
     let result = pick_route_with_fingerprinting("/api/users", &routes);
     assert!(result.is_some());
-    if let Some((backend, fingerprinting, prefix, replace_path)) = result {
-        assert_eq!(backend, "backend-a:9000");
-        assert!(!fingerprinting);
-        assert_eq!(prefix, "/api");
-        assert_eq!(replace_path, &Some("".to_string()));
+    if let Some(route) = result {
+        assert_eq!(route.backend, "backend-a:9000");
+        assert!(!route.fingerprinting);
+        assert_eq!(route.matched_prefix, "/api");
+        assert_eq!(route.replace_path, Some(""));
     }
 }

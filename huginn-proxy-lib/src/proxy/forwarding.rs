@@ -15,6 +15,14 @@ use tokio::time::Instant;
 type HttpClient = Client<HttpConnector, Incoming>;
 type RespBody = BoxBody<bytes::Bytes, hyper::Error>;
 
+#[derive(Debug, Clone)]
+pub struct RouteMatch<'a> {
+    pub backend: &'a str,
+    pub fingerprinting: bool,
+    pub matched_prefix: &'a str,
+    pub replace_path: Option<&'a str>,
+}
+
 pub fn find_backend_config<'a>(
     address: &str,
     backends: &'a [crate::config::Backend],
@@ -83,7 +91,7 @@ pub async fn forward(
     keep_alive: &KeepAliveConfig,
     metrics: Option<Arc<Metrics>>,
     matched_prefix: &str,
-    replace_path: &Option<String>,
+    replace_path: Option<&str>,
 ) -> HttpResult<Response<RespBody>> {
     let start = Instant::now();
     let protocol = format!("{:?}", req.version());
@@ -185,9 +193,14 @@ pub fn pick_route<'a>(path: &str, routes: &'a [crate::config::Route]) -> Option<
 pub fn pick_route_with_fingerprinting<'a>(
     path: &str,
     routes: &'a [crate::config::Route],
-) -> Option<(&'a str, bool, &'a str, &'a Option<String>)> {
+) -> Option<RouteMatch<'a>> {
     routes
         .iter()
         .find(|r| path.starts_with(&r.prefix))
-        .map(|r| (r.backend.as_str(), r.fingerprinting, r.prefix.as_str(), &r.replace_path))
+        .map(|r| RouteMatch {
+            backend: r.backend.as_str(),
+            fingerprinting: r.fingerprinting,
+            matched_prefix: r.prefix.as_str(),
+            replace_path: r.replace_path.as_deref(),
+        })
 }

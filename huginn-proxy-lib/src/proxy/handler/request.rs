@@ -37,30 +37,28 @@ pub async fn handle_proxy_request(
 
     // Route selection (determine backend and fingerprinting configuration)
     let path = req.uri().path();
-    let (backend, should_fingerprint, matched_prefix, replace_path) =
-        if let Some((target, fingerprinting, prefix, replace)) =
-            crate::proxy::forwarding::pick_route_with_fingerprinting(path, &routes)
-        {
-            // Route matched: use route's fingerprinting configuration
-            let backend_str = target.to_string();
-            if let Some(ref m) = metrics {
-                m.backend_selections_total
-                    .add(1, &[KeyValue::new("backend", backend_str.clone())]);
-            }
-            (backend_str, fingerprinting, prefix, replace)
-        } else {
-            // No route matched: return 404
-            let error = HttpError::NoMatchingRoute;
-            if let Some(ref m) = metrics {
-                m.errors_total
-                    .add(1, &[KeyValue::new("error_type", error.error_type())]);
-            }
-            return Err(error);
-        };
+    let route_match = if let Some(route) =
+        crate::proxy::forwarding::pick_route_with_fingerprinting(path, &routes)
+    {
+        // Route matched: use route's fingerprinting configuration
+        if let Some(ref m) = metrics {
+            m.backend_selections_total
+                .add(1, &[KeyValue::new("backend", route.backend.to_string())]);
+        }
+        route
+    } else {
+        // No route matched: return 404
+        let error = HttpError::NoMatchingRoute;
+        if let Some(ref m) = metrics {
+            m.errors_total
+                .add(1, &[KeyValue::new("error_type", error.error_type())]);
+        }
+        return Err(error);
+    };
 
     // Extract and inject fingerprints first (fingerprints are extracted from TLS handshake/HTTP2 frames,
     // not from HTTP headers, so adding X-Forwarded-* headers won't affect fingerprint generation)
-    if should_fingerprint {
+    if route_match.fingerprinting {
         if let Some(hv) = tls_header {
             req.headers_mut()
                 .insert(HeaderName::from_static(names::TLS_JA4), hv);
@@ -98,12 +96,12 @@ pub async fn handle_proxy_request(
     // Forward request
     let result = forward(
         req,
-        backend.clone(),
+        route_match.backend.to_string(),
         &backends,
         keep_alive,
         metrics.clone(),
-        matched_prefix,
-        replace_path,
+        route_match.matched_prefix,
+        route_match.replace_path,
     )
     .await;
 
