@@ -37,6 +37,13 @@ pub struct Route {
     /// Default: true (fingerprinting enabled)
     #[serde(default = "default_true")]
     pub fingerprinting: bool,
+    /// Path that will be used to replace the "prefix" part of incoming url
+    /// If specified, the matched prefix will be replaced with this path before forwarding to backend
+    /// Example: prefix = "/api", replace_path = "/v1"
+    ///   Request: /api/users → Backend: /v1/users
+    /// Example: prefix = "/api", replace_path = "" (or "/")
+    ///   Request: /api/users → Backend: /users (path stripping)
+    pub replace_path: Option<String>,
 }
 
 /// TLS version configuration

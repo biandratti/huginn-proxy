@@ -37,25 +37,26 @@ pub async fn handle_proxy_request(
 
     // Route selection (determine backend and fingerprinting configuration)
     let path = req.uri().path();
-    let (backend, should_fingerprint) = if let Some((target, fingerprinting)) =
-        crate::proxy::forwarding::pick_route_with_fingerprinting(path, &routes)
-    {
-        // Route matched: use route's fingerprinting configuration
-        let backend_str = target.to_string();
-        if let Some(ref m) = metrics {
-            m.backend_selections_total
-                .add(1, &[KeyValue::new("backend", backend_str.clone())]);
-        }
-        (backend_str, fingerprinting)
-    } else {
-        // No route matched: return 404
-        let error = HttpError::NoMatchingRoute;
-        if let Some(ref m) = metrics {
-            m.errors_total
-                .add(1, &[KeyValue::new("error_type", error.error_type())]);
-        }
-        return Err(error);
-    };
+    let (backend, should_fingerprint, matched_prefix, replace_path) =
+        if let Some((target, fingerprinting, prefix, replace)) =
+            crate::proxy::forwarding::pick_route_with_fingerprinting(path, &routes)
+        {
+            // Route matched: use route's fingerprinting configuration
+            let backend_str = target.to_string();
+            if let Some(ref m) = metrics {
+                m.backend_selections_total
+                    .add(1, &[KeyValue::new("backend", backend_str.clone())]);
+            }
+            (backend_str, fingerprinting, prefix, replace)
+        } else {
+            // No route matched: return 404
+            let error = HttpError::NoMatchingRoute;
+            if let Some(ref m) = metrics {
+                m.errors_total
+                    .add(1, &[KeyValue::new("error_type", error.error_type())]);
+            }
+            return Err(error);
+        };
 
     // Extract and inject fingerprints first (fingerprints are extracted from TLS handshake/HTTP2 frames,
     // not from HTTP headers, so adding X-Forwarded-* headers won't affect fingerprint generation)
@@ -95,7 +96,16 @@ pub async fn handle_proxy_request(
     add_forwarded_headers(&mut req, peer, is_https);
 
     // Forward request
-    let result = forward(req, backend.clone(), &backends, keep_alive, metrics.clone()).await;
+    let result = forward(
+        req,
+        backend.clone(),
+        &backends,
+        keep_alive,
+        metrics.clone(),
+        matched_prefix,
+        replace_path,
+    )
+    .await;
 
     let duration = start.elapsed().as_secs_f64();
     let status_code = match &result {

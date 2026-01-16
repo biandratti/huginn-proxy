@@ -6,9 +6,22 @@ backends = [
 ]
 
 routes = [
+  # Basic route without path manipulation
   { prefix = "/api", backend = "backend-a:9000", fingerprinting = true },
+  
+  # Route without fingerprinting (for integration tests)
   { prefix = "/static", backend = "backend-b:9000", fingerprinting = false },
-  { prefix = "/",   backend = "backend-b:9000" }
+  
+  # Path stripping example (uncomment to test):
+  # Request: /static/css/style.css → Backend: /css/style.css
+  # { prefix = "/static", backend = "backend-b:9000", fingerprinting = false, replace_path = "" },
+  
+  # Path rewriting example (uncomment to test):
+  # Request: /old/path/file.txt → Backend: /new/path/file.txt
+  # { prefix = "/old", backend = "backend-a:9000", replace_path = "/new" },
+  
+  # Default route (no path manipulation)
+  { prefix = "/", backend = "backend-b:9000" }
 ]
 
 [tls]
