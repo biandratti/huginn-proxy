@@ -14,5 +14,6 @@ mod fingerprints;
 mod header_override;
 mod health_checks;
 mod load_balancing;
+mod path_manipulation;
 mod tls;
 mod tls_cipher_curve_config;
