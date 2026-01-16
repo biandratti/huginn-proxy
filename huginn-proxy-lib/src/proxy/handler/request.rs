@@ -67,7 +67,7 @@ pub async fn handle_proxy_request(
             if req.version() == Version::HTTP_2 {
                 let akamai = rx.borrow().clone();
                 debug!("Handler: akamai fingerprint: {:?}", akamai);
-                if let Some(hv) = akamai_header_value(&akamai) {
+                if let Some(hv) = akamai_header_value(akamai.as_ref()) {
                     debug!("Handler: injecting {} header: {:?}", names::HTTP2_AKAMAI, hv);
                     req.headers_mut()
                         .insert(HeaderName::from_static(names::HTTP2_AKAMAI), hv);

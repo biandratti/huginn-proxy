@@ -47,7 +47,7 @@ pub struct Route {
 }
 
 /// TLS version configuration
-#[derive(Debug, Deserialize, Clone, PartialEq, Eq)]
+#[derive(Debug, Deserialize, Clone, Copy, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum TlsVersion {
     /// TLS 1.2

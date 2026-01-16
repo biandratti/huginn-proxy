@@ -69,7 +69,7 @@ pub async fn handle_tls_connection(
                 );
 
                 let tls_header = if config.fingerprint_config.tls_enabled {
-                    tls_header_value(&ja4)
+                    tls_header_value(ja4.as_ref())
                 } else {
                     None
                 };

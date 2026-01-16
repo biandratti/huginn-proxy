@@ -67,7 +67,7 @@ pub fn validate_tls_options(options: &TlsOptions) -> Result<()> {
 }
 
 fn validate_tls_options_impl(options: &TlsOptions) -> Result<()> {
-    if let (Some(min), Some(max)) = (&options.min_version, &options.max_version) {
+    if let (Some(min), Some(max)) = (options.min_version, options.max_version) {
         if matches!((min, max), (TlsVersion::V1_3, TlsVersion::V1_2)) {
             return Err(ProxyError::Tls(
                 "min_version (1.3) cannot be greater than max_version (1.2)".to_string(),
