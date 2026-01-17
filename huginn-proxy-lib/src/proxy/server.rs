@@ -105,6 +105,7 @@ pub async fn run(config: Arc<Config>, metrics: Option<Arc<Metrics>>) -> Result<(
                 let tls_acceptor_clone = tls_acceptor.clone();
                 let fingerprint_config = config.fingerprint.clone();
                 let keep_alive_config = config.timeout.keep_alive.clone();
+                let security_headers = config.security.headers.clone();
                 let metrics_clone = metrics.clone();
 
                 let metrics_for_connection = metrics_clone.clone();
@@ -121,6 +122,7 @@ pub async fn run(config: Arc<Config>, metrics: Option<Arc<Metrics>>) -> Result<(
                                 routes: routes_clone,
                                 backends: backends_clone,
                                 keep_alive: keep_alive_config.clone(),
+                                security_headers: security_headers.clone(),
                                 metrics: metrics_for_connection,
                                 builder: builder_clone,
                             },
@@ -134,6 +136,7 @@ pub async fn run(config: Arc<Config>, metrics: Option<Arc<Metrics>>) -> Result<(
                                 routes: routes_clone,
                                 backends: backends_clone,
                                 keep_alive: keep_alive_config,
+                                security_headers: security_headers.clone(),
                                 metrics: metrics_for_connection,
                                 builder: builder_clone,
                             },

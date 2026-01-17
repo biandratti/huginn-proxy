@@ -27,6 +27,7 @@ pub async fn handle_proxy_request(
     tls_header: Option<hyper::header::HeaderValue>,
     fingerprint_rx: Option<watch::Receiver<Option<huginn_net_http::AkamaiFingerprint>>>,
     keep_alive: &KeepAliveConfig,
+    security_headers: &crate::config::SecurityHeaders,
     metrics: Option<Arc<Metrics>>,
     peer: std::net::SocketAddr,
     is_https: bool,
@@ -97,11 +98,15 @@ pub async fn handle_proxy_request(
     let result = forward(
         req,
         route_match.backend.to_string(),
-        &backends,
-        keep_alive,
-        metrics.clone(),
-        route_match.matched_prefix,
-        route_match.replace_path,
+        crate::proxy::forwarding::ForwardConfig {
+            backends: &backends,
+            keep_alive,
+            metrics: metrics.clone(),
+            matched_prefix: route_match.matched_prefix,
+            replace_path: route_match.replace_path,
+            security_headers: Some(security_headers),
+            is_https,
+        },
     )
     .await;
 

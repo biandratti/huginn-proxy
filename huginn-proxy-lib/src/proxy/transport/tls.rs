@@ -24,6 +24,7 @@ pub struct TlsConnectionConfig {
     pub routes: Vec<crate::config::Route>,
     pub backends: Arc<Vec<crate::config::Backend>>,
     pub keep_alive: crate::config::KeepAliveConfig,
+    pub security_headers: crate::config::SecurityHeaders,
     pub metrics: Option<Arc<Metrics>>,
     pub builder: ConnBuilder<TokioExecutor>,
 }
@@ -92,6 +93,7 @@ pub async fn handle_tls_connection(
                     let metrics = metrics_for_connection.clone();
                     let routes_template = config.routes.clone();
                     let keep_alive = config.keep_alive.clone();
+                    let security_headers = config.security_headers.clone();
 
                     let svc = hyper::service::service_fn(
                         move |req: hyper::Request<hyper::body::Incoming>| {
@@ -101,6 +103,7 @@ pub async fn handle_tls_connection(
                             let fingerprint_rx = fingerprint_rx.clone();
                             let metrics = metrics.clone();
                             let keep_alive = keep_alive.clone();
+                            let security_headers = security_headers.clone();
 
                             async move {
                                 let metrics_for_match = metrics.clone();
@@ -112,6 +115,7 @@ pub async fn handle_tls_connection(
                                         tls_header,
                                         Some(fingerprint_rx),
                                         &keep_alive, // Pass by reference
+                                        &security_headers,
                                         metrics,
                                         peer,
                                         true,
@@ -174,6 +178,7 @@ pub async fn handle_tls_connection(
                     let metrics = metrics_for_connection.clone();
                     let routes_template = config.routes.clone();
                     let keep_alive = config.keep_alive.clone();
+                    let security_headers = config.security_headers.clone();
 
                     let svc = hyper::service::service_fn(
                         move |req: hyper::Request<hyper::body::Incoming>| {
@@ -182,6 +187,7 @@ pub async fn handle_tls_connection(
                             let tls_header = tls_header.clone();
                             let metrics = metrics.clone();
                             let keep_alive = keep_alive.clone();
+                            let security_headers = security_headers.clone();
 
                             async move {
                                 let metrics_for_match = metrics.clone();
@@ -193,6 +199,7 @@ pub async fn handle_tls_connection(
                                         tls_header,
                                         None,
                                         &keep_alive, // Pass by reference
+                                        &security_headers,
                                         metrics,
                                         peer,
                                         true,

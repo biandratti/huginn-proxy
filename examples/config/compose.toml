@@ -75,6 +75,24 @@ timeout_secs = 60
 [security]
 max_connections = 512
 
+[security.headers]
+custom = [
+  { name = "X-Frame-Options", value = "DENY" },
+  { name = "X-Content-Type-Options", value = "nosniff" },
+  { name = "X-XSS-Protection", value = "1; mode=block" },
+  { name = "Referrer-Policy", value = "strict-origin-when-cross-origin" }
+]
+
+[security.headers.hsts]
+enabled = true
+max_age = 31536000
+include_subdomains = false
+preload = false
+
+[security.headers.csp]
+enabled = true
+policy = "default-src 'self'; script-src 'self' 'unsafe-inline'"
+
 [telemetry]
 metrics_port = 9090
 otel_log_level = "warn"
