@@ -239,11 +239,14 @@ pub struct SecurityConfig {
     /// Maximum number of concurrent connections allowed
     #[serde(default = "default_max_connections")]
     pub max_connections: usize,
+    /// Security headers configuration
+    #[serde(default)]
+    pub headers: SecurityHeaders,
 }
 
 impl Default for SecurityConfig {
     fn default() -> Self {
-        Self { max_connections: default_max_connections() }
+        Self { max_connections: default_max_connections(), headers: SecurityHeaders::default() }
     }
 }
 
@@ -323,6 +326,87 @@ fn default_log_level() -> String {
     "info".to_string()
 }
 
+/// Security headers configuration
+#[derive(Debug, Deserialize, Clone, PartialEq, Default)]
+pub struct SecurityHeaders {
+    /// Custom headers to add to all responses
+    #[serde(default)]
+    pub custom: Vec<CustomHeader>,
+    /// HSTS (HTTP Strict Transport Security) configuration
+    #[serde(default)]
+    pub hsts: HstsConfig,
+    /// CSP (Content Security Policy) configuration
+    #[serde(default)]
+    pub csp: CspConfig,
+}
+
+/// Custom header configuration
+#[derive(Debug, Deserialize, Clone, PartialEq)]
+pub struct CustomHeader {
+    /// Header name (e.g., "X-Frame-Options")
+    pub name: String,
+    /// Header value (e.g., "DENY")
+    pub value: String,
+}
+
+/// HSTS (HTTP Strict Transport Security) configuration
+///
+/// Reference: RFC 6797 - https://tools.ietf.org/html/rfc6797
+#[derive(Debug, Deserialize, Clone, PartialEq)]
+pub struct HstsConfig {
+    /// Enable HSTS (only applies to HTTPS connections)
+    #[serde(default)]
+    pub enabled: bool,
+    /// Max age in seconds (RFC 6797 requirement)
+    ///
+    /// Common values:
+    /// - 31536000 (1 year) - Recommended for production
+    /// - 63072000 (2 years) - Very secure
+    /// - 2592000 (30 days) - Minimum recommended
+    /// - 300 (5 minutes) - Testing only
+    ///
+    /// Default: 31536000 (1 year)
+    #[serde(default = "default_hsts_max_age")]
+    pub max_age: u64,
+    /// Include subdomains in HSTS policy (includeSubDomains directive)
+    #[serde(default)]
+    pub include_subdomains: bool,
+    /// Add preload directive for HSTS preload list submission
+    ///
+    /// Warning: Only enable if you plan to submit to https://hstspreload.org/
+    /// This is a permanent commitment and cannot be easily undone.
+    #[serde(default)]
+    pub preload: bool,
+}
+
+/// CSP (Content Security Policy) configuration
+#[derive(Debug, Deserialize, Clone, PartialEq)]
+pub struct CspConfig {
+    /// Enable CSP
+    #[serde(default)]
+    pub enabled: bool,
+    /// CSP policy string
+    #[serde(default = "default_csp_policy")]
+    pub policy: String,
+}
+
+impl Default for HstsConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            max_age: default_hsts_max_age(),
+            include_subdomains: false,
+            preload: false,
+        }
+    }
+}
+
+impl Default for CspConfig {
+    fn default() -> Self {
+        Self { enabled: false, policy: default_csp_policy() }
+    }
+}
+
 fn default_connect_timeout() -> u64 {
     5000
 }
@@ -333,6 +417,14 @@ fn default_idle_timeout() -> u64 {
 
 fn default_shutdown_timeout() -> u64 {
     30
+}
+
+fn default_hsts_max_age() -> u64 {
+    31536000 // 1 year
+}
+
+fn default_csp_policy() -> String {
+    "default-src 'self'".to_string()
 }
 
 fn default_tls_versions() -> Vec<TlsVersion> {

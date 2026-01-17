@@ -16,6 +16,7 @@ pub struct PlainConnectionConfig {
     pub routes: Vec<crate::config::Route>,
     pub backends: Arc<Vec<crate::config::Backend>>,
     pub keep_alive: crate::config::KeepAliveConfig,
+    pub security_headers: crate::config::SecurityHeaders,
     pub metrics: Option<Arc<Metrics>>,
     pub builder: ConnBuilder<TokioExecutor>,
 }
@@ -30,12 +31,14 @@ pub async fn handle_plain_connection(
     let metrics = config.metrics.clone();
     let routes_template = config.routes.clone();
     let keep_alive = config.keep_alive.clone();
+    let security_headers = config.security_headers.clone();
 
     let svc = hyper::service::service_fn(move |req: hyper::Request<hyper::body::Incoming>| {
         let routes = routes_template.clone();
         let backends = backends.clone();
         let metrics = metrics.clone();
         let keep_alive = keep_alive.clone();
+        let security_headers = security_headers.clone();
 
         async move {
             let metrics_for_match = metrics.clone();
@@ -45,7 +48,8 @@ pub async fn handle_plain_connection(
                 backends,
                 None,
                 None,
-                &keep_alive, // Pass by reference
+                &keep_alive,
+                &security_headers,
                 metrics,
                 peer,
                 false, // is_https = false for plain HTTP connections

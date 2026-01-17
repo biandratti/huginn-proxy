@@ -23,6 +23,16 @@ pub struct RouteMatch<'a> {
     pub replace_path: Option<&'a str>,
 }
 
+pub struct ForwardConfig<'a> {
+    pub backends: &'a [crate::config::Backend],
+    pub keep_alive: &'a KeepAliveConfig,
+    pub metrics: Option<Arc<Metrics>>,
+    pub matched_prefix: &'a str,
+    pub replace_path: Option<&'a str>,
+    pub security_headers: Option<&'a crate::config::SecurityHeaders>,
+    pub is_https: bool,
+}
+
 pub fn find_backend_config<'a>(
     address: &str,
     backends: &'a [crate::config::Backend],
@@ -87,11 +97,7 @@ pub fn create_client(http_version: Version, keep_alive: &KeepAliveConfig) -> Htt
 pub async fn forward(
     mut req: Request<Incoming>,
     backend: String,
-    backends: &[crate::config::Backend],
-    keep_alive: &KeepAliveConfig,
-    metrics: Option<Arc<Metrics>>,
-    matched_prefix: &str,
-    replace_path: Option<&str>,
+    config: ForwardConfig<'_>,
 ) -> HttpResult<Response<RespBody>> {
     let start = Instant::now();
     let protocol = format!("{:?}", req.version());
@@ -104,9 +110,9 @@ pub async fn forward(
         .as_bytes();
 
     // Replace some parts of path if replace_path is enabled for chosen upstream
-    let new_pq = match replace_path {
+    let new_pq = match config.replace_path {
         Some(new_path) => {
-            let matched_path: &[u8] = matched_prefix.as_bytes();
+            let matched_path: &[u8] = config.matched_prefix.as_bytes();
             if matched_path.is_empty() || org_pq.len() < matched_path.len() {
                 return Err(HttpError::InvalidUri("Path and query is broken".to_string()));
             }
@@ -128,7 +134,7 @@ pub async fn forward(
         .map_err(|e| HttpError::InvalidUri(e.to_string()))?;
 
     let client_version = req.version();
-    let backend_config = find_backend_config(&backend, backends);
+    let backend_config = find_backend_config(&backend, config.backends);
     let target_version = determine_http_version(backend_config, client_version, false);
 
     if req.version() != target_version {
@@ -139,15 +145,22 @@ pub async fn forward(
     parts.uri = uri;
     let out_req = Request::from_parts(parts, body);
 
-    let client = create_client(target_version, keep_alive);
+    let client = create_client(target_version, config.keep_alive);
     let result = client.request(out_req).await;
 
     let duration = start.elapsed().as_secs_f64();
 
     match result {
-        Ok(resp) => {
+        Ok(mut resp) => {
             let status_code = resp.status().as_u16();
-            if let Some(ref m) = metrics {
+
+            crate::security::apply_security_headers(
+                &mut resp,
+                config.security_headers,
+                config.is_https,
+            );
+
+            if let Some(ref m) = config.metrics {
                 m.backend_requests_total.add(
                     1,
                     &[
@@ -169,7 +182,7 @@ pub async fn forward(
         }
         Err(e) => {
             let error = HttpError::FailedToGetResponseFromBackend(e.to_string());
-            if let Some(ref m) = metrics {
+            if let Some(ref m) = config.metrics {
                 m.backend_errors_total.add(
                     1,
                     &[

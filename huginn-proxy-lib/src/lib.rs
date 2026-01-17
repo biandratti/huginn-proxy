@@ -5,6 +5,7 @@ pub mod error;
 pub mod fingerprinting;
 pub mod load_balancing;
 pub mod proxy;
+pub mod security;
 pub mod telemetry;
 pub mod tls;
 
