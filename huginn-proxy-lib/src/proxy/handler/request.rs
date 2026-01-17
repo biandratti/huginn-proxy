@@ -18,6 +18,23 @@ use http::StatusCode;
 
 type RespBody = http_body_util::combinators::BoxBody<bytes::Bytes, hyper::Error>;
 
+fn check_ip_access(
+    peer: std::net::SocketAddr,
+    ip_filter: &crate::config::IpFilterConfig,
+    metrics: Option<&Arc<Metrics>>,
+) -> HttpResult<()> {
+    let client_ip = peer.ip();
+    if !crate::security::is_ip_allowed(client_ip, ip_filter) {
+        debug!(?peer, "IP blocked by filter");
+        if let Some(m) = metrics {
+            m.errors_total
+                .add(1, &[KeyValue::new("error_type", "ip_blocked")]);
+        }
+        return Err(HttpError::Forbidden);
+    }
+    Ok(())
+}
+
 /// Handle request routing and forwarding
 #[allow(clippy::too_many_arguments)]
 pub async fn handle_proxy_request(
@@ -28,6 +45,7 @@ pub async fn handle_proxy_request(
     fingerprint_rx: Option<watch::Receiver<Option<huginn_net_http::AkamaiFingerprint>>>,
     keep_alive: &KeepAliveConfig,
     security_headers: &crate::config::SecurityHeaders,
+    ip_filter: &crate::config::IpFilterConfig,
     metrics: Option<Arc<Metrics>>,
     peer: std::net::SocketAddr,
     is_https: bool,
@@ -36,7 +54,8 @@ pub async fn handle_proxy_request(
     let method = req.method().to_string();
     let protocol = format!("{:?}", req.version());
 
-    // Route selection (determine backend and fingerprinting configuration)
+    check_ip_access(peer, ip_filter, metrics.as_ref())?;
+
     let path = req.uri().path();
     let route_match = if let Some(route) =
         crate::proxy::forwarding::pick_route_with_fingerprinting(path, &routes)

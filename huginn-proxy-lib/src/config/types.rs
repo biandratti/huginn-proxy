@@ -1,3 +1,4 @@
+use ipnet::IpNet;
 use serde::Deserialize;
 use std::net::SocketAddr;
 
@@ -242,11 +243,18 @@ pub struct SecurityConfig {
     /// Security headers configuration
     #[serde(default)]
     pub headers: SecurityHeaders,
+    /// IP filtering (ACL) configuration
+    #[serde(default)]
+    pub ip_filter: IpFilterConfig,
 }
 
 impl Default for SecurityConfig {
     fn default() -> Self {
-        Self { max_connections: default_max_connections(), headers: SecurityHeaders::default() }
+        Self {
+            max_connections: default_max_connections(),
+            headers: SecurityHeaders::default(),
+            ip_filter: IpFilterConfig::default(),
+        }
     }
 }
 
@@ -425,6 +433,63 @@ fn default_hsts_max_age() -> u64 {
 
 fn default_csp_policy() -> String {
     "default-src 'self'".to_string()
+}
+
+/// IP filtering mode
+#[derive(Debug, Deserialize, Clone, Copy, PartialEq, Eq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum IpFilterMode {
+    /// IP filtering is disabled (allow all)
+    #[default]
+    Disabled,
+    /// Only allow IPs in the allowlist
+    Allowlist,
+    /// Block IPs in the denylist
+    Denylist,
+}
+
+/// IP filtering (ACL) configuration
+#[derive(Debug, Deserialize, Clone, PartialEq)]
+pub struct IpFilterConfig {
+    /// Filtering mode
+    #[serde(default)]
+    pub mode: IpFilterMode,
+    /// Allowlist: Only these IPs/networks are allowed (when mode = "allowlist")
+    /// Supports CIDR notation: ["127.0.0.1/32", "192.168.1.0/24", "::1/128"]
+    #[serde(default)]
+    #[serde(deserialize_with = "deserialize_ip_networks")]
+    pub allowlist: Vec<IpNet>,
+    /// Denylist: These IPs/networks are blocked (when mode = "denylist")
+    /// Supports CIDR notation: ["10.0.0.0/8", "172.16.0.0/12"]
+    #[serde(default)]
+    #[serde(deserialize_with = "deserialize_ip_networks")]
+    pub denylist: Vec<IpNet>,
+}
+
+impl Default for IpFilterConfig {
+    fn default() -> Self {
+        Self { mode: IpFilterMode::Disabled, allowlist: vec![], denylist: vec![] }
+    }
+}
+
+/// Custom deserializer for IP networks that handles parsing errors gracefully
+fn deserialize_ip_networks<'de, D>(deserializer: D) -> Result<Vec<IpNet>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let strings: Vec<String> = Vec::deserialize(deserializer)?;
+    let mut networks = Vec::new();
+
+    for s in strings {
+        match s.parse::<IpNet>() {
+            Ok(net) => networks.push(net),
+            Err(e) => {
+                return Err(serde::de::Error::custom(format!("Invalid IP network '{}': {}", s, e)));
+            }
+        }
+    }
+
+    Ok(networks)
 }
 
 fn default_tls_versions() -> Vec<TlsVersion> {

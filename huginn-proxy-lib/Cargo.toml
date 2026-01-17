@@ -14,6 +14,7 @@ huginn-net-http.workspace = true
 huginn-net-tls.workspace = true
 hyper.workspace = true
 hyper-util.workspace = true
+ipnet.workspace = true
 notify.workspace = true
 opentelemetry.workspace = true
 opentelemetry-prometheus.workspace = true
