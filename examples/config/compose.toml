@@ -75,6 +75,25 @@ timeout_secs = 60
 [security]
 max_connections = 512
 
+[security.ip_filter]
+mode = "disabled"
+
+# Allowlist example (only these IPs can connect):
+# mode = "allowlist"
+# allowlist = [
+#   "127.0.0.1/32",      # Localhost IPv4
+#   "::1/128",           # Localhost IPv6
+#   "192.168.1.0/24",    # Private network
+#   "10.0.0.0/8"         # Private network (large range)
+# ]
+
+# Denylist example (block these IPs):
+# mode = "denylist"
+# denylist = [
+#   "192.168.1.100/32",  # Block specific IP
+#   "10.0.0.0/8"         # Block entire network
+# ]
+
 [security.headers]
 custom = [
   { name = "X-Frame-Options", value = "DENY" },
