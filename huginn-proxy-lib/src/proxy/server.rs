@@ -39,6 +39,13 @@ pub async fn run(config: Arc<Config>, metrics: Option<Arc<Metrics>>) -> Result<(
         None
     };
 
+    let security_context = crate::proxy::SecurityContext::new(
+        config.security.headers.clone(),
+        config.security.ip_filter.clone(),
+        config.security.rate_limit.clone(),
+        rate_limit_manager,
+    );
+
     // Setup TLS with hot reload support
     let tls_acceptor = match &config.tls {
         Some(tls_config) => {
@@ -114,10 +121,7 @@ pub async fn run(config: Arc<Config>, metrics: Option<Arc<Metrics>>) -> Result<(
                 let tls_acceptor_clone = tls_acceptor.clone();
                 let fingerprint_config = config.fingerprint.clone();
                 let keep_alive_config = config.timeout.keep_alive.clone();
-                let security_headers = config.security.headers.clone();
-                let ip_filter = config.security.ip_filter.clone();
-                let rate_limit_config = config.security.rate_limit.clone();
-                let rate_limit_manager_clone = rate_limit_manager.clone();
+                let security = security_context.clone();
                 let metrics_clone = metrics.clone();
 
                 let metrics_for_connection = metrics_clone.clone();
@@ -134,10 +138,7 @@ pub async fn run(config: Arc<Config>, metrics: Option<Arc<Metrics>>) -> Result<(
                                 routes: routes_clone,
                                 backends: backends_clone,
                                 keep_alive: keep_alive_config.clone(),
-                                security_headers: security_headers.clone(),
-                                ip_filter: ip_filter.clone(),
-                                rate_limit_config: rate_limit_config.clone(),
-                                rate_limit_manager: rate_limit_manager_clone.clone(),
+                                security: security.clone(),
                                 metrics: metrics_for_connection,
                                 builder: builder_clone,
                             },
@@ -151,10 +152,7 @@ pub async fn run(config: Arc<Config>, metrics: Option<Arc<Metrics>>) -> Result<(
                                 routes: routes_clone,
                                 backends: backends_clone,
                                 keep_alive: keep_alive_config,
-                                security_headers: security_headers.clone(),
-                                ip_filter: ip_filter.clone(),
-                                rate_limit_config: rate_limit_config.clone(),
-                                rate_limit_manager: rate_limit_manager_clone.clone(),
+                                security: security.clone(),
                                 metrics: metrics_for_connection,
                                 builder: builder_clone,
                             },

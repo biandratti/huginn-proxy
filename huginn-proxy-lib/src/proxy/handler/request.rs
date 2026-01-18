@@ -45,10 +45,7 @@ pub async fn handle_proxy_request(
     tls_header: Option<hyper::header::HeaderValue>,
     fingerprint_rx: Option<watch::Receiver<Option<huginn_net_http::AkamaiFingerprint>>>,
     keep_alive: &KeepAliveConfig,
-    security_headers: &crate::config::SecurityHeaders,
-    ip_filter: &crate::config::IpFilterConfig,
-    rate_limit_config: &crate::config::RateLimitConfig,
-    rate_limit_manager: Option<&std::sync::Arc<crate::security::RateLimitManager>>,
+    security: &crate::proxy::SecurityContext,
     metrics: Option<Arc<Metrics>>,
     peer: std::net::SocketAddr,
     is_https: bool,
@@ -57,7 +54,7 @@ pub async fn handle_proxy_request(
     let method = req.method().to_string();
     let protocol = format!("{:?}", req.version());
 
-    check_ip_access(peer, ip_filter, metrics.as_ref())?;
+    check_ip_access(peer, &security.ip_filter, metrics.as_ref())?;
 
     let path = req.uri().path();
     let route_match = if let Some(route) =
@@ -80,8 +77,8 @@ pub async fn handle_proxy_request(
     };
 
     if let Some(rate_limited_response) = check_rate_limit(
-        rate_limit_manager,
-        rate_limit_config,
+        security.rate_limit_manager.as_ref(),
+        &security.rate_limit_config,
         &route_match,
         peer,
         req.headers(),
@@ -137,7 +134,7 @@ pub async fn handle_proxy_request(
             metrics: metrics.clone(),
             matched_prefix: route_match.matched_prefix,
             replace_path: route_match.replace_path,
-            security_headers: Some(security_headers),
+            security_headers: Some(&security.headers),
             is_https,
         },
     )
