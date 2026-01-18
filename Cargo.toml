@@ -12,6 +12,7 @@ repository = "https://github.com/biandratti/huginn-proxy"
 homepage = "https://github.com/biandratti/huginn-proxy"
 
 [workspace.dependencies]
+ahash = "0.8.12"
 async-trait = "0.1.89"
 bytes = "1.11.0"
 criterion = { version = "0.8.1", features = ["html_reports"] }

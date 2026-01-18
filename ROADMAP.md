@@ -13,9 +13,6 @@
 - [ ] Connection pooling for backends
 
 ### Security & TLS
-- [ ] IP filtering
-- [ ] Rate limiting
-- [ ] Security headers (HSTS, CSP, etc.)
 - [ ] mTLS support
 - [ ] OCSP stapling
 - [ ] Session resumption
