@@ -10,7 +10,8 @@ fn test_path_stripping_basic() {
         prefix: "/api".to_string(),
         backend: "backend:9000".to_string(),
         fingerprinting: true,
-        replace_path: Some("".to_string()), // Empty string means strip prefix
+        replace_path: Some("".to_string()),
+        rate_limit: None, // Empty string means strip prefix
     }];
 
     let result = pick_route_with_fingerprinting("/api/users", &routes);
@@ -31,6 +32,7 @@ fn test_path_stripping_with_query_params() {
         backend: "backend:9000".to_string(),
         fingerprinting: true,
         replace_path: Some("".to_string()),
+        rate_limit: None,
     }];
 
     let result = pick_route_with_fingerprinting("/api/users?id=123&name=test", &routes);
@@ -53,6 +55,7 @@ fn test_path_rewriting_basic() {
         backend: "backend:9000".to_string(),
         fingerprinting: true,
         replace_path: Some("/replacing/path1".to_string()),
+        rate_limit: None,
     }];
 
     let result = pick_route_with_fingerprinting("/maps/org/any.ext", &routes);
@@ -73,6 +76,7 @@ fn test_path_rewriting_with_versioned_api() {
         backend: "backend:9000".to_string(),
         fingerprinting: true,
         replace_path: Some("/v1/api".to_string()),
+        rate_limit: None,
     }];
 
     let result = pick_route_with_fingerprinting("/api/users", &routes);
@@ -93,6 +97,7 @@ fn test_no_path_manipulation() {
         backend: "backend:9000".to_string(),
         fingerprinting: true,
         replace_path: None,
+        rate_limit: None,
     }];
 
     let result = pick_route_with_fingerprinting("/api/users", &routes);
@@ -112,6 +117,7 @@ fn test_path_manipulation_with_nested_paths() {
         backend: "backend:9000".to_string(),
         fingerprinting: true,
         replace_path: Some("/backend/v1".to_string()),
+        rate_limit: None,
     }];
 
     let result = pick_route_with_fingerprinting("/api/v1/users/123", &routes);
@@ -131,6 +137,7 @@ fn test_path_manipulation_root_path() {
         backend: "backend:9000".to_string(),
         fingerprinting: true,
         replace_path: Some("/api".to_string()),
+        rate_limit: None,
     }];
 
     let result = pick_route_with_fingerprinting("/users", &routes);
@@ -152,12 +159,14 @@ fn test_multiple_routes_matching_priority() {
             backend: "backend-v1:9000".to_string(),
             fingerprinting: true,
             replace_path: Some("/v1".to_string()),
+            rate_limit: None,
         },
         Route {
             prefix: "/api".to_string(),
             backend: "backend-api:9000".to_string(),
             fingerprinting: true,
             replace_path: Some("/".to_string()),
+            rate_limit: None,
         },
     ];
 
@@ -181,6 +190,7 @@ fn test_path_manipulation_exact_prefix_match() {
         backend: "backend:9000".to_string(),
         fingerprinting: true,
         replace_path: Some("/v1".to_string()),
+        rate_limit: None,
     }];
 
     let result = pick_route_with_fingerprinting("/api", &routes);
@@ -201,6 +211,7 @@ fn test_path_stripping_to_root() {
         backend: "backend:9000".to_string(),
         fingerprinting: true,
         replace_path: Some("".to_string()),
+        rate_limit: None,
     }];
 
     let result = pick_route_with_fingerprinting("/api/health", &routes);
@@ -221,6 +232,7 @@ fn test_path_manipulation_with_special_characters() {
         backend: "backend:9000".to_string(),
         fingerprinting: true,
         replace_path: Some("/v1".to_string()),
+        rate_limit: None,
     }];
 
     let result = pick_route_with_fingerprinting("/api/users%20info", &routes);

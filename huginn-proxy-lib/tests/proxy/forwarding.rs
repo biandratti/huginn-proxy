@@ -118,18 +118,21 @@ fn test_pick_route() {
             backend: "backend-a:9000".to_string(),
             fingerprinting: true,
             replace_path: None,
+            rate_limit: None,
         },
         Route {
             prefix: "/static".to_string(),
             backend: "backend-b:9000".to_string(),
             fingerprinting: true,
             replace_path: None,
+            rate_limit: None,
         },
         Route {
             prefix: "/".to_string(),
             backend: "backend-c:9000".to_string(),
             fingerprinting: true,
             replace_path: None,
+            rate_limit: None,
         },
     ];
 
@@ -203,6 +206,7 @@ fn test_pick_route_with_fingerprinting_basic() {
         backend: "backend-a:9000".to_string(),
         fingerprinting: true,
         replace_path: None,
+        rate_limit: None,
     }];
 
     let result = pick_route_with_fingerprinting("/api/users", &routes);
@@ -224,6 +228,7 @@ fn test_pick_route_with_fingerprinting_with_replace_path() {
         backend: "backend-a:9000".to_string(),
         fingerprinting: true,
         replace_path: Some("/v1".to_string()),
+        rate_limit: None,
     }];
 
     let result = pick_route_with_fingerprinting("/api/users", &routes);
@@ -245,7 +250,8 @@ fn test_pick_route_with_fingerprinting_path_stripping() {
         prefix: "/api".to_string(),
         backend: "backend-a:9000".to_string(),
         fingerprinting: false,
-        replace_path: Some("".to_string()), // Strip prefix
+        replace_path: Some("".to_string()),
+        rate_limit: None, // Strip prefix
     }];
 
     let result = pick_route_with_fingerprinting("/api/users", &routes);

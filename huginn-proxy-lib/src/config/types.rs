@@ -45,6 +45,10 @@ pub struct Route {
     /// Example: prefix = "/api", replace_path = "" (or "/")
     ///   Request: /api/users → Backend: /users (path stripping)
     pub replace_path: Option<String>,
+    /// Rate limiting configuration for this route (optional)
+    /// If not specified, uses global rate limit settings
+    #[serde(default)]
+    pub rate_limit: Option<RouteRateLimitConfig>,
 }
 
 /// TLS version configuration
@@ -246,6 +250,9 @@ pub struct SecurityConfig {
     /// IP filtering (ACL) configuration
     #[serde(default)]
     pub ip_filter: IpFilterConfig,
+    /// Rate limiting configuration
+    #[serde(default)]
+    pub rate_limit: RateLimitConfig,
 }
 
 impl Default for SecurityConfig {
@@ -254,6 +261,7 @@ impl Default for SecurityConfig {
             max_connections: default_max_connections(),
             headers: SecurityHeaders::default(),
             ip_filter: IpFilterConfig::default(),
+            rate_limit: RateLimitConfig::default(),
         }
     }
 }
@@ -528,4 +536,100 @@ impl Default for TlsOptions {
             curve_preferences: default_curve_preferences(),
         }
     }
+}
+
+/// Rate limiting configuration
+#[derive(Debug, Deserialize, Clone, PartialEq)]
+pub struct RateLimitConfig {
+    /// Enable rate limiting
+    /// Default: false
+    #[serde(default)]
+    pub enabled: bool,
+    /// Maximum requests per second
+    /// Default: 1000
+    #[serde(default = "default_requests_per_second")]
+    pub requests_per_second: u32,
+    /// Burst size (maximum requests in a single window)
+    /// Default: 2000 (2x requests_per_second)
+    #[serde(default = "default_burst")]
+    pub burst: u32,
+    /// Time window in seconds
+    /// Default: 1
+    #[serde(default = "default_window_seconds")]
+    pub window_seconds: u64,
+    /// Key extraction strategy
+    /// Default: "ip"
+    #[serde(default = "default_limit_by")]
+    pub limit_by: LimitBy,
+    /// Custom header name for "header" limit_by mode
+    /// Required when limit_by = "header"
+    pub limit_by_header: Option<String>,
+}
+
+impl Default for RateLimitConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            requests_per_second: default_requests_per_second(),
+            burst: default_burst(),
+            window_seconds: default_window_seconds(),
+            limit_by: default_limit_by(),
+            limit_by_header: None,
+        }
+    }
+}
+
+/// Per-route rate limiting configuration
+#[derive(Debug, Deserialize, Clone, PartialEq)]
+pub struct RouteRateLimitConfig {
+    /// Enable rate limiting for this route
+    /// If not specified, inherits from global config
+    #[serde(default)]
+    pub enabled: Option<bool>,
+    /// Maximum requests per second for this route
+    /// If not specified, uses global config
+    pub requests_per_second: Option<u32>,
+    /// Burst size for this route
+    /// If not specified, uses global config
+    pub burst: Option<u32>,
+    /// Key extraction strategy for this route
+    /// If not specified, uses global config
+    pub limit_by: Option<LimitBy>,
+    /// Custom header name for "header" limit_by mode
+    /// If not specified, uses global config
+    pub limit_by_header: Option<String>,
+}
+
+/// Rate limiting key extraction strategy
+#[derive(Debug, Deserialize, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum LimitBy {
+    /// Rate limit by client IP address
+    /// Extracts IP from X-Forwarded-For or connection IP
+    Ip,
+    /// Rate limit by custom header value
+    /// Requires limit_by_header to be specified
+    Header,
+    /// Rate limit by route path
+    /// All clients share the same limit for a route
+    Route,
+    /// Rate limit by combination of IP and route
+    /// Provides per-IP limits that are also route-specific
+    Combined,
+}
+
+fn default_requests_per_second() -> u32 {
+    1000
+}
+
+fn default_burst() -> u32 {
+    2000
+}
+
+fn default_window_seconds() -> u64 {
+    1
+}
+
+fn default_limit_by() -> LimitBy {
+    LimitBy::Ip
 }

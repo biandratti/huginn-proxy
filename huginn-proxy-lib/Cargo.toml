@@ -6,6 +6,7 @@ license = "MIT OR Apache-2.0"
 publish = false
 
 [dependencies]
+ahash.workspace = true
 async-trait.workspace = true
 bytes.workspace = true
 http.workspace = true

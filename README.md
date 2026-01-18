@@ -17,6 +17,8 @@
 
 **Huginn Proxy** is a reverse proxy built in Rust that combines traditional load balancing and request forwarding with advanced passive fingerprinting capabilities. It leverages the [Huginn Net](https://github.com/biandratti/huginn-net) fingerprinting libraries to extract TLS (JA4) and HTTP/2 (Akamai) fingerprints from client connections, injecting them as headers for downstream services.
 
+Inspired by production-grade proxies like [Pingora](https://github.com/cloudflare/pingora), [Sozu](https://github.com/sozu-proxy/sozu), and [rust-rpxy](https://github.com/junkurihara/rust-rpxy).
+
 > **Note:** This project is currently in active development.
 
 ## Quick Start
@@ -74,6 +76,7 @@ docker run -v /path/to/config.toml:/config.toml huginn-proxy /config.toml
 - **HTTP/1.x & HTTP/2** - Full support for both protocol versions
 - **Load Balancing** - Round-robin load balancing across multiple backends
 - **Path-based Routing** - Route matching with prefix support, path stripping, and path rewriting
+- **Rate Limiting** - Token bucket algorithm with multiple strategies (IP, Header, Route, Combined), global and per-route limits
 - **Security Headers** - HSTS, CSP, X-Frame-Options, and custom headers
 - **IP Filtering (ACL)** - Allowlist/denylist with CIDR notation support
 - **TLS Termination** - Server-side TLS with ALPN, certificate hot reload (single certificate per configuration)
@@ -121,36 +124,10 @@ All endpoints return JSON responses (except `/metrics` which returns Prometheus 
 
 ## Examples
 
-### Basic Configuration
-
-```toml
-listen = "0.0.0.0:7000"
-
-backends = [
-  { address = "backend-a:8080", http_version = "preserve" },
-  { address = "backend-b:8080", http_version = "preserve" }
-]
-
-routes = [
-  # Basic routing with fingerprinting
-  { prefix = "/api", backend = "backend-a:8080", fingerprinting = true },
-  
-  # Path stripping: /static/css/style.css → backend receives /css/style.css
-  { prefix = "/static", backend = "backend-b:8080", fingerprinting = false, replace_path = "" },
-  
-  # Path rewriting: /old/path/file.txt → backend receives /new/path/file.txt
-  { prefix = "/old", backend = "backend-a:8080", replace_path = "/new" }
-]
-
-[tls]
-cert_path = "/path/to/cert.pem"
-key_path = "/path/to/key.pem"
-alpn = ["h2", "http/1.1"]
-```
-
-### Docker Compose
-
-See [`examples/docker-compose.yml`](examples/docker-compose.yml) for a complete setup with TLS termination, multiple backends, and path-based routing.
+See the [`examples/`](examples/) directory for:
+- Docker Compose setup with TLS termination
+- Rate limiting configurations
+- Advanced routing examples
 
 ## Performance
 

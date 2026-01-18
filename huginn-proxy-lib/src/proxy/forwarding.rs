@@ -21,6 +21,7 @@ pub struct RouteMatch<'a> {
     pub fingerprinting: bool,
     pub matched_prefix: &'a str,
     pub replace_path: Option<&'a str>,
+    pub rate_limit: Option<&'a crate::config::RouteRateLimitConfig>,
 }
 
 pub struct ForwardConfig<'a> {
@@ -215,5 +216,6 @@ pub fn pick_route_with_fingerprinting<'a>(
             fingerprinting: r.fingerprinting,
             matched_prefix: r.prefix.as_str(),
             replace_path: r.replace_path.as_deref(),
+            rate_limit: r.rate_limit.as_ref(),
         })
 }
