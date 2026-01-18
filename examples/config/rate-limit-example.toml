@@ -6,10 +6,10 @@ listen = "0.0.0.0:7000"
 
 # Backend servers
 [[backends]]
-address = "backend-1:9000"
+address = "backend-a:9000"
 
 [[backends]]
-address = "backend-2:9000"
+address = "backend-b:9000"
 
 # Security configuration with rate limiting
 [security]
@@ -37,7 +37,7 @@ limit_by = "ip"             # Rate limit by client IP address
 # Routes with per-route rate limiting overrides
 [[routes]]
 prefix = "/api"
-backend = "backend-1:9000"
+backend = "backend-a:9000"
 fingerprinting = true
 
 # Override global rate limit for this route
@@ -49,7 +49,7 @@ limit_by = "combined"       # Per-IP, per-route limiting
 
 [[routes]]
 prefix = "/public"
-backend = "backend-2:9000"
+backend = "backend-b:9000"
 fingerprinting = false
 
 # Disable rate limiting for this specific route
@@ -58,7 +58,7 @@ enabled = false
 
 [[routes]]
 prefix = "/api/premium"
-backend = "backend-1:9000"
+backend = "backend-a:9000"
 
 # Higher limits for premium endpoints
 [routes.rate_limit]
@@ -70,7 +70,7 @@ limit_by_header = "X-API-Key"  # Rate limit by API key
 
 [[routes]]
 prefix = "/health"
-backend = "backend-1:9000"
+backend = "backend-a:9000"
 
 # No rate limiting for health check endpoint
 [routes.rate_limit]
@@ -78,8 +78,8 @@ enabled = false
 
 # TLS configuration (optional)
 [tls]
-cert_path = "../certs/cert.pem"
-key_path = "../certs/key.pem"
+cert_path = "/config/certs/server.crt"
+key_path = "/config/certs/server.key"
 alpn = ["h2", "http/1.1"]
 
 # Logging configuration
