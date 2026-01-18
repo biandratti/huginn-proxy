@@ -128,7 +128,7 @@ impl Rate {
     /// // ... after 1 second ...
     /// assert_eq!(rate.rate(&"user-123"), 5.0); // 5 requests per second
     /// ```
-    pub fn rate<T: Hash>(&self, key: &T) -> f64 {
+    pub fn rate<T: Hash + ?Sized>(&self, key: &T) -> f64 {
         let past_ms = self.maybe_reset();
         if past_ms >= self.reset_interval_ms.saturating_mul(2) {
             // already missed 2 intervals, no data, just report 0 as a short cut
@@ -172,7 +172,7 @@ impl Rate {
     ///     println!("Rate limit exceeded!");
     /// }
     /// ```
-    pub fn observe<T: Hash>(&self, key: &T, events: isize) -> isize {
+    pub fn observe<T: Hash + ?Sized>(&self, key: &T, events: isize) -> isize {
         self.maybe_reset();
         self.current(self.red_or_blue()).incr(key, events)
     }

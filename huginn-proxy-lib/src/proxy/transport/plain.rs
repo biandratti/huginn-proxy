@@ -18,6 +18,8 @@ pub struct PlainConnectionConfig {
     pub keep_alive: crate::config::KeepAliveConfig,
     pub security_headers: crate::config::SecurityHeaders,
     pub ip_filter: crate::config::IpFilterConfig,
+    pub rate_limit_config: crate::config::RateLimitConfig,
+    pub rate_limit_manager: Option<Arc<crate::security::RateLimitManager>>,
     pub metrics: Option<Arc<Metrics>>,
     pub builder: ConnBuilder<TokioExecutor>,
 }
@@ -34,6 +36,8 @@ pub async fn handle_plain_connection(
     let keep_alive = config.keep_alive.clone();
     let security_headers = config.security_headers.clone();
     let ip_filter = config.ip_filter.clone();
+    let rate_limit_config = config.rate_limit_config.clone();
+    let rate_limit_manager = config.rate_limit_manager.clone();
 
     let svc = hyper::service::service_fn(move |req: hyper::Request<hyper::body::Incoming>| {
         let routes = routes_template.clone();
@@ -42,6 +46,8 @@ pub async fn handle_plain_connection(
         let keep_alive = keep_alive.clone();
         let security_headers = security_headers.clone();
         let ip_filter = ip_filter.clone();
+        let rate_limit_config = rate_limit_config.clone();
+        let rate_limit_manager = rate_limit_manager.clone();
 
         async move {
             let metrics_for_match = metrics.clone();
@@ -54,6 +60,8 @@ pub async fn handle_plain_connection(
                 &keep_alive,
                 &security_headers,
                 &ip_filter,
+                &rate_limit_config,
+                rate_limit_manager.as_ref(),
                 metrics,
                 peer,
                 false, // is_https = false for plain HTTP connections

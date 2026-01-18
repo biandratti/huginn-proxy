@@ -35,6 +35,13 @@ docker compose -f examples/docker-compose.yml up --build
 - **Backend B**: `http://localhost:9001/` (default routes)
 
 
+### Configuration Examples
+
+The `config/` directory contains various configuration examples:
+
+- **compose.toml**: Basic configuration for Docker Compose
+- **rate-limit-example.toml**: Comprehensive rate limiting configuration with examples and best practices
+
 ### Example Requests
 
 ```bash
@@ -44,4 +51,8 @@ curl -k https://localhost:7000/api/test
 # Metrics and health endpoints
 curl http://localhost:9090/metrics
 curl http://localhost:9090/health
+
+# Test rate limiting (requires rate-limit-example.toml)
+for i in {1..100}; do curl -k https://localhost:7000/api/test; done
+# Should receive 429 Too Many Requests after exceeding the limit
 ```

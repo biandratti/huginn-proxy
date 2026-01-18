@@ -60,9 +60,11 @@
 
 mod estimator;
 mod limiter;
+mod manager;
 mod rate;
 
 pub use limiter::{RateLimitResult, RateLimiter};
+pub use manager::{extract_rate_limit_key, RateLimitManager};
 
 pub use rate::Rate;
 

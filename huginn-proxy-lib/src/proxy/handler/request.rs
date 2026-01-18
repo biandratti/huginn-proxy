@@ -12,6 +12,7 @@ use crate::config::{Backend, KeepAliveConfig, Route};
 use crate::fingerprinting::names;
 use crate::proxy::forwarding::forward;
 use crate::proxy::handler::headers::{add_forwarded_headers, akamai_header_value};
+use crate::proxy::handler::rate_limit_validation::check_rate_limit;
 use crate::proxy::http_result::{HttpError, HttpResult};
 use crate::telemetry::Metrics;
 use http::StatusCode;
@@ -46,6 +47,8 @@ pub async fn handle_proxy_request(
     keep_alive: &KeepAliveConfig,
     security_headers: &crate::config::SecurityHeaders,
     ip_filter: &crate::config::IpFilterConfig,
+    rate_limit_config: &crate::config::RateLimitConfig,
+    rate_limit_manager: Option<&std::sync::Arc<crate::security::RateLimitManager>>,
     metrics: Option<Arc<Metrics>>,
     peer: std::net::SocketAddr,
     is_https: bool,
@@ -75,6 +78,17 @@ pub async fn handle_proxy_request(
         }
         return Err(error);
     };
+
+    if let Some(rate_limited_response) = check_rate_limit(
+        rate_limit_manager,
+        rate_limit_config,
+        &route_match,
+        peer,
+        req.headers(),
+        metrics.as_ref(),
+    ) {
+        return Ok(rate_limited_response);
+    }
 
     // Extract and inject fingerprints first (fingerprints are extracted from TLS handshake/HTTP2 frames,
     // not from HTTP headers, so adding X-Forwarded-* headers won't affect fingerprint generation)

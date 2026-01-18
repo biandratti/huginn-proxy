@@ -30,6 +30,15 @@ pub async fn run(config: Arc<Config>, metrics: Option<Arc<Metrics>>) -> Result<(
     let backends_for_loop = Arc::clone(&backends);
     let routes = config.routes.clone();
 
+    let rate_limit_manager = if config.security.rate_limit.enabled {
+        Some(Arc::new(crate::security::RateLimitManager::new(
+            &config.security.rate_limit,
+            &routes,
+        )))
+    } else {
+        None
+    };
+
     // Setup TLS with hot reload support
     let tls_acceptor = match &config.tls {
         Some(tls_config) => {
@@ -107,6 +116,8 @@ pub async fn run(config: Arc<Config>, metrics: Option<Arc<Metrics>>) -> Result<(
                 let keep_alive_config = config.timeout.keep_alive.clone();
                 let security_headers = config.security.headers.clone();
                 let ip_filter = config.security.ip_filter.clone();
+                let rate_limit_config = config.security.rate_limit.clone();
+                let rate_limit_manager_clone = rate_limit_manager.clone();
                 let metrics_clone = metrics.clone();
 
                 let metrics_for_connection = metrics_clone.clone();
@@ -125,6 +136,8 @@ pub async fn run(config: Arc<Config>, metrics: Option<Arc<Metrics>>) -> Result<(
                                 keep_alive: keep_alive_config.clone(),
                                 security_headers: security_headers.clone(),
                                 ip_filter: ip_filter.clone(),
+                                rate_limit_config: rate_limit_config.clone(),
+                                rate_limit_manager: rate_limit_manager_clone.clone(),
                                 metrics: metrics_for_connection,
                                 builder: builder_clone,
                             },
@@ -140,6 +153,8 @@ pub async fn run(config: Arc<Config>, metrics: Option<Arc<Metrics>>) -> Result<(
                                 keep_alive: keep_alive_config,
                                 security_headers: security_headers.clone(),
                                 ip_filter: ip_filter.clone(),
+                                rate_limit_config: rate_limit_config.clone(),
+                                rate_limit_manager: rate_limit_manager_clone.clone(),
                                 metrics: metrics_for_connection,
                                 builder: builder_clone,
                             },

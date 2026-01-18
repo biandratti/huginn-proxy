@@ -115,7 +115,7 @@ impl RateLimiter {
     ///
     /// # Returns
     /// `RateLimitResult` indicating whether the request is allowed or limited
-    pub fn check<T: Hash>(&self, key: &T) -> RateLimitResult {
+    pub fn check<T: Hash + ?Sized>(&self, key: &T) -> RateLimitResult {
         let current = self.rate_tracker.observe(key, 1);
 
         if current > self.max_requests {
@@ -142,7 +142,7 @@ impl RateLimiter {
     ///
     /// # Returns
     /// `RateLimitResult` indicating whether a request would be allowed
-    pub fn check_only<T: Hash>(&self, key: &T) -> RateLimitResult {
+    pub fn check_only<T: Hash + ?Sized>(&self, key: &T) -> RateLimitResult {
         let current = self.rate_tracker.observe(key, 0); // Observe with 0 to not increment
 
         if current >= self.max_requests {
@@ -162,7 +162,7 @@ impl RateLimiter {
     /// Get the current rate for a key (requests per second).
     ///
     /// This returns the rate from the previous completed window.
-    pub fn current_rate<T: Hash>(&self, key: &T) -> f64 {
+    pub fn current_rate<T: Hash + ?Sized>(&self, key: &T) -> f64 {
         self.rate_tracker.rate(key)
     }
 
