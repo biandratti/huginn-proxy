@@ -86,6 +86,8 @@ docker run -v /path/to/config.toml:/config.toml huginn-proxy /config.toml
 - **High Performance** - Built on Tokio and Hyper
 - **Easy Deployment** - Single binary, Docker-ready
 
+See [FEATURES.md](FEATURES.md) for detailed descriptions and limitations of each feature.
+
 ## Fingerprinting
 
 Fingerprints are automatically extracted and injected as headers:
