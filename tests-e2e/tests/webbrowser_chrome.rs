@@ -28,7 +28,7 @@ const PROXY_URL: &str = "https://localhost:7000";
 const CHROMEDRIVER_URL: &str = "http://localhost:9515";
 
 #[tokio::test]
-async fn test_chrome_fingerprint() -> WebDriverResult<()> {
+async fn test_chrome_fingerprint() -> Result<(), Box<dyn std::error::Error>> {
     // Configure Chrome options
     let mut caps = DesiredCapabilities::chrome();
 
@@ -55,13 +55,12 @@ async fn test_chrome_fingerprint() -> WebDriverResult<()> {
     println!("Response content:\n{}", content);
 
     // Parse JSON response
-    let json: serde_json::Value = serde_json::from_str(&content)
-        .map_err(|e| WebDriverError::ParseError(format!("Failed to parse JSON: {}", e)))?;
+    let json: serde_json::Value = serde_json::from_str(&content)?;
 
     // Verify headers exist
     let headers = json["headers"]
         .as_object()
-        .ok_or_else(|| WebDriverError::ParseError("Missing headers in response".to_string()))?;
+        .ok_or("Missing headers in response")?;
 
     println!("\nFingerprint Headers:");
 
@@ -69,9 +68,7 @@ async fn test_chrome_fingerprint() -> WebDriverResult<()> {
     let http2_fp = headers
         .get("x-http2-fingerprint")
         .and_then(|v| v.as_str())
-        .ok_or_else(|| {
-            WebDriverError::ParseError("Missing X-Http2-Fingerprint header".to_string())
-        })?;
+        .ok_or("Missing X-Http2-Fingerprint header")?;
 
     println!("  X-Http2-Fingerprint: {}", http2_fp);
 
@@ -86,9 +83,7 @@ async fn test_chrome_fingerprint() -> WebDriverResult<()> {
     let ja4_fp = headers
         .get("x-ja4-fingerprint")
         .and_then(|v| v.as_str())
-        .ok_or_else(|| {
-            WebDriverError::ParseError("Missing X-Ja4-Fingerprint header".to_string())
-        })?;
+        .ok_or("Missing X-Ja4-Fingerprint header")?;
 
     println!("  X-Ja4-Fingerprint: {}", ja4_fp);
 
@@ -110,7 +105,7 @@ async fn test_chrome_fingerprint() -> WebDriverResult<()> {
 }
 
 #[tokio::test]
-async fn test_chrome_multiple_requests() -> WebDriverResult<()> {
+async fn test_chrome_multiple_requests() -> Result<(), Box<dyn std::error::Error>> {
     let mut caps = DesiredCapabilities::chrome();
     caps.add_arg("--ignore-certificate-errors")?;
     caps.add_arg("--headless=new")?;
@@ -127,12 +122,11 @@ async fn test_chrome_multiple_requests() -> WebDriverResult<()> {
 
         let element = driver.find(By::Tag("pre")).await?;
         let content = element.text().await?;
-        let json: serde_json::Value = serde_json::from_str(&content)
-            .map_err(|e| WebDriverError::ParseError(format!("Parse error: {}", e)))?;
+        let json: serde_json::Value = serde_json::from_str(&content)?;
 
         let headers = json["headers"]
             .as_object()
-            .ok_or_else(|| WebDriverError::ParseError("Missing headers".to_string()))?;
+            .ok_or("Missing headers")?;
 
         if let Some(http2_fp) = headers.get("x-http2-fingerprint") {
             println!("  HTTP/2: {}", http2_fp);

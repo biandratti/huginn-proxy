@@ -28,7 +28,7 @@ const PROXY_URL: &str = "https://localhost:7000";
 const GECKODRIVER_URL: &str = "http://localhost:4444";
 
 #[tokio::test]
-async fn test_firefox_fingerprint() -> WebDriverResult<()> {
+async fn test_firefox_fingerprint() -> Result<(), Box<dyn std::error::Error>> {
     // Configure Firefox options
     let mut caps = DesiredCapabilities::firefox();
 
@@ -55,13 +55,12 @@ async fn test_firefox_fingerprint() -> WebDriverResult<()> {
     println!("Response content:\n{}", content);
 
     // Parse JSON response
-    let json: serde_json::Value = serde_json::from_str(&content)
-        .map_err(|e| WebDriverError::ParseError(format!("Failed to parse JSON: {}", e)))?;
+    let json: serde_json::Value = serde_json::from_str(&content)?;
 
     // Verify headers exist
     let headers = json["headers"]
         .as_object()
-        .ok_or_else(|| WebDriverError::ParseError("Missing headers in response".to_string()))?;
+        .ok_or("Missing headers in response")?;
 
     println!("\nFingerprint Headers:");
 
@@ -69,9 +68,7 @@ async fn test_firefox_fingerprint() -> WebDriverResult<()> {
     let http2_fp = headers
         .get("x-http2-fingerprint")
         .and_then(|v| v.as_str())
-        .ok_or_else(|| {
-            WebDriverError::ParseError("Missing X-Http2-Fingerprint header".to_string())
-        })?;
+        .ok_or("Missing X-Http2-Fingerprint header")?;
 
     println!("  X-Http2-Fingerprint: {}", http2_fp);
 
@@ -86,9 +83,7 @@ async fn test_firefox_fingerprint() -> WebDriverResult<()> {
     let ja4_fp = headers
         .get("x-ja4-fingerprint")
         .and_then(|v| v.as_str())
-        .ok_or_else(|| {
-            WebDriverError::ParseError("Missing X-Ja4-Fingerprint header".to_string())
-        })?;
+        .ok_or("Missing X-Ja4-Fingerprint header")?;
 
     println!("  X-Ja4-Fingerprint: {}", ja4_fp);
 
@@ -108,7 +103,7 @@ async fn test_firefox_fingerprint() -> WebDriverResult<()> {
 }
 
 #[tokio::test]
-async fn test_firefox_multiple_requests() -> WebDriverResult<()> {
+async fn test_firefox_multiple_requests() -> Result<(), Box<dyn std::error::Error>> {
     let mut caps = DesiredCapabilities::firefox();
     caps.add_arg("--headless")?;
     caps.accept_insecure_certs(true)?;
@@ -125,12 +120,11 @@ async fn test_firefox_multiple_requests() -> WebDriverResult<()> {
 
         let element = driver.find(By::Tag("pre")).await?;
         let content = element.text().await?;
-        let json: serde_json::Value = serde_json::from_str(&content)
-            .map_err(|e| WebDriverError::ParseError(format!("Parse error: {}", e)))?;
+        let json: serde_json::Value = serde_json::from_str(&content)?;
 
         let headers = json["headers"]
             .as_object()
-            .ok_or_else(|| WebDriverError::ParseError("Missing headers".to_string()))?;
+            .ok_or("Missing headers")?;
 
         if let Some(http2_fp) = headers.get("x-http2-fingerprint") {
             println!("  HTTP/2: {}", http2_fp);
@@ -147,7 +141,7 @@ async fn test_firefox_multiple_requests() -> WebDriverResult<()> {
 }
 
 #[tokio::test]
-async fn test_firefox_vs_chrome_different_fingerprints() -> WebDriverResult<()> {
+async fn test_firefox_vs_chrome_different_fingerprints() -> Result<(), Box<dyn std::error::Error>> {
     // This test verifies that Firefox and Chrome produce different fingerprints
     // Note: Requires both chromedriver and geckodriver running
 
@@ -164,8 +158,7 @@ async fn test_firefox_vs_chrome_different_fingerprints() -> WebDriverResult<()> 
 
     let firefox_element = firefox_driver.find(By::Tag("pre")).await?;
     let firefox_content = firefox_element.text().await?;
-    let firefox_json: serde_json::Value = serde_json::from_str(&firefox_content)
-        .map_err(|e| WebDriverError::ParseError(format!("Parse error: {}", e)))?;
+    let firefox_json: serde_json::Value = serde_json::from_str(&firefox_content)?;
 
     let firefox_http2 = firefox_json["headers"]["x-http2-fingerprint"]
         .as_str()
@@ -187,8 +180,7 @@ async fn test_firefox_vs_chrome_different_fingerprints() -> WebDriverResult<()> 
 
     let chrome_element = chrome_driver.find(By::Tag("pre")).await?;
     let chrome_content = chrome_element.text().await?;
-    let chrome_json: serde_json::Value = serde_json::from_str(&chrome_content)
-        .map_err(|e| WebDriverError::ParseError(format!("Parse error: {}", e)))?;
+    let chrome_json: serde_json::Value = serde_json::from_str(&chrome_content)?;
 
     let chrome_http2 = chrome_json["headers"]["x-http2-fingerprint"]
         .as_str()
