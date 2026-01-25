@@ -3,8 +3,8 @@ use std::sync::Arc;
 use hyper_util::rt::{TokioExecutor, TokioIo};
 use hyper_util::server::conn::auto::Builder as ConnBuilder;
 use tokio::net::TcpStream;
-use tracing::warn;
 
+use super::timeout_helper::serve_with_timeout;
 use crate::proxy::synthetic_response::synthetic_error_response;
 use crate::telemetry::Metrics;
 use http::StatusCode;
@@ -20,6 +20,7 @@ pub struct PlainConnectionConfig {
     pub metrics: Option<Arc<Metrics>>,
     pub builder: ConnBuilder<TokioExecutor>,
     pub preserve_host: bool,
+    pub connection_handling_timeout: tokio::time::Duration,
 }
 
 /// Handle a plain HTTP connection
@@ -94,11 +95,7 @@ pub async fn handle_plain_connection(
         }
     });
 
-    if let Err(e) = config
-        .builder
-        .serve_connection(TokioIo::new(stream), svc)
-        .await
-    {
-        warn!(?peer, error = %e, "serve_connection error");
-    }
+    let serve_fut = config.builder.serve_connection(TokioIo::new(stream), svc);
+
+    serve_with_timeout(serve_fut, config.connection_handling_timeout, config.metrics, peer).await;
 }

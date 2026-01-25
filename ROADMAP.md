@@ -7,7 +7,6 @@
 - [ ] Metrics documentation
 
 ### Operational Features
-- [ ] Granular timeouts (read/write/TLS handshake)
 - [ ] Backend health checks (active polling)
 - [ ] Connection pooling for backends
 

@@ -196,7 +196,7 @@ pub struct LoggingConfig {
 }
 
 /// Timeout configuration
-#[derive(Debug, Deserialize, Clone, Default)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct TimeoutConfig {
     /// Connection timeout in milliseconds
     /// Default: 5000 (5 seconds)
@@ -210,6 +210,19 @@ pub struct TimeoutConfig {
     /// Default: 30
     #[serde(default = "default_shutdown_timeout")]
     pub shutdown_secs: u64,
+    /// TLS handshake timeout in seconds
+    /// Maximum time allowed for completing the TLS handshake
+    /// Prevents slow clients from holding connections during handshake
+    /// Default: 15 seconds
+    #[serde(default = "default_tls_handshake_timeout")]
+    pub tls_handshake_secs: u64,
+    /// Total connection handling timeout in seconds
+    /// Maximum total time for handling a complete connection lifecycle:
+    /// receive request + process + send response
+    /// Prevents slow clients from holding connections indefinitely
+    /// Default: 300 seconds (5 minutes)
+    #[serde(default = "default_connection_handling_timeout")]
+    pub connection_handling_secs: u64,
     /// HTTP/1.1 keep-alive configuration
     ///
     /// Note: This configuration only applies to HTTP/1.1 connections.
@@ -256,6 +269,19 @@ fn default_keep_alive_timeout() -> u64 {
 impl Default for KeepAliveConfig {
     fn default() -> Self {
         Self { enabled: true, timeout_secs: default_keep_alive_timeout() }
+    }
+}
+
+impl Default for TimeoutConfig {
+    fn default() -> Self {
+        Self {
+            connect_ms: default_connect_timeout(),
+            idle_ms: default_idle_timeout(),
+            shutdown_secs: default_shutdown_timeout(),
+            tls_handshake_secs: default_tls_handshake_timeout(),
+            connection_handling_secs: default_connection_handling_timeout(),
+            keep_alive: KeepAliveConfig::default(),
+        }
     }
 }
 
@@ -460,6 +486,14 @@ fn default_idle_timeout() -> u64 {
 
 fn default_shutdown_timeout() -> u64 {
     30
+}
+
+fn default_tls_handshake_timeout() -> u64 {
+    15
+}
+
+fn default_connection_handling_timeout() -> u64 {
+    300
 }
 
 fn default_hsts_max_age() -> u64 {

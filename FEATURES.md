@@ -108,6 +108,20 @@ This is useful for virtual hosting scenarios where the backend needs to know whi
 
 Limitation: Global setting only, cannot be configured per-route.
 
+## Granular Timeouts
+
+**TLS handshake and connection handling timeouts**
+
+Multiple timeout controls to prevent resource exhaustion:
+- TLS handshake timeout (default: 15s) - Maximum time for completing TLS handshake
+- Connection handling timeout (default: 300s/5min) - Maximum total time for entire connection lifecycle (read + process + write)
+
+All timeouts are independently configurable.
+
+Metrics track timeout occurrences by type (tls_handshake, connection_handling) for monitoring and alerting.
+
+Limitation: Individual HTTP read/write timeouts are not supported. The connection_handling_secs timeout covers the entire connection lifecycle.
+
 ## Configuration
 
 **TOML-based config files**
@@ -124,6 +138,29 @@ Metrics server runs on a separate port. Exposes request counters, TLS handshake 
 
 Health endpoints: /health (general), /ready (Kubernetes readiness), /live (Kubernetes liveness), /metrics (Prometheus).
 
+**Available Metrics:**
+- `huginn_connections_total` - Total connections established
+- `huginn_connections_active` - Active connections (gauge)
+- `huginn_connections_rejected_total` - Connections rejected due to limits
+- `huginn_requests_total` - Total HTTP requests processed
+- `huginn_requests_duration_seconds` - Request duration histogram
+- `huginn_tls_connections_active` - Active TLS connections (gauge)
+- `huginn_tls_handshakes_total` - Total TLS handshakes completed
+- `huginn_tls_handshake_duration_seconds` - TLS handshake duration histogram
+- `huginn_tls_handshake_errors_total` - TLS handshake errors
+- `huginn_tls_fingerprints_extracted_total` - TLS (JA4) fingerprints extracted
+- `huginn_tls_fingerprint_extraction_duration_seconds` - TLS fingerprint extraction duration
+- `huginn_tls_fingerprint_failures_total` - TLS fingerprint extraction failures
+- `huginn_http2_fingerprints_extracted_total` - HTTP/2 (Akamai) fingerprints extracted
+- `huginn_http2_fingerprint_extraction_duration_seconds` - HTTP/2 fingerprint extraction duration
+- `huginn_http2_fingerprint_failures_total` - HTTP/2 fingerprint extraction failures
+- `huginn_backend_requests_total` - Total requests forwarded to backends
+- `huginn_backend_errors_total` - Backend errors
+- `huginn_backend_duration_seconds` - Backend request duration histogram
+- `huginn_backend_selections_total` - Backend selections (load balancing)
+- `huginn_errors_total` - Total errors by type
+- `huginn_timeouts_total` - Timeouts by type (tls_handshake, connection_handling)
+
 Limitation: No distributed tracing. No request logging to files. No custom metrics.
 
 ## Timeouts
@@ -134,4 +171,4 @@ Configurable timeouts for connection establishment, idle connections, and gracef
 
 HTTP/2 connections are always persistent with multiplexing, so keep-alive settings don't apply there.
 
-Limitation: No per-route timeout configuration. No TLS handshake timeout (uses default).
+Limitation: No per-route timeout configuration.

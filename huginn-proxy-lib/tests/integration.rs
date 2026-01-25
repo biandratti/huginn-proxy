@@ -24,6 +24,8 @@ fn create_test_config(listen: &str, backends: Vec<Backend>) -> Config {
             connect_ms: 5000,
             idle_ms: 60000,
             shutdown_secs: 30,
+            tls_handshake_secs: 15,
+            connection_handling_secs: 300,
             keep_alive: KeepAliveConfig::default(),
         },
         security: SecurityConfig::default(),
