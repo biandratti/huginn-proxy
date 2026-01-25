@@ -1,4 +1,4 @@
-use huginn_proxy_lib::config::{TlsConfig, TlsOptions};
+use huginn_proxy_lib::config::{ClientAuth, TlsConfig, TlsOptions};
 use huginn_proxy_lib::tls::build_cert_reloader;
 use std::fs;
 use std::path::PathBuf;
@@ -40,6 +40,7 @@ async fn test_build_cert_reloader() -> Result<(), Box<dyn std::error::Error + Se
         alpn: vec!["h2".to_string()],
         watch_delay_secs: 60,
         options: TlsOptions::default(),
+        client_auth: ClientAuth::Disabled,
     };
 
     // This should succeed in creating the reloader service with valid PEM format
@@ -75,6 +76,7 @@ async fn test_build_cert_reloader_missing_files(
         alpn: vec![],
         watch_delay_secs: 60,
         options: TlsOptions::default(),
+        client_auth: ClientAuth::Disabled,
     };
 
     // Should fail because certificates must exist at startup

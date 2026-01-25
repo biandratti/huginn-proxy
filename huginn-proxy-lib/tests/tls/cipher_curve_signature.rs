@@ -1,4 +1,4 @@
-use huginn_proxy_lib::config::{TlsConfig, TlsOptions};
+use huginn_proxy_lib::config::{ClientAuth, TlsConfig, TlsOptions};
 use huginn_proxy_lib::tls::acceptor::build_rustls;
 use huginn_proxy_lib::tls::cipher_suites::supported_cipher_suites;
 use huginn_proxy_lib::tls::curves::supported_curves;
@@ -51,6 +51,7 @@ fn test_different_cipher_suites_produce_different_configs(
                 .collect(),
             ..Default::default()
         },
+        client_auth: ClientAuth::Disabled,
     };
 
     // Configuration 2: Only TLS 1.2 cipher suites
@@ -67,6 +68,7 @@ fn test_different_cipher_suites_produce_different_configs(
                 .collect(),
             ..Default::default()
         },
+        client_auth: ClientAuth::Disabled,
     };
 
     // Both configurations should validate and build successfully
@@ -123,6 +125,7 @@ fn test_different_curve_preferences_produce_different_configs(
         key_path: key_path.display().to_string(),
         alpn: vec!["h2".to_string(), "http/1.1".to_string()],
         options: TlsOptions { curve_preferences: vec!["X25519".to_string()], ..Default::default() },
+        client_auth: ClientAuth::Disabled,
     };
 
     // Configuration 2: Only secp256r1 (NIST P-256)
@@ -135,6 +138,7 @@ fn test_different_curve_preferences_produce_different_configs(
             curve_preferences: vec!["secp256r1".to_string()],
             ..Default::default()
         },
+        client_auth: ClientAuth::Disabled,
     };
 
     // Both configurations should validate and build successfully
@@ -189,6 +193,7 @@ fn test_combined_cipher_and_curve_configs() -> Result<(), Box<dyn std::error::Er
             curve_preferences: vec![supported_curves[0].to_string()],
             ..Default::default()
         },
+        client_auth: ClientAuth::Disabled,
     };
 
     let result = build_rustls(&config);

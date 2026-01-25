@@ -1,4 +1,4 @@
-use huginn_proxy_lib::config::{Backend, BackendHttpVersion, Config};
+use huginn_proxy_lib::config::{Backend, BackendHttpVersion, ClientAuth, Config, TlsConfig};
 
 #[test]
 fn test_backend_http_version_deserialization(
@@ -50,4 +50,78 @@ fn test_backend_http_version_case_insensitive() {
     let toml = r#"address = "backend:9000"
 http_version = "HTTP11""#;
     assert!(toml::from_str::<Backend>(toml).is_err());
+}
+
+#[test]
+fn test_mtls_config_required() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let toml = r#"
+cert_path = "/config/certs/server.crt"
+key_path = "/config/certs/server.key"
+alpn = ["h2", "http/1.1"]
+watch_delay_secs = 60
+
+[client_auth]
+required = { ca_cert_path = "/config/certs/client-ca.crt" }
+"#;
+
+    let config: TlsConfig = toml::from_str(toml)?;
+    match config.client_auth {
+        ClientAuth::Required { ca_cert_path } => {
+            assert_eq!(ca_cert_path, "/config/certs/client-ca.crt");
+        }
+        ClientAuth::Disabled => panic!("Expected ClientAuth::Required"),
+    }
+    Ok(())
+}
+
+#[test]
+fn test_mtls_config_default_is_disabled() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let toml = r#"
+cert_path = "/config/certs/server.crt"
+key_path = "/config/certs/server.key"
+alpn = ["h2", "http/1.1"]
+watch_delay_secs = 60
+"#;
+
+    let config: TlsConfig = toml::from_str(toml)?;
+    assert!(matches!(config.client_auth, ClientAuth::Disabled));
+    Ok(())
+}
+
+#[test]
+fn test_mtls_full_config() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let toml = r#"
+listen = "0.0.0.0:7000"
+
+backends = [
+  { address = "backend-a:9000" }
+]
+
+routes = [
+  { prefix = "/api", backend = "backend-a:9000" }
+]
+
+[tls]
+cert_path = "/config/certs/server.crt"
+key_path = "/config/certs/server.key"
+alpn = ["h2", "http/1.1"]
+watch_delay_secs = 60
+
+[tls.client_auth]
+required = { ca_cert_path = "/config/certs/client-ca.crt" }
+"#;
+
+    let config: Config = toml::from_str(toml)?;
+
+    let Some(tls_config) = config.tls else {
+        panic!("Expected TLS config to be present");
+    };
+
+    match tls_config.client_auth {
+        ClientAuth::Required { ca_cert_path } => {
+            assert_eq!(ca_cert_path, "/config/certs/client-ca.crt");
+        }
+        ClientAuth::Disabled => panic!("Expected ClientAuth::Required"),
+    }
+    Ok(())
 }

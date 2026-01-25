@@ -80,10 +80,13 @@ docker run -v /path/to/config.toml:/config.toml huginn-proxy /config.toml
 - **Security Headers** - HSTS, CSP, X-Frame-Options, and custom headers
 - **IP Filtering (ACL)** - Allowlist/denylist with CIDR notation support
 - **TLS Termination** - Server-side TLS with ALPN, certificate hot reload (single certificate per configuration)
+- **mTLS (Mutual TLS)** - Client certificate authentication for secure service-to-service communication
 - **Passive Fingerprinting** - Automatic TLS (JA4) and HTTP/2 (Akamai) fingerprint extraction
 - **X-Forwarded-* Headers** - Automatic injection of proxy forwarding headers
 - **High Performance** - Built on Tokio and Hyper
 - **Easy Deployment** - Single binary, Docker-ready
+
+See [FEATURES.md](FEATURES.md) for detailed descriptions and limitations of each feature.
 
 ## Fingerprinting
 

@@ -100,6 +100,23 @@ pub struct TlsOptions {
     pub curve_preferences: Vec<String>,
 }
 
+/// Client authentication mode for mTLS
+#[derive(Debug, Deserialize, Clone, PartialEq, Eq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum ClientAuth {
+    /// Client authentication is disabled (default)
+    #[default]
+    Disabled,
+    /// Client authentication is required
+    /// Clients must present valid certificates signed by the specified CA
+    Required {
+        /// Path to client CA certificate file (PEM format)
+        /// File must exist and be readable at startup
+        /// Can contain one or more CA certificates
+        ca_cert_path: String,
+    },
+}
+
 /// TLS termination configuration
 #[derive(Debug, Deserialize, Clone)]
 pub struct TlsConfig {
@@ -120,6 +137,10 @@ pub struct TlsConfig {
     /// Controls TLS versions and cipher suites
     #[serde(default)]
     pub options: TlsOptions,
+    /// Client authentication mode for mTLS (mutual TLS authentication)
+    /// Default: disabled (no client authentication required)
+    #[serde(default)]
+    pub client_auth: ClientAuth,
 }
 
 fn default_cert_watch_delay_secs() -> u32 {
