@@ -124,9 +124,7 @@ async fn test_chrome_multiple_requests() -> Result<(), Box<dyn std::error::Error
         let content = element.text().await?;
         let json: serde_json::Value = serde_json::from_str(&content)?;
 
-        let headers = json["headers"]
-            .as_object()
-            .ok_or("Missing headers")?;
+        let headers = json["headers"].as_object().ok_or("Missing headers")?;
 
         if let Some(http2_fp) = headers.get("x-http2-fingerprint") {
             println!("  HTTP/2: {}", http2_fp);
