@@ -12,6 +12,7 @@ fn create_test_config(listen: &str, backends: Vec<Backend>) -> Config {
             .unwrap_or_else(|_| panic!("Invalid listen address: {listen}")),
         backends,
         routes: vec![],
+        preserve_host: false,
         tls: None,
         fingerprint: FingerprintConfig {
             tls_enabled: true,

@@ -49,6 +49,7 @@ pub async fn handle_proxy_request(
     metrics: Option<Arc<Metrics>>,
     peer: std::net::SocketAddr,
     is_https: bool,
+    preserve_host: bool,
 ) -> HttpResult<hyper::Response<RespBody>> {
     let start = Instant::now();
     let method = req.method().to_string();
@@ -136,6 +137,7 @@ pub async fn handle_proxy_request(
             replace_path: route_match.replace_path,
             security_headers: Some(&security.headers),
             is_https,
+            preserve_host,
         },
     )
     .await;

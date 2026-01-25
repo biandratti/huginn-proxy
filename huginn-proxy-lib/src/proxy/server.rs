@@ -123,6 +123,7 @@ pub async fn run(config: Arc<Config>, metrics: Option<Arc<Metrics>>) -> Result<(
                 let keep_alive_config = config.timeout.keep_alive.clone();
                 let security = security_context.clone();
                 let metrics_clone = metrics.clone();
+                let preserve_host = config.preserve_host;
 
                 let metrics_for_connection = metrics_clone.clone();
                 tokio::spawn(async move {
@@ -141,6 +142,7 @@ pub async fn run(config: Arc<Config>, metrics: Option<Arc<Metrics>>) -> Result<(
                                 security: security.clone(),
                                 metrics: metrics_for_connection,
                                 builder: builder_clone,
+                                preserve_host,
                             },
                         )
                         .await;
@@ -155,6 +157,7 @@ pub async fn run(config: Arc<Config>, metrics: Option<Arc<Metrics>>) -> Result<(
                                 security: security.clone(),
                                 metrics: metrics_for_connection,
                                 builder: builder_clone,
+                                preserve_host,
                             },
                         )
                         .await;
