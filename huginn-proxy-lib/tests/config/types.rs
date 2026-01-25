@@ -205,8 +205,8 @@ connection_handling_secs = 120
 }
 
 #[test]
-fn test_timeout_connection_handling_optional() -> Result<(), Box<dyn std::error::Error + Send + Sync>>
-{
+fn test_timeout_connection_handling_optional(
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let toml = r#"
 listen = "0.0.0.0:7000"
 backends = [{ address = "backend:9000" }]

@@ -44,14 +44,14 @@ pub async fn handle_tls_connection(
         let handshake_start = Instant::now();
         let (prefix, ja4) =
             match read_client_hello(&mut stream, metrics_for_connection.clone()).await {
-        Ok(v) => v,
-        Err(e) => {
-            warn!(?peer, error = %e, "failed to read client hello");
-            if let Some(ref m) = metrics_for_connection {
-                m.tls_handshake_errors_total.add(1, &[]);
-            }
-            return;
-        }
+                Ok(v) => v,
+                Err(e) => {
+                    warn!(?peer, error = %e, "failed to read client hello");
+                    if let Some(ref m) = metrics_for_connection {
+                        m.tls_handshake_errors_total.add(1, &[]);
+                    }
+                    return;
+                }
             };
 
         let prefixed = PrefixedStream::new(prefix, stream);
@@ -61,20 +61,20 @@ pub async fn handle_tls_connection(
         let tls = match tls_accept_result {
             Ok(Ok(tls)) => tls,
             Ok(Err(e)) => {
-        warn!(?peer, error = %e, "TLS accept failed");
-        if let Some(ref m) = metrics_for_connection {
-            m.tls_handshake_errors_total.add(1, &[]);
-        }
-        return;
+                warn!(?peer, error = %e, "TLS accept failed");
+                if let Some(ref m) = metrics_for_connection {
+                    m.tls_handshake_errors_total.add(1, &[]);
+                }
+                return;
             }
             Err(_) => {
-        warn!(?peer, "TLS handshake timeout");
-        if let Some(ref m) = metrics_for_connection {
-            m.timeouts_total
-                .add(1, &[opentelemetry::KeyValue::new("type", "tls_handshake")]);
-            m.tls_handshake_errors_total.add(1, &[]);
-        }
-        return;
+                warn!(?peer, "TLS handshake timeout");
+                if let Some(ref m) = metrics_for_connection {
+                    m.timeouts_total
+                        .add(1, &[opentelemetry::KeyValue::new("type", "tls_handshake")]);
+                    m.tls_handshake_errors_total.add(1, &[]);
+                }
+                return;
             }
         };
 
@@ -85,8 +85,8 @@ pub async fn handle_tls_connection(
         // Note: The main active_connections counter is handled by ConnectionGuard
         let tls_connection_guard = TlsConnectionGuard::new(
             metrics_for_connection
-        .as_ref()
-        .map(|m| m.tls_connections_active.clone()),
+                .as_ref()
+                .map(|m| m.tls_connections_active.clone()),
         );
 
         let tls_header = if config.fingerprint_config.tls_enabled {
@@ -115,8 +115,8 @@ pub async fn handle_tls_connection(
             let keep_alive = config.keep_alive.clone();
             let security = config.security.clone();
 
-            let svc = hyper::service::service_fn(
-                move |req: hyper::Request<hyper::body::Incoming>| {
+            let svc =
+                hyper::service::service_fn(move |req: hyper::Request<hyper::body::Incoming>| {
                     let routes = routes_template.clone();
                     let backends = backends.clone();
                     let tls_header = tls_header.clone();
@@ -128,21 +128,20 @@ pub async fn handle_tls_connection(
                     async move {
                         let metrics_for_match = metrics.clone();
                         let preserve_host = config.preserve_host;
-                        let http_result =
-                            crate::proxy::handler::request::handle_proxy_request(
-                                req,
-                                routes,
-                                backends,
-                                tls_header,
-                                Some(fingerprint_rx),
-                                &keep_alive,
-                                &security,
-                                metrics,
-                                peer,
-                                true,
-                                preserve_host,
-                            )
-                            .await;
+                        let http_result = crate::proxy::handler::request::handle_proxy_request(
+                            req,
+                            routes,
+                            backends,
+                            tls_header,
+                            Some(fingerprint_rx),
+                            &keep_alive,
+                            &security,
+                            metrics,
+                            peer,
+                            true,
+                            preserve_host,
+                        )
+                        .await;
 
                         match http_result {
                             Ok(v) => {
@@ -161,32 +160,26 @@ pub async fn handle_tls_connection(
                                 tracing::error!("{e}");
                                 let code = StatusCode::from(e.clone());
                                 if let Some(ref m) = metrics_for_match {
-                                    m.errors_total.add(
-                                        1,
-                                        &[KeyValue::new("error_type", e.error_type())],
-                                    );
+                                    m.errors_total
+                                        .add(1, &[KeyValue::new("error_type", e.error_type())]);
                                 }
                                 match synthetic_error_response(code) {
                                     Ok(resp) => Ok(resp),
                                     Err(e) => {
-                                        let body = http_body_util::Full::new(
-                                            bytes::Bytes::from(format!(
-                                                "Failed to create error response: {e}"
-                                            )),
-                                        )
+                                        let body = http_body_util::Full::new(bytes::Bytes::from(
+                                            format!("Failed to create error response: {e}"),
+                                        ))
                                         .map_err(|never| match never {})
                                         .boxed();
                                         let mut resp = hyper::Response::new(body);
-                                        *resp.status_mut() =
-                                            StatusCode::INTERNAL_SERVER_ERROR;
+                                        *resp.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
                                         Ok(resp)
                                     }
                                 }
                             }
                         }
                     }
-                },
-            );
+                });
 
             let serve_fut = config
                 .builder
@@ -216,8 +209,8 @@ pub async fn handle_tls_connection(
             let keep_alive = config.keep_alive.clone();
             let security = config.security.clone();
 
-            let svc = hyper::service::service_fn(
-                move |req: hyper::Request<hyper::body::Incoming>| {
+            let svc =
+                hyper::service::service_fn(move |req: hyper::Request<hyper::body::Incoming>| {
                     let routes = routes_template.clone();
                     let backends = backends.clone();
                     let tls_header = tls_header.clone();
@@ -228,21 +221,20 @@ pub async fn handle_tls_connection(
                     async move {
                         let preserve_host = config.preserve_host;
                         let metrics_for_match = metrics.clone();
-                        let http_result =
-                            crate::proxy::handler::request::handle_proxy_request(
-                                req,
-                                routes,
-                                backends,
-                                tls_header,
-                                None,
-                                &keep_alive,
-                                &security,
-                                metrics,
-                                peer,
-                                true,
-                                preserve_host,
-                            )
-                            .await;
+                        let http_result = crate::proxy::handler::request::handle_proxy_request(
+                            req,
+                            routes,
+                            backends,
+                            tls_header,
+                            None,
+                            &keep_alive,
+                            &security,
+                            metrics,
+                            peer,
+                            true,
+                            preserve_host,
+                        )
+                        .await;
 
                         match http_result {
                             Ok(v) => {
@@ -261,32 +253,26 @@ pub async fn handle_tls_connection(
                                 tracing::error!("{e}");
                                 let code = StatusCode::from(e.clone());
                                 if let Some(ref m) = metrics_for_match {
-                                    m.errors_total.add(
-                                        1,
-                                        &[KeyValue::new("error_type", e.error_type())],
-                                    );
+                                    m.errors_total
+                                        .add(1, &[KeyValue::new("error_type", e.error_type())]);
                                 }
                                 match synthetic_error_response(code) {
                                     Ok(resp) => Ok(resp),
                                     Err(e) => {
-                                        let body = http_body_util::Full::new(
-                                            bytes::Bytes::from(format!(
-                                                "Failed to create error response: {e}"
-                                            )),
-                                        )
+                                        let body = http_body_util::Full::new(bytes::Bytes::from(
+                                            format!("Failed to create error response: {e}"),
+                                        ))
                                         .map_err(|never| match never {})
                                         .boxed();
                                         let mut resp = hyper::Response::new(body);
-                                        *resp.status_mut() =
-                                            StatusCode::INTERNAL_SERVER_ERROR;
+                                        *resp.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
                                         Ok(resp)
                                     }
                                 }
                             }
                         }
                     }
-                },
-            );
+                });
 
             let serve_fut = config.builder.serve_connection(TokioIo::new(tls), svc);
 
