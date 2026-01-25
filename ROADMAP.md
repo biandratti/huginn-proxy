@@ -8,7 +8,6 @@
 
 ### Operational Features
 - [ ] Granular timeouts (read/write/TLS handshake)
-- [ ] Preserve Host header (configurable)
 - [ ] Backend health checks (active polling)
 - [ ] Connection pooling for backends
 

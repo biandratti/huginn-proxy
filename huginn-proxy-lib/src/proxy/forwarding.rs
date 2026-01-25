@@ -32,6 +32,7 @@ pub struct ForwardConfig<'a> {
     pub replace_path: Option<&'a str>,
     pub security_headers: Option<&'a crate::config::SecurityHeaders>,
     pub is_https: bool,
+    pub preserve_host: bool,
 }
 
 pub fn find_backend_config<'a>(
@@ -143,7 +144,16 @@ pub async fn forward(
     }
 
     let (mut parts, body) = req.into_parts();
+
+    let original_host = config
+        .preserve_host
+        .then(|| parts.headers.get("host").cloned())
+        .flatten();
     parts.uri = uri;
+    if let Some(host) = original_host {
+        parts.headers.insert("host", host);
+    }
+
     let out_req = Request::from_parts(parts, body);
 
     let client = create_client(target_version, config.keep_alive);

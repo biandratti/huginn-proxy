@@ -27,6 +27,7 @@ pub struct TlsConnectionConfig {
     pub security: crate::proxy::SecurityContext,
     pub metrics: Option<Arc<Metrics>>,
     pub builder: ConnBuilder<TokioExecutor>,
+    pub preserve_host: bool,
 }
 
 /// Handle a TLS connection
@@ -107,6 +108,7 @@ pub async fn handle_tls_connection(
 
                             async move {
                                 let metrics_for_match = metrics.clone();
+                                let preserve_host = config.preserve_host;
                                 let http_result =
                                     crate::proxy::handler::request::handle_proxy_request(
                                         req,
@@ -119,6 +121,7 @@ pub async fn handle_tls_connection(
                                         metrics,
                                         peer,
                                         true,
+                                        preserve_host,
                                     )
                                     .await;
 
@@ -190,6 +193,7 @@ pub async fn handle_tls_connection(
                             let security = security.clone();
 
                             async move {
+                                let preserve_host = config.preserve_host;
                                 let metrics_for_match = metrics.clone();
                                 let http_result =
                                     crate::proxy::handler::request::handle_proxy_request(
@@ -203,6 +207,7 @@ pub async fn handle_tls_connection(
                                         metrics,
                                         peer,
                                         true,
+                                        preserve_host,
                                     )
                                     .await;
 

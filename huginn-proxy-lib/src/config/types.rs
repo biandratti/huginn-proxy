@@ -327,6 +327,12 @@ pub struct Config {
     /// If no routes match, requests return 404
     #[serde(default)]
     pub routes: Vec<Route>,
+    /// Preserve the original Host header from clients when forwarding to backends
+    /// When true: Backend receives the original Host header (useful for virtual hosting)
+    /// When false: Backend receives the backend address as Host header (default)
+    /// Default: false
+    #[serde(default)]
+    pub preserve_host: bool,
     /// TLS termination configuration (optional)
     /// If not provided, proxy operates in plain HTTP mode
     /// Default: None

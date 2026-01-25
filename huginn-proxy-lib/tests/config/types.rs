@@ -125,3 +125,42 @@ required = { ca_cert_path = "/config/certs/client-ca.crt" }
     }
     Ok(())
 }
+
+#[test]
+fn test_preserve_host_default_is_false() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let toml = r#"
+listen = "0.0.0.0:7000"
+backends = [{ address = "backend:9000" }]
+"#;
+
+    let config: Config = toml::from_str(toml)?;
+    assert!(!config.preserve_host);
+    Ok(())
+}
+
+#[test]
+fn test_preserve_host_enabled() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let toml = r#"
+listen = "0.0.0.0:7000"
+backends = [{ address = "backend:9000" }]
+preserve_host = true
+"#;
+
+    let config: Config = toml::from_str(toml)?;
+    assert!(config.preserve_host);
+    Ok(())
+}
+
+#[test]
+fn test_preserve_host_disabled_explicitly() -> Result<(), Box<dyn std::error::Error + Send + Sync>>
+{
+    let toml = r#"
+listen = "0.0.0.0:7000"
+backends = [{ address = "backend:9000" }]
+preserve_host = false
+"#;
+
+    let config: Config = toml::from_str(toml)?;
+    assert!(!config.preserve_host);
+    Ok(())
+}

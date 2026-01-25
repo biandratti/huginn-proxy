@@ -4,7 +4,7 @@ Huginn Proxy is a reverse proxy focused on passive fingerprinting. The main goal
 
 Security features like TLS termination, mTLS, rate limiting, and IP filtering are included to meet production requirements. But this is not a general-purpose reverse proxy trying to compete with Nginx or HAProxy. Some common features you might expect are missing because they don't align with the fingerprinting use case.
 
-If you need advanced load balancing algorithms, circuit breakers, or complex routing rules, you should use a different proxy. This one does fingerprinting well and includes enough infrastructure features to run in production, but nothing more.
+If you need advanced load balancing algorithms, or complex routing rules, you should use a different proxy. This one does fingerprinting well and includes enough infrastructure features to run in production, but nothing more.
 
 ## Protocol Support
 
@@ -97,6 +97,16 @@ Limitation: Fingerprints are only extracted and forwarded, not validated or used
 Automatically adds X-Forwarded-For, X-Forwarded-Host, X-Forwarded-Port, and X-Forwarded-Proto. Client-provided values are overridden to prevent spoofing.
 
 Limitation: No configurable header names. No support for Forwarded header (RFC 7239).
+
+## Host Header Preservation
+
+**Configurable Host header forwarding**
+
+By default, the proxy replaces the Host header with the backend address. When preserve_host is enabled, the original Host header from the client is preserved and sent to the backend.
+
+This is useful for virtual hosting scenarios where the backend needs to know which domain was originally requested.
+
+Limitation: Global setting only, cannot be configured per-route.
 
 ## Configuration
 

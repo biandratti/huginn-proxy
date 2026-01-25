@@ -19,6 +19,7 @@ pub struct PlainConnectionConfig {
     pub security: crate::proxy::SecurityContext,
     pub metrics: Option<Arc<Metrics>>,
     pub builder: ConnBuilder<TokioExecutor>,
+    pub preserve_host: bool,
 }
 
 /// Handle a plain HTTP connection
@@ -41,6 +42,7 @@ pub async fn handle_plain_connection(
         let security = security.clone();
 
         async move {
+            let preserve_host = config.preserve_host;
             let metrics_for_match = metrics.clone();
             let http_result = crate::proxy::handler::request::handle_proxy_request(
                 req,
@@ -53,6 +55,7 @@ pub async fn handle_plain_connection(
                 metrics,
                 peer,
                 false, // is_https = false for plain HTTP connections
+                preserve_host,
             )
             .await;
 
