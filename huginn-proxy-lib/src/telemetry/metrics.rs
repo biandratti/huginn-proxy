@@ -37,6 +37,9 @@ pub struct Metrics {
 
     // Connection limit metrics
     pub connections_rejected_total: Counter<u64>,
+
+    // Timeout metrics
+    pub timeouts_total: Counter<u64>,
 }
 
 impl Metrics {
@@ -129,6 +132,11 @@ impl Metrics {
             connections_rejected_total: meter
                 .u64_counter("huginn_connections_rejected_total")
                 .with_description("Total number of connections rejected due to connection limit")
+                .build(),
+
+            timeouts_total: meter
+                .u64_counter("huginn_timeouts_total")
+                .with_description("Total number of timeouts by type (tls_handshake, http_read, http_write, connection_handling)")
                 .build(),
         }
     }

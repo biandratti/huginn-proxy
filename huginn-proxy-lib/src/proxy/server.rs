@@ -121,6 +121,12 @@ pub async fn run(config: Arc<Config>, metrics: Option<Arc<Metrics>>) -> Result<(
                 let tls_acceptor_clone = tls_acceptor.clone();
                 let fingerprint_config = config.fingerprint.clone();
                 let keep_alive_config = config.timeout.keep_alive.clone();
+                let tls_handshake_timeout =
+                    tokio::time::Duration::from_secs(config.timeout.tls_handshake_secs);
+                let connection_handling_timeout = config
+                    .timeout
+                    .connection_handling_secs
+                    .map(tokio::time::Duration::from_secs);
                 let security = security_context.clone();
                 let metrics_clone = metrics.clone();
                 let preserve_host = config.preserve_host;
@@ -140,9 +146,11 @@ pub async fn run(config: Arc<Config>, metrics: Option<Arc<Metrics>>) -> Result<(
                                 backends: backends_clone,
                                 keep_alive: keep_alive_config.clone(),
                                 security: security.clone(),
-                                metrics: metrics_for_connection,
-                                builder: builder_clone,
+                                metrics: metrics_for_connection.clone(),
+                                builder: builder_clone.clone(),
                                 preserve_host,
+                                tls_handshake_timeout,
+                                connection_handling_timeout,
                             },
                         )
                         .await;
@@ -158,6 +166,7 @@ pub async fn run(config: Arc<Config>, metrics: Option<Arc<Metrics>>) -> Result<(
                                 metrics: metrics_for_connection,
                                 builder: builder_clone,
                                 preserve_host,
+                                connection_handling_timeout,
                             },
                         )
                         .await;

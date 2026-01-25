@@ -196,7 +196,7 @@ pub struct LoggingConfig {
 }
 
 /// Timeout configuration
-#[derive(Debug, Deserialize, Clone, Default)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct TimeoutConfig {
     /// Connection timeout in milliseconds
     /// Default: 5000 (5 seconds)
@@ -210,6 +210,31 @@ pub struct TimeoutConfig {
     /// Default: 30
     #[serde(default = "default_shutdown_timeout")]
     pub shutdown_secs: u64,
+    /// TLS handshake timeout in seconds
+    /// Maximum time allowed for completing the TLS handshake
+    /// Prevents slow clients from holding connections during handshake
+    /// Default: 15 seconds
+    #[serde(default = "default_tls_handshake_timeout")]
+    pub tls_handshake_secs: u64,
+    /// HTTP request read timeout in seconds
+    /// Maximum time allowed to receive the complete HTTP request from the client
+    /// Prevents slow POST/PUT attacks and slow clients from holding resources
+    /// Default: 60 seconds
+    #[serde(default = "default_http_read_timeout")]
+    pub http_read_secs: u64,
+    /// HTTP response write timeout in seconds
+    /// Maximum time allowed to send the complete HTTP response to the client
+    /// Prevents slow clients from holding resources during response transmission
+    /// Default: 60 seconds
+    #[serde(default = "default_http_write_timeout")]
+    pub http_write_secs: u64,
+    /// Total connection handling timeout in seconds (optional)
+    /// Maximum total time for handling a complete connection lifecycle:
+    /// receive request + process + send response
+    /// None means no overall timeout (only individual operation timeouts apply)
+    /// Default: None (disabled)
+    #[serde(default)]
+    pub connection_handling_secs: Option<u64>,
     /// HTTP/1.1 keep-alive configuration
     ///
     /// Note: This configuration only applies to HTTP/1.1 connections.
@@ -256,6 +281,21 @@ fn default_keep_alive_timeout() -> u64 {
 impl Default for KeepAliveConfig {
     fn default() -> Self {
         Self { enabled: true, timeout_secs: default_keep_alive_timeout() }
+    }
+}
+
+impl Default for TimeoutConfig {
+    fn default() -> Self {
+        Self {
+            connect_ms: default_connect_timeout(),
+            idle_ms: default_idle_timeout(),
+            shutdown_secs: default_shutdown_timeout(),
+            tls_handshake_secs: default_tls_handshake_timeout(),
+            http_read_secs: default_http_read_timeout(),
+            http_write_secs: default_http_write_timeout(),
+            connection_handling_secs: None,
+            keep_alive: KeepAliveConfig::default(),
+        }
     }
 }
 
@@ -460,6 +500,18 @@ fn default_idle_timeout() -> u64 {
 
 fn default_shutdown_timeout() -> u64 {
     30
+}
+
+fn default_tls_handshake_timeout() -> u64 {
+    15
+}
+
+fn default_http_read_timeout() -> u64 {
+    60
+}
+
+fn default_http_write_timeout() -> u64 {
+    60
 }
 
 fn default_hsts_max_age() -> u64 {

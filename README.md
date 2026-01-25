@@ -81,6 +81,7 @@ docker run -v /path/to/config.toml:/config.toml huginn-proxy /config.toml
 - **IP Filtering (ACL)** - Allowlist/denylist with CIDR notation support
 - **TLS Termination** - Server-side TLS with ALPN, certificate hot reload (single certificate per configuration)
 - **mTLS (Mutual TLS)** - Client certificate authentication for secure service-to-service communication
+- **Granular Timeouts** - TLS handshake, HTTP read/write, and connection handling timeouts for resource protection
 - **Host Header Preservation** - Configurable forwarding of original Host header for virtual hosting
 - **Passive Fingerprinting** - Automatic TLS (JA4) and HTTP/2 (Akamai) fingerprint extraction
 - **X-Forwarded-* Headers** - Automatic injection of proxy forwarding headers

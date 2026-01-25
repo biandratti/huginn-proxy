@@ -20,6 +20,7 @@ pub struct PlainConnectionConfig {
     pub metrics: Option<Arc<Metrics>>,
     pub builder: ConnBuilder<TokioExecutor>,
     pub preserve_host: bool,
+    pub connection_handling_timeout: Option<tokio::time::Duration>,
 }
 
 /// Handle a plain HTTP connection
@@ -94,11 +95,23 @@ pub async fn handle_plain_connection(
         }
     });
 
-    if let Err(e) = config
-        .builder
-        .serve_connection(TokioIo::new(stream), svc)
-        .await
-    {
+    let serve_fut = config.builder.serve_connection(TokioIo::new(stream), svc);
+
+    if let Some(timeout_duration) = config.connection_handling_timeout {
+        match tokio::time::timeout(timeout_duration, serve_fut).await {
+            Ok(Ok(())) => {}
+            Ok(Err(e)) => {
+                warn!(?peer, error = %e, "serve_connection error");
+            }
+            Err(_) => {
+                warn!(?peer, "connection handling timeout");
+                if let Some(ref m) = config.metrics {
+                    m.timeouts_total
+                        .add(1, &[KeyValue::new("type", "connection_handling")]);
+                }
+            }
+        }
+    } else if let Err(e) = serve_fut.await {
         warn!(?peer, error = %e, "serve_connection error");
     }
 }
