@@ -167,7 +167,6 @@ fn test_mtls_missing_client_ca() -> Result<(), Box<dyn std::error::Error + Send 
     let result = build_rustls(&config);
     assert!(result.is_err());
 
-    // Cleanup
     let _ = fs::remove_file(&cert_path);
     let _ = fs::remove_file(&key_path);
 
@@ -197,7 +196,6 @@ fn test_mtls_invalid_client_ca_pem() -> Result<(), Box<dyn std::error::Error + S
     let result = build_rustls(&config);
     assert!(result.is_err());
 
-    // Cleanup
     let _ = fs::remove_file(&cert_path);
     let _ = fs::remove_file(&key_path);
     let _ = fs::remove_file(&ca_path);
@@ -243,8 +241,6 @@ fn test_mtls_valid_client_ca_format() -> Result<(), Box<dyn std::error::Error + 
     let _ = fs::remove_file(&key_path);
     let _ = fs::remove_file(&ca_path);
 
-    // Should fail due to invalid cert content, but CA loading should succeed
-    // The error should be about the server cert/key, not the CA cert
     assert!(result.is_err());
     if let Err(err) = result {
         let err_msg = format!("{}", err);
@@ -279,12 +275,10 @@ fn test_mtls_multiple_ca_certificates() -> Result<(), Box<dyn std::error::Error 
 
     let result = build_rustls(&config);
 
-    // Cleanup
     let _ = fs::remove_file(&cert_path);
     let _ = fs::remove_file(&key_path);
     let _ = fs::remove_file(&ca_path);
 
-    // Should fail due to invalid cert content, but multiple CA loading should succeed
     assert!(result.is_err());
     if let Err(err) = result {
         let err_msg = format!("{}", err);
@@ -311,11 +305,9 @@ fn test_mtls_disabled_by_default() -> Result<(), Box<dyn std::error::Error + Sen
 
     let result = build_rustls(&config);
 
-    // Cleanup
     let _ = fs::remove_file(&cert_path);
     let _ = fs::remove_file(&key_path);
 
-    // Should fail with invalid cert/key (expected), but no CA-related errors
     assert!(result.is_err());
     if let Err(err) = result {
         let err_msg = format!("{}", err);
