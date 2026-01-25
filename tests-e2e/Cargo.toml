@@ -13,8 +13,8 @@ browser-tests = ["dep:thirtyfour"]
 huginn-proxy-lib = { path = "../huginn-proxy-lib" }
 reqwest.workspace = true
 serde_json.workspace = true
-tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
 thirtyfour = { workspace = true, optional = true }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
 
 [[test]]
 name = "e2e"
