@@ -5,13 +5,26 @@ edition = "2021"
 license = "MIT OR Apache-2.0"
 publish = false
 
+[features]
+default = []
+browser-tests = ["dep:thirtyfour"]
+
 [dependencies]
 huginn-proxy-lib = { path = "../huginn-proxy-lib" }
 reqwest.workspace = true
 serde_json.workspace = true
 tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
+thirtyfour = { workspace = true, optional = true }
 
 [[test]]
 name = "e2e"
 path = "tests/e2e.rs"
+
+[[test]]
+name = "webbrowser_chrome"
+path = "tests/webbrowser_chrome.rs"
+
+[[test]]
+name = "webbrowser_firefox"
+path = "tests/webbrowser_firefox.rs"
 
