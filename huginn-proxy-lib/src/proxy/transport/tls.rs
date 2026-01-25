@@ -30,7 +30,7 @@ pub struct TlsConnectionConfig {
     pub builder: ConnBuilder<TokioExecutor>,
     pub preserve_host: bool,
     pub tls_handshake_timeout: tokio::time::Duration,
-    pub connection_handling_timeout: Option<tokio::time::Duration>,
+    pub connection_handling_timeout: tokio::time::Duration,
 }
 
 /// Handle a TLS connection

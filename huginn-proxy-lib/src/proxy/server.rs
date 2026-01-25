@@ -123,10 +123,8 @@ pub async fn run(config: Arc<Config>, metrics: Option<Arc<Metrics>>) -> Result<(
                 let keep_alive_config = config.timeout.keep_alive.clone();
                 let tls_handshake_timeout =
                     tokio::time::Duration::from_secs(config.timeout.tls_handshake_secs);
-                let connection_handling_timeout = config
-                    .timeout
-                    .connection_handling_secs
-                    .map(tokio::time::Duration::from_secs);
+                let connection_handling_timeout =
+                    tokio::time::Duration::from_secs(config.timeout.connection_handling_secs);
                 let security = security_context.clone();
                 let metrics_clone = metrics.clone();
                 let preserve_host = config.preserve_host;

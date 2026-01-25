@@ -20,7 +20,7 @@ pub struct PlainConnectionConfig {
     pub metrics: Option<Arc<Metrics>>,
     pub builder: ConnBuilder<TokioExecutor>,
     pub preserve_host: bool,
-    pub connection_handling_timeout: Option<tokio::time::Duration>,
+    pub connection_handling_timeout: tokio::time::Duration,
 }
 
 /// Handle a plain HTTP connection

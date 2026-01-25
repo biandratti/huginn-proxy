@@ -177,9 +177,7 @@ backends = [{ address = "backend:9000" }]
     assert_eq!(config.timeout.idle_ms, 60000);
     assert_eq!(config.timeout.shutdown_secs, 30);
     assert_eq!(config.timeout.tls_handshake_secs, 15);
-    assert_eq!(config.timeout.http_read_secs, 60);
-    assert_eq!(config.timeout.http_write_secs, 60);
-    assert_eq!(config.timeout.connection_handling_secs, None);
+    assert_eq!(config.timeout.connection_handling_secs, 300);
     Ok(())
 }
 
@@ -191,22 +189,18 @@ backends = [{ address = "backend:9000" }]
 
 [timeout]
 tls_handshake_secs = 20
-http_read_secs = 30
-http_write_secs = 45
 connection_handling_secs = 120
 "#;
 
     let config: Config = toml::from_str(toml)?;
     assert_eq!(config.timeout.tls_handshake_secs, 20);
-    assert_eq!(config.timeout.http_read_secs, 30);
-    assert_eq!(config.timeout.http_write_secs, 45);
-    assert_eq!(config.timeout.connection_handling_secs, Some(120));
+    assert_eq!(config.timeout.connection_handling_secs, 120);
     Ok(())
 }
 
 #[test]
-fn test_timeout_connection_handling_optional(
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+fn test_timeout_connection_handling_default() -> Result<(), Box<dyn std::error::Error + Send + Sync>>
+{
     let toml = r#"
 listen = "0.0.0.0:7000"
 backends = [{ address = "backend:9000" }]
@@ -216,6 +210,6 @@ tls_handshake_secs = 15
 "#;
 
     let config: Config = toml::from_str(toml)?;
-    assert_eq!(config.timeout.connection_handling_secs, None);
+    assert_eq!(config.timeout.connection_handling_secs, 300); // default value
     Ok(())
 }

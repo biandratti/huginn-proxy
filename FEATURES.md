@@ -110,19 +110,17 @@ Limitation: Global setting only, cannot be configured per-route.
 
 ## Granular Timeouts
 
-**TLS handshake, HTTP read/write, and connection handling timeouts**
+**TLS handshake and connection handling timeouts**
 
 Multiple timeout controls to prevent resource exhaustion:
 - TLS handshake timeout (default: 15s) - Maximum time for completing TLS handshake
-- HTTP read timeout (default: 60s) - Maximum time to receive complete HTTP request
-- HTTP write timeout (default: 60s) - Maximum time to send complete HTTP response
-- Connection handling timeout (optional) - Maximum total time for entire connection lifecycle
+- Connection handling timeout (default: 300s/5min) - Maximum total time for entire connection lifecycle (read + process + write)
 
-All timeouts are independently configurable. Connection handling timeout is disabled by default.
+All timeouts are independently configurable.
 
 Metrics track timeout occurrences by type (tls_handshake, connection_handling) for monitoring and alerting.
 
-Limitation: HTTP read/write timeouts are implemented as part of connection handling timeout. Individual per-request timeouts are not supported.
+Limitation: Individual HTTP read/write timeouts are not supported. The connection_handling_secs timeout covers the entire connection lifecycle.
 
 ## Configuration
 
