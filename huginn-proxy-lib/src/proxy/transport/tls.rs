@@ -7,6 +7,7 @@ use tokio::time::Instant;
 use tokio_rustls::TlsAcceptor;
 use tracing::warn;
 
+use super::timeout_helper::serve_with_timeout;
 use crate::fingerprinting::{read_client_hello, CapturingStream};
 use crate::proxy::connection::{PrefixedStream, TlsConnectionGuard};
 use crate::proxy::handler::headers::tls_header_value;
@@ -185,23 +186,13 @@ pub async fn handle_tls_connection(
                 .builder
                 .serve_connection(TokioIo::new(capturing_stream), svc);
 
-            if let Some(timeout_duration) = config.connection_handling_timeout {
-                match tokio::time::timeout(timeout_duration, serve_fut).await {
-                    Ok(Ok(())) => {}
-                    Ok(Err(e)) => {
-                        warn!(?peer, error = %e, "serve_connection error");
-                    }
-                    Err(_) => {
-                        warn!(?peer, "connection handling timeout");
-                        if let Some(ref m) = metrics_for_connection {
-                            m.timeouts_total
-                                .add(1, &[KeyValue::new("type", "connection_handling")]);
-                        }
-                    }
-                }
-            } else if let Err(e) = serve_fut.await {
-                warn!(?peer, error = %e, "serve_connection error");
-            }
+            serve_with_timeout(
+                serve_fut,
+                config.connection_handling_timeout,
+                metrics_for_connection,
+                peer,
+            )
+            .await;
         } else {
             let backends = config.backends.clone();
             let metrics = metrics_for_connection.clone();
@@ -276,23 +267,13 @@ pub async fn handle_tls_connection(
 
             let serve_fut = config.builder.serve_connection(TokioIo::new(tls), svc);
 
-            if let Some(timeout_duration) = config.connection_handling_timeout {
-                match tokio::time::timeout(timeout_duration, serve_fut).await {
-                    Ok(Ok(())) => {}
-                    Ok(Err(e)) => {
-                        warn!(?peer, error = %e, "serve_connection error");
-                    }
-                    Err(_) => {
-                        warn!(?peer, "connection handling timeout");
-                        if let Some(ref m) = metrics_for_connection {
-                            m.timeouts_total
-                                .add(1, &[KeyValue::new("type", "connection_handling")]);
-                        }
-                    }
-                }
-            } else if let Err(e) = serve_fut.await {
-                warn!(?peer, error = %e, "serve_connection error");
-            }
+            serve_with_timeout(
+                serve_fut,
+                config.connection_handling_timeout,
+                metrics_for_connection,
+                peer,
+            )
+            .await;
         }
     } else {
         warn!(?peer, "TLS acceptor not initialized");

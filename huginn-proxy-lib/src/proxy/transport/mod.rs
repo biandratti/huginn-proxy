@@ -1,4 +1,5 @@
 pub mod plain;
+mod timeout_helper;
 pub mod tls;
 
 pub use plain::{handle_plain_connection, PlainConnectionConfig};
