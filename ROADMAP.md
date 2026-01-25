@@ -13,7 +13,6 @@
 - [ ] Connection pooling for backends
 
 ### Security & TLS
-- [ ] mTLS support
 - [ ] OCSP stapling
 - [ ] Session resumption
 

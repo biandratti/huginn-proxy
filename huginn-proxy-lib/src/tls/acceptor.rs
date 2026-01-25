@@ -1,13 +1,25 @@
 use rustls_pki_types::pem::PemObject;
 use rustls_pki_types::{CertificateDer, PrivateKeyDer};
 use std::sync::Arc;
+use tokio_rustls::rustls::server::WebPkiClientVerifier;
+use tokio_rustls::rustls::RootCertStore;
 use tokio_rustls::rustls::ServerConfig;
 use tokio_rustls::TlsAcceptor;
 
-use crate::config::{TlsConfig, TlsOptions, TlsVersion};
+use crate::config::{ClientAuth, TlsConfig, TlsOptions, TlsVersion};
 use crate::error::{ProxyError, Result};
 use crate::tls::cipher_suites::{is_cipher_suite_supported, supported_cipher_suites};
 use crate::tls::curves::{is_curve_supported, supported_curves};
+
+/// Loads CA certificates from a PEM file for client authentication
+fn load_ca_certs(path: &str) -> Result<Vec<CertificateDer<'static>>> {
+    let bytes = std::fs::read(path)
+        .map_err(|e| ProxyError::Tls(format!("Failed to read client CA certificate: {e}")))?;
+
+    CertificateDer::pem_slice_iter(&bytes)
+        .collect::<std::result::Result<Vec<_>, rustls_pki_types::pem::Error>>()
+        .map_err(|e| ProxyError::Tls(format!("Failed to parse client CA certificates: {e}")))
+}
 
 /// Builds a TLS acceptor from configuration
 pub fn build_rustls(cfg: &TlsConfig) -> Result<TlsAcceptor> {
@@ -36,10 +48,34 @@ pub fn build_rustls(cfg: &TlsConfig) -> Result<TlsAcceptor> {
     // Build server config with safe defaults
     // rustls 0.23 uses safe defaults which include TLS 1.2 and 1.3
     // The builder() method already uses safe defaults
-    let mut server = ServerConfig::builder()
-        .with_no_client_auth()
-        .with_single_cert(certs, key)
-        .map_err(|e| ProxyError::Tls(format!("Failed to build TLS config: {e}")))?;
+    let mut server = match &cfg.client_auth {
+        ClientAuth::Required { ca_cert_path } => {
+            // mTLS: Load client CA certificates and require client authentication
+            let client_ca_certs = load_ca_certs(ca_cert_path)?;
+            let mut root_store = RootCertStore::empty();
+            for cert in client_ca_certs {
+                root_store
+                    .add(cert)
+                    .map_err(|e| ProxyError::Tls(format!("Failed to add CA certificate: {e}")))?;
+            }
+
+            let client_verifier = WebPkiClientVerifier::builder(Arc::new(root_store))
+                .build()
+                .map_err(|e| ProxyError::Tls(format!("Failed to build client verifier: {e}")))?;
+
+            ServerConfig::builder()
+                .with_client_cert_verifier(client_verifier)
+                .with_single_cert(certs, key)
+                .map_err(|e| ProxyError::Tls(format!("Failed to build TLS config: {e}")))?
+        }
+        ClientAuth::Disabled => {
+            // No mTLS: standard server configuration
+            ServerConfig::builder()
+                .with_no_client_auth()
+                .with_single_cert(certs, key)
+                .map_err(|e| ProxyError::Tls(format!("Failed to build TLS config: {e}")))?
+        }
+    };
 
     // Note: rustls 0.23 doesn't expose a direct API to filter cipher suites
     // or restrict TLS versions beyond safe defaults. The options are validated
