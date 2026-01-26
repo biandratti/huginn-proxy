@@ -7,12 +7,13 @@ publish = false
 
 [features]
 default = []
-browser-tests = ["dep:thirtyfour"]
+browser-tests = ["dep:thirtyfour", "dep:serial_test"]
 
 [dependencies]
 huginn-proxy-lib = { path = "../huginn-proxy-lib" }
 reqwest.workspace = true
 serde_json.workspace = true
+serial_test = { version = "3", optional = true }
 thirtyfour = { workspace = true, optional = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
 

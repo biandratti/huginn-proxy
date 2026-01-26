@@ -22,12 +22,16 @@
 
 #![cfg(feature = "browser-tests")]
 
+#[cfg(feature = "browser-tests")]
+use serial_test::serial;
+use std::time::Duration;
 use thirtyfour::prelude::*;
 
 const PROXY_URL: &str = "https://localhost:7000";
 const GECKODRIVER_URL: &str = "http://localhost:4444";
 
 #[tokio::test]
+#[serial]
 async fn test_firefox_fingerprint() -> Result<(), Box<dyn std::error::Error>> {
     // Configure Firefox options
     let mut caps = DesiredCapabilities::firefox();
@@ -45,11 +49,15 @@ async fn test_firefox_fingerprint() -> Result<(), Box<dyn std::error::Error>> {
     let url = format!("{}/anything", PROXY_URL);
     driver.goto(&url).await?;
 
-    // Wait for page to load
-    tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+    // Wait for page to load and element to be present
+    tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
 
-    // Get page content
-    let element = driver.find(By::Tag("pre")).await?;
+    // Use explicit wait for element
+    let element = driver
+        .query(By::Tag("pre"))
+        .wait(Duration::from_secs(5), Duration::from_millis(100))
+        .first()
+        .await?;
     let content = element.text().await?;
 
     println!("Response content:\n{}", content);
@@ -103,6 +111,7 @@ async fn test_firefox_fingerprint() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[tokio::test]
+#[serial]
 async fn test_firefox_multiple_requests() -> Result<(), Box<dyn std::error::Error>> {
     let mut caps = DesiredCapabilities::firefox();
     caps.add_arg("--headless")?;
@@ -139,6 +148,7 @@ async fn test_firefox_multiple_requests() -> Result<(), Box<dyn std::error::Erro
 }
 
 #[tokio::test]
+#[serial]
 async fn test_firefox_vs_chrome_different_fingerprints() -> Result<(), Box<dyn std::error::Error>> {
     // This test verifies that Firefox and Chrome produce different fingerprints
     // Note: Requires both chromedriver and geckodriver running
@@ -152,9 +162,13 @@ async fn test_firefox_vs_chrome_different_fingerprints() -> Result<(), Box<dyn s
     firefox_driver
         .goto(&format!("{}/anything", PROXY_URL))
         .await?;
-    tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+    tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
 
-    let firefox_element = firefox_driver.find(By::Tag("pre")).await?;
+    let firefox_element = firefox_driver
+        .query(By::Tag("pre"))
+        .wait(Duration::from_secs(5), Duration::from_millis(100))
+        .first()
+        .await?;
     let firefox_content = firefox_element.text().await?;
     let firefox_json: serde_json::Value = serde_json::from_str(&firefox_content)?;
 
@@ -174,9 +188,13 @@ async fn test_firefox_vs_chrome_different_fingerprints() -> Result<(), Box<dyn s
     chrome_driver
         .goto(&format!("{}/anything", PROXY_URL))
         .await?;
-    tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+    tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
 
-    let chrome_element = chrome_driver.find(By::Tag("pre")).await?;
+    let chrome_element = chrome_driver
+        .query(By::Tag("pre"))
+        .wait(Duration::from_secs(5), Duration::from_millis(100))
+        .first()
+        .await?;
     let chrome_content = chrome_element.text().await?;
     let chrome_json: serde_json::Value = serde_json::from_str(&chrome_content)?;
 
