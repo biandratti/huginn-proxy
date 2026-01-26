@@ -1,6 +1,9 @@
 name: Browser E2E Tests
 
 on:
+  push:
+    branches:
+      - '*'
   workflow_dispatch:
     inputs:
       browsers:
