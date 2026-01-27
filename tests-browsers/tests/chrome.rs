@@ -13,14 +13,12 @@
 //! # Terminal 1: Start chromedriver
 //! chromedriver --port=9515
 //!
-//! # Terminal 2: Start huginn-proxy
-//! cargo run
+//! # Terminal 2: Start huginn-proxy (via Docker Compose)
+//! cd examples && docker compose up -d
 //!
-//! # Terminal 3: Run tests (with feature flag)
-//! cargo test --test webbrowser_chrome --features browser-tests -- --nocapture
+//! # Terminal 3: Run tests
+//! cargo test --package tests-browsers --test chrome -- --nocapture --test-threads=1
 //! ```
-
-#![cfg(feature = "browser-tests")]
 
 use thirtyfour::prelude::*;
 
@@ -38,8 +36,12 @@ async fn test_chrome_fingerprint() -> Result<(), Box<dyn std::error::Error>> {
     caps.add_arg("--no-sandbox")?;
     caps.add_arg("--disable-dev-shm-usage")?;
 
-    let driver = WebDriver::new(CHROMEDRIVER_URL, caps).await
-        .map_err(|e| format!("Chrome/chromedriver not available: {}. Start chromedriver: chromedriver --port=9515", e))?;
+    let driver = WebDriver::new(CHROMEDRIVER_URL, caps).await.map_err(|e| {
+        format!(
+            "Chrome/chromedriver not available: {}. Start chromedriver: chromedriver --port=9515",
+            e
+        )
+    })?;
 
     let result = async {
         let url = format!("{}/anything", PROXY_URL);
@@ -78,7 +80,8 @@ async fn test_chrome_fingerprint() -> Result<(), Box<dyn std::error::Error>> {
         );
 
         Ok::<(), Box<dyn std::error::Error>>(())
-    }.await;
+    }
+    .await;
 
     let _ = driver.quit().await;
     result
@@ -90,8 +93,12 @@ async fn test_chrome_multiple_requests() -> Result<(), Box<dyn std::error::Error
     caps.add_arg("--ignore-certificate-errors")?;
     caps.add_arg("--headless=new")?;
 
-    let driver = WebDriver::new(CHROMEDRIVER_URL, caps).await
-        .map_err(|e| format!("Chrome/chromedriver not available: {}. Start chromedriver: chromedriver --port=9515", e))?;
+    let driver = WebDriver::new(CHROMEDRIVER_URL, caps).await.map_err(|e| {
+        format!(
+            "Chrome/chromedriver not available: {}. Start chromedriver: chromedriver --port=9515",
+            e
+        )
+    })?;
 
     let result = async {
         for i in 1..=3 {
@@ -100,8 +107,9 @@ async fn test_chrome_multiple_requests() -> Result<(), Box<dyn std::error::Error
 
             let element = driver.find(By::Tag("pre")).await?;
             let content = element.text().await?;
-            let json: serde_json::Value = serde_json::from_str(&content)
-                .map_err(|e| format!("Failed to parse JSON in request {}: {}. Content: {}", i, e, content))?;
+            let json: serde_json::Value = serde_json::from_str(&content).map_err(|e| {
+                format!("Failed to parse JSON in request {}: {}. Content: {}", i, e, content)
+            })?;
 
             let headers = json["headers"].as_object().ok_or("Missing headers")?;
             assert!(headers.contains_key(HEADER_HTTP2_AKAMAI));
@@ -109,7 +117,8 @@ async fn test_chrome_multiple_requests() -> Result<(), Box<dyn std::error::Error
         }
 
         Ok::<(), Box<dyn std::error::Error>>(())
-    }.await;
+    }
+    .await;
 
     let _ = driver.quit().await;
     result

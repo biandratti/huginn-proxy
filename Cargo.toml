@@ -1,5 +1,5 @@
 [workspace]
-members = ["examples/backend", "huginn-proxy", "huginn-proxy-lib", "tests-e2e"]
+members = ["examples/backend", "huginn-proxy", "huginn-proxy-lib", "tests-e2e", "tests-browsers"]
 resolver = "2"
 
 [workspace.package]

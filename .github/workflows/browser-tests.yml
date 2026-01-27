@@ -166,18 +166,16 @@ jobs:
       - name: Run Chrome browser tests
         if: matrix.browser == 'chrome'
         run: |
-          cargo test --package tests-e2e \
-            --test webbrowser_chrome \
-            --features browser-tests \
+          cargo test --package tests-browsers \
+            --test chrome \
             --verbose \
             -- --nocapture --test-threads=1
 
       - name: Run Firefox browser tests
         if: matrix.browser == 'firefox'
         run: |
-          cargo test --package tests-e2e \
-            --test webbrowser_firefox \
-            --features browser-tests \
+          cargo test --package tests-browsers \
+            --test firefox \
             --verbose \
             -- --nocapture --test-threads=1
 

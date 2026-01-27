@@ -1,5 +1,5 @@
 [package]
-name = "tests-e2e"
+name = "tests-browsers"
 version = "0.1.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
@@ -7,11 +7,15 @@ publish = false
 
 [dependencies]
 huginn-proxy-lib = { path = "../huginn-proxy-lib" }
-reqwest.workspace = true
 serde_json.workspace = true
+serial_test = "3"
+thirtyfour = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
 
 [[test]]
-name = "e2e"
-path = "tests/e2e.rs"
+name = "chrome"
+path = "tests/chrome.rs"
 
+[[test]]
+name = "firefox"
+path = "tests/firefox.rs"
