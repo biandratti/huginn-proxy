@@ -33,6 +33,7 @@ reqwest = { version = "0.13.1", features = ["json", "http2"] }
 rustls-pki-types = "1.14.0"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
+serial_test = "3"
 tempfile = "3.24.0"
 thirtyfour = "0.36.0"
 thiserror = "2.0.17"

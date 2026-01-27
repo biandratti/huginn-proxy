@@ -10,9 +10,8 @@ name = "tests_browsers"
 path = "src/lib.rs"
 
 [dependencies]
-huginn-proxy-lib = { path = "../huginn-proxy-lib" }
 serde_json.workspace = true
-serial_test = "3"
+serial_test.workspace = true
 thirtyfour = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
 

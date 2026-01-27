@@ -2397,7 +2397,6 @@ dependencies = [
 name = "tests-browsers"
 version = "0.1.0"
 dependencies = [
- "huginn-proxy-lib",
  "serde_json",
  "serial_test",
  "thirtyfour",

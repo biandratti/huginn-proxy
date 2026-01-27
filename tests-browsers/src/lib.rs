@@ -56,7 +56,6 @@ pub async fn verify_chrome_version(driver: &WebDriver) -> Result<(), Box<dyn std
     Ok(())
 }
 
-/// Verify Firefox version matches expected version
 pub async fn verify_firefox_version(driver: &WebDriver) -> Result<(), Box<dyn std::error::Error>> {
     let user_agent: String = driver
         .execute("return navigator.userAgent;", vec![])
