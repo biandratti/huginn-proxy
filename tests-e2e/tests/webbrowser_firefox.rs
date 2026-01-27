@@ -262,7 +262,7 @@ async fn test_firefox_vs_chrome_different_fingerprints() -> Result<(), Box<dyn s
         let chrome_url = format!("{}/anything", PROXY_URL);
         chrome_driver.goto(&chrome_url).await?;
         
-        let chrome_content = chrome_driver.source().await?;
+        let chrome_content = chrome_driver.find(By::Tag("pre")).await?.text().await?;
         let chrome_json: serde_json::Value = serde_json::from_str(&chrome_content)
             .map_err(|e| format!("Failed to parse Chrome JSON: {}. Content: {}", e, chrome_content))?;
 
