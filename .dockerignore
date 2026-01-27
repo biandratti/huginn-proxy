@@ -5,7 +5,6 @@ target/
 # Test packages - exclude source but allow Cargo.toml for workspace resolution
 tests-browsers/src/
 tests-browsers/tests/
-tests-browsers/README.md
 tests-e2e/src/
 tests-e2e/tests/
 tests-e2e/README.md

@@ -63,7 +63,7 @@ jobs:
         if: matrix.browser == 'chrome'
         uses: browser-actions/setup-chrome@v2
         with:
-          chrome-version: stable
+          chrome-version: "144"
 
       - name: Install chromedriver
         if: matrix.browser == 'chrome'
@@ -76,7 +76,7 @@ jobs:
         if: matrix.browser == 'firefox'
         uses: browser-actions/setup-firefox@v1
         with:
-          firefox-version: latest
+          firefox-version: "147.0"
 
       - name: Install geckodriver
         if: matrix.browser == 'firefox'

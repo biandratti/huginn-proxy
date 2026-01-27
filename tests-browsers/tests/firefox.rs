@@ -4,7 +4,7 @@
 //! and that their TLS and HTTP/2 fingerprints are correctly captured and exposed.
 //!
 //! ## Requirements
-//! - Firefox browser installed
+//! - Firefox browser installed (must match FIREFOX_FINGERPRINTS.version in lib.rs)
 //! - geckodriver installed and running on port 4444
 //! - Docker Compose services running (proxy on https://localhost:7000)
 //!
@@ -54,7 +54,8 @@
 use serial_test::serial;
 use tests_browsers::{
     get_chrome_json, get_firefox_json, get_http2_fingerprint, parse_response,
-    verify_fingerprint_headers, HEADER_HTTP2_AKAMAI, HEADER_TLS_JA4, PROXY_URL,
+    verify_fingerprint_headers, verify_firefox_version, FIREFOX_FINGERPRINTS, HEADER_HTTP2_AKAMAI,
+    HEADER_TLS_JA4, PROXY_URL,
 };
 use thirtyfour::prelude::*;
 
@@ -70,6 +71,8 @@ async fn test_firefox_fingerprint() -> Result<(), Box<dyn std::error::Error>> {
     let driver = WebDriver::new(GECKODRIVER_URL, caps).await?;
 
     let result = async {
+        verify_firefox_version(&driver).await?;
+        
         let url = format!("{}/anything", PROXY_URL);
         driver.goto(&url).await?;
 
@@ -93,9 +96,9 @@ async fn test_firefox_fingerprint() -> Result<(), Box<dyn std::error::Error>> {
             .ok_or(format!("Missing {} header", HEADER_TLS_JA4))?;
 
         assert_eq!(
-            ja4_fp, "t13d1717h2_5b57614c22b0_3cbfd9057e0d",
-            "JA4 fingerprint mismatch. Browser version may have changed. Got: {}",
-            ja4_fp
+            ja4_fp, FIREFOX_FINGERPRINTS.tls_ja4,
+            "JA4 fingerprint mismatch. Expected Firefox {} fingerprint: {}. Got: {}. Update FIREFOX_FINGERPRINTS in lib.rs if Firefox version changed.",
+            FIREFOX_FINGERPRINTS.version, FIREFOX_FINGERPRINTS.tls_ja4, ja4_fp
         );
 
         Ok::<(), Box<dyn std::error::Error>>(())

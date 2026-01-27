@@ -4,9 +4,10 @@
 //! and that their TLS and HTTP/2 fingerprints are correctly captured and exposed.
 //!
 //! ## Requirements
-//! - Chrome/Chromium browser installed
+//! - Chrome/Chromium browser installed (must match CHROME_FINGERPRINTS.version in lib.rs)
 //! - chromedriver running on port 9515: `chromedriver --port=9515`
 //! - huginn-proxy running on https://localhost:7000
+//!
 //!
 //! ## Running
 //! ```bash
@@ -21,8 +22,8 @@
 //! ```
 
 use tests_browsers::{
-    get_chrome_json, parse_response, verify_fingerprint_headers, HEADER_HTTP2_AKAMAI,
-    HEADER_TLS_JA4, PROXY_URL,
+    get_chrome_json, parse_response, verify_chrome_version, verify_fingerprint_headers,
+    CHROME_FINGERPRINTS, HEADER_HTTP2_AKAMAI, HEADER_TLS_JA4, PROXY_URL,
 };
 use thirtyfour::prelude::*;
 
@@ -44,6 +45,8 @@ async fn test_chrome_fingerprint() -> Result<(), Box<dyn std::error::Error>> {
     })?;
 
     let result = async {
+        verify_chrome_version(&driver).await?;
+        
         let url = format!("{}/anything", PROXY_URL);
         driver.goto(&url).await?;
 
@@ -56,9 +59,9 @@ async fn test_chrome_fingerprint() -> Result<(), Box<dyn std::error::Error>> {
             .ok_or(format!("Missing {} header", HEADER_HTTP2_AKAMAI))?;
 
         assert_eq!(
-            http2_fp, "1:65536;2:0;4:6291456;6:262144|15663105|0|",
-            "HTTP/2 fingerprint mismatch. Browser version may have changed. Got: {}",
-            http2_fp
+            http2_fp, CHROME_FINGERPRINTS.http2_akamai,
+            "HTTP/2 fingerprint mismatch. Expected Chrome {} fingerprint: {}. Got: {}. Update CHROME_FINGERPRINTS in lib.rs if Chrome version changed.",
+            CHROME_FINGERPRINTS.version, CHROME_FINGERPRINTS.http2_akamai, http2_fp
         );
 
         let ja4_fp = headers
@@ -67,9 +70,9 @@ async fn test_chrome_fingerprint() -> Result<(), Box<dyn std::error::Error>> {
             .ok_or(format!("Missing {} header", HEADER_TLS_JA4))?;
 
         assert_eq!(
-            ja4_fp, "t13d1516h2_8daaf6152771_d8a2da3f94cd",
-            "JA4 fingerprint mismatch. Browser version may have changed. Got: {}",
-            ja4_fp
+            ja4_fp, CHROME_FINGERPRINTS.tls_ja4,
+            "JA4 fingerprint mismatch. Expected Chrome {} fingerprint: {}. Got: {}. Update CHROME_FINGERPRINTS in lib.rs if Chrome version changed.",
+            CHROME_FINGERPRINTS.version, CHROME_FINGERPRINTS.tls_ja4, ja4_fp
         );
 
         Ok::<(), Box<dyn std::error::Error>>(())
