@@ -5,6 +5,10 @@ edition = "2021"
 license = "MIT OR Apache-2.0"
 publish = false
 
+[lib]
+name = "tests_browsers"
+path = "src/lib.rs"
+
 [dependencies]
 huginn-proxy-lib = { path = "../huginn-proxy-lib" }
 serde_json.workspace = true

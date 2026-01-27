@@ -20,13 +20,13 @@
 //! cargo test --package tests-browsers --test chrome -- --nocapture --test-threads=1
 //! ```
 
+use tests_browsers::{
+    get_chrome_json, parse_response, verify_fingerprint_headers, HEADER_HTTP2_AKAMAI,
+    HEADER_TLS_JA4, PROXY_URL,
+};
 use thirtyfour::prelude::*;
 
-const PROXY_URL: &str = "https://localhost:7000";
 const CHROMEDRIVER_URL: &str = "http://localhost:9515";
-
-const HEADER_HTTP2_AKAMAI: &str = "x-huginn-net-akamai";
-const HEADER_TLS_JA4: &str = "x-huginn-net-ja4";
 
 #[tokio::test]
 async fn test_chrome_fingerprint() -> Result<(), Box<dyn std::error::Error>> {
@@ -47,15 +47,8 @@ async fn test_chrome_fingerprint() -> Result<(), Box<dyn std::error::Error>> {
         let url = format!("{}/anything", PROXY_URL);
         driver.goto(&url).await?;
 
-        let element = driver.find(By::Tag("pre")).await?;
-        let content = element.text().await?;
-
-        let json: serde_json::Value = serde_json::from_str(&content)
-            .map_err(|e| format!("Failed to parse JSON: {}. Content: {}", e, content))?;
-
-        let headers = json["headers"]
-            .as_object()
-            .ok_or("Missing headers in response")?;
+        let content = get_chrome_json(&driver).await?;
+        let headers = parse_response(&content)?;
 
         let http2_fp = headers
             .get(HEADER_HTTP2_AKAMAI)
@@ -105,15 +98,9 @@ async fn test_chrome_multiple_requests() -> Result<(), Box<dyn std::error::Error
             let url = format!("{}/anything?request={}", PROXY_URL, i);
             driver.goto(&url).await?;
 
-            let element = driver.find(By::Tag("pre")).await?;
-            let content = element.text().await?;
-            let json: serde_json::Value = serde_json::from_str(&content).map_err(|e| {
-                format!("Failed to parse JSON in request {}: {}. Content: {}", i, e, content)
-            })?;
-
-            let headers = json["headers"].as_object().ok_or("Missing headers")?;
-            assert!(headers.contains_key(HEADER_HTTP2_AKAMAI));
-            assert!(headers.contains_key(HEADER_TLS_JA4));
+            let content = get_chrome_json(&driver).await?;
+            let headers = parse_response(&content)?;
+            verify_fingerprint_headers(&headers)?;
         }
 
         Ok::<(), Box<dyn std::error::Error>>(())

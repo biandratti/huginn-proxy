@@ -1,0 +1,45 @@
+# Build artifacts
+target/
+**/target/
+
+# Test packages - exclude source but allow Cargo.toml for workspace resolution
+tests-browsers/src/
+tests-browsers/tests/
+tests-browsers/README.md
+tests-e2e/src/
+tests-e2e/tests/
+tests-e2e/README.md
+benches/
+
+# Examples - exclude config and docs, but allow backend/ for backend Dockerfiles
+examples/config/
+examples/README.md
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# CI/CD
+.github/
+
+# Documentation (keep README.md for reference)
+*.md
+!README.md
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Rust backup files
+**/*.rs.bk
+
+# Logs
+*.log

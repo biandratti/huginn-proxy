@@ -52,91 +52,13 @@
 //! ```
 
 use serial_test::serial;
+use tests_browsers::{
+    get_chrome_json, get_firefox_json, get_http2_fingerprint, parse_response,
+    verify_fingerprint_headers, HEADER_HTTP2_AKAMAI, HEADER_TLS_JA4, PROXY_URL,
+};
 use thirtyfour::prelude::*;
 
-const PROXY_URL: &str = "https://localhost:7000";
 const GECKODRIVER_URL: &str = "http://localhost:4444";
-
-const HEADER_HTTP2_AKAMAI: &str = "x-huginn-net-akamai";
-const HEADER_TLS_JA4: &str = "x-huginn-net-ja4";
-
-async fn get_json_content(driver: &WebDriver) -> Result<String, Box<dyn std::error::Error>> {
-    if let Ok(raw_tab) = driver.find(By::Id("rawdata-tab")).await {
-        let _ = raw_tab.click().await;
-    }
-
-    let script = r#"
-        const script = document.getElementById('data');
-        if (script && script.textContent) {
-            return script.textContent.trim();
-        }
-        return null;
-    "#;
-
-    if let Ok(result) = driver.execute(script, vec![]).await {
-        if let Ok(json_str) = result.convert::<String>() {
-            if let Some(json) = json_str.strip_prefix("null") {
-                if !json.trim().is_empty() {
-                    return Ok(json.trim().to_string());
-                }
-            } else if !json_str.is_empty() && json_str != "null" {
-                return Ok(json_str);
-            }
-        }
-    }
-
-    let html = driver.source().await?;
-    if let Some(start) = html.find(r#"<script id="data" type="application/json">"#) {
-        let tag_len = r#"<script id="data" type="application/json">"#.len();
-        let start_pos = start
-            .checked_add(tag_len)
-            .ok_or("HTML parsing: position overflow")?;
-        if let Some(end) = html[start_pos..].find("</script>") {
-            let end_pos = start_pos
-                .checked_add(end)
-                .ok_or("HTML parsing: end position overflow")?;
-            let json_str = html[start_pos..end_pos].trim();
-            if !json_str.is_empty() {
-                return Ok(json_str.to_string());
-            }
-        }
-    }
-
-    if let Ok(panel) = driver.find(By::Id("rawdata-panel")).await {
-        let text = panel.text().await?;
-        if let Some(json_start) = text.find('{') {
-            if let Some(json_end) = text.rfind('}') {
-                let json_str = &text[json_start..=json_end];
-                if serde_json::from_str::<serde_json::Value>(json_str).is_ok() {
-                    return Ok(json_str.to_string());
-                }
-            }
-        }
-    }
-
-    if let Ok(element) = driver.find(By::Tag("pre")).await {
-        let text = element.text().await?;
-        if let Some(json_start) = text.find('{') {
-            if let Some(json_end) = text.rfind('}') {
-                let json_str = &text[json_start..=json_end];
-                if serde_json::from_str::<serde_json::Value>(json_str).is_ok() {
-                    return Ok(json_str.to_string());
-                }
-            }
-        }
-    }
-
-    if let Some(json_start) = html.find('{') {
-        if let Some(json_end) = html.rfind('}') {
-            let json_str = html[json_start..=json_end].trim();
-            if serde_json::from_str::<serde_json::Value>(json_str).is_ok() {
-                return Ok(json_str.to_string());
-            }
-        }
-    }
-
-    Err("Could not extract valid JSON from Firefox viewer".into())
-}
 
 #[tokio::test]
 #[serial]
@@ -151,13 +73,8 @@ async fn test_firefox_fingerprint() -> Result<(), Box<dyn std::error::Error>> {
         let url = format!("{}/anything", PROXY_URL);
         driver.goto(&url).await?;
 
-        let content = get_json_content(&driver).await?;
-        let json: serde_json::Value = serde_json::from_str(&content)
-            .map_err(|e| format!("Failed to parse JSON: {}. Content: {}", e, content))?;
-
-        let headers = json["headers"]
-            .as_object()
-            .ok_or("Missing headers in response")?;
+        let content = get_firefox_json(&driver).await?;
+        let headers = parse_response(&content)?;
 
         let http2_fp = headers
             .get(HEADER_HTTP2_AKAMAI)
@@ -203,14 +120,9 @@ async fn test_firefox_multiple_requests() -> Result<(), Box<dyn std::error::Erro
             let url = format!("{}/anything?request={}", PROXY_URL, i);
             driver.goto(&url).await?;
 
-            let content = get_json_content(&driver).await?;
-            let json: serde_json::Value = serde_json::from_str(&content).map_err(|e| {
-                format!("Failed to parse JSON in request {}: {}. Content: {}", i, e, content)
-            })?;
-
-            let headers = json["headers"].as_object().ok_or("Missing headers")?;
-            assert!(headers.contains_key(HEADER_HTTP2_AKAMAI));
-            assert!(headers.contains_key(HEADER_TLS_JA4));
+            let content = get_firefox_json(&driver).await?;
+            let headers = parse_response(&content)?;
+            verify_fingerprint_headers(&headers)?;
         }
 
         Ok::<(), Box<dyn std::error::Error>>(())
@@ -234,15 +146,9 @@ async fn test_firefox_vs_chrome_different_fingerprints() -> Result<(), Box<dyn s
         let firefox_url = format!("{}/anything", PROXY_URL);
         firefox_driver.goto(&firefox_url).await?;
 
-        let firefox_content = get_json_content(&firefox_driver).await?;
-        let firefox_json: serde_json::Value =
-            serde_json::from_str(&firefox_content).map_err(|e| {
-                format!("Failed to parse Firefox JSON: {}. Content: {}", e, firefox_content)
-            })?;
-
-        let firefox_http2 = firefox_json["headers"][HEADER_HTTP2_AKAMAI]
-            .as_str()
-            .unwrap_or("");
+        let firefox_content = get_firefox_json(&firefox_driver).await?;
+        let firefox_headers = parse_response(&firefox_content)?;
+        let firefox_http2 = get_http2_fingerprint(&firefox_headers).unwrap_or("");
         Ok::<String, Box<dyn std::error::Error>>(firefox_http2.to_string())
     }
     .await;
@@ -266,15 +172,9 @@ async fn test_firefox_vs_chrome_different_fingerprints() -> Result<(), Box<dyn s
         let chrome_url = format!("{}/anything", PROXY_URL);
         chrome_driver.goto(&chrome_url).await?;
 
-        let chrome_content = chrome_driver.find(By::Tag("pre")).await?.text().await?;
-        let chrome_json: serde_json::Value =
-            serde_json::from_str(&chrome_content).map_err(|e| {
-                format!("Failed to parse Chrome JSON: {}. Content: {}", e, chrome_content)
-            })?;
-
-        let chrome_http2 = chrome_json["headers"][HEADER_HTTP2_AKAMAI]
-            .as_str()
-            .unwrap_or("");
+        let chrome_content = get_chrome_json(&chrome_driver).await?;
+        let chrome_headers = parse_response(&chrome_content)?;
+        let chrome_http2 = get_http2_fingerprint(&chrome_headers).unwrap_or("");
         Ok::<String, Box<dyn std::error::Error>>(chrome_http2.to_string())
     }
     .await;
