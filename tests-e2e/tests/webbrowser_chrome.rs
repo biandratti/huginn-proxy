@@ -27,81 +27,61 @@ use thirtyfour::prelude::*;
 const PROXY_URL: &str = "https://localhost:7000";
 const CHROMEDRIVER_URL: &str = "http://localhost:9515";
 
+const HEADER_HTTP2_AKAMAI: &str = "x-huginn-net-akamai";
+const HEADER_TLS_JA4: &str = "x-huginn-net-ja4";
+
 #[tokio::test]
 async fn test_chrome_fingerprint() -> Result<(), Box<dyn std::error::Error>> {
-    // Configure Chrome options
     let mut caps = DesiredCapabilities::chrome();
-
-    // Chrome arguments
     caps.add_arg("--ignore-certificate-errors")?;
-    caps.add_arg("--headless=new")?; // Use new headless mode
+    caps.add_arg("--headless=new")?;
     caps.add_arg("--no-sandbox")?;
     caps.add_arg("--disable-dev-shm-usage")?;
 
-    // Create WebDriver
-    let driver = WebDriver::new(CHROMEDRIVER_URL, caps).await?;
+    let driver = WebDriver::new(CHROMEDRIVER_URL, caps).await
+        .map_err(|e| format!("Chrome/chromedriver not available: {}. Start chromedriver: chromedriver --port=9515", e))?;
 
-    // Navigate to proxy endpoint
-    let url = format!("{}/anything", PROXY_URL);
-    driver.goto(&url).await?;
+    let result = async {
+        let url = format!("{}/anything", PROXY_URL);
+        driver.goto(&url).await?;
 
-    // Wait for page to load
-    tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+        let element = driver.find(By::Tag("pre")).await?;
+        let content = element.text().await?;
 
-    // Get page content
-    let element = driver.find(By::Tag("pre")).await?;
-    let content = element.text().await?;
+        let json: serde_json::Value = serde_json::from_str(&content)
+            .map_err(|e| format!("Failed to parse JSON: {}. Content: {}", e, content))?;
 
-    println!("Response content:\n{}", content);
+        let headers = json["headers"]
+            .as_object()
+            .ok_or("Missing headers in response")?;
 
-    // Parse JSON response
-    let json: serde_json::Value = serde_json::from_str(&content)?;
+        let http2_fp = headers
+            .get(HEADER_HTTP2_AKAMAI)
+            .and_then(|v| v.as_str())
+            .ok_or(format!("Missing {} header", HEADER_HTTP2_AKAMAI))?;
 
-    // Verify headers exist
-    let headers = json["headers"]
-        .as_object()
-        .ok_or("Missing headers in response")?;
+        assert_eq!(
+            http2_fp, "1:65536;2:0;4:6291456;6:262144|15663105|0|",
+            "HTTP/2 fingerprint mismatch. Browser version may have changed. Got: {}",
+            http2_fp
+        );
 
-    println!("\nFingerprint Headers:");
+        let ja4_fp = headers
+            .get(HEADER_TLS_JA4)
+            .and_then(|v| v.as_str())
+            .ok_or(format!("Missing {} header", HEADER_TLS_JA4))?;
 
-    // Check HTTP/2 fingerprint
-    let http2_fp = headers
-        .get("x-http2-fingerprint")
-        .and_then(|v| v.as_str())
-        .ok_or("Missing X-Http2-Fingerprint header")?;
+        assert_eq!(
+            ja4_fp, "t13d1516h2_8daaf6152771_d8a2da3f94cd",
+            "JA4 fingerprint mismatch. Browser version may have changed. Got: {}",
+            ja4_fp
+        );
 
-    println!("  X-Http2-Fingerprint: {}", http2_fp);
+        Ok::<(), Box<dyn std::error::Error>>(())
+    }.await;
 
-    // Chrome version 136+ fingerprint
-    // Note: This may vary with browser versions. Update if test fails with newer Chrome.
-    assert_eq!(
-        http2_fp, "1:65536;2:0;4:6291456;6:262144|15663105|1:1:0:256|m,a,s,p",
-        "HTTP/2 fingerprint mismatch. Browser version may have changed."
-    );
-
-    // Check JA4 fingerprint
-    let ja4_fp = headers
-        .get("x-ja4-fingerprint")
-        .and_then(|v| v.as_str())
-        .ok_or("Missing X-Ja4-Fingerprint header")?;
-
-    println!("  X-Ja4-Fingerprint: {}", ja4_fp);
-
-    // Chrome version 136+ JA4 fingerprint
-    // Note: This may vary with browser versions. Update if test fails with newer Chrome.
-    assert_eq!(
-        ja4_fp, "t13d1516h2_8daaf6152771_d8a2da3f94cd",
-        "JA4 fingerprint mismatch. Browser version may have changed."
-    );
-
-    // Note: Chrome doesn't send JA3 (that's TLS 1.2 only, Chrome uses TLS 1.3)
-
-    println!("\n✅ Chrome fingerprinting test passed");
-
-    // Cleanup
-    driver.quit().await?;
-
-    Ok(())
+    let _ = driver.quit().await;
+    result
 }
 
 #[tokio::test]
@@ -110,32 +90,27 @@ async fn test_chrome_multiple_requests() -> Result<(), Box<dyn std::error::Error
     caps.add_arg("--ignore-certificate-errors")?;
     caps.add_arg("--headless=new")?;
 
-    let driver = WebDriver::new(CHROMEDRIVER_URL, caps).await?;
+    let driver = WebDriver::new(CHROMEDRIVER_URL, caps).await
+        .map_err(|e| format!("Chrome/chromedriver not available: {}. Start chromedriver: chromedriver --port=9515", e))?;
 
-    // Make multiple requests to verify fingerprints are consistent
-    for i in 1..=3 {
-        println!("\n=== Request {} ===", i);
+    let result = async {
+        for i in 1..=3 {
+            let url = format!("{}/anything?request={}", PROXY_URL, i);
+            driver.goto(&url).await?;
 
-        let url = format!("{}/anything?request={}", PROXY_URL, i);
-        driver.goto(&url).await?;
-        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+            let element = driver.find(By::Tag("pre")).await?;
+            let content = element.text().await?;
+            let json: serde_json::Value = serde_json::from_str(&content)
+                .map_err(|e| format!("Failed to parse JSON in request {}: {}. Content: {}", i, e, content))?;
 
-        let element = driver.find(By::Tag("pre")).await?;
-        let content = element.text().await?;
-        let json: serde_json::Value = serde_json::from_str(&content)?;
-
-        let headers = json["headers"].as_object().ok_or("Missing headers")?;
-
-        if let Some(http2_fp) = headers.get("x-http2-fingerprint") {
-            println!("  HTTP/2: {}", http2_fp);
+            let headers = json["headers"].as_object().ok_or("Missing headers")?;
+            assert!(headers.contains_key(HEADER_HTTP2_AKAMAI));
+            assert!(headers.contains_key(HEADER_TLS_JA4));
         }
-        if let Some(ja4_fp) = headers.get("x-ja4-fingerprint") {
-            println!("  JA4: {}", ja4_fp);
-        }
-    }
 
-    println!("\n✅ Multiple requests test passed");
+        Ok::<(), Box<dyn std::error::Error>>(())
+    }.await;
 
-    driver.quit().await?;
-    Ok(())
+    let _ = driver.quit().await;
+    result
 }
