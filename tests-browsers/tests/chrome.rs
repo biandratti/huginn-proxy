@@ -46,7 +46,6 @@ async fn test_chrome_fingerprint() -> Result<(), Box<dyn std::error::Error>> {
 
     let result = async {
         verify_chrome_version(&driver).await?;
-        
         let url = format!("{}/anything", PROXY_URL);
         driver.goto(&url).await?;
 

@@ -72,7 +72,6 @@ async fn test_firefox_fingerprint() -> Result<(), Box<dyn std::error::Error>> {
 
     let result = async {
         verify_firefox_version(&driver).await?;
-        
         let url = format!("{}/anything", PROXY_URL);
         driver.goto(&url).await?;
 
