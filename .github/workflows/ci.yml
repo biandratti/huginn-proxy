@@ -16,7 +16,7 @@ permissions:
 env:
   CARGO_TERM_COLOR: always
   rust_stable: stable
-  rust_min: '1.83'
+  rust_min: '1.85'
 
 jobs:
   
@@ -198,7 +198,7 @@ jobs:
         with:
           toolchain: beta
       - name: Test Beta
-        run: cargo test --workspace --all-features --exclude tests-e2e
+        run: cargo test --workspace --all-features --exclude tests-e2e --exclude tests-browsers
 
   test:
     runs-on: ubuntu-latest
@@ -213,7 +213,7 @@ jobs:
         uses: actions/checkout@v6
       - name: Generate code coverage
         run: |
-          cargo +nightly tarpaulin --workspace --exclude tests-e2e --verbose --all-features --timeout 120 --out xml --output-dir .
+          cargo +nightly tarpaulin --workspace --exclude tests-e2e --exclude tests-browsers --verbose --all-features --timeout 120 --out xml --output-dir .
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v5
         with:

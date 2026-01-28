@@ -1,11 +1,17 @@
 [workspace]
-members = ["examples/backend", "huginn-proxy", "huginn-proxy-lib", "tests-e2e"]
+members = [
+    "examples/backend",
+    "huginn-proxy",
+    "huginn-proxy-lib",
+    "tests-browsers",
+    "tests-e2e",
+]
 resolver = "2"
 
 [workspace.package]
 version = "0.1.0"
 edition = "2021"
-rust-version = "1.83"
+rust-version = "1.85"
 license = "MIT OR Apache-2.0"
 authors = ["Maximiliano Biandratti"]
 repository = "https://github.com/biandratti/huginn-proxy"
@@ -33,7 +39,9 @@ reqwest = { version = "0.13.1", features = ["json", "http2"] }
 rustls-pki-types = "1.14.0"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
+serial_test = "3"
 tempfile = "3.24.0"
+thirtyfour = "0.36.0"
 thiserror = "2.0.17"
 tokio = { version = "1.49.0", features = ["net", "time", "io-util", "macros", "rt-multi-thread", "sync", "signal", "fs"] }
 tokio-rustls = "0.26.4"
