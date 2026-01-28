@@ -2,7 +2,6 @@
 version = 2
 unmaintained = "all"
 # Exception for paste: transitive dependency of thirtyfour (used in tests-browsers)
-# paste is unmaintained but thirtyfour still depends on it
 # See: https://rustsec.org/advisories/RUSTSEC-2024-0436
 ignore = [
     "RUSTSEC-2024-0436",
