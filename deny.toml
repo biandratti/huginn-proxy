@@ -1,6 +1,11 @@
 [advisories]
 version = 2
 unmaintained = "all"
+# Exception for paste: transitive dependency of thirtyfour (used in tests-browsers)
+# See: https://rustsec.org/advisories/RUSTSEC-2024-0436
+ignore = [
+    "RUSTSEC-2024-0436",
+]
 
 [licenses]
 version = 2
@@ -13,6 +18,7 @@ allow = [
     "OpenSSL",
     "CC0-1.0",
     "CDLA-Permissive-2.0",
+    "Zlib",
 ]
 confidence-threshold = 1.0
 
