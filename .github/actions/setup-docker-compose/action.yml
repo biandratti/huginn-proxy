@@ -1,0 +1,61 @@
+name: 'Setup Docker Compose services'
+description: 'Set up Docker Buildx, generate TLS certificates, build images, and start Docker Compose services'
+inputs:
+  compose-dir:
+    description: 'Directory containing docker-compose.yml (default: examples)'
+    required: false
+    default: 'examples'
+  health-timeout:
+    description: 'Timeout in seconds to wait for services to be healthy (default: 120)'
+    required: false
+    default: '120'
+  ready-delay:
+    description: 'Additional delay in seconds after services are healthy (default: 5)'
+    required: false
+    default: '5'
+runs:
+  using: 'composite'
+  steps:
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Generate TLS certificates
+      shell: bash
+      run: |
+        mkdir -p ${{ inputs.compose-dir }}/certs
+        openssl req -x509 -newkey rsa:2048 -nodes \
+          -keyout ${{ inputs.compose-dir }}/certs/server.key \
+          -out ${{ inputs.compose-dir }}/certs/server.crt \
+          -days 365 \
+          -subj "/CN=localhost"
+        chmod 644 ${{ inputs.compose-dir }}/certs/server.key
+        chmod 644 ${{ inputs.compose-dir }}/certs/server.crt
+
+    - name: Start Docker Compose services
+      shell: bash
+      env:
+        DOCKER_BUILDKIT: 1
+        COMPOSE_DOCKER_CLI_BUILD: 1
+      run: |
+        cd ${{ inputs.compose-dir }}
+        docker buildx build \
+          --cache-from type=gha \
+          --cache-to type=gha,mode=max \
+          -f ../Dockerfile \
+          -t examples_proxy:latest \
+          --load \
+          ..
+        docker buildx build \
+          --cache-from type=gha \
+          --cache-to type=gha,mode=max \
+          -f ../examples/backend/Dockerfile \
+          -t examples_backend-a:latest \
+          -t examples_backend-b:latest \
+          --load \
+          ..
+        docker compose up -d
+        echo "Waiting for services to be healthy..."
+        timeout ${{ inputs.health-timeout }} bash -c 'until docker compose ps | grep -q "healthy"; do sleep 2; done'
+        docker compose ps
+        echo "Waiting for services to be ready..."
+        sleep ${{ inputs.ready-delay }}

@@ -3,15 +3,16 @@ name: Browser E2E Tests
 on:
   workflow_dispatch:
     inputs:
-      browsers:
-        description: 'Browsers to test'
-        required: true
-        default: 'chrome,firefox'
-        type: choice
-        options:
-          - 'chrome'
-          - 'firefox'
-          - 'chrome,firefox'
+      run-chrome:
+        description: 'Run Chrome tests'
+        required: false
+        default: true
+        type: boolean
+      run-firefox:
+        description: 'Run Firefox tests'
+        required: false
+        default: true
+        type: boolean
   schedule:
     - cron: '0 0 * * 0'
 
@@ -28,13 +29,12 @@ env:
   rust_min: '1.85'
 
 jobs:
-  browser-tests:
-    name: Browser Tests (${{ matrix.browser }})
+  chrome-tests:
+    name: Chrome Tests
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.run-chrome != false }}
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        browser: [chrome, firefox]
+    env:
+      CHROMEDRIVER_PORT: 9515
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -56,134 +56,61 @@ jobs:
         with:
           toolchain: ${{ env.rust_stable }}
 
-      - name: Install Chrome
-        if: matrix.browser == 'chrome'
-        uses: browser-actions/setup-chrome@v2
+      - name: Setup Docker Compose services
+        uses: ./.github/actions/setup-docker-compose
+
+      - name: Setup Chrome
+        uses: ./.github/actions/setup-chrome
         with:
           chrome-version: "144"
-
-      - name: Install chromedriver
-        if: matrix.browser == 'chrome'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y chromium-chromedriver
-          chromedriver --version
-
-      - name: Install Firefox
-        if: matrix.browser == 'firefox'
-        uses: browser-actions/setup-firefox@v1
-        with:
-          firefox-version: "147.0"
-
-      - name: Install geckodriver
-        if: matrix.browser == 'firefox'
-        run: |
-          GECKODRIVER_VERSION=$(curl -s https://api.github.com/repos/mozilla/geckodriver/releases/latest | jq -r '.tag_name')
-          wget https://github.com/mozilla/geckodriver/releases/download/${GECKODRIVER_VERSION}/geckodriver-${GECKODRIVER_VERSION}-linux64.tar.gz
-          tar -xzf geckodriver-${GECKODRIVER_VERSION}-linux64.tar.gz
-          sudo mv geckodriver /usr/local/bin/
-          geckodriver --version
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Generate TLS certificates
-        run: |
-          mkdir -p examples/certs
-          openssl req -x509 -newkey rsa:2048 -nodes \
-            -keyout examples/certs/server.key \
-            -out examples/certs/server.crt \
-            -days 365 \
-            -subj "/CN=localhost"
-          chmod 644 examples/certs/server.key
-          chmod 644 examples/certs/server.crt
-
-      - name: Start Docker Compose services
-        env:
-          DOCKER_BUILDKIT: 1
-          COMPOSE_DOCKER_CLI_BUILD: 1
-        run: |
-          cd examples
-          docker buildx build \
-            --cache-from type=gha \
-            --cache-to type=gha,mode=max \
-            -f ../Dockerfile \
-            -t examples_proxy:latest \
-            --load \
-            ..
-          docker buildx build \
-            --cache-from type=gha \
-            --cache-to type=gha,mode=max \
-            -f ../examples/backend/Dockerfile \
-            -t examples_backend-a:latest \
-            -t examples_backend-b:latest \
-            --load \
-            ..
-          docker compose up -d
-          echo "Waiting for services to be healthy..."
-          timeout 120 bash -c 'until docker compose ps | grep -q "healthy"; do sleep 2; done'
-          docker compose ps
-          echo "Waiting for services to be ready..."
-          sleep 5
-
-      - name: Start chromedriver
-        if: matrix.browser == 'chrome'
-        run: |
-          pkill -f chromedriver || true
-          sleep 1
-          chromedriver --port=9515 --log-path=/tmp/chromedriver.log &
-          sleep 3
-          for i in {1..10}; do
-            if curl -s http://localhost:9515/status > /dev/null 2>&1; then
-              echo "✅ chromedriver is running"
-              break
-            fi
-            echo "Waiting for chromedriver... ($i/10)"
-            sleep 1
-          done
-          curl -s http://localhost:9515/status || (cat /tmp/chromedriver.log && exit 1)
-
-      - name: Start geckodriver
-        if: matrix.browser == 'firefox'
-        run: |
-          pkill -f geckodriver || true
-          sleep 1
-          geckodriver --port 4444 --log trace &
-          sleep 3
-          for i in {1..10}; do
-            if curl -s http://localhost:4444/status > /dev/null 2>&1; then
-              echo "✅ geckodriver is running"
-              break
-            fi
-            echo "Waiting for geckodriver... ($i/10)"
-            sleep 1
-          done
-          curl -s http://localhost:4444/status || (echo "geckodriver failed to start" && exit 1)
+          chromedriver-port: ${{ env.CHROMEDRIVER_PORT }}
 
       - name: Run Chrome browser tests
-        if: matrix.browser == 'chrome'
         run: |
           cargo test --package tests-browsers \
             --test chrome \
             --verbose \
             -- --nocapture --test-threads=1
 
+  firefox-tests:
+    name: Firefox Tests
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.run-firefox != false }}
+    runs-on: ubuntu-latest
+    env:
+      GECKODRIVER_PORT: 4444
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-browser-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-browser-
+            ${{ runner.os }}-cargo-
+
+      - name: Install Rust ${{ env.rust_stable }}
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.rust_stable }}
+
+      - name: Setup Docker Compose services
+        uses: ./.github/actions/setup-docker-compose
+
+      - name: Setup Firefox
+        uses: ./.github/actions/setup-firefox
+        with:
+          firefox-version: "147.0"
+          geckodriver-port: ${{ env.GECKODRIVER_PORT }}
+
       - name: Run Firefox browser tests
-        if: matrix.browser == 'firefox'
         run: |
           cargo test --package tests-browsers \
             --test firefox \
             --verbose \
             -- --nocapture --test-threads=1
-
-      - name: Show chromedriver logs
-        if: failure() && matrix.browser == 'chrome'
-        run: |
-          echo "=== chromedriver logs ==="
-          cat /tmp/chromedriver.log || echo "No logs found"
-
-      - name: Show Docker Compose logs
-        if: failure()
-        run: |
-          cd examples
-          docker compose logs
