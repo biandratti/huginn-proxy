@@ -3,15 +3,16 @@ name: Browser E2E Tests
 on:
   workflow_dispatch:
     inputs:
-      browsers:
-        description: 'Browsers to test'
-        required: true
-        default: 'chrome,firefox'
-        type: choice
-        options:
-          - 'chrome'
-          - 'firefox'
-          - 'chrome,firefox'
+      run-chrome:
+        description: 'Run Chrome tests'
+        required: false
+        default: true
+        type: boolean
+      run-firefox:
+        description: 'Run Firefox tests'
+        required: false
+        default: true
+        type: boolean
   schedule:
     - cron: '0 0 * * 0'
 
@@ -30,6 +31,7 @@ env:
 jobs:
   chrome-tests:
     name: Chrome Tests
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.run-chrome != false }}
     runs-on: ubuntu-latest
     env:
       CHROMEDRIVER_PORT: 9515
@@ -72,6 +74,7 @@ jobs:
 
   firefox-tests:
     name: Firefox Tests
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.run-firefox != false }}
     runs-on: ubuntu-latest
     env:
       GECKODRIVER_PORT: 4444
