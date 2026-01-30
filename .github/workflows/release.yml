@@ -27,14 +27,20 @@ jobs:
       - name: Verify tag points to master branch
         run: |
           TAG=${GITHUB_REF#refs/tags/}
-          COMMIT_SHA=$(git rev-list -n 1 ${TAG})
+          COMMIT_SHA=$(git rev-list -n 1 ${TAG} || echo "")
+          
+          if [ -z "${COMMIT_SHA}" ]; then
+            echo "✗ Tag ${TAG} does not exist or cannot be resolved"
+            exit 1
+          fi
           
           # Check if the commit is in master branch
           if git branch -r --contains ${COMMIT_SHA} | grep -qE 'origin/master'; then
             echo "✓ Tag ${TAG} points to a commit in master branch"
           else
             echo "✗ Tag ${TAG} does not point to a commit in master branch"
-            echo "Only tags pointing to master can trigger releases"
+            echo "Only tags pointing to master branch can trigger releases"
+            echo "This prevents releases from tags created on feature branches"
             exit 1
           fi
 
