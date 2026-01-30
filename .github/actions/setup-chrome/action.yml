@@ -1,0 +1,20 @@
+name: 'Setup Chrome and chromedriver'
+description: 'Install Chrome browser and chromedriver for browser testing'
+inputs:
+  chrome-version:
+    description: 'Chrome version to install (e.g., "144")'
+    required: true
+runs:
+  using: 'composite'
+  steps:
+    - name: Install Chrome
+      uses: browser-actions/setup-chrome@v2
+      with:
+        chrome-version: ${{ inputs.chrome-version }}
+    
+    - name: Install chromedriver
+      shell: bash
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y chromium-chromedriver
+        chromedriver --version
