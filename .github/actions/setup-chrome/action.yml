@@ -1,8 +1,11 @@
 name: 'Setup Chrome and chromedriver'
-description: 'Install Chrome browser and chromedriver for browser testing'
+description: 'Install Chrome browser, chromedriver, and start chromedriver service'
 inputs:
   chrome-version:
     description: 'Chrome version to install (e.g., "144")'
+    required: true
+  chromedriver-port:
+    description: 'Port for chromedriver'
     required: true
 runs:
   using: 'composite'
@@ -18,3 +21,20 @@ runs:
         sudo apt-get update
         sudo apt-get install -y chromium-chromedriver
         chromedriver --version
+    
+    - name: Start chromedriver
+      shell: bash
+      run: |
+        pkill -f chromedriver || true
+        sleep 1
+        chromedriver --port=${{ inputs.chromedriver-port }} --log-path=/tmp/chromedriver.log &
+        sleep 3
+        for i in {1..10}; do
+          if curl -s http://localhost:${{ inputs.chromedriver-port }}/status > /dev/null 2>&1; then
+            echo "chromedriver is running"
+            break
+          fi
+          echo "Waiting for chromedriver... ($i/10)"
+          sleep 1
+        done
+        curl -s http://localhost:${{ inputs.chromedriver-port }}/status || (cat /tmp/chromedriver.log && exit 1)
