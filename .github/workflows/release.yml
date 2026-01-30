@@ -134,18 +134,19 @@ jobs:
           cache-to: type=gha,mode=max,scope=docker-${{ matrix.dockerfile }}
 
       - name: Run Trivy vulnerability scanner
+        id: trivy
+        continue-on-error: true
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: ${{ env.GHCR }}/${{ env.GHCR_IMAGE_NAME }}:${{ steps.version.outputs.tag }}
           format: 'sarif'
           output: 'trivy-results.sarif'
           severity: 'CRITICAL,HIGH'
-          exit-code: '1'
-        continue-on-error: true
+          exit-code: '0'
 
       - name: Upload Trivy results to GitHub Security
+        if: always() && steps.trivy.outcome == 'success' && hashFiles('trivy-results.sarif') != ''
         uses: github/codeql-action/upload-sarif@v4
-        if: always()
         with:
           sarif_file: 'trivy-results.sarif'
 
@@ -222,9 +223,6 @@ jobs:
           - os: macos-latest
             target: aarch64-apple-darwin
             binary-name: huginn-proxy
-          - os: windows-latest
-            target: x86_64-pc-windows-msvc
-            binary-name: huginn-proxy.exe
 
     runs-on: ${{ matrix.os }}
 
@@ -274,31 +272,15 @@ jobs:
         run: |
           OUTPUT_PATH="${{ steps.output.outputs.path }}"
           RELEASE_NAME="huginn-proxy-${{ steps.version.outputs.tag }}-${{ matrix.target }}"
-          if [ "${{ matrix.os }}" == "windows-latest" ]; then
-            cp "${OUTPUT_PATH}" "${RELEASE_NAME}.exe"
-            echo "RELEASE_BINARY=${RELEASE_NAME}.exe" >> $GITHUB_ENV
-          else
-            cp "${OUTPUT_PATH}" "${RELEASE_NAME}"
-            chmod +x "${RELEASE_NAME}"
-            echo "RELEASE_BINARY=${RELEASE_NAME}" >> $GITHUB_ENV
-          fi
+          cp "${OUTPUT_PATH}" "${RELEASE_NAME}"
+          chmod +x "${RELEASE_NAME}"
+          echo "RELEASE_BINARY=${RELEASE_NAME}" >> $GITHUB_ENV
 
       - name: Verify binary
         shell: bash
         run: |
-          if [ "${{ matrix.os }}" == "windows-latest" ]; then
-            # Windows doesn't have file command, just check if file exists
-            if [ -f "${RELEASE_BINARY}" ]; then
-              echo "✓ Binary exists: ${RELEASE_BINARY}"
-              ls -lh "${RELEASE_BINARY}" || dir "${RELEASE_BINARY}"
-            else
-              echo "✗ Binary not found: ${RELEASE_BINARY}"
-              exit 1
-            fi
-          else
-            file "${RELEASE_BINARY}"
-            ls -lh "${RELEASE_BINARY}"
-          fi
+          file "${RELEASE_BINARY}"
+          ls -lh "${RELEASE_BINARY}"
 
       - name: Upload binary artifact
         uses: actions/upload-artifact@v6
