@@ -107,7 +107,7 @@ jobs:
           images: |
             ${{ env.GHCR }}/${{ env.GHCR_IMAGE_NAME }}
           tags: |
-            type=ref,event=tag,prefix=v
+            type=ref,event=tag
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
