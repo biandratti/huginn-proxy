@@ -52,9 +52,9 @@ tracing-opentelemetry = "0.32.1"
 tracing-subscriber = { version = "0.3.22", features = ["fmt", "env-filter"] }
 
 [profile.release]
-codegen-units = 1
-incremental = false
-lto = "fat"
+codegen-units = 4
+incremental = true
+lto = "thin"
 opt-level = 3
 panic = "abort"
 strip = true
