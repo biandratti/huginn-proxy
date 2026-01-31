@@ -76,6 +76,9 @@ jobs:
     name: Build, scan and push Docker images
     runs-on: ubuntu-latest
     needs: validate
+    outputs:
+      image_tag: ${{ steps.version.outputs.image_tag }}
+      tag: ${{ steps.version.outputs.tag }}
     strategy:
       fail-fast: false
       matrix:
@@ -91,9 +94,12 @@ jobs:
       - name: Extract version from tag
         id: version
         run: |
-          VERSION=${GITHUB_REF#refs/tags/v}
+          TAG=${GITHUB_REF#refs/tags/}
+          VERSION=${TAG#v}
+          IMAGE_TAG="${{ env.GHCR }}/${{ env.GHCR_IMAGE_NAME }}:${TAG}"
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
-          echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          echo "image_tag=${IMAGE_TAG}" >> $GITHUB_OUTPUT
 
       - name: Docker meta
         id: meta
@@ -106,7 +112,7 @@ jobs:
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
-            type=raw,value=latest${{ matrix.tags-suffix }}
+            type=raw,value=latest${{ matrix.tags-suffix }},enable={{is_default_branch}}
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -134,18 +140,19 @@ jobs:
           cache-to: type=gha,mode=max,scope=docker-${{ matrix.dockerfile }}
 
       - name: Run Trivy vulnerability scanner
+        id: trivy
+        continue-on-error: true
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: ${{ env.GHCR }}/${{ env.GHCR_IMAGE_NAME }}:${{ steps.version.outputs.tag }}
+          image-ref: ${{ steps.version.outputs.image_tag }}
           format: 'sarif'
           output: 'trivy-results.sarif'
           severity: 'CRITICAL,HIGH'
-          exit-code: '1'
-        continue-on-error: true
+          exit-code: '0'
 
       - name: Upload Trivy results to GitHub Security
+        if: always() && steps.trivy.outcome == 'success' && hashFiles('trivy-results.sarif') != ''
         uses: github/codeql-action/upload-sarif@v4
-        if: always()
         with:
           sarif_file: 'trivy-results.sarif'
 
@@ -167,13 +174,6 @@ jobs:
             suffix: ""
 
     steps:
-      - name: Extract version from tag
-        id: version
-        run: |
-          VERSION=${GITHUB_REF#refs/tags/v}
-          echo "version=${VERSION}" >> $GITHUB_OUTPUT
-          echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
-
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -186,8 +186,8 @@ jobs:
 
       - name: Extract binary from Docker image
         run: |
-          IMAGE_TAG="${{ env.GHCR }}/${{ env.GHCR_IMAGE_NAME }}:${{ steps.version.outputs.tag }}"
-          BINARY_NAME="huginn-proxy-${{ steps.version.outputs.tag }}-${{ matrix.target }}"
+          IMAGE_TAG="${{ needs.docker.outputs.image_tag }}"
+          BINARY_NAME="huginn-proxy-${{ needs.docker.outputs.tag }}-${{ matrix.target }}"
           
           echo "Pulling image: ${IMAGE_TAG}"
           docker pull --platform=${{ matrix.platform }} ${IMAGE_TAG}
@@ -207,7 +207,7 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: ${{ matrix.target }}${{ matrix.suffix }}
-          path: /tmp/huginn-proxy-${{ steps.version.outputs.tag }}-${{ matrix.target }}
+          path: /tmp/huginn-proxy-${{ needs.docker.outputs.tag }}-${{ matrix.target }}
 
   binaries-cross-platform:
     name: Build cross-platform binaries
@@ -222,9 +222,6 @@ jobs:
           - os: macos-latest
             target: aarch64-apple-darwin
             binary-name: huginn-proxy
-          - os: windows-latest
-            target: x86_64-pc-windows-msvc
-            binary-name: huginn-proxy.exe
 
     runs-on: ${{ matrix.os }}
 
@@ -274,31 +271,15 @@ jobs:
         run: |
           OUTPUT_PATH="${{ steps.output.outputs.path }}"
           RELEASE_NAME="huginn-proxy-${{ steps.version.outputs.tag }}-${{ matrix.target }}"
-          if [ "${{ matrix.os }}" == "windows-latest" ]; then
-            cp "${OUTPUT_PATH}" "${RELEASE_NAME}.exe"
-            echo "RELEASE_BINARY=${RELEASE_NAME}.exe" >> $GITHUB_ENV
-          else
-            cp "${OUTPUT_PATH}" "${RELEASE_NAME}"
-            chmod +x "${RELEASE_NAME}"
-            echo "RELEASE_BINARY=${RELEASE_NAME}" >> $GITHUB_ENV
-          fi
+          cp "${OUTPUT_PATH}" "${RELEASE_NAME}"
+          chmod +x "${RELEASE_NAME}"
+          echo "RELEASE_BINARY=${RELEASE_NAME}" >> $GITHUB_ENV
 
       - name: Verify binary
         shell: bash
         run: |
-          if [ "${{ matrix.os }}" == "windows-latest" ]; then
-            # Windows doesn't have file command, just check if file exists
-            if [ -f "${RELEASE_BINARY}" ]; then
-              echo "✓ Binary exists: ${RELEASE_BINARY}"
-              ls -lh "${RELEASE_BINARY}" || dir "${RELEASE_BINARY}"
-            else
-              echo "✗ Binary not found: ${RELEASE_BINARY}"
-              exit 1
-            fi
-          else
-            file "${RELEASE_BINARY}"
-            ls -lh "${RELEASE_BINARY}"
-          fi
+          file "${RELEASE_BINARY}"
+          ls -lh "${RELEASE_BINARY}"
 
       - name: Upload binary artifact
         uses: actions/upload-artifact@v6
