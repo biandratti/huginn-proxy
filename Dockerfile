@@ -5,6 +5,7 @@ COPY . .
 RUN cargo build --release -p huginn-proxy
 
 FROM alpine:3.23.2
+LABEL org.opencontainers.image.description="High-performance reverse proxy with passive fingerprinting capabilities powered by Huginn Net"
 RUN apk add --no-cache ca-certificates wget
 RUN adduser -D app
 WORKDIR /app
