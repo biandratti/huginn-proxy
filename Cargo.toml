@@ -20,7 +20,7 @@ homepage = "https://github.com/biandratti/huginn-proxy"
 [workspace.dependencies]
 ahash = "0.8.12"
 async-trait = "0.1.89"
-bytes = "1.11.0"
+bytes = "1.11.1"
 criterion = { version = "0.8.2", features = ["html_reports"] }
 http = "1.4.0"
 http-body-util = "0.1.3"
