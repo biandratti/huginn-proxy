@@ -21,7 +21,7 @@ homepage = "https://github.com/biandratti/huginn-proxy"
 ahash = "0.8.12"
 async-trait = "0.1.89"
 bytes = "1.11.0"
-criterion = { version = "0.8.1", features = ["html_reports"] }
+criterion = { version = "0.8.2", features = ["html_reports"] }
 http = "1.4.0"
 http-body-util = "0.1.3"
 huginn-net-db = "1.7.2"
