@@ -5,6 +5,6 @@ pub use loader::load_from_path;
 pub use types::{
     Backend, BackendHttpVersion, ClientAuth, Config, CspConfig, CustomHeader, FingerprintConfig,
     HstsConfig, IpFilterConfig, IpFilterMode, KeepAliveConfig, LimitBy, LoggingConfig,
-    RateLimitConfig, Route, RouteRateLimitConfig, SecurityConfig, SecurityHeaders, TelemetryConfig,
-    TimeoutConfig, TlsConfig, TlsOptions, TlsVersion,
+    RateLimitConfig, Route, RouteRateLimitConfig, SecurityConfig, SecurityHeaders,
+    SessionResumptionConfig, TelemetryConfig, TimeoutConfig, TlsConfig, TlsOptions, TlsVersion,
 };

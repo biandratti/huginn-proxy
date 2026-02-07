@@ -151,7 +151,7 @@ fn default_cert_watch_delay_secs() -> u32 {
 }
 
 /// Session resumption configuration for TLS
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone, Default)]
 pub struct SessionResumptionConfig {
     /// Enable session resumption (default: true)
     /// When enabled, clients can reuse previous TLS sessions to reduce handshake overhead

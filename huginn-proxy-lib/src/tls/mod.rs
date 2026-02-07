@@ -3,6 +3,7 @@ pub mod cipher_suites;
 pub mod curves;
 pub mod metrics;
 pub mod reloader;
+pub mod session_resumption;
 pub mod setup;
 
 pub use acceptor::build_rustls;

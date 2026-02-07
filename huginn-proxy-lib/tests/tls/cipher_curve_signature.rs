@@ -52,6 +52,7 @@ fn test_different_cipher_suites_produce_different_configs(
             ..Default::default()
         },
         client_auth: ClientAuth::Disabled,
+        session_resumption: Default::default(),
     };
 
     // Configuration 2: Only TLS 1.2 cipher suites
@@ -69,6 +70,7 @@ fn test_different_cipher_suites_produce_different_configs(
             ..Default::default()
         },
         client_auth: ClientAuth::Disabled,
+        session_resumption: Default::default(),
     };
 
     // Both configurations should validate and build successfully
@@ -126,6 +128,7 @@ fn test_different_curve_preferences_produce_different_configs(
         alpn: vec!["h2".to_string(), "http/1.1".to_string()],
         options: TlsOptions { curve_preferences: vec!["X25519".to_string()], ..Default::default() },
         client_auth: ClientAuth::Disabled,
+        session_resumption: Default::default(),
     };
 
     // Configuration 2: Only secp256r1 (NIST P-256)
@@ -139,6 +142,7 @@ fn test_different_curve_preferences_produce_different_configs(
             ..Default::default()
         },
         client_auth: ClientAuth::Disabled,
+        session_resumption: Default::default(),
     };
 
     // Both configurations should validate and build successfully
@@ -194,6 +198,7 @@ fn test_combined_cipher_and_curve_configs() -> Result<(), Box<dyn std::error::Er
             ..Default::default()
         },
         client_auth: ClientAuth::Disabled,
+        session_resumption: Default::default(),
     };
 
     let result = build_rustls(&config);

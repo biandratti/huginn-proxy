@@ -41,6 +41,7 @@ fn test_build_rustls_success() -> Result<(), Box<dyn std::error::Error + Send + 
         alpn: vec!["h2".to_string(), "http/1.1".to_string()],
         options: Default::default(),
         client_auth: ClientAuth::Disabled,
+        session_resumption: Default::default(),
     };
 
     // This will fail with invalid cert/key, but we can test the error handling
@@ -64,6 +65,7 @@ fn test_build_rustls_missing_cert() -> Result<(), Box<dyn std::error::Error + Se
         alpn: vec![],
         options: Default::default(),
         client_auth: ClientAuth::Disabled,
+        session_resumption: Default::default(),
     };
 
     let result = build_rustls(&config);
@@ -86,6 +88,7 @@ fn test_build_rustls_empty_alpn() -> Result<(), Box<dyn std::error::Error + Send
         alpn: vec![], // Empty ALPN means no ALPN
         options: Default::default(),
         client_auth: ClientAuth::Disabled,
+        session_resumption: Default::default(),
     };
 
     let result = build_rustls(&config);
@@ -110,6 +113,7 @@ fn test_build_rustls_custom_alpn() -> Result<(), Box<dyn std::error::Error + Sen
         alpn: vec!["h2".to_string()],
         options: Default::default(),
         client_auth: ClientAuth::Disabled,
+        session_resumption: Default::default(),
     };
 
     let result = build_rustls(&config);
@@ -139,6 +143,7 @@ fn test_build_rustls_invalid_pem() -> Result<(), Box<dyn std::error::Error + Sen
         alpn: vec![],
         options: Default::default(),
         client_auth: ClientAuth::Disabled,
+        session_resumption: Default::default(),
     };
 
     let result = build_rustls(&config);
@@ -162,6 +167,7 @@ fn test_mtls_missing_client_ca() -> Result<(), Box<dyn std::error::Error + Send 
         alpn: vec![],
         options: Default::default(),
         client_auth: ClientAuth::Required { ca_cert_path: "/nonexistent/ca.pem".to_string() },
+        session_resumption: Default::default(),
     };
 
     let result = build_rustls(&config);
@@ -191,6 +197,7 @@ fn test_mtls_invalid_client_ca_pem() -> Result<(), Box<dyn std::error::Error + S
         alpn: vec![],
         options: Default::default(),
         client_auth: ClientAuth::Required { ca_cert_path: ca_path.display().to_string() },
+        session_resumption: Default::default(),
     };
 
     let result = build_rustls(&config);
@@ -232,6 +239,7 @@ fn test_mtls_valid_client_ca_format() -> Result<(), Box<dyn std::error::Error + 
         alpn: vec![],
         options: Default::default(),
         client_auth: ClientAuth::Required { ca_cert_path: ca_path.display().to_string() },
+        session_resumption: Default::default(),
     };
 
     let result = build_rustls(&config);
@@ -271,6 +279,7 @@ fn test_mtls_multiple_ca_certificates() -> Result<(), Box<dyn std::error::Error 
         alpn: vec![],
         options: Default::default(),
         client_auth: ClientAuth::Required { ca_cert_path: ca_path.display().to_string() },
+        session_resumption: Default::default(),
     };
 
     let result = build_rustls(&config);
@@ -301,6 +310,7 @@ fn test_mtls_disabled_by_default() -> Result<(), Box<dyn std::error::Error + Sen
         alpn: vec![],
         options: Default::default(),
         client_auth: ClientAuth::Disabled,
+        session_resumption: Default::default(),
     };
 
     let result = build_rustls(&config);

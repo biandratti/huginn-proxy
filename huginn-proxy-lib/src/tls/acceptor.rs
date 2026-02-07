@@ -10,6 +10,7 @@ use crate::config::{ClientAuth, TlsConfig, TlsOptions, TlsVersion};
 use crate::error::{ProxyError, Result};
 use crate::tls::cipher_suites::{is_cipher_suite_supported, supported_cipher_suites};
 use crate::tls::curves::{is_curve_supported, supported_curves};
+use crate::tls::session_resumption::configure_session_resumption;
 
 /// Loads CA certificates from a PEM file for client authentication
 fn load_ca_certs(path: &str) -> Result<Vec<CertificateDer<'static>>> {
@@ -95,6 +96,9 @@ pub fn build_rustls(cfg: &TlsConfig) -> Result<TlsAcceptor> {
         server.alpn_protocols = cfg.alpn.iter().map(|s| s.as_bytes().to_vec()).collect();
     }
     // If alpn is empty, leave server.alpn_protocols as default (empty = no ALPN)
+
+    configure_session_resumption(&mut server, &cfg.session_resumption);
+
     Ok(TlsAcceptor::from(Arc::new(server)))
 }
 

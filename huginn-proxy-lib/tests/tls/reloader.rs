@@ -41,6 +41,7 @@ async fn test_build_cert_reloader() -> Result<(), Box<dyn std::error::Error + Se
         watch_delay_secs: 60,
         options: TlsOptions::default(),
         client_auth: ClientAuth::Disabled,
+        session_resumption: Default::default(),
     };
 
     // This should succeed in creating the reloader service with valid PEM format
@@ -57,7 +58,7 @@ async fn test_build_cert_reloader() -> Result<(), Box<dyn std::error::Error + Se
             let alpn = vec!["h2".to_string()];
             let options = TlsOptions::default();
             // This may fail due to invalid certs, but the structure should be correct
-            let _ = certs_keys.build_tls_acceptor(&alpn, &options);
+            let _ = certs_keys.build_tls_acceptor(&alpn, &options, &config.session_resumption);
         } else {
             panic!("initial value should be Some");
         }
@@ -77,6 +78,7 @@ async fn test_build_cert_reloader_missing_files(
         watch_delay_secs: 60,
         options: TlsOptions::default(),
         client_auth: ClientAuth::Disabled,
+        session_resumption: Default::default(),
     };
 
     // Should fail because certificates must exist at startup
@@ -100,7 +102,7 @@ fn test_server_certs_keys_build_tls_acceptor(
     let options = TlsOptions::default();
 
     // This will fail because certs/key are invalid, but we test the function exists
-    let result = server_certs_keys.build_tls_acceptor(&alpn, &options);
+    let result = server_certs_keys.build_tls_acceptor(&alpn, &options, &Default::default());
     assert!(result.is_err());
     Ok(())
 }
