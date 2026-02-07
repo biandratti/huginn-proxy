@@ -141,10 +141,31 @@ pub struct TlsConfig {
     /// Default: disabled (no client authentication required)
     #[serde(default)]
     pub client_auth: ClientAuth,
+    /// Session resumption configuration
+    #[serde(default)]
+    pub session_resumption: SessionResumptionConfig,
 }
 
 fn default_cert_watch_delay_secs() -> u32 {
     60
+}
+
+/// Session resumption configuration for TLS
+#[derive(Debug, Deserialize, Clone)]
+pub struct SessionResumptionConfig {
+    /// Enable session resumption (default: true)
+    /// When enabled, clients can reuse previous TLS sessions to reduce handshake overhead
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    /// Maximum number of sessions to cache (default: 256)
+    /// Only applies to TLS 1.2 session ID resumption
+    /// TLS 1.3 uses stateless session tickets and doesn't use this cache
+    #[serde(default = "default_session_cache_size")]
+    pub max_sessions: usize,
+}
+
+fn default_session_cache_size() -> usize {
+    256
 }
 
 /// Fingerprinting configuration
