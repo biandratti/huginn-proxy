@@ -80,6 +80,7 @@ docker run -v /path/to/config.toml:/config.toml huginn-proxy /config.toml
 - **Security Headers** - HSTS, CSP, X-Frame-Options, and custom headers
 - **IP Filtering (ACL)** - Allowlist/denylist with CIDR notation support
 - **TLS Termination** - Server-side TLS with ALPN, certificate hot reload (single certificate per configuration)
+- **TLS Session Resumption** - Support for TLS 1.2 session IDs and TLS 1.3 session tickets
 - **mTLS (Mutual TLS)** - Client certificate authentication for secure service-to-service communication
 - **Granular Timeouts** - TLS handshake and connection handling timeouts for resource protection
 - **Host Header Preservation** - Configurable forwarding of original Host header for virtual hosting

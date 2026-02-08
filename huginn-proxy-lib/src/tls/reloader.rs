@@ -1,6 +1,7 @@
-use crate::config::{TlsConfig, TlsOptions};
+use crate::config::{SessionResumptionConfig, TlsConfig, TlsOptions};
 use crate::error::ProxyError;
 use crate::tls::acceptor::validate_tls_options;
+use crate::tls::session_resumption::configure_session_resumption;
 use notify::{Config, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use rustls_pki_types::pem::PemObject;
 use rustls_pki_types::{CertificateDer, PrivateKeyDer};
@@ -30,6 +31,7 @@ impl ServerCertsKeys {
         &self,
         alpn: &[String],
         options: &TlsOptions,
+        session_resumption: &SessionResumptionConfig,
     ) -> crate::error::Result<TlsAcceptor> {
         validate_tls_options(options)?;
 
@@ -50,6 +52,8 @@ impl ServerCertsKeys {
             server.alpn_protocols = alpn.iter().map(|s| s.as_bytes().to_vec()).collect();
         }
         // If alpn is empty, leave server.alpn_protocols as default (empty = no ALPN)
+
+        configure_session_resumption(&mut server, session_resumption);
 
         Ok(TlsAcceptor::from(Arc::new(server)))
     }
