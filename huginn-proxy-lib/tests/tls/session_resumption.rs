@@ -1,37 +1,11 @@
+use crate::helpers::{create_dummy_test_cert, generate_valid_test_cert_der};
 use huginn_proxy_lib::config::{ClientAuth, SessionResumptionConfig, TlsConfig};
 use huginn_proxy_lib::tls::build_rustls;
-use std::fs;
-use std::path::PathBuf;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
-
-fn tmp_path(name: &str) -> PathBuf {
-    let nanos = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_else(|_| Duration::from_secs(0))
-        .as_nanos();
-    std::env::temp_dir().join(format!("huginn-test-{nanos}-{name}"))
-}
-
-fn create_test_cert() -> Result<(PathBuf, PathBuf), Box<dyn std::error::Error + Send + Sync>> {
-    let cert_path = tmp_path("test.crt");
-    let key_path = tmp_path("test.key");
-
-    fs::write(
-        &cert_path,
-        b"-----BEGIN CERTIFICATE-----\nMIIBkTCB+wIJAKJ\n-----END CERTIFICATE-----\n",
-    )?;
-    fs::write(
-        &key_path,
-        b"-----BEGIN PRIVATE KEY-----\nMIIBVAIBADANBgkq\n-----END PRIVATE KEY-----\n",
-    )?;
-
-    Ok((cert_path, key_path))
-}
 
 #[test]
 fn test_session_resumption_enabled_default() -> Result<(), Box<dyn std::error::Error + Send + Sync>>
 {
-    let (cert_path, key_path) = create_test_cert()?;
+    let (cert_path, key_path) = create_dummy_test_cert()?;
 
     let config = TlsConfig {
         watch_delay_secs: 60,
@@ -45,8 +19,8 @@ fn test_session_resumption_enabled_default() -> Result<(), Box<dyn std::error::E
 
     let result = build_rustls(&config);
 
-    let _ = fs::remove_file(&cert_path);
-    let _ = fs::remove_file(&key_path);
+    let _ = std::fs::remove_file(&cert_path);
+    let _ = std::fs::remove_file(&key_path);
 
     // Note: This may fail due to invalid certs, but we're testing the configuration structure
     // The important thing is that session_resumption is accepted
@@ -56,7 +30,7 @@ fn test_session_resumption_enabled_default() -> Result<(), Box<dyn std::error::E
 
 #[test]
 fn test_session_resumption_disabled() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let (cert_path, key_path) = create_test_cert()?;
+    let (cert_path, key_path) = create_dummy_test_cert()?;
 
     let config = TlsConfig {
         watch_delay_secs: 60,
@@ -70,8 +44,8 @@ fn test_session_resumption_disabled() -> Result<(), Box<dyn std::error::Error + 
 
     let result = build_rustls(&config);
 
-    let _ = fs::remove_file(&cert_path);
-    let _ = fs::remove_file(&key_path);
+    let _ = std::fs::remove_file(&cert_path);
+    let _ = std::fs::remove_file(&key_path);
 
     // Note: This may fail due to invalid certs, but we're testing the configuration structure
     let _ = result;
@@ -81,7 +55,7 @@ fn test_session_resumption_disabled() -> Result<(), Box<dyn std::error::Error + 
 #[test]
 fn test_session_resumption_custom_cache_size(
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let (cert_path, key_path) = create_test_cert()?;
+    let (cert_path, key_path) = create_dummy_test_cert()?;
 
     let config = TlsConfig {
         watch_delay_secs: 60,
@@ -95,8 +69,8 @@ fn test_session_resumption_custom_cache_size(
 
     let result = build_rustls(&config);
 
-    let _ = fs::remove_file(&cert_path);
-    let _ = fs::remove_file(&key_path);
+    let _ = std::fs::remove_file(&cert_path);
+    let _ = std::fs::remove_file(&key_path);
 
     // Note: This may fail due to invalid certs, but we're testing the configuration structure
     let _ = result;
@@ -128,32 +102,13 @@ max_sessions = 512
     Ok(())
 }
 
-fn generate_test_cert() -> Result<
-    (
-        rustls_pki_types::CertificateDer<'static>,
-        rustls_pki_types::PrivateKeyDer<'static>,
-    ),
-    Box<dyn std::error::Error + Send + Sync>,
-> {
-    let subject_alt_names = vec!["localhost".to_string()];
-    let rcgen::CertifiedKey { cert, key_pair } =
-        rcgen::generate_simple_self_signed(subject_alt_names)?;
-
-    let cert_der = rustls_pki_types::CertificateDer::from(cert.der().to_vec());
-    let key_der = rustls_pki_types::PrivateKeyDer::Pkcs8(
-        rustls_pki_types::PrivatePkcs8KeyDer::from(key_pair.serialize_der()),
-    );
-
-    Ok((cert_der, key_der))
-}
-
 #[test]
 fn test_session_storage_configuration() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     use huginn_proxy_lib::tls::session_resumption::configure_session_resumption;
     use tokio_rustls::rustls::ServerConfig;
 
     // Generate valid test cert/key
-    let (cert, key) = generate_test_cert()?;
+    let (cert, key) = generate_valid_test_cert_der()?;
 
     let mut server = ServerConfig::builder()
         .with_no_client_auth()
@@ -183,7 +138,7 @@ fn test_ticket_producer_configuration() -> Result<(), Box<dyn std::error::Error 
     use tokio_rustls::rustls::ServerConfig;
 
     // Generate valid test cert/key
-    let (cert, key) = generate_test_cert()?;
+    let (cert, key) = generate_valid_test_cert_der()?;
 
     let mut server = ServerConfig::builder()
         .with_no_client_auth()

@@ -1,40 +1,13 @@
+use crate::helpers::create_valid_test_cert;
 use huginn_proxy_lib::config::{ClientAuth, TlsConfig, TlsOptions};
 use huginn_proxy_lib::tls::acceptor::build_rustls;
 use huginn_proxy_lib::tls::cipher_suites::supported_cipher_suites;
 use huginn_proxy_lib::tls::curves::supported_curves;
-use std::fs;
-use std::path::PathBuf;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
-
-fn tmp_path(name: &str) -> PathBuf {
-    let nanos = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_else(|_| Duration::from_secs(0))
-        .as_nanos();
-    std::env::temp_dir().join(format!("huginn-test-{nanos}-{name}"))
-}
-
-fn create_test_cert() -> Result<(PathBuf, PathBuf), Box<dyn std::error::Error + Send + Sync>> {
-    let cert_path = tmp_path("test.crt");
-    let key_path = tmp_path("test.key");
-
-    // Create minimal valid PEM files for testing
-    fs::write(
-        &cert_path,
-        b"-----BEGIN CERTIFICATE-----\nMIIBkTCB+wIJAKJ\n-----END CERTIFICATE-----\n",
-    )?;
-    fs::write(
-        &key_path,
-        b"-----BEGIN PRIVATE KEY-----\nMIIBVAIBADANBgkq\n-----END PRIVATE KEY-----\n",
-    )?;
-
-    Ok((cert_path, key_path))
-}
 
 #[test]
 fn test_different_cipher_suites_produce_different_configs(
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let (cert_path, key_path) = create_test_cert()?;
+    let (cert_path, key_path) = create_valid_test_cert()?;
     let supported = supported_cipher_suites();
 
     // Configuration 1: Only TLS 1.3 cipher suites
@@ -79,12 +52,12 @@ fn test_different_cipher_suites_produce_different_configs(
     let result2 = build_rustls(&config2);
 
     // Cleanup
-    let _ = fs::remove_file(&cert_path);
-    let _ = fs::remove_file(&key_path);
+    let _ = std::fs::remove_file(&cert_path);
+    let _ = std::fs::remove_file(&key_path);
 
-    // Both should fail with invalid cert/key (expected), but validation should pass
-    assert!(result1.is_err()); // Invalid cert/key
-    assert!(result2.is_err()); // Invalid cert/key
+    // Both should succeed with valid cert/key
+    assert!(result1.is_ok(), "build_rustls should succeed with TLS 1.3 cipher suites");
+    assert!(result2.is_ok(), "build_rustls should succeed with TLS 1.2 cipher suites");
 
     // Verify that the configurations are different
     assert_ne!(
@@ -118,7 +91,7 @@ fn test_different_cipher_suites_produce_different_configs(
 #[test]
 fn test_different_curve_preferences_produce_different_configs(
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let (cert_path, key_path) = create_test_cert()?;
+    let (cert_path, key_path) = create_valid_test_cert()?;
 
     // Configuration 1: Only X25519 (preferred for performance)
     let config1 = TlsConfig {
@@ -149,12 +122,12 @@ fn test_different_curve_preferences_produce_different_configs(
     let result1 = build_rustls(&config1);
     let result2 = build_rustls(&config2);
 
-    let _ = fs::remove_file(&cert_path);
-    let _ = fs::remove_file(&key_path);
+    let _ = std::fs::remove_file(&cert_path);
+    let _ = std::fs::remove_file(&key_path);
 
-    // Both should fail with invalid cert/key (expected), but validation should pass
-    assert!(result1.is_err()); // Invalid cert/key
-    assert!(result2.is_err()); // Invalid cert/key
+    // Both should succeed with valid cert/key
+    assert!(result1.is_ok(), "build_rustls should succeed with X25519 curve");
+    assert!(result2.is_ok(), "build_rustls should succeed with secp256r1 curve");
 
     // Verify that the configurations are different
     assert_ne!(
@@ -182,7 +155,7 @@ fn test_different_curve_preferences_produce_different_configs(
 #[test]
 fn test_combined_cipher_and_curve_configs() -> Result<(), Box<dyn std::error::Error + Send + Sync>>
 {
-    let (cert_path, key_path) = create_test_cert()?;
+    let (cert_path, key_path) = create_valid_test_cert()?;
     let supported_suites = supported_cipher_suites();
     let supported_curves = supported_curves();
 
@@ -203,11 +176,14 @@ fn test_combined_cipher_and_curve_configs() -> Result<(), Box<dyn std::error::Er
 
     let result = build_rustls(&config);
 
-    let _ = fs::remove_file(&cert_path);
-    let _ = fs::remove_file(&key_path);
+    let _ = std::fs::remove_file(&cert_path);
+    let _ = std::fs::remove_file(&key_path);
 
-    // Should fail with invalid cert/key (expected), but validation should pass
-    assert!(result.is_err()); // Invalid cert/key
+    // Should succeed with valid cert/key
+    assert!(
+        result.is_ok(),
+        "build_rustls should succeed with combined cipher and curve configs"
+    );
 
     // Verify that both cipher suites and curve preferences are set
     assert_eq!(config.options.cipher_suites.len(), 2);

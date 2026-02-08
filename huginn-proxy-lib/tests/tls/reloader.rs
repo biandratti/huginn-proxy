@@ -1,38 +1,10 @@
+use crate::helpers::create_valid_test_cert;
 use huginn_proxy_lib::config::{ClientAuth, TlsConfig, TlsOptions};
 use huginn_proxy_lib::tls::build_cert_reloader;
-use std::fs;
-use std::path::PathBuf;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
-
-fn tmp_path(name: &str) -> PathBuf {
-    let nanos = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_else(|_| Duration::from_secs(0))
-        .as_nanos();
-    std::env::temp_dir().join(format!("huginn-test-{nanos}-{name}"))
-}
-
-fn create_test_cert() -> Result<(PathBuf, PathBuf), Box<dyn std::error::Error + Send + Sync>> {
-    let cert_path = tmp_path("test.crt");
-    let key_path = tmp_path("test.key");
-
-    // Create minimal valid PEM files for testing
-    // Note: These are not real certificates, but valid PEM format
-    fs::write(
-        &cert_path,
-        b"-----BEGIN CERTIFICATE-----\nMIIBkTCB+wIJAKJ\n-----END CERTIFICATE-----\n",
-    )?;
-    fs::write(
-        &key_path,
-        b"-----BEGIN PRIVATE KEY-----\nMIIBVAIBADANBgkq\n-----END PRIVATE KEY-----\n",
-    )?;
-
-    Ok((cert_path, key_path))
-}
 
 #[tokio::test]
 async fn test_build_cert_reloader() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let (cert_path, key_path) = create_test_cert()?;
+    let (cert_path, key_path) = create_valid_test_cert()?;
 
     let config = TlsConfig {
         cert_path: cert_path.display().to_string(),
@@ -44,27 +16,33 @@ async fn test_build_cert_reloader() -> Result<(), Box<dyn std::error::Error + Se
         session_resumption: Default::default(),
     };
 
-    // This should succeed in creating the reloader service with valid PEM format
-    // Note: The certs may not be cryptographically valid, but PEM format is correct
+    // This should succeed in creating the reloader service with valid certificates
     let result = build_cert_reloader(&config).await;
 
-    let _ = fs::remove_file(&cert_path);
-    let _ = fs::remove_file(&key_path);
+    let _ = std::fs::remove_file(&cert_path);
+    let _ = std::fs::remove_file(&key_path);
 
-    // Should succeed - reloader service is created with valid PEM format
-    if let Ok(rx) = result {
-        let initial_value = rx.borrow();
-        if let Some(certs_keys) = initial_value.as_ref() {
-            let alpn = vec!["h2".to_string()];
-            let options = TlsOptions::default();
-            // This may fail due to invalid certs, but the structure should be correct
-            let _ = certs_keys.build_tls_acceptor(&alpn, &options, &config.session_resumption);
-        } else {
-            panic!("initial value should be Some");
-        }
-    } else {
-        panic!("build_cert_reloader should succeed with valid PEM files");
-    }
+    // Should succeed - reloader service is created with valid certificates
+    let rx = match result {
+        Ok(rx) => rx,
+        Err(e) => panic!("build_cert_reloader should succeed with valid certificates: {e}"),
+    };
+    let initial_value = rx.borrow();
+    let certs_keys = match initial_value.as_ref() {
+        Some(certs_keys) => certs_keys,
+        None => panic!("initial value should be Some"),
+    };
+
+    let alpn = vec!["h2".to_string()];
+    let options = TlsOptions::default();
+    // With valid certs, this should also succeed
+    let acceptor_result =
+        certs_keys.build_tls_acceptor(&alpn, &options, &config.session_resumption);
+    assert!(
+        acceptor_result.is_ok(),
+        "build_tls_acceptor should succeed with valid certificates"
+    );
+
     Ok(())
 }
 
