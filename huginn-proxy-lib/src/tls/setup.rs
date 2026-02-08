@@ -5,7 +5,7 @@ use tokio::sync::RwLock;
 use tokio_rustls::TlsAcceptor;
 use tracing::{error, info, warn};
 
-use super::{build_cert_reloader, build_rustls};
+use super::{build_cert_reloader, build_tls_acceptor};
 
 pub struct TlsSetup {
     /// TLS acceptor wrapped in Arc<RwLock> for thread-safe hot reload
@@ -22,7 +22,7 @@ pub struct TlsSetup {
 /// Returns a `TlsSetup` containing the TLS acceptor.
 /// The reloader service runs in background tasks and doesn't need to be returned.
 pub async fn setup_tls_with_hot_reload(tls_config: &TlsConfig) -> Result<TlsSetup> {
-    let initial_acceptor = build_rustls(tls_config)?;
+    let initial_acceptor = build_tls_acceptor(tls_config)?;
     let tls_acceptor = Arc::new(RwLock::new(Some(initial_acceptor)));
 
     // Setup certificate reloader (async - initializes filesystem watcher)

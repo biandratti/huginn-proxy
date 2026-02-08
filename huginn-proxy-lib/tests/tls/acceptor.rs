@@ -1,10 +1,10 @@
 use crate::helpers::{create_dummy_test_cert, create_valid_test_cert, tmp_path};
 use huginn_proxy_lib::config::{ClientAuth, TlsConfig};
-use huginn_proxy_lib::tls::build_rustls;
+use huginn_proxy_lib::tls::build_tls_acceptor;
 use std::fs;
 
 #[test]
-fn test_build_rustls_success() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+fn test_build_tls_acceptor_success() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let (cert_path, key_path) = create_valid_test_cert()?;
 
     let config = TlsConfig {
@@ -18,19 +18,19 @@ fn test_build_rustls_success() -> Result<(), Box<dyn std::error::Error + Send + 
     };
 
     // With valid certs, this should succeed
-    let result = build_rustls(&config);
+    let result = build_tls_acceptor(&config);
 
     // Cleanup
     let _ = fs::remove_file(&cert_path);
     let _ = fs::remove_file(&key_path);
 
     // Should succeed with valid cert/key
-    assert!(result.is_ok(), "build_rustls should succeed with valid certificates");
+    assert!(result.is_ok(), "build_tls_acceptor should succeed with valid certificates");
     Ok(())
 }
 
 #[test]
-fn test_build_rustls_missing_cert() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+fn test_build_tls_acceptor_missing_cert() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let config = TlsConfig {
         watch_delay_secs: 60,
         cert_path: "/nonexistent/cert.pem".to_string(),
@@ -41,7 +41,7 @@ fn test_build_rustls_missing_cert() -> Result<(), Box<dyn std::error::Error + Se
         session_resumption: Default::default(),
     };
 
-    let result = build_rustls(&config);
+    let result = build_tls_acceptor(&config);
     assert!(result.is_err());
 
     if let Err(err) = result {
@@ -51,7 +51,7 @@ fn test_build_rustls_missing_cert() -> Result<(), Box<dyn std::error::Error + Se
 }
 
 #[test]
-fn test_build_rustls_empty_alpn() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+fn test_build_tls_acceptor_empty_alpn() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let (cert_path, key_path) = create_valid_test_cert()?;
 
     let config = TlsConfig {
@@ -64,19 +64,19 @@ fn test_build_rustls_empty_alpn() -> Result<(), Box<dyn std::error::Error + Send
         session_resumption: Default::default(),
     };
 
-    let result = build_rustls(&config);
+    let result = build_tls_acceptor(&config);
 
     // Cleanup
     let _ = fs::remove_file(&cert_path);
     let _ = fs::remove_file(&key_path);
 
     // Should succeed with valid cert/key and empty ALPN
-    assert!(result.is_ok(), "build_rustls should succeed with empty ALPN");
+    assert!(result.is_ok(), "build_tls_acceptor should succeed with empty ALPN");
     Ok(())
 }
 
 #[test]
-fn test_build_rustls_custom_alpn() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+fn test_build_tls_acceptor_custom_alpn() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let (cert_path, key_path) = create_valid_test_cert()?;
 
     let config = TlsConfig {
@@ -89,19 +89,19 @@ fn test_build_rustls_custom_alpn() -> Result<(), Box<dyn std::error::Error + Sen
         session_resumption: Default::default(),
     };
 
-    let result = build_rustls(&config);
+    let result = build_tls_acceptor(&config);
 
     // Cleanup
     let _ = fs::remove_file(&cert_path);
     let _ = fs::remove_file(&key_path);
 
     // Should succeed with valid cert/key and custom ALPN
-    assert!(result.is_ok(), "build_rustls should succeed with custom ALPN");
+    assert!(result.is_ok(), "build_tls_acceptor should succeed with custom ALPN");
     Ok(())
 }
 
 #[test]
-fn test_build_rustls_invalid_pem() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+fn test_build_tls_acceptor_invalid_pem() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let cert_path = tmp_path("invalid.crt");
     let key_path = tmp_path("invalid.key");
 
@@ -119,7 +119,7 @@ fn test_build_rustls_invalid_pem() -> Result<(), Box<dyn std::error::Error + Sen
         session_resumption: Default::default(),
     };
 
-    let result = build_rustls(&config);
+    let result = build_tls_acceptor(&config);
     assert!(result.is_err());
 
     // Cleanup
@@ -143,7 +143,7 @@ fn test_mtls_missing_client_ca() -> Result<(), Box<dyn std::error::Error + Send 
         session_resumption: Default::default(),
     };
 
-    let result = build_rustls(&config);
+    let result = build_tls_acceptor(&config);
     assert!(result.is_err());
 
     let _ = fs::remove_file(&cert_path);
@@ -173,7 +173,7 @@ fn test_mtls_invalid_client_ca_pem() -> Result<(), Box<dyn std::error::Error + S
         session_resumption: Default::default(),
     };
 
-    let result = build_rustls(&config);
+    let result = build_tls_acceptor(&config);
     assert!(result.is_err());
 
     let _ = fs::remove_file(&cert_path);
@@ -213,7 +213,7 @@ fn test_mtls_valid_client_ca_format() -> Result<(), Box<dyn std::error::Error + 
         session_resumption: Default::default(),
     };
 
-    let result = build_rustls(&config);
+    let result = build_tls_acceptor(&config);
 
     // Cleanup
     let _ = fs::remove_file(&cert_path);
@@ -221,7 +221,7 @@ fn test_mtls_valid_client_ca_format() -> Result<(), Box<dyn std::error::Error + 
     let _ = fs::remove_file(&ca_path);
 
     // Should succeed with valid cert/key and valid CA format
-    assert!(result.is_ok(), "build_rustls should succeed with valid CA format");
+    assert!(result.is_ok(), "build_tls_acceptor should succeed with valid CA format");
 
     Ok(())
 }
@@ -251,14 +251,17 @@ fn test_mtls_multiple_ca_certificates() -> Result<(), Box<dyn std::error::Error 
         session_resumption: Default::default(),
     };
 
-    let result = build_rustls(&config);
+    let result = build_tls_acceptor(&config);
 
     let _ = fs::remove_file(&cert_path);
     let _ = fs::remove_file(&key_path);
     let _ = fs::remove_file(&ca_path);
 
     // Should succeed with valid cert/key and multiple CAs
-    assert!(result.is_ok(), "build_rustls should succeed with multiple CA certificates");
+    assert!(
+        result.is_ok(),
+        "build_tls_acceptor should succeed with multiple CA certificates"
+    );
 
     Ok(())
 }
@@ -278,7 +281,7 @@ fn test_mtls_disabled_by_default() -> Result<(), Box<dyn std::error::Error + Sen
         session_resumption: Default::default(),
     };
 
-    let result = build_rustls(&config);
+    let result = build_tls_acceptor(&config);
 
     let _ = fs::remove_file(&cert_path);
     let _ = fs::remove_file(&key_path);

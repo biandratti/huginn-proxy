@@ -23,7 +23,7 @@ fn load_ca_certs(path: &str) -> Result<Vec<CertificateDer<'static>>> {
 }
 
 /// Builds a TLS acceptor from configuration
-pub fn build_rustls(cfg: &TlsConfig) -> Result<TlsAcceptor> {
+pub fn build_tls_acceptor(cfg: &TlsConfig) -> Result<TlsAcceptor> {
     let certs = {
         let bytes = std::fs::read(&cfg.cert_path)
             .map_err(|e| ProxyError::Tls(format!("Failed to read certificate: {e}")))?;

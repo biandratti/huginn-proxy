@@ -1,5 +1,3 @@
-//! Shared test helpers for TLS tests
-
 use std::fs;
 use std::path::PathBuf;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};

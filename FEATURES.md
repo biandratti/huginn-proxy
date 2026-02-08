@@ -70,6 +70,16 @@ Certificate hot reload watches the cert files and reloads them when they change.
 
 Limitation: Only one certificate per proxy instance. No SNI support for serving multiple domains with different certs.
 
+## TLS Session Resumption
+
+**TLS 1.2 session IDs and TLS 1.3 session tickets**
+
+Session resumption reduces handshake overhead for subsequent connections. TLS 1.2 uses server-side session ID caching (default: 256 sessions), while TLS 1.3 uses stateless session tickets.
+
+Enabled by default. Configurable via `session_resumption.enabled` and `session_resumption.max_sessions` (for TLS 1.2 cache size).
+
+Limitation: TLS 1.3 ticket lifetime and rotation are managed by rustls defaults. No manual control over ticket encryption keys or expiration.
+
 ## mTLS (Mutual TLS)
 
 **Client certificate authentication**

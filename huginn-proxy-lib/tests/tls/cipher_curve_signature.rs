@@ -1,6 +1,6 @@
 use crate::helpers::create_valid_test_cert;
 use huginn_proxy_lib::config::{ClientAuth, TlsConfig, TlsOptions};
-use huginn_proxy_lib::tls::acceptor::build_rustls;
+use huginn_proxy_lib::tls::acceptor::build_tls_acceptor;
 use huginn_proxy_lib::tls::cipher_suites::supported_cipher_suites;
 use huginn_proxy_lib::tls::curves::supported_curves;
 
@@ -48,16 +48,16 @@ fn test_different_cipher_suites_produce_different_configs(
 
     // Both configurations should validate and build successfully
     // (even though rustls 0.23 doesn't apply them fully)
-    let result1 = build_rustls(&config1);
-    let result2 = build_rustls(&config2);
+    let result1 = build_tls_acceptor(&config1);
+    let result2 = build_tls_acceptor(&config2);
 
     // Cleanup
     let _ = std::fs::remove_file(&cert_path);
     let _ = std::fs::remove_file(&key_path);
 
     // Both should succeed with valid cert/key
-    assert!(result1.is_ok(), "build_rustls should succeed with TLS 1.3 cipher suites");
-    assert!(result2.is_ok(), "build_rustls should succeed with TLS 1.2 cipher suites");
+    assert!(result1.is_ok(), "build_tls_acceptor should succeed with TLS 1.3 cipher suites");
+    assert!(result2.is_ok(), "build_tls_acceptor should succeed with TLS 1.2 cipher suites");
 
     // Verify that the configurations are different
     assert_ne!(
@@ -119,15 +119,15 @@ fn test_different_curve_preferences_produce_different_configs(
     };
 
     // Both configurations should validate and build successfully
-    let result1 = build_rustls(&config1);
-    let result2 = build_rustls(&config2);
+    let result1 = build_tls_acceptor(&config1);
+    let result2 = build_tls_acceptor(&config2);
 
     let _ = std::fs::remove_file(&cert_path);
     let _ = std::fs::remove_file(&key_path);
 
     // Both should succeed with valid cert/key
-    assert!(result1.is_ok(), "build_rustls should succeed with X25519 curve");
-    assert!(result2.is_ok(), "build_rustls should succeed with secp256r1 curve");
+    assert!(result1.is_ok(), "build_tls_acceptor should succeed with X25519 curve");
+    assert!(result2.is_ok(), "build_tls_acceptor should succeed with secp256r1 curve");
 
     // Verify that the configurations are different
     assert_ne!(
@@ -174,7 +174,7 @@ fn test_combined_cipher_and_curve_configs() -> Result<(), Box<dyn std::error::Er
         session_resumption: Default::default(),
     };
 
-    let result = build_rustls(&config);
+    let result = build_tls_acceptor(&config);
 
     let _ = std::fs::remove_file(&cert_path);
     let _ = std::fs::remove_file(&key_path);
@@ -182,7 +182,7 @@ fn test_combined_cipher_and_curve_configs() -> Result<(), Box<dyn std::error::Er
     // Should succeed with valid cert/key
     assert!(
         result.is_ok(),
-        "build_rustls should succeed with combined cipher and curve configs"
+        "build_tls_acceptor should succeed with combined cipher and curve configs"
     );
 
     // Verify that both cipher suites and curve preferences are set

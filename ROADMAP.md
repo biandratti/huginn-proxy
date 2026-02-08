@@ -12,7 +12,6 @@
 
 ### Security & TLS
 - [ ] OCSP stapling
-- [ ] Session resumption
 
 ### Routing & Path Handling
 - [ ] Regex-based route matching (optional, for advanced use cases)

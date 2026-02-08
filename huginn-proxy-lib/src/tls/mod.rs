@@ -6,7 +6,7 @@ pub mod reloader;
 pub mod session_resumption;
 pub mod setup;
 
-pub use acceptor::build_rustls;
+pub use acceptor::build_tls_acceptor;
 pub use cipher_suites::{is_cipher_suite_supported, supported_cipher_suites};
 pub use curves::{is_curve_supported, supported_curves};
 pub use metrics::{extract_tls_info, record_tls_handshake_metrics};

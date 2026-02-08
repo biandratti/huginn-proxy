@@ -1,6 +1,6 @@
 use crate::helpers::{create_dummy_test_cert, generate_valid_test_cert_der};
 use huginn_proxy_lib::config::{ClientAuth, SessionResumptionConfig, TlsConfig};
-use huginn_proxy_lib::tls::build_rustls;
+use huginn_proxy_lib::tls::build_tls_acceptor;
 
 #[test]
 fn test_session_resumption_enabled_default() -> Result<(), Box<dyn std::error::Error + Send + Sync>>
@@ -17,7 +17,7 @@ fn test_session_resumption_enabled_default() -> Result<(), Box<dyn std::error::E
         session_resumption: Default::default(),
     };
 
-    let result = build_rustls(&config);
+    let result = build_tls_acceptor(&config);
 
     let _ = std::fs::remove_file(&cert_path);
     let _ = std::fs::remove_file(&key_path);
@@ -42,7 +42,7 @@ fn test_session_resumption_disabled() -> Result<(), Box<dyn std::error::Error + 
         session_resumption: SessionResumptionConfig { enabled: false, max_sessions: 256 },
     };
 
-    let result = build_rustls(&config);
+    let result = build_tls_acceptor(&config);
 
     let _ = std::fs::remove_file(&cert_path);
     let _ = std::fs::remove_file(&key_path);
@@ -67,7 +67,7 @@ fn test_session_resumption_custom_cache_size(
         session_resumption: SessionResumptionConfig { enabled: true, max_sessions: 512 },
     };
 
-    let result = build_rustls(&config);
+    let result = build_tls_acceptor(&config);
 
     let _ = std::fs::remove_file(&cert_path);
     let _ = std::fs::remove_file(&key_path);
