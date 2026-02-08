@@ -8,6 +8,12 @@ This directory contains Docker Compose examples and configuration files to help 
 
 ### 1. Generate TLS Certificates (first time only)
 
+**Create the certificates directory:**
+
+```bash
+mkdir -p examples/certs
+```
+
 **Option A: Self-signed certificate (default, works with `curl -k` but browsers will show warnings)**
 
 ```bash

@@ -37,8 +37,10 @@ pub fn configure_session_resumption(server: &mut ServerConfig, config: &SessionR
     // For TLS 1.3: Leave rustls default ticketer unchanged (same approach as rust-rpxy)
     // TLS 1.3 is STATELESS - it does NOT use the session_storage cache above
     // Instead, it uses encrypted tickets that the client stores
-    // Rustls already configures a default ticketer when ServerConfig is created
+    // Note: rustls may or may not enable ticketer by default depending on version
     // We don't modify server.ticketer, letting rustls use its defaults
+    // If the default ticketer is disabled, TLS 1.3 session resumption won't work,
+    // but that's consistent with rustls default behavior
 }
 
 // Implementations to disable session resumption

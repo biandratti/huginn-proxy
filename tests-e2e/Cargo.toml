@@ -8,8 +8,10 @@ publish = false
 [dependencies]
 huginn-proxy-lib = { path = "../huginn-proxy-lib" }
 reqwest.workspace = true
+rustls-pki-types.workspace = true
 serde_json.workspace = true
-tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "net"] }
+tokio-rustls.workspace = true
 
 [[test]]
 name = "e2e"

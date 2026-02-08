@@ -151,7 +151,8 @@ fn default_cert_watch_delay_secs() -> u32 {
 }
 
 /// Session resumption configuration for TLS
-#[derive(Debug, Deserialize, Clone, Default)]
+#[derive(Debug, Deserialize, Clone)]
+#[cfg_attr(test, derive(serde::Serialize))]
 pub struct SessionResumptionConfig {
     /// Enable session resumption (default: true)
     /// When enabled, clients can reuse previous TLS sessions to reduce handshake overhead
@@ -162,6 +163,12 @@ pub struct SessionResumptionConfig {
     /// TLS 1.3 uses stateless session tickets and doesn't use this cache
     #[serde(default = "default_session_cache_size")]
     pub max_sessions: usize,
+}
+
+impl Default for SessionResumptionConfig {
+    fn default() -> Self {
+        Self { enabled: default_true(), max_sessions: default_session_cache_size() }
+    }
 }
 
 fn default_session_cache_size() -> usize {
