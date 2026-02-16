@@ -30,6 +30,7 @@ fn create_test_config(listen: &str, backends: Vec<Backend>) -> Config {
         },
         security: SecurityConfig::default(),
         telemetry: TelemetryConfig { metrics_port: None, otel_log_level: "warn".to_string() },
+        headers: None,
     }
 }
 

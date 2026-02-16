@@ -1,3 +1,4 @@
+pub mod header_manipulation;
 pub mod headers;
 pub mod rate_limit_validation;
 pub mod request;

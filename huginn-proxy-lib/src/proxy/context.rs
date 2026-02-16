@@ -2,7 +2,8 @@ use std::sync::Arc;
 use tokio::sync::watch;
 
 use crate::config::{
-    Backend, IpFilterConfig, KeepAliveConfig, RateLimitConfig, Route, SecurityHeaders,
+    Backend, HeaderManipulation, IpFilterConfig, KeepAliveConfig, RateLimitConfig, Route,
+    SecurityHeaders,
 };
 use crate::security::RateLimitManager;
 use crate::telemetry::Metrics;
@@ -14,6 +15,7 @@ pub struct SecurityContext {
     pub ip_filter: IpFilterConfig,
     pub rate_limit_config: RateLimitConfig,
     pub rate_limit_manager: Option<Arc<RateLimitManager>>,
+    pub global_header_manipulation: Option<HeaderManipulation>,
 }
 
 impl SecurityContext {
@@ -22,8 +24,15 @@ impl SecurityContext {
         ip_filter: IpFilterConfig,
         rate_limit_config: RateLimitConfig,
         rate_limit_manager: Option<Arc<RateLimitManager>>,
+        global_header_manipulation: Option<HeaderManipulation>,
     ) -> Self {
-        Self { headers, ip_filter, rate_limit_config, rate_limit_manager }
+        Self {
+            headers,
+            ip_filter,
+            rate_limit_config,
+            rate_limit_manager,
+            global_header_manipulation,
+        }
     }
 }
 

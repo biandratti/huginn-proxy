@@ -11,6 +11,9 @@ use tracing::debug;
 use crate::config::{Backend, KeepAliveConfig, Route};
 use crate::fingerprinting::names;
 use crate::proxy::forwarding::forward;
+use crate::proxy::handler::header_manipulation::{
+    apply_request_header_manipulation, apply_response_header_manipulation,
+};
 use crate::proxy::handler::headers::{add_forwarded_headers, akamai_header_value};
 use crate::proxy::handler::rate_limit_validation::check_rate_limit;
 use crate::proxy::http_result::{HttpError, HttpResult};
@@ -125,6 +128,13 @@ pub async fn handle_proxy_request(
     // so adding these headers doesn't affect fingerprint generation
     add_forwarded_headers(&mut req, peer, is_https);
 
+    // Apply request header manipulation (global + per-route)
+    apply_request_header_manipulation(
+        req.headers_mut(),
+        security.global_header_manipulation.as_ref(),
+        route_match.headers,
+    );
+
     // Forward request
     let result = forward(
         req,
@@ -141,6 +151,16 @@ pub async fn handle_proxy_request(
         },
     )
     .await;
+
+    // Apply response header manipulation
+    let mut result = result;
+    if let Ok(ref mut response) = result {
+        apply_response_header_manipulation(
+            response.headers_mut(),
+            security.global_header_manipulation.as_ref(),
+            route_match.headers,
+        );
+    }
 
     let duration = start.elapsed().as_secs_f64();
     let status_code = match &result {

@@ -49,6 +49,10 @@ pub struct Route {
     /// If not specified, uses global rate limit settings
     #[serde(default)]
     pub rate_limit: Option<RouteRateLimitConfig>,
+    /// Header manipulation for this route (optional)
+    /// Allows adding or removing headers for specific routes
+    #[serde(default)]
+    pub headers: Option<HeaderManipulation>,
 }
 
 /// TLS version configuration
@@ -409,6 +413,10 @@ pub struct Config {
     /// Controls metrics, tracing, and observability features
     #[serde(default)]
     pub telemetry: TelemetryConfig,
+    /// Global header manipulation (optional)
+    /// Allows adding or removing headers for all routes
+    #[serde(default)]
+    pub headers: Option<HeaderManipulation>,
 }
 
 fn default_true() -> bool {
@@ -444,6 +452,28 @@ pub struct CustomHeader {
     pub name: String,
     /// Header value (e.g., "DENY")
     pub value: String,
+}
+
+/// Header manipulation for requests or responses
+#[derive(Debug, Deserialize, Clone, PartialEq, Default)]
+pub struct HeaderManipulationGroup {
+    /// Headers to add (overwrite if exist)
+    #[serde(default)]
+    pub add: Vec<CustomHeader>,
+    /// Headers to remove
+    #[serde(default)]
+    pub remove: Vec<String>,
+}
+
+/// Header manipulation configuration
+#[derive(Debug, Deserialize, Clone, PartialEq, Default)]
+pub struct HeaderManipulation {
+    /// Request header manipulation
+    #[serde(default)]
+    pub request: HeaderManipulationGroup,
+    /// Response header manipulation
+    #[serde(default)]
+    pub response: HeaderManipulationGroup,
 }
 
 /// HSTS (HTTP Strict Transport Security) configuration
