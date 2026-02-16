@@ -28,6 +28,24 @@ routes = [
   { prefix = "/", backend = "backend-b:9000" }
 ]
 
+# Global header manipulation (applied to all routes)
+[headers.request]
+# Headers to remove from requests (hide client info)
+remove = ["X-Forwarded-Server"]
+# Headers to add to requests
+add = [
+  { name = "X-Proxy-Name", value = "huginn-proxy" },
+  { name = "X-Proxy-Version", value = "0.0.1" }
+]
+
+[headers.response]
+# Headers to remove from responses (hide backend info)
+remove = ["Server", "X-Powered-By", "X-AspNet-Version"]
+# Headers to add to responses
+add = [
+  { name = "X-Proxy", value = "huginn-proxy" }
+]
+
 [tls]
 cert_path = "/config/certs/server.crt"
 key_path  = "/config/certs/server.key"

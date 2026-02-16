@@ -18,7 +18,10 @@ use http::{HeaderMap, HeaderName, HeaderValue};
 ///
 /// apply_header_manipulation_group(&mut headers, &manipulation);
 /// ```
-pub fn apply_header_manipulation_group(headers: &mut HeaderMap, manipulation: &HeaderManipulationGroup) {
+pub fn apply_header_manipulation_group(
+    headers: &mut HeaderMap,
+    manipulation: &HeaderManipulationGroup,
+) {
     // Remove headers first
     if !manipulation.remove.is_empty() {
         remove_headers(headers, &manipulation.remove);
@@ -139,10 +142,7 @@ pub fn remove_headers(headers: &mut HeaderMap, headers_to_remove: &[String]) {
 /// ```
 pub fn add_headers(headers: &mut HeaderMap, headers_to_add: &[(String, String)]) {
     for (name, value) in headers_to_add {
-        match (
-            HeaderName::from_bytes(name.as_bytes()),
-            HeaderValue::from_str(value),
-        ) {
+        match (HeaderName::from_bytes(name.as_bytes()), HeaderValue::from_str(value)) {
             (Ok(header_name), Ok(header_value)) => {
                 headers.insert(header_name, header_value);
 

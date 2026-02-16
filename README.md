@@ -77,6 +77,7 @@ docker run -v /path/to/config.toml:/config.toml huginn-proxy /config.toml
 - **Load Balancing** - Round-robin load balancing across multiple backends
 - **Path-based Routing** - Route matching with prefix support, path stripping, and path rewriting
 - **Rate Limiting** - Token bucket algorithm with multiple strategies (IP, Header, Route, Combined), global and per-route limits
+- **Header Manipulation** - Add or remove request/response headers globally or per-route for security and customization
 - **Security Headers** - HSTS, CSP, X-Frame-Options, and custom headers
 - **IP Filtering (ACL)** - Allowlist/denylist with CIDR notation support
 - **TLS Termination** - Server-side TLS with ALPN, certificate hot reload (single certificate per configuration)

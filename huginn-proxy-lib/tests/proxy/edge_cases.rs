@@ -135,7 +135,7 @@ fn test_pick_route_with_empty_prefix() {
         fingerprinting: true,
         replace_path: None,
         rate_limit: None,
-            headers: None,
+        headers: None,
     }];
 
     assert_eq!(pick_route("/any/path", &routes), Some("backend-default:9000"));

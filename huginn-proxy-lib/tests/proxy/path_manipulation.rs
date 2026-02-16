@@ -167,7 +167,7 @@ fn test_multiple_routes_matching_priority() {
             fingerprinting: true,
             replace_path: Some("/v1".to_string()),
             rate_limit: None,
-        headers: None,
+            headers: None,
         },
         Route {
             prefix: "/api".to_string(),
@@ -175,7 +175,7 @@ fn test_multiple_routes_matching_priority() {
             fingerprinting: true,
             replace_path: Some("/".to_string()),
             rate_limit: None,
-        headers: None,
+            headers: None,
         },
     ];
 

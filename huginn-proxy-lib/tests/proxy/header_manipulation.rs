@@ -8,10 +8,7 @@ fn test_remove_headers() {
     headers.insert("x-powered-by", HeaderValue::from_static("PHP/8.0"));
     headers.insert("x-custom", HeaderValue::from_static("keep-me"));
 
-    remove_headers(
-        &mut headers,
-        &["server".to_string(), "x-powered-by".to_string()],
-    );
+    remove_headers(&mut headers, &["server".to_string(), "x-powered-by".to_string()]);
 
     assert!(headers.get("server").is_none());
     assert!(headers.get("x-powered-by").is_none());

@@ -210,7 +210,7 @@ fn test_pick_route_with_fingerprinting_basic() {
         fingerprinting: true,
         replace_path: None,
         rate_limit: None,
-            headers: None,
+        headers: None,
     }];
 
     let result = pick_route_with_fingerprinting("/api/users", &routes);
@@ -233,7 +233,7 @@ fn test_pick_route_with_fingerprinting_with_replace_path() {
         fingerprinting: true,
         replace_path: Some("/v1".to_string()),
         rate_limit: None,
-            headers: None,
+        headers: None,
     }];
 
     let result = pick_route_with_fingerprinting("/api/users", &routes);
