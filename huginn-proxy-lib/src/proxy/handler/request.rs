@@ -58,6 +58,17 @@ pub async fn handle_proxy_request(
     let method = req.method().to_string();
     let protocol = format!("{:?}", req.version());
 
+    if let Some(ref m) = metrics {
+        if let Some(content_length) = req.headers().get(hyper::header::CONTENT_LENGTH) {
+            if let Ok(length_str) = content_length.to_str() {
+                if let Ok(length) = length_str.parse::<u64>() {
+                    m.bytes_received_total
+                        .add(length, &[KeyValue::new("protocol", protocol.clone())]);
+                }
+            }
+        }
+    }
+
     check_ip_access(peer, &security.ip_filter, metrics.as_ref())?;
 
     let path = req.uri().path();
@@ -154,6 +165,17 @@ pub async fn handle_proxy_request(
 
     let mut result = result;
     if let Ok(ref mut response) = result {
+        if let Some(ref m) = metrics {
+            if let Some(content_length) = response.headers().get(hyper::header::CONTENT_LENGTH) {
+                if let Ok(length_str) = content_length.to_str() {
+                    if let Ok(length) = length_str.parse::<u64>() {
+                        m.bytes_sent_total
+                            .add(length, &[KeyValue::new("protocol", protocol.clone())]);
+                    }
+                }
+            }
+        }
+
         apply_response_header_manipulation(
             response.headers_mut(),
             security.global_header_manipulation.as_ref(),

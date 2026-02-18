@@ -12,6 +12,10 @@ pub struct Metrics {
     pub requests_total: Counter<u64>,
     pub requests_duration_seconds: Histogram<f64>,
 
+    // Throughput metrics
+    pub bytes_received_total: Counter<u64>,
+    pub bytes_sent_total: Counter<u64>,
+
     // TLS fingerprinting metrics (JA4)
     pub tls_fingerprints_extracted_total: Counter<u64>,
     pub tls_fingerprint_extraction_duration_seconds: Histogram<f64>,
@@ -25,6 +29,10 @@ pub struct Metrics {
     pub backend_requests_total: Counter<u64>,
     pub backend_errors_total: Counter<u64>,
     pub backend_duration_seconds: Histogram<f64>,
+
+    // Backend throughput metrics
+    pub backend_bytes_received_total: Counter<u64>,
+    pub backend_bytes_sent_total: Counter<u64>,
 
     pub backend_selections_total: Counter<u64>,
     pub errors_total: Counter<u64>,
@@ -61,6 +69,15 @@ impl Metrics {
             requests_duration_seconds: meter
                 .f64_histogram("huginn_requests_duration_seconds")
                 .with_description("Request duration in seconds")
+                .build(),
+
+            bytes_received_total: meter
+                .u64_counter("huginn_bytes_received_total")
+                .with_description("Total bytes received from clients")
+                .build(),
+            bytes_sent_total: meter
+                .u64_counter("huginn_bytes_sent_total")
+                .with_description("Total bytes sent to clients")
                 .build(),
 
             tls_fingerprints_extracted_total: meter
@@ -100,6 +117,15 @@ impl Metrics {
             backend_duration_seconds: meter
                 .f64_histogram("huginn_backend_duration_seconds")
                 .with_description("Backend request duration in seconds")
+                .build(),
+
+            backend_bytes_received_total: meter
+                .u64_counter("huginn_backend_bytes_received_total")
+                .with_description("Total bytes received from backends")
+                .build(),
+            backend_bytes_sent_total: meter
+                .u64_counter("huginn_backend_bytes_sent_total")
+                .with_description("Total bytes sent to backends")
                 .build(),
 
             backend_selections_total: meter

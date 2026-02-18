@@ -50,7 +50,43 @@ scrape_configs:
 
 ## Implemented Metrics
 
-### 1. Connection Metrics
+### 1. Throughput Metrics
+
+| Metric | Type | Description | Labels |
+|--------|------|-------------|--------|
+| `huginn_bytes_received_total` | Counter | Total bytes received from clients | `protocol` |
+| `huginn_bytes_sent_total` | Counter | Total bytes sent to clients | `protocol` |
+| `huginn_backend_bytes_received_total` | Counter | Total bytes received from backends | `backend_address` |
+| `huginn_backend_bytes_sent_total` | Counter | Total bytes sent to backends | `backend_address` |
+
+**Labels**:
+- `protocol`: Connection protocol (`http/1.1`, `h2`, `https`)
+- `backend_address`: Backend server address (e.g., `backend-1:9000`)
+
+**Example queries**:
+```promql
+# Client throughput rate (bytes/sec received)
+rate(huginn_bytes_received_total[5m])
+
+# Client throughput rate (bytes/sec sent)
+rate(huginn_bytes_sent_total[5m])
+
+# Backend throughput rate (bytes/sec)
+rate(huginn_backend_bytes_received_total[5m])
+rate(huginn_backend_bytes_sent_total[5m])
+
+# Total bandwidth usage (MB/s)
+(rate(huginn_bytes_received_total[5m]) + rate(huginn_bytes_sent_total[5m])) / 1024 / 1024
+
+# Per-backend bandwidth
+sum by (backend_address) (rate(huginn_backend_bytes_received_total[5m]))
+```
+
+**Note**: Throughput metrics are based on `Content-Length` headers when available. Chunked transfer encoding (without `Content-Length`) will not be counted.
+
+---
+
+### 2. Connection Metrics
 
 | Metric                              | Type    | Description                        | Labels     |
 |-------------------------------------|---------|------------------------------------|------------|
@@ -79,7 +115,7 @@ rate(huginn_connections_rejected_total[5m])
 
 ---
 
-### 2. Request Metrics
+### 3. Request Metrics
 
 | Metric                             | Type      | Description                   | Labels                              |
 |------------------------------------|-----------|-------------------------------|-------------------------------------|
@@ -111,7 +147,7 @@ histogram_quantile(0.99, rate(huginn_requests_duration_seconds_bucket[5m]))
 
 ---
 
-### 3. TLS Handshake Metrics
+### 4. TLS Handshake Metrics
 
 | Metric                                  | Type      | Description              | Labels                        |
 |-----------------------------------------|-----------|--------------------------|-------------------------------|
@@ -148,7 +184,7 @@ histogram_quantile(0.95, rate(huginn_tls_handshake_duration_seconds_bucket[5m]))
 
 ---
 
-### 4. Fingerprinting Metrics
+### 5. Fingerprinting Metrics
 
 #### TLS Fingerprinting (JA4)
 
@@ -187,7 +223,7 @@ histogram_quantile(0.95, rate(huginn_tls_fingerprint_extraction_duration_seconds
 
 ---
 
-### 5. Backend Metrics
+### 6. Backend Metrics
 
 | Metric                            | Type      | Description                    | Labels                   |
 |-----------------------------------|-----------|--------------------------------|--------------------------|
@@ -222,7 +258,7 @@ sum by (backend) (rate(huginn_backend_selections_total[5m]))
 
 ---
 
-### 6. Error Metrics
+### 7. Error Metrics
 
 | Metric                | Type    | Description          | Labels                    |
 |-----------------------|---------|----------------------|---------------------------|
@@ -401,6 +437,7 @@ spec:
 - Active connections: `huginn_connections_active`
 - Error rate: `rate(huginn_requests_total{status_code=~"5.."}[5m]) / rate(huginn_requests_total[5m])`
 - P95 latency: `histogram_quantile(0.95, rate(huginn_requests_duration_seconds_bucket[5m]))`
+- Bandwidth (MB/s): `(rate(huginn_bytes_received_total[5m]) + rate(huginn_bytes_sent_total[5m])) / 1024 / 1024`
 
 **TLS Panel**:
 
@@ -421,6 +458,7 @@ spec:
 - Backend request rate: `sum by (backend) (rate(huginn_backend_requests_total[5m]))`
 - Backend error rate: `rate(huginn_backend_errors_total[5m]) / rate(huginn_backend_requests_total[5m])`
 - Backend latency P95: `histogram_quantile(0.95, rate(huginn_backend_duration_seconds_bucket[5m]))`
+- Backend throughput: `sum by (backend_address) (rate(huginn_backend_bytes_received_total[5m]) + rate(huginn_backend_bytes_sent_total[5m]))`
 
 ---
 
@@ -430,7 +468,6 @@ The following telemetry features are planned but not yet implemented:
 
 ### Metrics (Planned)
 
-- Throughput metrics (bytes received/sent)
 - Rate limiting metrics
 - Per-route metrics
 - IP filtering metrics

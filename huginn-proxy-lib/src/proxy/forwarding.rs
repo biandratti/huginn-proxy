@@ -146,6 +146,17 @@ pub async fn forward(
 
     let (mut parts, body) = req.into_parts();
 
+    if let Some(ref m) = config.metrics {
+        if let Some(content_length) = parts.headers.get(hyper::header::CONTENT_LENGTH) {
+            if let Ok(length_str) = content_length.to_str() {
+                if let Ok(length) = length_str.parse::<u64>() {
+                    m.backend_bytes_sent_total
+                        .add(length, &[KeyValue::new("backend_address", backend.clone())]);
+                }
+            }
+        }
+    }
+
     let original_host = config
         .preserve_host
         .then(|| parts.headers.get("host").cloned())
@@ -165,6 +176,17 @@ pub async fn forward(
     match result {
         Ok(mut resp) => {
             let status_code = resp.status().as_u16();
+
+            if let Some(ref m) = config.metrics {
+                if let Some(content_length) = resp.headers().get(hyper::header::CONTENT_LENGTH) {
+                    if let Ok(length_str) = content_length.to_str() {
+                        if let Ok(length) = length_str.parse::<u64>() {
+                            m.backend_bytes_received_total
+                                .add(length, &[KeyValue::new("backend_address", backend.clone())]);
+                        }
+                    }
+                }
+            }
 
             crate::security::apply_security_headers(
                 &mut resp,
