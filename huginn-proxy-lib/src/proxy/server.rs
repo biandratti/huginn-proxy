@@ -44,6 +44,7 @@ pub async fn run(config: Arc<Config>, metrics: Option<Arc<Metrics>>) -> Result<(
         config.security.ip_filter.clone(),
         config.security.rate_limit.clone(),
         rate_limit_manager,
+        config.headers.clone(),
     );
 
     // Setup TLS with hot reload support

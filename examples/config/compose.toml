@@ -1,57 +1,65 @@
 listen = "0.0.0.0:7000"
 
 backends = [
-  { address = "backend-a:9000", http_version = "preserve" },
-  { address = "backend-b:9000", http_version = "preserve" }
+    { address = "backend-a:9000", http_version = "preserve" },
+    { address = "backend-b:9000", http_version = "preserve" }
 ]
 
 routes = [
-  # Basic route without path manipulation
-  { prefix = "/api", backend = "backend-a:9000", fingerprinting = true },
-  
-  # Route without fingerprinting (for fingerprint tests)
-  { prefix = "/static", backend = "backend-b:9000", fingerprinting = false },
-  
-  # Path stripping: removes matched prefix
-  # Request: /strip/users → Backend: /users
-  { prefix = "/strip", backend = "backend-a:9000", fingerprinting = true, replace_path = "" },
-  
-  # Path rewriting: replaces prefix with new path
-  # Request: /old/data → Backend: /new/data
-  { prefix = "/old", backend = "backend-b:9000", fingerprinting = true, replace_path = "/new" },
-  
-  # Path rewriting to versioned API
-  # Request: /v1/endpoint → Backend: /api/v1/endpoint
-  { prefix = "/v1", backend = "backend-a:9000", fingerprinting = true, replace_path = "/api/v1" },
-  
-  # Default route (no path manipulation)
-  { prefix = "/", backend = "backend-b:9000" }
+    # Basic route without path manipulation
+    { prefix = "/api", backend = "backend-a:9000", fingerprinting = true },
+    # Route without fingerprinting (for fingerprint tests)
+    { prefix = "/static", backend = "backend-b:9000", fingerprinting = false },
+    # Path stripping: removes matched prefix
+    # Request: /strip/users → Backend: /users
+    { prefix = "/strip", backend = "backend-a:9000", fingerprinting = true, replace_path = "" },
+    # Path rewriting: replaces prefix with new path
+    # Request: /old/data → Backend: /new/data
+    { prefix = "/old", backend = "backend-b:9000", fingerprinting = true, replace_path = "/new" },
+    # Path rewriting to versioned API
+    # Request: /v1/endpoint → Backend: /api/v1/endpoint
+    { prefix = "/v1", backend = "backend-a:9000", fingerprinting = true, replace_path = "/api/v1" },
+    # Default route (no path manipulation)
+    { prefix = "/", backend = "backend-b:9000" }
+]
+
+[headers.request]
+remove = ["X-Forwarded-Server"]
+add = [
+    { name = "X-Proxy-Name", value = "huginn-proxy" },
+    { name = "X-Proxy-Version", value = "0.0.1" }
+]
+
+[headers.response]
+remove = ["Server", "X-Powered-By", "X-AspNet-Version"]
+add = [
+    { name = "X-Proxy", value = "huginn-proxy" }
 ]
 
 [tls]
 cert_path = "/config/certs/server.crt"
-key_path  = "/config/certs/server.key"
+key_path = "/config/certs/server.key"
 alpn = ["h2", "http/1.1"]
 watch_delay_secs = 60
 
 [tls.options]
 versions = ["1.2", "1.3"]
 cipher_suites = [
-   "TLS13_AES_128_GCM_SHA256",
-   "TLS13_AES_256_GCM_SHA384",
-   "TLS13_CHACHA20_POLY1305_SHA256",
-   "TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256",
-   "TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384",
-   "TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256",
-   "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256",
-   "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384",
-   "TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256",
+    "TLS13_AES_128_GCM_SHA256",
+    "TLS13_AES_256_GCM_SHA384",
+    "TLS13_CHACHA20_POLY1305_SHA256",
+    "TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256",
+    "TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384",
+    "TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256",
+    "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256",
+    "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384",
+    "TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256",
 ]
 curve_preferences = [
-   "X25519",
-   "secp256r1",
-   "secp384r1",
-   "secp521r1",
+    "X25519",
+    "secp256r1",
+    "secp384r1",
+    "secp521r1",
 ]
 
 preserve_host = false
@@ -100,10 +108,10 @@ mode = "disabled"
 
 [security.headers]
 custom = [
-  { name = "X-Frame-Options", value = "DENY" },
-  { name = "X-Content-Type-Options", value = "nosniff" },
-  { name = "X-XSS-Protection", value = "1; mode=block" },
-  { name = "Referrer-Policy", value = "strict-origin-when-cross-origin" }
+    { name = "X-Frame-Options", value = "DENY" },
+    { name = "X-Content-Type-Options", value = "nosniff" },
+    { name = "X-XSS-Protection", value = "1; mode=block" },
+    { name = "Referrer-Policy", value = "strict-origin-when-cross-origin" }
 ]
 
 [security.headers.hsts]

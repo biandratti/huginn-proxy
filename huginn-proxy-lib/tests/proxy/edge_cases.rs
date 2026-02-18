@@ -13,6 +13,7 @@ fn test_pick_route_no_match() {
             fingerprinting: true,
             replace_path: None,
             rate_limit: None,
+            headers: None,
         },
         Route {
             prefix: "/static".to_string(),
@@ -20,6 +21,7 @@ fn test_pick_route_no_match() {
             fingerprinting: true,
             replace_path: None,
             rate_limit: None,
+            headers: None,
         },
     ];
 
@@ -35,6 +37,7 @@ fn test_pick_route_exact_match() {
             fingerprinting: true,
             replace_path: None,
             rate_limit: None,
+            headers: None,
         },
         Route {
             prefix: "/".to_string(),
@@ -42,6 +45,7 @@ fn test_pick_route_exact_match() {
             fingerprinting: true,
             replace_path: None,
             rate_limit: None,
+            headers: None,
         },
     ];
 
@@ -58,6 +62,7 @@ fn test_pick_route_longest_prefix() {
             fingerprinting: true,
             replace_path: None,
             rate_limit: None,
+            headers: None,
         },
         Route {
             prefix: "/api".to_string(),
@@ -65,6 +70,7 @@ fn test_pick_route_longest_prefix() {
             fingerprinting: true,
             replace_path: None,
             rate_limit: None,
+            headers: None,
         },
         Route {
             prefix: "/".to_string(),
@@ -72,6 +78,7 @@ fn test_pick_route_longest_prefix() {
             fingerprinting: true,
             replace_path: None,
             rate_limit: None,
+            headers: None,
         },
     ];
 
@@ -128,6 +135,7 @@ fn test_pick_route_with_empty_prefix() {
         fingerprinting: true,
         replace_path: None,
         rate_limit: None,
+        headers: None,
     }];
 
     assert_eq!(pick_route("/any/path", &routes), Some("backend-default:9000"));
