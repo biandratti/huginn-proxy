@@ -47,6 +47,17 @@ pub fn check_rate_limit(
         headers,
     );
 
+    let strategy = format!("{:?}", limit_by).to_lowercase();
+    if let Some(m) = metrics {
+        m.rate_limit_requests_total.add(
+            1,
+            &[
+                KeyValue::new("strategy", strategy.clone()),
+                KeyValue::new("route", route_match.matched_prefix.to_string()),
+            ],
+        );
+    }
+
     let rate_limit_result = manager.check(&rate_limit_key, Some(route_match.matched_prefix));
 
     match rate_limit_result {
@@ -54,12 +65,30 @@ pub fn check_rate_limit(
             if let Some(m) = metrics {
                 m.errors_total
                     .add(1, &[KeyValue::new("error_type", "rate_limited")]);
+                m.rate_limit_rejected_total.add(
+                    1,
+                    &[
+                        KeyValue::new("strategy", strategy),
+                        KeyValue::new("route", route_match.matched_prefix.to_string()),
+                    ],
+                );
             }
 
             Some(create_429_response(limit, reset_after.as_secs()))
         }
         RateLimitResult::Allowed { limit, remaining } => {
             debug!(limit = limit, remaining = remaining, "Rate limit check passed");
+
+            if let Some(m) = metrics {
+                m.rate_limit_allowed_total.add(
+                    1,
+                    &[
+                        KeyValue::new("strategy", strategy),
+                        KeyValue::new("route", route_match.matched_prefix.to_string()),
+                    ],
+                );
+            }
+
             None
         }
     }

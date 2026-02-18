@@ -258,7 +258,43 @@ sum by (backend) (rate(huginn_backend_selections_total[5m]))
 
 ---
 
-### 7. Error Metrics
+### 7. Rate Limiting Metrics
+
+| Metric | Type | Description | Labels |
+|--------|------|-------------|--------|
+| `huginn_rate_limit_requests_total` | Counter | Total requests evaluated by rate limiter | `strategy`, `route` |
+| `huginn_rate_limit_allowed_total` | Counter | Total requests allowed by rate limiter | `strategy`, `route` |
+| `huginn_rate_limit_rejected_total` | Counter | Total requests rejected (429) by rate limiter | `strategy`, `route` |
+
+**Labels**:
+- `strategy`: Rate limiting strategy (`ip`, `header`, `route`, `combined`)
+- `route`: Route prefix (e.g., `/api`, `/`)
+
+**Example queries**:
+```promql
+# Rate limit evaluation rate
+rate(huginn_rate_limit_requests_total[5m])
+
+# Rate limit rejection rate
+rate(huginn_rate_limit_rejected_total[5m])
+
+# Rate limit rejection percentage
+rate(huginn_rate_limit_rejected_total[5m]) 
+  / rate(huginn_rate_limit_requests_total[5m]) * 100
+
+# Rejections by strategy
+sum by (strategy) (rate(huginn_rate_limit_rejected_total[5m]))
+
+# Rejections by route
+sum by (route) (rate(huginn_rate_limit_rejected_total[5m]))
+
+# Allow rate by strategy
+sum by (strategy) (rate(huginn_rate_limit_allowed_total[5m]))
+```
+
+---
+
+### 8. Error Metrics
 
 | Metric                | Type    | Description          | Labels                    |
 |-----------------------|---------|----------------------|---------------------------|
@@ -453,6 +489,13 @@ spec:
 - Extraction duration P95:
   `histogram_quantile(0.95, rate(huginn_tls_fingerprint_extraction_duration_seconds_bucket[5m]))`
 
+**Rate Limiting Panel**:
+
+- Rate limit evaluation rate: `rate(huginn_rate_limit_requests_total[5m])`
+- Rate limit rejection rate: `rate(huginn_rate_limit_rejected_total[5m])`
+- Rejection percentage: `rate(huginn_rate_limit_rejected_total[5m]) / rate(huginn_rate_limit_requests_total[5m]) * 100`
+- Rejections by strategy: `sum by (strategy) (rate(huginn_rate_limit_rejected_total[5m]))`
+
 **Backend Panel**:
 
 - Backend request rate: `sum by (backend) (rate(huginn_backend_requests_total[5m]))`
@@ -468,7 +511,6 @@ The following telemetry features are planned but not yet implemented:
 
 ### Metrics (Planned)
 
-- Rate limiting metrics
 - Per-route metrics
 - IP filtering metrics
 - Header manipulation metrics

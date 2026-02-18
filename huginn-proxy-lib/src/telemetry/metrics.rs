@@ -48,6 +48,11 @@ pub struct Metrics {
 
     // Timeout metrics
     pub timeouts_total: Counter<u64>,
+
+    // Rate limiting metrics
+    pub rate_limit_requests_total: Counter<u64>,
+    pub rate_limit_allowed_total: Counter<u64>,
+    pub rate_limit_rejected_total: Counter<u64>,
 }
 
 impl Metrics {
@@ -163,6 +168,19 @@ impl Metrics {
             timeouts_total: meter
                 .u64_counter("huginn_timeouts_total")
                 .with_description("Total number of timeouts by type (tls_handshake, http_read, http_write, connection_handling)")
+                .build(),
+
+            rate_limit_requests_total: meter
+                .u64_counter("huginn_rate_limit_requests_total")
+                .with_description("Total number of requests evaluated by rate limiter")
+                .build(),
+            rate_limit_allowed_total: meter
+                .u64_counter("huginn_rate_limit_allowed_total")
+                .with_description("Total number of requests allowed by rate limiter")
+                .build(),
+            rate_limit_rejected_total: meter
+                .u64_counter("huginn_rate_limit_rejected_total")
+                .with_description("Total number of requests rejected by rate limiter (429)")
                 .build(),
         }
     }
