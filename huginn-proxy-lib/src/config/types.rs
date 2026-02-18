@@ -1,5 +1,5 @@
 use ipnet::IpNet;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 
 /// HTTP version preference for backend connections
@@ -446,7 +446,7 @@ pub struct SecurityHeaders {
 }
 
 /// Custom header configuration
-#[derive(Debug, Deserialize, Clone, PartialEq)]
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
 pub struct CustomHeader {
     /// Header name (e.g., "X-Frame-Options")
     pub name: String,
@@ -455,7 +455,7 @@ pub struct CustomHeader {
 }
 
 /// Header manipulation for requests or responses
-#[derive(Debug, Deserialize, Clone, PartialEq, Default)]
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Default)]
 pub struct HeaderManipulationGroup {
     /// Headers to add (overwrite if exist)
     #[serde(default)]
@@ -466,7 +466,7 @@ pub struct HeaderManipulationGroup {
 }
 
 /// Header manipulation configuration
-#[derive(Debug, Deserialize, Clone, PartialEq, Default)]
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Default)]
 pub struct HeaderManipulation {
     /// Request header manipulation
     #[serde(default)]
