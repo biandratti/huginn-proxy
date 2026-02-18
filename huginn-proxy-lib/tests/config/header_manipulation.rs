@@ -33,20 +33,23 @@ add = [
     )?;
 
     let config = load_from_path(file.path())?;
-    let headers = config.headers.as_ref().expect("headers should be present");
 
-    assert_eq!(headers.request.add.len(), 1);
-    assert_eq!(headers.request.add[0].name, "X-Custom");
+    if let Some(headers) = config.headers.as_ref() {
+        assert_eq!(headers.request.add.len(), 1);
+        assert_eq!(headers.request.add[0].name, "X-Custom");
 
-    assert!(
-        headers.request.remove.is_empty(),
-        "remove should default to empty when only add is configured"
-    );
+        assert!(
+            headers.request.remove.is_empty(),
+            "remove should default to empty when only add is configured"
+        );
 
-    assert!(headers.response.add.is_empty());
-    assert!(headers.response.remove.is_empty());
+        assert!(headers.response.add.is_empty());
+        assert!(headers.response.remove.is_empty());
 
-    Ok(())
+        Ok(())
+    } else {
+        Err("headers should be present".into())
+    }
 }
 
 #[tokio::test]
@@ -65,19 +68,22 @@ remove = ["Server", "X-Powered-By"]
     )?;
 
     let config = load_from_path(file.path())?;
-    let headers = config.headers.as_ref().expect("headers should be present");
 
-    assert_eq!(headers.request.remove.len(), 2);
+    if let Some(headers) = config.headers.as_ref() {
+        assert_eq!(headers.request.remove.len(), 2);
 
-    assert!(
-        headers.request.add.is_empty(),
-        "add should default to empty when only remove is configured"
-    );
+        assert!(
+            headers.request.add.is_empty(),
+            "add should default to empty when only remove is configured"
+        );
 
-    assert!(headers.response.add.is_empty());
-    assert!(headers.response.remove.is_empty());
+        assert!(headers.response.add.is_empty());
+        assert!(headers.response.remove.is_empty());
 
-    Ok(())
+        Ok(())
+    } else {
+        Err("headers should be present".into())
+    }
 }
 
 #[tokio::test]
@@ -98,20 +104,23 @@ add = [
     )?;
 
     let config = load_from_path(file.path())?;
-    let headers = config.headers.as_ref().expect("headers should be present");
 
-    assert_eq!(headers.response.add.len(), 1);
-    assert_eq!(headers.response.add[0].name, "X-Proxy");
+    if let Some(headers) = config.headers.as_ref() {
+        assert_eq!(headers.response.add.len(), 1);
+        assert_eq!(headers.response.add[0].name, "X-Proxy");
 
-    assert!(
-        headers.response.remove.is_empty(),
-        "remove should default to empty when only add is configured"
-    );
+        assert!(
+            headers.response.remove.is_empty(),
+            "remove should default to empty when only add is configured"
+        );
 
-    assert!(headers.request.add.is_empty());
-    assert!(headers.request.remove.is_empty());
+        assert!(headers.request.add.is_empty());
+        assert!(headers.request.remove.is_empty());
 
-    Ok(())
+        Ok(())
+    } else {
+        Err("headers should be present".into())
+    }
 }
 
 #[tokio::test]
@@ -130,19 +139,22 @@ remove = ["Server"]
     )?;
 
     let config = load_from_path(file.path())?;
-    let headers = config.headers.as_ref().expect("headers should be present");
 
-    assert_eq!(headers.response.remove.len(), 1);
+    if let Some(headers) = config.headers.as_ref() {
+        assert_eq!(headers.response.remove.len(), 1);
 
-    assert!(
-        headers.response.add.is_empty(),
-        "add should default to empty when only remove is configured"
-    );
+        assert!(
+            headers.response.add.is_empty(),
+            "add should default to empty when only remove is configured"
+        );
 
-    assert!(headers.request.add.is_empty());
-    assert!(headers.request.remove.is_empty());
+        assert!(headers.request.add.is_empty());
+        assert!(headers.request.remove.is_empty());
 
-    Ok(())
+        Ok(())
+    } else {
+        Err("headers should be present".into())
+    }
 }
 
 #[tokio::test]
@@ -164,15 +176,18 @@ remove = ["Server"]
     )?;
 
     let config = load_from_path(file.path())?;
-    let headers = config.headers.as_ref().expect("headers should be present");
 
-    assert_eq!(headers.request.add.len(), 1);
-    assert!(headers.request.remove.is_empty());
+    if let Some(headers) = config.headers.as_ref() {
+        assert_eq!(headers.request.add.len(), 1);
+        assert!(headers.request.remove.is_empty());
 
-    assert_eq!(headers.response.remove.len(), 1);
-    assert!(headers.response.add.is_empty());
+        assert_eq!(headers.response.remove.len(), 1);
+        assert!(headers.response.add.is_empty());
 
-    Ok(())
+        Ok(())
+    } else {
+        Err("headers should be present".into())
+    }
 }
 
 #[tokio::test]
@@ -196,28 +211,31 @@ add = [{{ name = "X-API", value = "v1" }}]
 
     let config = load_from_path(file.path())?;
     let route = &config.routes[0];
-    let headers = route
-        .headers
-        .as_ref()
-        .expect("route headers should be present");
 
-    assert_eq!(headers.request.add.len(), 1);
-    assert!(
-        headers.request.remove.is_empty(),
-        "route request remove should default to empty"
-    );
+    if let Some(headers) = route.headers.as_ref() {
+        assert_eq!(headers.request.add.len(), 1);
+        assert!(
+            headers.request.remove.is_empty(),
+            "route request remove should default to empty"
+        );
 
-    assert!(headers.response.add.is_empty());
-    assert!(headers.response.remove.is_empty());
+        assert!(headers.response.add.is_empty());
+        assert!(headers.response.remove.is_empty());
 
-    Ok(())
+        Ok(())
+    } else {
+        Err("route headers should be present".into())
+    }
 }
 
 #[test]
 fn test_empty_header_manipulation_group_serialization() {
     let group = HeaderManipulationGroup::default();
-    let toml = toml::to_string(&group).expect("should serialize");
 
-    assert!(toml.contains("add = []") || !toml.contains("add"));
-    assert!(toml.contains("remove = []") || !toml.contains("remove"));
+    if let Ok(toml) = toml::to_string(&group) {
+        assert!(toml.contains("add = []") || !toml.contains("add"));
+        assert!(toml.contains("remove = []") || !toml.contains("remove"));
+    } else {
+        panic!("Failed to serialize HeaderManipulationGroup");
+    }
 }

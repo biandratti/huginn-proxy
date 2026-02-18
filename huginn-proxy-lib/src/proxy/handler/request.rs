@@ -152,7 +152,6 @@ pub async fn handle_proxy_request(
     )
     .await;
 
-    // Apply response header manipulation
     let mut result = result;
     if let Ok(ref mut response) = result {
         apply_response_header_manipulation(

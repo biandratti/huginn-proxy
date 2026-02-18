@@ -13,7 +13,6 @@ async fn test_global_header_manipulation() -> Result<(), Box<dyn std::error::Err
         "HTTPS proxy should be ready"
     );
 
-    // Send a request
     let response = client
         .get(PROXY_HTTPS_URL)
         .send()
@@ -27,13 +26,11 @@ async fn test_global_header_manipulation() -> Result<(), Box<dyn std::error::Err
         .await
         .map_err(|e| format!("Failed to parse response as JSON: {e}"))?;
 
-    // Verify request headers received by backend
     let headers = body
         .get("headers")
         .and_then(|h| h.as_object())
         .ok_or("Response should contain headers object")?;
 
-    // Verify global request headers were added
     assert!(
         headers.contains_key("x-proxy-name"),
         "X-Proxy-Name header should be present (added by global config)"
@@ -75,7 +72,6 @@ async fn test_response_header_manipulation() -> Result<(), Box<dyn std::error::E
         "HTTPS proxy should be ready"
     );
 
-    // Send a request
     let response = client
         .get(PROXY_HTTPS_URL)
         .send()
@@ -84,11 +80,8 @@ async fn test_response_header_manipulation() -> Result<(), Box<dyn std::error::E
 
     assert_eq!(response.status(), reqwest::StatusCode::OK);
 
-    // Check response headers received by client
     let response_headers = response.headers();
 
-    // Verify that backend info headers were removed (if they existed)
-    // Note: These might not be present in the backend response, but if they are, they should be removed
     assert!(
         !response_headers.contains_key("x-powered-by"),
         "X-Powered-By header should be removed (global config removes it)"
@@ -98,7 +91,6 @@ async fn test_response_header_manipulation() -> Result<(), Box<dyn std::error::E
         "X-AspNet-Version header should be removed (global config removes it)"
     );
 
-    // Verify that X-Proxy header was added
     assert!(
         response_headers.contains_key("x-proxy"),
         "X-Proxy header should be present (added by global config)"
@@ -129,7 +121,6 @@ async fn test_request_header_removal() -> Result<(), Box<dyn std::error::Error +
         "HTTPS proxy should be ready"
     );
 
-    // Send a request with X-Forwarded-Server header (configured to be removed)
     let response = client
         .get(PROXY_HTTPS_URL)
         .header("X-Forwarded-Server", "should-be-removed.example.com")
@@ -149,7 +140,6 @@ async fn test_request_header_removal() -> Result<(), Box<dyn std::error::Error +
         .and_then(|h| h.as_object())
         .ok_or("Response should contain headers object")?;
 
-    // Verify X-Forwarded-Server was removed
     assert!(
         !headers.contains_key("x-forwarded-server"),
         "X-Forwarded-Server should be removed by global config. Headers: {headers:?}"
@@ -174,7 +164,6 @@ async fn test_header_override_behavior() -> Result<(), Box<dyn std::error::Error
         "HTTPS proxy should be ready"
     );
 
-    // Send a request with headers that will be overridden
     let response = client
         .get(PROXY_HTTPS_URL)
         .header("X-Proxy-Name", "fake-proxy")
@@ -195,7 +184,6 @@ async fn test_header_override_behavior() -> Result<(), Box<dyn std::error::Error
         .and_then(|h| h.as_object())
         .ok_or("Response should contain headers object")?;
 
-    // Verify our configured values override client values
     let proxy_name = headers
         .get("x-proxy-name")
         .and_then(|v| v.as_str())
@@ -235,7 +223,6 @@ async fn test_case_insensitive_header_removal(
         "HTTPS proxy should be ready"
     );
 
-    // Send requests with different casings of the same header
     let test_cases = vec![
         "X-Forwarded-Server",
         "x-forwarded-server",

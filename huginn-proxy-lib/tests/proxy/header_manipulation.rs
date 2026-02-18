@@ -20,7 +20,6 @@ fn test_remove_headers_case_insensitive() {
     let mut headers = HeaderMap::new();
     headers.insert("server", HeaderValue::from_static("nginx"));
 
-    // Should work with different case
     remove_headers(&mut headers, &["SERVER".to_string()]);
 
     assert!(headers.get("server").is_none());
@@ -31,7 +30,6 @@ fn test_remove_headers_nonexistent() {
     let mut headers = HeaderMap::new();
     headers.insert("server", HeaderValue::from_static("nginx"));
 
-    // Should not panic if header doesn't exist
     remove_headers(&mut headers, &["nonexistent".to_string()]);
 
     assert!(headers.get("server").is_some());
@@ -60,7 +58,6 @@ fn test_add_headers_overwrite() {
     let to_add = vec![("x-custom".to_string(), "new-value".to_string())];
 
     add_headers(&mut headers, &to_add);
-
     assert_eq!(headers.get("x-custom").map(|v| v.as_bytes()), Some(b"new-value".as_ref()));
 }
 
@@ -68,12 +65,9 @@ fn test_add_headers_overwrite() {
 fn test_add_headers_invalid_name() {
     let mut headers = HeaderMap::new();
 
-    // Invalid header name (contains space)
     let to_add = vec![("invalid name".to_string(), "value".to_string())];
 
     add_headers(&mut headers, &to_add);
-
-    // Should not panic, just log warning
     assert!(headers.get("invalid name").is_none());
 }
 
@@ -81,11 +75,8 @@ fn test_add_headers_invalid_name() {
 fn test_add_headers_invalid_value() {
     let mut headers = HeaderMap::new();
 
-    // Invalid header value (contains newline)
     let to_add = vec![("x-custom".to_string(), "value\nwith\nnewlines".to_string())];
 
     add_headers(&mut headers, &to_add);
-
-    // Should not panic, just log warning
     assert!(headers.get("x-custom").is_none());
 }
