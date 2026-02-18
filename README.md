@@ -91,6 +91,7 @@ docker run -v /path/to/config.toml:/config.toml huginn-proxy /config.toml
 - **Easy Deployment** - Single binary, Docker-ready
 
 See [FEATURES.md](FEATURES.md) for detailed descriptions and limitations of each feature.
+See [MELEMETRY.md](MELEMETRY.md) for telemetry information.
 
 ## Fingerprinting
 
