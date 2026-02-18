@@ -626,6 +626,14 @@ spec:
 
 The following telemetry features are planned but not yet implemented:
 
+### Metrics for Pending Features
+
+The following metrics will be added when the corresponding features are implemented:
+
+- **Connection Pooling**: Pool size, active/idle connections, reuse rate
+- **Active Health Checks**: Health check status, execution count, duration
+- **Circuit Breaker**: Circuit state, open/close events
+
 ### Tracing (Planned)
 
 - Distributed tracing with Jaeger/Zipkin
