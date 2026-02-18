@@ -55,6 +55,18 @@ pub struct Metrics {
     pub rate_limit_allowed_total: Counter<u64>,
     pub rate_limit_rejected_total: Counter<u64>,
 
+    // IP filtering metrics
+    pub ip_filter_requests_total: Counter<u64>,
+    pub ip_filter_allowed_total: Counter<u64>,
+    pub ip_filter_denied_total: Counter<u64>,
+
+    // Header manipulation metrics
+    pub headers_added_total: Counter<u64>,
+    pub headers_removed_total: Counter<u64>,
+
+    // mTLS metrics
+    pub mtls_connections_total: Counter<u64>,
+
     // Build info
     pub build_info: Gauge<u64>,
 }
@@ -187,6 +199,33 @@ impl Metrics {
                 .with_description("Total number of requests rejected by rate limiter (429)")
                 .build(),
 
+            ip_filter_requests_total: meter
+                .u64_counter("huginn_ip_filter_requests_total")
+                .with_description("Total number of requests evaluated by IP filter")
+                .build(),
+            ip_filter_allowed_total: meter
+                .u64_counter("huginn_ip_filter_allowed_total")
+                .with_description("Total number of requests allowed by IP filter")
+                .build(),
+            ip_filter_denied_total: meter
+                .u64_counter("huginn_ip_filter_denied_total")
+                .with_description("Total number of requests denied by IP filter (403)")
+                .build(),
+
+            headers_added_total: meter
+                .u64_counter("huginn_headers_added_total")
+                .with_description("Total number of headers added by header manipulation")
+                .build(),
+            headers_removed_total: meter
+                .u64_counter("huginn_headers_removed_total")
+                .with_description("Total number of headers removed by header manipulation")
+                .build(),
+
+            mtls_connections_total: meter
+                .u64_counter("huginn_mtls_connections_total")
+                .with_description("Total number of connections with mTLS enabled (client certificate authentication)")
+                .build(),
+
             build_info: meter
                 .u64_gauge("huginn_build_info")
                 .with_description("Build information (version, rust version)")
@@ -221,7 +260,6 @@ pub fn init_metrics() -> Result<(Arc<Metrics>, Registry), Box<dyn std::error::Er
     let meter = global::meter("huginn-proxy");
     let metrics = Arc::new(Metrics::new(meter));
 
-    // Set build info immediately
     metrics.set_build_info();
 
     Ok((metrics, registry))

@@ -28,14 +28,25 @@ fn check_ip_access(
     metrics: Option<&Arc<Metrics>>,
 ) -> HttpResult<()> {
     let client_ip = peer.ip();
+
+    if let Some(m) = metrics {
+        m.ip_filter_requests_total.add(1, &[]);
+    }
+
     if !crate::security::is_ip_allowed(client_ip, ip_filter) {
         debug!(?peer, "IP blocked by filter");
         if let Some(m) = metrics {
             m.errors_total
                 .add(1, &[KeyValue::new("error_type", "ip_blocked")]);
+            m.ip_filter_denied_total.add(1, &[]);
         }
         return Err(HttpError::Forbidden);
     }
+
+    if let Some(m) = metrics {
+        m.ip_filter_allowed_total.add(1, &[]);
+    }
+
     Ok(())
 }
 
@@ -144,6 +155,7 @@ pub async fn handle_proxy_request(
         req.headers_mut(),
         security.global_header_manipulation.as_ref(),
         route_match.headers,
+        metrics.as_ref(),
     );
 
     // Forward request
@@ -181,6 +193,7 @@ pub async fn handle_proxy_request(
             response.headers_mut(),
             security.global_header_manipulation.as_ref(),
             route_match.headers,
+            metrics.as_ref(),
         );
     }
 

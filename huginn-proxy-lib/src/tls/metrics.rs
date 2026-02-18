@@ -26,6 +26,7 @@ pub fn record_tls_handshake_metrics<S>(
 ) {
     if let Some(ref m) = metrics {
         let (tls_version, cipher_suite) = extract_tls_info(tls);
+        let (_, connection) = tls.get_ref();
 
         m.tls_handshakes_total.add(
             1,
@@ -42,5 +43,9 @@ pub fn record_tls_handshake_metrics<S>(
             ],
         );
         m.tls_connections_active.add(1, &[]);
+
+        if connection.peer_certificates().is_some() {
+            m.mtls_connections_total.add(1, &[]);
+        }
     }
 }

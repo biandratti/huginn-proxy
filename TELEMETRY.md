@@ -6,7 +6,7 @@
 
 Huginn Proxy provides comprehensive telemetry through:
 
-- **Prometheus Metrics** - 30 metrics covering connections, requests, TLS, fingerprinting, backends, throughput, and rate limiting
+- **Prometheus Metrics** - 36 metrics covering connections, requests, TLS, fingerprinting, backends, throughput, rate limiting, IP filtering, header manipulation, and mTLS
 - **Health Check Endpoints** - Kubernetes-ready health and readiness probes
 - **OpenTelemetry** - Built on modern OpenTelemetry standards for future extensibility
 
@@ -335,7 +335,83 @@ rate(huginn_errors_total[5m])
 
 ---
 
-### 9. Build Info
+### 9. IP Filtering Metrics
+
+| Metric | Type | Description | Labels |
+|--------|------|-------------|--------|
+| `huginn_ip_filter_requests_total` | Counter | Total requests evaluated by IP filter | - |
+| `huginn_ip_filter_allowed_total` | Counter | Total requests allowed by IP filter | - |
+| `huginn_ip_filter_denied_total` | Counter | Total requests denied by IP filter (403) | - |
+
+**Example queries**:
+```promql
+# IP filter evaluation rate
+rate(huginn_ip_filter_requests_total[5m])
+
+# IP filter denial rate
+rate(huginn_ip_filter_denied_total[5m])
+
+# IP filter denial percentage
+rate(huginn_ip_filter_denied_total[5m]) 
+  / rate(huginn_ip_filter_requests_total[5m]) * 100
+
+# Allow rate
+rate(huginn_ip_filter_allowed_total[5m])
+```
+
+---
+
+### 10. Header Manipulation Metrics
+
+| Metric | Type | Description | Labels |
+|--------|------|-------------|--------|
+| `huginn_headers_added_total` | Counter | Total headers added by header manipulation | `context` |
+| `huginn_headers_removed_total` | Counter | Total headers removed by header manipulation | `context` |
+
+**Labels**:
+- `context`: Context where headers were manipulated (`request`, `response`)
+
+**Example queries**:
+```promql
+# Headers added rate
+rate(huginn_headers_added_total[5m])
+
+# Headers removed rate
+rate(huginn_headers_removed_total[5m])
+
+# Headers added per context
+sum by (context) (rate(huginn_headers_added_total[5m]))
+
+# Headers removed per context
+sum by (context) (rate(huginn_headers_removed_total[5m]))
+```
+
+---
+
+### 11. mTLS Metrics
+
+| Metric | Type | Description | Labels |
+|--------|------|-------------|--------|
+| `huginn_mtls_connections_total` | Counter | Total connections with mTLS enabled (client certificate verified) | - |
+
+**Example queries**:
+```promql
+# mTLS connection rate
+rate(huginn_mtls_connections_total[5m])
+
+# mTLS usage percentage
+rate(huginn_mtls_connections_total[5m]) 
+  / rate(huginn_tls_handshakes_total[5m]) * 100
+```
+
+**Note**: 
+- This metric only counts successful TLS handshakes where a client certificate was present and verified.
+- mTLS verification failures are captured in `huginn_tls_handshake_errors_total`.
+- When mTLS is required but client certificate is invalid/absent, the TLS handshake fails before this metric is recorded.
+
+---
+
+### 12. Build Info
 
 | Metric | Type | Description | Labels |
 |--------|------|-------------|--------|
@@ -550,11 +626,6 @@ spec:
 
 The following telemetry features are planned but not yet implemented:
 
-### Metrics (Planned)
-
-- IP filtering metrics
-- Header manipulation metrics
-
 ### Tracing (Planned)
 
 - Distributed tracing with Jaeger/Zipkin
@@ -562,12 +633,3 @@ The following telemetry features are planned but not yet implemented:
 - Trace sampling
 
 See [ROADMAP.md](ROADMAP.md) for complete list of planned features.
-
----
-
-## Related Documentation
-
-- [README.md](README.md) - Project overview
-- [FEATURES.md](FEATURES.md) - Complete feature list
-- [ROADMAP.md](ROADMAP.md) - Planned features
-- [examples/](examples/) - Configuration examples
