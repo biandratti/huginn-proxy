@@ -22,7 +22,7 @@
 //!
 //! # Example Usage
 //!
-//! ```ignore
+//! ```
 //! use huginn_proxy_lib::security::rate_limit::{RateLimiter, RateLimitResult};
 //! use std::time::Duration;
 //!

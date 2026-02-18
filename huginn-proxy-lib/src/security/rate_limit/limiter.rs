@@ -67,9 +67,9 @@ impl RateLimitResult {
 /// A rate limiter that enforces request limits over time windows.
 ///
 /// # Example
-/// ```ignore
+/// ```
 /// use std::time::Duration;
-/// use huginn_proxy_lib::security::rate_limit::RateLimiter;
+/// use huginn_proxy_lib::security::rate_limit::{RateLimiter, RateLimitResult};
 ///
 /// let limiter = RateLimiter::new(100, 200, Duration::from_secs(1));
 ///
@@ -97,7 +97,10 @@ impl RateLimiter {
     /// - `window`: Time window for rate limiting
     ///
     /// # Example
-    /// ```ignore
+    /// ```
+    /// use std::time::Duration;
+    /// use huginn_proxy_lib::security::rate_limit::RateLimiter;
+    ///
     /// // Allow 100 requests per second with burst of 200
     /// let limiter = RateLimiter::new(100, 200, Duration::from_secs(1));
     /// ```

@@ -9,6 +9,8 @@ use std::sync::Arc;
 /// # Arguments
 /// * `headers` - The header map to modify
 /// * `manipulation` - The header manipulation configuration
+/// * `context` - Context string ("request" or "response") for metrics
+/// * `metrics` - Optional metrics for tracking header operations
 ///
 /// # Example
 /// ```
@@ -19,7 +21,7 @@ use std::sync::Arc;
 /// let mut headers = HeaderMap::new();
 /// let manipulation = HeaderManipulationGroup::default();
 ///
-/// apply_header_manipulation_group(&mut headers, &manipulation);
+/// apply_header_manipulation_group(&mut headers, &manipulation, "request", None);
 /// ```
 pub fn apply_header_manipulation_group(
     headers: &mut HeaderMap,

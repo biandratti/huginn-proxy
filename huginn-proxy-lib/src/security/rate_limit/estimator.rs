@@ -59,6 +59,7 @@ impl Estimator {
     ///
     /// # Example
     /// ```ignore
+    /// # use huginn_proxy_lib::security::rate_limit::estimator::Estimator;
     /// let est = Estimator::new(4, 1024);
     /// let count = est.incr("user-123", 1);
     /// assert_eq!(count, 1);

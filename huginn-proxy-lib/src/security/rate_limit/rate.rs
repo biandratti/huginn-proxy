@@ -64,8 +64,10 @@ impl Rate {
     /// Create a new `Rate` with the given interval.
     ///
     /// # Example
-    /// ```ignore
+    /// ```
     /// use std::time::Duration;
+    /// use huginn_proxy_lib::security::rate_limit::Rate;
+    ///
     /// let rate = Rate::new(Duration::from_secs(1)); // 1 second window
     /// ```
     pub fn new(interval: std::time::Duration) -> Self {
@@ -122,11 +124,13 @@ impl Rate {
     /// This is the average rate of the latest completed period of length `interval`.
     ///
     /// # Example
-    /// ```ignore
+    /// ```
+    /// use std::time::Duration;
+    /// use huginn_proxy_lib::security::rate_limit::Rate;
+    ///
     /// let rate = Rate::new(Duration::from_secs(1));
     /// rate.observe(&"user-123", 5);
-    /// // ... after 1 second ...
-    /// assert_eq!(rate.rate(&"user-123"), 5.0); // 5 requests per second
+    /// // After 1 second, rate would be ~5.0 requests per second
     /// ```
     pub fn rate<T: Hash + ?Sized>(&self, key: &T) -> f64 {
         let past_ms = self.maybe_reset();
@@ -144,7 +148,10 @@ impl Rate {
     /// The Duration representing the time window for rate tracking
     ///
     /// # Example
-    /// ```ignore
+    /// ```
+    /// use std::time::Duration;
+    /// use huginn_proxy_lib::security::rate_limit::Rate;
+    ///
     /// let rate = Rate::new(Duration::from_secs(1));
     /// assert_eq!(rate.interval(), Duration::from_secs(1));
     /// ```
@@ -165,7 +172,10 @@ impl Rate {
     /// The total number of events for this key in the current time window
     ///
     /// # Example
-    /// ```ignore
+    /// ```
+    /// use std::time::Duration;
+    /// use huginn_proxy_lib::security::rate_limit::Rate;
+    ///
     /// let rate = Rate::new(Duration::from_secs(1));
     /// let count = rate.observe(&"192.168.1.1", 1);
     /// if count > 100 {
