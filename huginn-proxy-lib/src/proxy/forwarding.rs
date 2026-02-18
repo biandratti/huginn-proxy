@@ -34,6 +34,7 @@ pub struct ForwardConfig<'a> {
     pub security_headers: Option<&'a crate::config::SecurityHeaders>,
     pub is_https: bool,
     pub preserve_host: bool,
+    pub route: &'a str,
 }
 
 pub fn find_backend_config<'a>(
@@ -201,6 +202,7 @@ pub async fn forward(
                         KeyValue::new("backend_address", backend.clone()),
                         KeyValue::new("status_code", status_code.to_string()),
                         KeyValue::new("protocol", protocol.clone()),
+                        KeyValue::new("route", config.route.to_string()),
                     ],
                 );
                 m.backend_duration_seconds.record(
@@ -209,6 +211,7 @@ pub async fn forward(
                         KeyValue::new("backend_address", backend.clone()),
                         KeyValue::new("status_code", status_code.to_string()),
                         KeyValue::new("protocol", protocol),
+                        KeyValue::new("route", config.route.to_string()),
                     ],
                 );
             }
@@ -222,6 +225,7 @@ pub async fn forward(
                     &[
                         KeyValue::new("backend_address", backend.clone()),
                         KeyValue::new("error_type", error.error_type()),
+                        KeyValue::new("route", config.route.to_string()),
                     ],
                 );
             }

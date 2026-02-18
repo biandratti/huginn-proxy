@@ -159,6 +159,7 @@ pub async fn handle_proxy_request(
             security_headers: Some(&security.headers),
             is_https,
             preserve_host,
+            route: route_match.matched_prefix,
         },
     )
     .await;
@@ -199,6 +200,7 @@ pub async fn handle_proxy_request(
                 KeyValue::new("method", method.clone()),
                 KeyValue::new("status_code", status_code.to_string()),
                 KeyValue::new("protocol", protocol.clone()),
+                KeyValue::new("route", route_match.matched_prefix.to_string()),
             ],
         );
         m.requests_duration_seconds.record(
@@ -207,6 +209,7 @@ pub async fn handle_proxy_request(
                 KeyValue::new("method", method),
                 KeyValue::new("status_code", status_code.to_string()),
                 KeyValue::new("protocol", protocol),
+                KeyValue::new("route", route_match.matched_prefix.to_string()),
             ],
         );
     }

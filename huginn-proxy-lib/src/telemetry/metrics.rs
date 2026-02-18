@@ -1,5 +1,6 @@
 use opentelemetry::global;
-use opentelemetry::metrics::{Counter, Histogram, Meter, UpDownCounter};
+use opentelemetry::metrics::{Counter, Gauge, Histogram, Meter, UpDownCounter};
+use opentelemetry::KeyValue;
 use opentelemetry_sdk::metrics::SdkMeterProvider;
 use prometheus::Registry;
 use std::sync::Arc;
@@ -53,6 +54,9 @@ pub struct Metrics {
     pub rate_limit_requests_total: Counter<u64>,
     pub rate_limit_allowed_total: Counter<u64>,
     pub rate_limit_rejected_total: Counter<u64>,
+
+    // Build info
+    pub build_info: Gauge<u64>,
 }
 
 impl Metrics {
@@ -182,7 +186,23 @@ impl Metrics {
                 .u64_counter("huginn_rate_limit_rejected_total")
                 .with_description("Total number of requests rejected by rate limiter (429)")
                 .build(),
+
+            build_info: meter
+                .u64_gauge("huginn_build_info")
+                .with_description("Build information (version, rust version)")
+                .build(),
         }
+    }
+
+    /// Set build info metric with version labels
+    pub fn set_build_info(&self) {
+        let version = env!("CARGO_PKG_VERSION");
+        let rust_version = env!("CARGO_PKG_RUST_VERSION");
+
+        self.build_info.record(
+            1,
+            &[KeyValue::new("version", version), KeyValue::new("rust_version", rust_version)],
+        );
     }
 }
 
@@ -200,6 +220,9 @@ pub fn init_metrics() -> Result<(Arc<Metrics>, Registry), Box<dyn std::error::Er
 
     let meter = global::meter("huginn-proxy");
     let metrics = Arc::new(Metrics::new(meter));
+
+    // Set build info immediately
+    metrics.set_build_info();
 
     Ok((metrics, registry))
 }

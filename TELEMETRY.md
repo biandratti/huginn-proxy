@@ -6,7 +6,7 @@
 
 Huginn Proxy provides comprehensive telemetry through:
 
-- **Prometheus Metrics** - 22 metrics covering connections, requests, TLS, fingerprinting, and backends
+- **Prometheus Metrics** - 30 metrics covering connections, requests, TLS, fingerprinting, backends, throughput, and rate limiting
 - **Health Check Endpoints** - Kubernetes-ready health and readiness probes
 - **OpenTelemetry** - Built on modern OpenTelemetry standards for future extensibility
 
@@ -143,6 +143,18 @@ histogram_quantile(0.95, rate(huginn_requests_duration_seconds_bucket[5m]))
 
 # P99 latency
 histogram_quantile(0.99, rate(huginn_requests_duration_seconds_bucket[5m]))
+
+# Requests by route
+sum by (route) (rate(huginn_requests_total[5m]))
+
+# Latency by route (P95)
+histogram_quantile(0.95, 
+  sum by (route, le) (rate(huginn_requests_duration_seconds_bucket[5m]))
+)
+
+# Error rate by route
+sum by (route) (rate(huginn_requests_total{status_code=~"5.."}[5m]))
+  / sum by (route) (rate(huginn_requests_total[5m]))
 ```
 
 ---
@@ -254,6 +266,12 @@ histogram_quantile(0.95, rate(huginn_backend_duration_seconds_bucket[5m]))
 
 # Backend distribution
 sum by (backend) (rate(huginn_backend_selections_total[5m]))
+
+# Backend requests by route
+sum by (backend_address, route) (rate(huginn_backend_requests_total[5m]))
+
+# Backend errors by route
+sum by (backend_address, route) (rate(huginn_backend_errors_total[5m]))
 ```
 
 ---
@@ -314,6 +332,29 @@ sum by (error_type) (rate(huginn_errors_total[5m]))
 # Total error rate
 rate(huginn_errors_total[5m])
 ```
+
+---
+
+### 9. Build Info
+
+| Metric | Type | Description | Labels |
+|--------|------|-------------|--------|
+| `huginn_build_info` | Gauge | Build information (always 1) | `version`, `rust_version` |
+
+**Labels**:
+- `version`: Proxy version (e.g., `0.0.1`)
+- `rust_version`: Rust version used to compile (e.g., `1.85`)
+
+**Example queries**:
+```promql
+# Get current version
+huginn_build_info
+
+# Check version across multiple instances
+group by (version) (huginn_build_info)
+```
+
+**Note**: This metric always has value `1` and is used to expose version information as labels.
 
 ---
 
@@ -511,10 +552,8 @@ The following telemetry features are planned but not yet implemented:
 
 ### Metrics (Planned)
 
-- Per-route metrics
 - IP filtering metrics
 - Header manipulation metrics
-- Build info metric
 
 ### Tracing (Planned)
 
