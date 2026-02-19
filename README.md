@@ -75,6 +75,7 @@ docker run -v /path/to/config.toml:/config.toml huginn-proxy /config.toml
 
 - **HTTP/1.x & HTTP/2** - Full support for both protocol versions
 - **Load Balancing** - Round-robin load balancing across multiple backends
+- **Connection Pooling** - Automatic connection reuse to backends for reduced latency (bypasses pooling per-route for fingerprinting)
 - **Path-based Routing** - Route matching with prefix support, path stripping, and path rewriting
 - **Rate Limiting** - Token bucket algorithm with multiple strategies (IP, Header, Route, Combined), global and per-route limits
 - **Header Manipulation** - Add or remove request/response headers globally or per-route for security and customization
@@ -118,6 +119,15 @@ The proxy automatically injects standard `X-Forwarded-*` headers to inform backe
 - **X-Forwarded-Proto**: Protocol used (`http` or `https`)
 
 These headers always override any client-provided values to prevent spoofing.
+
+## Advanced Configuration Options
+
+### Per-Route Settings
+
+- **`fingerprinting`** (bool, default: `true`) - Enable/disable TLS (JA4) and HTTP/2 (Akamai) fingerprint extraction and header injection
+- **`force_new_connection`** (bool, default: `false`) - Force new TCP + TLS handshake per request, bypassing connection pooling
+  - Use case: Per-request TLS fingerprinting, TCP fingerprinting (future), testing/debugging
+  - Performance: Adds ~50-200ms latency per request when enabled
 
 ## Health Check Endpoints
 

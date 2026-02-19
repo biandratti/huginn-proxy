@@ -38,6 +38,12 @@ pub struct Route {
     /// Default: true (fingerprinting enabled)
     #[serde(default = "default_true")]
     pub fingerprinting: bool,
+    /// Force new TCP/TLS connection for each request (bypasses connection pooling)
+    /// When true, a new connection is established for every request, enabling per-request
+    /// TCP and TLS fingerprinting at the cost of higher latency (~50-200ms extra per request)
+    /// Default: false (use connection pooling for better performance)
+    #[serde(default)]
+    pub force_new_connection: bool,
     /// Path that will be used to replace the "prefix" part of incoming url
     /// If specified, the matched prefix will be replaced with this path before forwarding to backend
     /// Example: prefix = "/api", replace_path = "/v1"

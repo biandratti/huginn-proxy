@@ -45,8 +45,8 @@ pub struct ClientPool {
 impl ClientPool {
     /// Create a new client pool with the given configuration
     pub fn new(keep_alive: &KeepAliveConfig, config: BackendPoolConfig) -> Self {
-        let http11_client = Self::create_http11_client(keep_alive);
-        let http2_client = Self::create_http2_client(keep_alive);
+        let http11_client = Self::create_http11_client(keep_alive, &config);
+        let http2_client = Self::create_http2_client(keep_alive, &config);
 
         Self {
             http11: Arc::new(http11_client),
@@ -56,30 +56,51 @@ impl ClientPool {
         }
     }
 
-    /// Create HTTP/1.1 client with keep-alive support
-    fn create_http11_client(keep_alive: &KeepAliveConfig) -> HttpClient {
+    /// Create HTTP/1.1 client with keep-alive and pooling support
+    fn create_http11_client(
+        keep_alive: &KeepAliveConfig,
+        config: &BackendPoolConfig,
+    ) -> HttpClient {
         let mut connector = HttpConnector::new();
+        // TCP keep-alive: sends periodic packets to keep TCP connection alive
         if keep_alive.enabled {
             connector.set_keepalive(Some(Duration::from_secs(keep_alive.timeout_secs)));
         } else {
             connector.set_keepalive(None);
         }
 
-        Client::builder(TokioExecutor::new()).build(connector)
+        let mut builder = Client::builder(TokioExecutor::new());
+        builder.pool_idle_timeout(Duration::from_secs(config.idle_timeout));
+
+        // Configure connection pool settings
+        if config.pool_max_idle_per_host > 0 {
+            builder.pool_max_idle_per_host(config.pool_max_idle_per_host);
+        }
+
+        builder.build(connector)
     }
 
-    /// Create HTTP/2-only client with keep-alive support
-    fn create_http2_client(keep_alive: &KeepAliveConfig) -> HttpClient {
+    /// Create HTTP/2-only client with keep-alive and pooling support
+    fn create_http2_client(keep_alive: &KeepAliveConfig, config: &BackendPoolConfig) -> HttpClient {
         let mut connector = HttpConnector::new();
+        // TCP keep-alive: sends periodic packets to keep TCP connection alive
+        // HTTP/2 uses persistent connections by default with native multiplexing
         if keep_alive.enabled {
             connector.set_keepalive(Some(Duration::from_secs(keep_alive.timeout_secs)));
         } else {
             connector.set_keepalive(None);
         }
 
-        Client::builder(TokioExecutor::new())
-            .http2_only(true)
-            .build(connector)
+        let mut builder = Client::builder(TokioExecutor::new());
+        builder.http2_only(true);
+        builder.pool_idle_timeout(Duration::from_secs(config.idle_timeout));
+
+        // Configure connection pool settings
+        if config.pool_max_idle_per_host > 0 {
+            builder.pool_max_idle_per_host(config.pool_max_idle_per_host);
+        }
+
+        builder.build(connector)
     }
 
     /// Get the appropriate client for the given HTTP version
@@ -123,9 +144,13 @@ impl ClientPool {
     /// Creating a new client per request adds 51-205ms of latency
     /// (TCP handshake + TLS handshake). Only use when necessary.
     pub fn create_oneoff_client(&self, version: Version) -> HttpClient {
+        // For one-off clients, disable pooling by setting max idle to 0
+        let oneoff_config =
+            BackendPoolConfig { enabled: false, idle_timeout: 0, pool_max_idle_per_host: 0 };
+
         match version {
-            Version::HTTP_2 => Self::create_http2_client(&self.keep_alive),
-            _ => Self::create_http11_client(&self.keep_alive),
+            Version::HTTP_2 => Self::create_http2_client(&self.keep_alive, &oneoff_config),
+            _ => Self::create_http11_client(&self.keep_alive, &oneoff_config),
         }
     }
 }

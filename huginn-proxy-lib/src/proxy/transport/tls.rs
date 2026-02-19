@@ -115,6 +115,7 @@ pub async fn handle_tls_connection(
             let routes_template = config.routes.clone();
             let keep_alive = config.keep_alive.clone();
             let security = config.security.clone();
+            let client_pool = config.client_pool.clone();
 
             let svc =
                 hyper::service::service_fn(move |req: hyper::Request<hyper::body::Incoming>| {
@@ -125,6 +126,7 @@ pub async fn handle_tls_connection(
                     let metrics = metrics.clone();
                     let keep_alive = keep_alive.clone();
                     let security = security.clone();
+                    let client_pool_for_request = client_pool.clone();
 
                     async move {
                         let metrics_for_match = metrics.clone();
@@ -141,6 +143,7 @@ pub async fn handle_tls_connection(
                             peer,
                             true,
                             preserve_host,
+                            &client_pool_for_request,
                         )
                         .await;
 
@@ -187,6 +190,7 @@ pub async fn handle_tls_connection(
             let routes_template = config.routes.clone();
             let keep_alive = config.keep_alive.clone();
             let security = config.security.clone();
+            let client_pool = config.client_pool.clone();
 
             let svc =
                 hyper::service::service_fn(move |req: hyper::Request<hyper::body::Incoming>| {
@@ -196,6 +200,7 @@ pub async fn handle_tls_connection(
                     let metrics = metrics.clone();
                     let keep_alive = keep_alive.clone();
                     let security = security.clone();
+                    let client_pool = client_pool.clone();
 
                     async move {
                         let preserve_host = config.preserve_host;
@@ -212,6 +217,7 @@ pub async fn handle_tls_connection(
                             peer,
                             true,
                             preserve_host,
+                            &client_pool,
                         )
                         .await;
 

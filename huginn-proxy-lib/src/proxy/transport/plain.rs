@@ -35,6 +35,7 @@ pub async fn handle_plain_connection(
     let routes_template = config.routes.clone();
     let keep_alive = config.keep_alive.clone();
     let security = config.security.clone();
+    let client_pool = config.client_pool.clone();
 
     let svc = hyper::service::service_fn(move |req: hyper::Request<hyper::body::Incoming>| {
         let routes = routes_template.clone();
@@ -42,6 +43,7 @@ pub async fn handle_plain_connection(
         let metrics = metrics.clone();
         let keep_alive = keep_alive.clone();
         let security = security.clone();
+        let client_pool = client_pool.clone();
 
         async move {
             let preserve_host = config.preserve_host;
@@ -58,6 +60,7 @@ pub async fn handle_plain_connection(
                 peer,
                 false, // is_https = false for plain HTTP connections
                 preserve_host,
+                &client_pool,
             )
             .await;
 

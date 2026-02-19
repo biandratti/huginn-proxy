@@ -1,17 +1,13 @@
 use crate::config::{BackendHttpVersion, KeepAliveConfig};
 use crate::proxy::http_result::{HttpError, HttpResult};
+use crate::proxy::ClientPool;
 use crate::telemetry::Metrics;
 use http::{Request, Response, Version};
 use http_body_util::{combinators::BoxBody, BodyExt};
 use hyper::body::Incoming;
-use hyper_util::client::legacy::connect::HttpConnector;
-use hyper_util::client::legacy::Client;
-use hyper_util::rt::TokioExecutor;
 use std::sync::Arc;
-use std::time::Duration;
 use tokio::time::Instant;
 
-type HttpClient = Client<HttpConnector, Incoming>;
 type RespBody = BoxBody<bytes::Bytes, hyper::Error>;
 
 #[derive(Debug, Clone)]
@@ -22,6 +18,7 @@ pub struct RouteMatch<'a> {
     pub replace_path: Option<&'a str>,
     pub rate_limit: Option<&'a crate::config::RouteRateLimitConfig>,
     pub headers: Option<&'a crate::config::HeaderManipulation>,
+    pub force_new_connection: bool,
 }
 
 pub struct ForwardConfig<'a> {
@@ -34,6 +31,8 @@ pub struct ForwardConfig<'a> {
     pub is_https: bool,
     pub preserve_host: bool,
     pub route: &'a str,
+    pub client_pool: &'a Arc<ClientPool>,
+    pub force_new_connection: bool,
 }
 
 pub fn find_backend_config<'a>(
@@ -68,33 +67,6 @@ pub fn determine_http_version(
             }
         }
     }
-}
-
-pub fn create_client(http_version: Version, keep_alive: &KeepAliveConfig) -> HttpClient {
-    let mut connector = HttpConnector::new();
-    // This sets the TCP keep-alive timeout for idle connections
-    if keep_alive.enabled {
-        connector.set_keepalive(Some(Duration::from_secs(keep_alive.timeout_secs)));
-    } else {
-        connector.set_keepalive(None);
-    }
-
-    let mut builder = Client::builder(TokioExecutor::new());
-
-    match http_version {
-        Version::HTTP_2 => {
-            // HTTP/2 uses persistent connections by default with native multiplexing
-            builder.http2_only(true);
-        }
-        Version::HTTP_11 => {
-            // HTTP/1.1 keep-alive is configured via connector.set_keepalive() above
-        }
-        _ => {
-            // For other versions, default to HTTP/1.1 (keep-alive configured above)
-        }
-    }
-
-    builder.build(connector)
 }
 
 pub async fn forward(
@@ -167,8 +139,16 @@ pub async fn forward(
 
     let out_req = Request::from_parts(parts, body);
 
-    let client = create_client(target_version, config.keep_alive);
-    let result = client.request(out_req).await;
+    // Use pooled client for better performance (reuses TCP connections)
+    let result = if let Some(pooled_client) = config
+        .client_pool
+        .get_client(target_version, config.force_new_connection)
+    {
+        pooled_client.request(out_req).await
+    } else {
+        let oneoff_client = config.client_pool.create_oneoff_client(target_version);
+        oneoff_client.request(out_req).await
+    };
 
     let duration = start.elapsed().as_secs_f64();
 
@@ -229,5 +209,6 @@ pub fn pick_route_with_fingerprinting<'a>(
             replace_path: r.replace_path.as_deref(),
             rate_limit: r.rate_limit.as_ref(),
             headers: r.headers.as_ref(),
+            force_new_connection: r.force_new_connection,
         })
 }
