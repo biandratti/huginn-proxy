@@ -6,7 +6,7 @@
 
 Huginn Proxy provides comprehensive telemetry through:
 
-- **Prometheus Metrics** - 36 metrics covering connections, requests, TLS, fingerprinting, backends, throughput, rate limiting, IP filtering, header manipulation, and mTLS
+- **Prometheus Metrics** - 35 metrics covering connections, requests, TLS, fingerprinting, backends, throughput, rate limiting, IP filtering, header manipulation, and mTLS
 - **Health Check Endpoints** - Kubernetes-ready health and readiness probes
 - **OpenTelemetry** - Built on modern OpenTelemetry standards for future extensibility
 
@@ -117,16 +117,17 @@ rate(huginn_connections_rejected_total[5m])
 
 ### 3. Request Metrics
 
-| Metric                             | Type      | Description                   | Labels                              |
-|------------------------------------|-----------|-------------------------------|-------------------------------------|
-| `huginn_requests_total`            | Counter   | Total HTTP requests processed | `method`, `status_code`, `protocol` |
-| `huginn_requests_duration_seconds` | Histogram | Request duration in seconds   | `method`, `status_code`             |
+| Metric                             | Type      | Description                   | Labels                                        |
+|------------------------------------|-----------|-------------------------------|-----------------------------------------------|
+| `huginn_requests_total`            | Counter   | Total HTTP requests processed | `method`, `status_code`, `protocol`, `route`  |
+| `huginn_requests_duration_seconds` | Histogram | Request duration in seconds   | `method`, `status_code`, `protocol`, `route`  |
 
 **Labels**:
 
 - `method`: HTTP method (`GET`, `POST`, `PUT`, etc.)
 - `status_code`: HTTP status code (`200`, `404`, `500`, etc.)
 - `protocol`: HTTP version (`HTTP/1.1`, `h2`)
+- `route`: Matched route prefix (e.g., `/api`, `/`)
 
 **Example queries**:
 
@@ -237,19 +238,21 @@ histogram_quantile(0.95, rate(huginn_tls_fingerprint_extraction_duration_seconds
 
 ### 6. Backend Metrics
 
-| Metric                            | Type      | Description                    | Labels                   |
-|-----------------------------------|-----------|--------------------------------|--------------------------|
-| `huginn_backend_requests_total`   | Counter   | Requests forwarded to backends | `backend`, `status_code` |
-| `huginn_backend_errors_total`     | Counter   | Backend errors                 | `backend`, `error_type`  |
-| `huginn_backend_duration_seconds` | Histogram | Backend request duration       | `backend`                |
-| `huginn_backend_selections_total` | Counter   | Backend selection events       | `backend`, `method`      |
+| Metric                            | Type      | Description                    | Labels                                                |
+|-----------------------------------|-----------|--------------------------------|-------------------------------------------------------|
+| `huginn_backend_requests_total`   | Counter   | Requests forwarded to backends | `backend_address`, `status_code`, `protocol`, `route` |
+| `huginn_backend_errors_total`     | Counter   | Backend errors                 | `backend_address`, `error_type`, `route`              |
+| `huginn_backend_duration_seconds` | Histogram | Backend request duration       | `backend_address`, `route`                            |
+| `huginn_backend_selections_total` | Counter   | Backend selection events       | `backend`                                             |
 
 **Labels**:
 
-- `backend`: Backend address (e.g., `backend-1:9000`)
+- `backend`: Backend name from configuration (e.g., `backend-1`)
+- `backend_address`: Backend address (e.g., `backend-1:9000`)
 - `status_code`: HTTP status code from backend
 - `error_type`: Error type (`connection_refused`, `timeout`, `dns_error`, etc.)
-- `method`: Selection method (`round_robin`, `route_match`)
+- `protocol`: HTTP version used for backend request
+- `route`: Route that triggered the backend request
 
 **Example queries**:
 
@@ -392,7 +395,10 @@ sum by (context) (rate(huginn_headers_removed_total[5m]))
 
 | Metric | Type | Description | Labels |
 |--------|------|-------------|--------|
-| `huginn_mtls_connections_total` | Counter | Total connections with mTLS enabled (client certificate verified) | - |
+| `huginn_mtls_connections_total` | Counter | Total connections with mTLS enabled (client certificate verified) | `protocol` |
+
+**Labels**:
+- `protocol`: TLS protocol version (e.g., `TLSv1.2`, `TLSv1.3`)
 
 **Example queries**:
 ```promql
@@ -402,6 +408,9 @@ rate(huginn_mtls_connections_total[5m])
 # mTLS usage percentage
 rate(huginn_mtls_connections_total[5m]) 
   / rate(huginn_tls_handshakes_total[5m]) * 100
+
+# mTLS by protocol version
+sum by (protocol) (rate(huginn_mtls_connections_total[5m]))
 ```
 
 **Note**: 

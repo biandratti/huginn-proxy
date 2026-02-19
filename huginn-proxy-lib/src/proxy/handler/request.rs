@@ -2,7 +2,6 @@ use http::Version;
 use hyper::body::Incoming;
 use hyper::header::HeaderName;
 use hyper::Request;
-use opentelemetry::KeyValue;
 use std::sync::Arc;
 use tokio::sync::watch;
 use tokio::time::Instant;
@@ -17,6 +16,7 @@ use crate::proxy::handler::header_manipulation::{
 use crate::proxy::handler::headers::{add_forwarded_headers, akamai_header_value};
 use crate::proxy::handler::rate_limit_validation::check_rate_limit;
 use crate::proxy::http_result::{HttpError, HttpResult};
+use crate::telemetry::metrics::values;
 use crate::telemetry::Metrics;
 use http::StatusCode;
 
@@ -33,8 +33,7 @@ fn check_ip_access(
         debug!(?peer, "IP blocked by filter");
         if let Some(m) = metrics {
             m.record_ip_filter_denied();
-            m.errors_total
-                .add(1, &[KeyValue::new("error_type", "ip_blocked")]);
+            m.record_error(values::ERROR_IP_BLOCKED);
         }
         return Err(HttpError::Forbidden);
     }
@@ -83,16 +82,14 @@ pub async fn handle_proxy_request(
     {
         // Route matched: use route's fingerprinting configuration
         if let Some(ref m) = metrics {
-            m.backend_selections_total
-                .add(1, &[KeyValue::new("backend", route.backend.to_string())]);
+            m.record_backend_selection(route.backend);
         }
         route
     } else {
         // No route matched: return 404
         let error = HttpError::NoMatchingRoute;
         if let Some(ref m) = metrics {
-            m.errors_total
-                .add(1, &[KeyValue::new("error_type", error.error_type())]);
+            m.record_error(error.error_type());
         }
         return Err(error);
     };

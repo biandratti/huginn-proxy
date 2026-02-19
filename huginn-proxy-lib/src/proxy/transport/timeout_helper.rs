@@ -1,8 +1,8 @@
 use std::sync::Arc;
 use tracing::warn;
 
+use crate::telemetry::metrics::values;
 use crate::telemetry::Metrics;
-use opentelemetry::KeyValue;
 
 /// Helper function to handle connection serving with timeout
 ///
@@ -26,8 +26,7 @@ pub async fn serve_with_timeout<F, E>(
         Err(_) => {
             warn!(?peer, "connection handling timeout");
             if let Some(ref m) = metrics {
-                m.timeouts_total
-                    .add(1, &[KeyValue::new("type", "connection_handling")]);
+                m.record_timeout(values::TIMEOUT_CONNECTION_HANDLING);
             }
         }
     }

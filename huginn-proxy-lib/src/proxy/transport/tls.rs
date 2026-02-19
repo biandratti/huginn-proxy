@@ -16,7 +16,6 @@ use crate::telemetry::Metrics;
 use crate::tls::record_tls_handshake_metrics;
 use http::StatusCode;
 use http_body_util::BodyExt;
-use opentelemetry::KeyValue;
 
 /// Configuration for handling TLS connections
 pub struct TlsConnectionConfig {
@@ -64,16 +63,15 @@ pub async fn handle_tls_connection(
             Ok(Err(e)) => {
                 warn!(?peer, error = %e, "TLS accept failed");
                 if let Some(ref m) = metrics_for_connection {
-                    m.tls_handshake_errors_total.add(1, &[]);
+                    m.record_tls_handshake_error();
                 }
                 return;
             }
             Err(_) => {
                 warn!(?peer, "TLS handshake timeout");
                 if let Some(ref m) = metrics_for_connection {
-                    m.timeouts_total
-                        .add(1, &[opentelemetry::KeyValue::new("type", "tls_handshake")]);
-                    m.tls_handshake_errors_total.add(1, &[]);
+                    m.record_timeout("tls_handshake");
+                    m.record_tls_handshake_error();
                 }
                 return;
             }
@@ -145,24 +143,12 @@ pub async fn handle_tls_connection(
                         .await;
 
                         match http_result {
-                            Ok(v) => {
-                                if let Some(ref m) = metrics_for_match {
-                                    m.requests_total.add(
-                                        1,
-                                        &[KeyValue::new(
-                                            "status_code",
-                                            v.status().as_u16().to_string(),
-                                        )],
-                                    );
-                                }
-                                Ok::<_, hyper::Error>(v)
-                            }
+                            Ok(v) => Ok::<_, hyper::Error>(v),
                             Err(e) => {
                                 tracing::error!("{e}");
                                 let code = StatusCode::from(e.clone());
                                 if let Some(ref m) = metrics_for_match {
-                                    m.errors_total
-                                        .add(1, &[KeyValue::new("error_type", e.error_type())]);
+                                    m.record_error(e.error_type());
                                 }
                                 match synthetic_error_response(code) {
                                     Ok(resp) => Ok(resp),
@@ -228,24 +214,12 @@ pub async fn handle_tls_connection(
                         .await;
 
                         match http_result {
-                            Ok(v) => {
-                                if let Some(ref m) = metrics_for_match {
-                                    m.requests_total.add(
-                                        1,
-                                        &[KeyValue::new(
-                                            "status_code",
-                                            v.status().as_u16().to_string(),
-                                        )],
-                                    );
-                                }
-                                Ok::<_, hyper::Error>(v)
-                            }
+                            Ok(v) => Ok::<_, hyper::Error>(v),
                             Err(e) => {
                                 tracing::error!("{e}");
                                 let code = StatusCode::from(e.clone());
                                 if let Some(ref m) = metrics_for_match {
-                                    m.errors_total
-                                        .add(1, &[KeyValue::new("error_type", e.error_type())]);
+                                    m.record_error(e.error_type());
                                 }
                                 match synthetic_error_response(code) {
                                     Ok(resp) => Ok(resp),

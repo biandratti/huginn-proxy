@@ -21,10 +21,14 @@ pub mod labels {
     pub const COMPONENT: &str = "component";
     pub const VERSION: &str = "version";
     pub const RUST_VERSION: &str = "rust_version";
+    pub const BACKEND: &str = "backend";
 }
 
 pub mod values {
     pub const ERROR_RATE_LIMITED: &str = "rate_limited";
+    pub const ERROR_IP_BLOCKED: &str = "ip_blocked";
+    pub const TIMEOUT_TLS_HANDSHAKE: &str = "tls_handshake";
+    pub const TIMEOUT_CONNECTION_HANDLING: &str = "connection_handling";
     pub const CONTEXT_REQUEST: &str = "request";
     pub const CONTEXT_RESPONSE: &str = "response";
 }
@@ -271,9 +275,6 @@ impl Metrics {
         );
     }
 
-    // Helper methods for common metric operations
-
-    /// Record a rate limit rejection
     pub fn record_rate_limit_rejection(&self, strategy: &str, route: &str) {
         self.errors_total
             .add(1, &[KeyValue::new(labels::ERROR_TYPE, values::ERROR_RATE_LIMITED)]);
@@ -286,7 +287,6 @@ impl Metrics {
         );
     }
 
-    /// Record a rate limit allowance
     pub fn record_rate_limit_allowed(&self, strategy: &str, route: &str) {
         self.rate_limit_allowed_total.add(
             1,
@@ -297,7 +297,6 @@ impl Metrics {
         );
     }
 
-    /// Record a rate limit request evaluation
     pub fn record_rate_limit_request(&self, strategy: &str, route: &str) {
         self.rate_limit_requests_total.add(
             1,
@@ -308,7 +307,6 @@ impl Metrics {
         );
     }
 
-    /// Record headers added
     pub fn record_headers_added(&self, count: u64, context: &str) {
         if count > 0 {
             self.headers_added_total
@@ -316,7 +314,6 @@ impl Metrics {
         }
     }
 
-    /// Record headers removed
     pub fn record_headers_removed(&self, count: u64, context: &str) {
         if count > 0 {
             self.headers_removed_total
@@ -324,19 +321,16 @@ impl Metrics {
         }
     }
 
-    /// Record IP filter allowance
     pub fn record_ip_filter_allowed(&self) {
         self.ip_filter_requests_total.add(1, &[]);
         self.ip_filter_allowed_total.add(1, &[]);
     }
 
-    /// Record IP filter denial
     pub fn record_ip_filter_denied(&self) {
         self.ip_filter_requests_total.add(1, &[]);
         self.ip_filter_denied_total.add(1, &[]);
     }
 
-    /// Record throughput - bytes received from client
     pub fn record_bytes_received(&self, bytes: u64, protocol: &str) {
         if bytes > 0 {
             self.bytes_received_total
@@ -344,7 +338,6 @@ impl Metrics {
         }
     }
 
-    /// Record throughput - bytes sent to client
     pub fn record_bytes_sent(&self, bytes: u64, protocol: &str) {
         if bytes > 0 {
             self.bytes_sent_total
@@ -352,7 +345,6 @@ impl Metrics {
         }
     }
 
-    /// Record throughput - bytes received from backend
     pub fn record_backend_bytes_received(&self, bytes: u64, backend: &str, route: &str) {
         if bytes > 0 {
             self.backend_bytes_received_total.add(
@@ -365,7 +357,6 @@ impl Metrics {
         }
     }
 
-    /// Record throughput - bytes sent to backend
     pub fn record_backend_bytes_sent(&self, bytes: u64, backend: &str, route: &str) {
         if bytes > 0 {
             self.backend_bytes_sent_total.add(
@@ -378,7 +369,6 @@ impl Metrics {
         }
     }
 
-    /// Record a backend request
     pub fn record_backend_request(
         &self,
         backend: &str,
@@ -397,7 +387,6 @@ impl Metrics {
         );
     }
 
-    /// Record backend request duration
     pub fn record_backend_duration(
         &self,
         duration: f64,
@@ -417,7 +406,6 @@ impl Metrics {
         );
     }
 
-    /// Record a backend error
     pub fn record_backend_error(&self, backend: &str, error_type: &str, route: &str) {
         self.backend_errors_total.add(
             1,
@@ -429,7 +417,6 @@ impl Metrics {
         );
     }
 
-    /// Record a request
     pub fn record_request(&self, method: &str, status_code: u16, protocol: &str, route: &str) {
         self.requests_total.add(
             1,
@@ -442,7 +429,6 @@ impl Metrics {
         );
     }
 
-    /// Record request duration
     pub fn record_request_duration(
         &self,
         duration: f64,
@@ -460,6 +446,51 @@ impl Metrics {
                 KeyValue::new(labels::ROUTE, route.to_string()),
             ],
         );
+    }
+
+    pub fn record_tls_handshake(&self, tls_version: &str, cipher_suite: &str, duration: f64) {
+        self.tls_handshakes_total.add(
+            1,
+            &[
+                KeyValue::new(labels::TLS_VERSION, tls_version.to_string()),
+                KeyValue::new(labels::CIPHER_SUITE, cipher_suite.to_string()),
+            ],
+        );
+        self.tls_handshake_duration_seconds.record(
+            duration,
+            &[
+                KeyValue::new(labels::TLS_VERSION, tls_version.to_string()),
+                KeyValue::new(labels::CIPHER_SUITE, cipher_suite.to_string()),
+            ],
+        );
+    }
+
+    pub fn record_tls_connection_active(&self) {
+        self.tls_connections_active.add(1, &[]);
+    }
+
+    pub fn record_mtls_connection(&self, protocol: &str) {
+        self.mtls_connections_total
+            .add(1, &[KeyValue::new(labels::PROTOCOL, protocol.to_string())]);
+    }
+
+    pub fn record_error(&self, error_type: &str) {
+        self.errors_total
+            .add(1, &[KeyValue::new(labels::ERROR_TYPE, error_type.to_string())]);
+    }
+
+    pub fn record_tls_handshake_error(&self) {
+        self.tls_handshake_errors_total.add(1, &[]);
+    }
+
+    pub fn record_timeout(&self, timeout_type: &str) {
+        self.timeouts_total
+            .add(1, &[KeyValue::new(labels::TIMEOUT_TYPE, timeout_type.to_string())]);
+    }
+
+    pub fn record_backend_selection(&self, backend: &str) {
+        self.backend_selections_total
+            .add(1, &[KeyValue::new(labels::BACKEND, backend.to_string())]);
     }
 }
 

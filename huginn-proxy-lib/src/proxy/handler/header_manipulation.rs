@@ -1,4 +1,5 @@
 use crate::config::{HeaderManipulation, HeaderManipulationGroup};
+use crate::telemetry::metrics::values;
 use crate::telemetry::Metrics;
 use http::{HeaderMap, HeaderName, HeaderValue};
 use std::sync::Arc;
@@ -8,7 +9,7 @@ use std::sync::Arc;
 /// # Arguments
 /// * `headers` - The header map to modify
 /// * `manipulation` - The header manipulation configuration
-/// * `context` - Context string ("request" or "response") for metrics
+/// * `context` - Context string (use `values::CONTEXT_REQUEST` or `values::CONTEXT_RESPONSE`) for metrics
 /// * `metrics` - Optional metrics for tracking header operations
 ///
 /// # Example
@@ -16,11 +17,12 @@ use std::sync::Arc;
 /// use http::HeaderMap;
 /// use huginn_proxy_lib::config::HeaderManipulationGroup;
 /// use huginn_proxy_lib::proxy::handler::header_manipulation::apply_header_manipulation_group;
+/// use huginn_proxy_lib::telemetry::metrics::values;
 ///
 /// let mut headers = HeaderMap::new();
 /// let manipulation = HeaderManipulationGroup::default();
 ///
-/// apply_header_manipulation_group(&mut headers, &manipulation, "request", None);
+/// apply_header_manipulation_group(&mut headers, &manipulation, values::CONTEXT_REQUEST, None);
 /// ```
 pub fn apply_header_manipulation_group(
     headers: &mut HeaderMap,
@@ -67,12 +69,12 @@ pub fn apply_request_header_manipulation(
 ) {
     // Apply global request header manipulation
     if let Some(global) = global_manipulation {
-        apply_header_manipulation_group(headers, &global.request, "request", metrics);
+        apply_header_manipulation_group(headers, &global.request, values::CONTEXT_REQUEST, metrics);
     }
 
     // Apply per-route request header manipulation (overrides global)
     if let Some(route) = route_manipulation {
-        apply_header_manipulation_group(headers, &route.request, "request", metrics);
+        apply_header_manipulation_group(headers, &route.request, values::CONTEXT_REQUEST, metrics);
     }
 }
 
@@ -93,12 +95,22 @@ pub fn apply_response_header_manipulation(
 ) {
     // Apply global response header manipulation
     if let Some(global) = global_manipulation {
-        apply_header_manipulation_group(headers, &global.response, "response", metrics);
+        apply_header_manipulation_group(
+            headers,
+            &global.response,
+            values::CONTEXT_RESPONSE,
+            metrics,
+        );
     }
 
     // Apply per-route response header manipulation (overrides global)
     if let Some(route) = route_manipulation {
-        apply_header_manipulation_group(headers, &route.response, "response", metrics);
+        apply_header_manipulation_group(
+            headers,
+            &route.response,
+            values::CONTEXT_RESPONSE,
+            metrics,
+        );
     }
 }
 

@@ -9,7 +9,6 @@ use crate::proxy::synthetic_response::synthetic_error_response;
 use crate::telemetry::Metrics;
 use http::StatusCode;
 use http_body_util::BodyExt;
-use opentelemetry::KeyValue;
 
 /// Configuration for handling plain HTTP connections
 pub struct PlainConnectionConfig {
@@ -61,21 +60,12 @@ pub async fn handle_plain_connection(
             .await;
 
             match http_result {
-                Ok(v) => {
-                    if let Some(ref m) = metrics_for_match {
-                        m.requests_total.add(
-                            1,
-                            &[KeyValue::new("status_code", v.status().as_u16().to_string())],
-                        );
-                    }
-                    Ok::<_, hyper::Error>(v)
-                }
+                Ok(v) => Ok::<_, hyper::Error>(v),
                 Err(e) => {
                     tracing::error!("{e}");
                     let code = StatusCode::from(e.clone());
                     if let Some(ref m) = metrics_for_match {
-                        m.errors_total
-                            .add(1, &[KeyValue::new("error_type", e.error_type())]);
+                        m.record_error(e.error_type());
                     }
                     match synthetic_error_response(code) {
                         Ok(resp) => Ok(resp),
