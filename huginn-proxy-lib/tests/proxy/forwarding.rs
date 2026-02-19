@@ -1,7 +1,7 @@
 use http::Version;
-use huginn_proxy_lib::config::{Backend, BackendHttpVersion, KeepAliveConfig, Route};
+use huginn_proxy_lib::config::{Backend, BackendHttpVersion, Route};
 use huginn_proxy_lib::proxy::forwarding::{
-    create_client, determine_http_version, find_backend_config, pick_route,
+    determine_http_version, find_backend_config, pick_route,
 };
 
 #[test]
@@ -120,6 +120,7 @@ fn test_pick_route() {
             replace_path: None,
             rate_limit: None,
             headers: None,
+            force_new_connection: false,
         },
         Route {
             prefix: "/static".to_string(),
@@ -128,6 +129,7 @@ fn test_pick_route() {
             replace_path: None,
             rate_limit: None,
             headers: None,
+            force_new_connection: false,
         },
         Route {
             prefix: "/".to_string(),
@@ -136,6 +138,7 @@ fn test_pick_route() {
             replace_path: None,
             rate_limit: None,
             headers: None,
+            force_new_connection: false,
         },
     ];
 
@@ -153,54 +156,6 @@ fn test_pick_route_empty() {
 }
 
 #[test]
-fn test_create_client_with_keep_alive_enabled() {
-    let keep_alive = KeepAliveConfig { enabled: true, timeout_secs: 120 };
-
-    let client_http11 = create_client(Version::HTTP_11, &keep_alive);
-    // Client should be created successfully (we can't verify keep-alive directly,
-    // but we can verify it doesn't panic and creates a valid client)
-    assert!(!std::ptr::eq(&client_http11 as *const _, std::ptr::null()));
-
-    // Test HTTP/2 client creation with keep-alive enabled
-    let client_http2 = create_client(Version::HTTP_2, &keep_alive);
-    assert!(!std::ptr::eq(&client_http2 as *const _, std::ptr::null()));
-}
-
-#[test]
-fn test_create_client_with_keep_alive_disabled() {
-    let keep_alive = KeepAliveConfig { enabled: false, timeout_secs: 60 };
-
-    let client_http11 = create_client(Version::HTTP_11, &keep_alive);
-    assert!(!std::ptr::eq(&client_http11 as *const _, std::ptr::null()));
-
-    let client_http2 = create_client(Version::HTTP_2, &keep_alive);
-    assert!(!std::ptr::eq(&client_http2 as *const _, std::ptr::null()));
-}
-
-#[test]
-fn test_create_client_with_default_keep_alive() {
-    let keep_alive = KeepAliveConfig::default();
-
-    assert!(keep_alive.enabled);
-    assert_eq!(keep_alive.timeout_secs, 60);
-
-    let client = create_client(Version::HTTP_11, &keep_alive);
-    assert!(!std::ptr::eq(&client as *const _, std::ptr::null()));
-}
-
-#[test]
-fn test_create_client_with_custom_timeout() {
-    let keep_alive = KeepAliveConfig { enabled: true, timeout_secs: 30 };
-
-    let client = create_client(Version::HTTP_11, &keep_alive);
-    assert!(!std::ptr::eq(&client as *const _, std::ptr::null()));
-
-    let keep_alive_long = KeepAliveConfig { enabled: true, timeout_secs: 3600 };
-    let client_long = create_client(Version::HTTP_11, &keep_alive_long);
-    assert!(!std::ptr::eq(&client_long as *const _, std::ptr::null()));
-}
-
-#[test]
 fn test_pick_route_with_fingerprinting_basic() {
     use huginn_proxy_lib::proxy::forwarding::pick_route_with_fingerprinting;
 
@@ -211,6 +166,7 @@ fn test_pick_route_with_fingerprinting_basic() {
         replace_path: None,
         rate_limit: None,
         headers: None,
+        force_new_connection: false,
     }];
 
     let result = pick_route_with_fingerprinting("/api/users", &routes);
@@ -234,6 +190,7 @@ fn test_pick_route_with_fingerprinting_with_replace_path() {
         replace_path: Some("/v1".to_string()),
         rate_limit: None,
         headers: None,
+        force_new_connection: false,
     }];
 
     let result = pick_route_with_fingerprinting("/api/users", &routes);
@@ -258,6 +215,7 @@ fn test_pick_route_with_fingerprinting_path_stripping() {
         replace_path: Some("".to_string()),
         rate_limit: None, // Strip prefix
         headers: None,
+        force_new_connection: false,
     }];
 
     let result = pick_route_with_fingerprinting("/api/users", &routes);

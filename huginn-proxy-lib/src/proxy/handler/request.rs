@@ -16,6 +16,7 @@ use crate::proxy::handler::header_manipulation::{
 use crate::proxy::handler::headers::{add_forwarded_headers, akamai_header_value};
 use crate::proxy::handler::rate_limit_validation::check_rate_limit;
 use crate::proxy::http_result::{HttpError, HttpResult};
+use crate::proxy::ClientPool;
 use crate::telemetry::metrics::values;
 use crate::telemetry::Metrics;
 use http::StatusCode;
@@ -59,6 +60,7 @@ pub async fn handle_proxy_request(
     peer: std::net::SocketAddr,
     is_https: bool,
     preserve_host: bool,
+    client_pool: &Arc<ClientPool>,
 ) -> HttpResult<hyper::Response<RespBody>> {
     let start = Instant::now();
     let method = req.method().to_string();
@@ -164,6 +166,8 @@ pub async fn handle_proxy_request(
             is_https,
             preserve_host,
             route: route_match.matched_prefix,
+            client_pool,
+            force_new_connection: route_match.force_new_connection,
         },
     )
     .await;

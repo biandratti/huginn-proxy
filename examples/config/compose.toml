@@ -6,10 +6,13 @@ backends = [
 ]
 
 routes = [
-    # Basic route without path manipulation
-    { prefix = "/api", backend = "backend-a:9000", fingerprinting = true },
+    # Basic route without path manipulation (with connection pooling)
+    { prefix = "/api", backend = "backend-a:9000", fingerprinting = true, force_new_connection = false },
     # Route without fingerprinting (for fingerprint tests)
-    { prefix = "/static", backend = "backend-b:9000", fingerprinting = false },
+    { prefix = "/static", backend = "backend-b:9000", fingerprinting = false, force_new_connection = false },
+    # Advanced fingerprinting: force new TCP+TLS handshake per request
+    # Performance: Adds latency per request
+    { prefix = "/fingerprint", backend = "backend-a:9000", fingerprinting = true, force_new_connection = true },
     # Path stripping: removes matched prefix
     # Request: /strip/users → Backend: /users
     { prefix = "/strip", backend = "backend-a:9000", fingerprinting = true, replace_path = "" },

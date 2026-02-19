@@ -12,6 +12,7 @@ use crate::fingerprinting::{read_client_hello, CapturingStream};
 use crate::proxy::connection::{PrefixedStream, TlsConnectionGuard};
 use crate::proxy::handler::headers::tls_header_value;
 use crate::proxy::synthetic_response::synthetic_error_response;
+use crate::proxy::ClientPool;
 use crate::telemetry::Metrics;
 use crate::tls::record_tls_handshake_metrics;
 use http::StatusCode;
@@ -30,6 +31,7 @@ pub struct TlsConnectionConfig {
     pub preserve_host: bool,
     pub tls_handshake_timeout: tokio::time::Duration,
     pub connection_handling_timeout: tokio::time::Duration,
+    pub client_pool: Arc<ClientPool>,
 }
 
 /// Handle a TLS connection
@@ -113,6 +115,7 @@ pub async fn handle_tls_connection(
             let routes_template = config.routes.clone();
             let keep_alive = config.keep_alive.clone();
             let security = config.security.clone();
+            let client_pool = config.client_pool.clone();
 
             let svc =
                 hyper::service::service_fn(move |req: hyper::Request<hyper::body::Incoming>| {
@@ -123,6 +126,7 @@ pub async fn handle_tls_connection(
                     let metrics = metrics.clone();
                     let keep_alive = keep_alive.clone();
                     let security = security.clone();
+                    let client_pool_for_request = client_pool.clone();
 
                     async move {
                         let metrics_for_match = metrics.clone();
@@ -139,6 +143,7 @@ pub async fn handle_tls_connection(
                             peer,
                             true,
                             preserve_host,
+                            &client_pool_for_request,
                         )
                         .await;
 
@@ -185,6 +190,7 @@ pub async fn handle_tls_connection(
             let routes_template = config.routes.clone();
             let keep_alive = config.keep_alive.clone();
             let security = config.security.clone();
+            let client_pool = config.client_pool.clone();
 
             let svc =
                 hyper::service::service_fn(move |req: hyper::Request<hyper::body::Incoming>| {
@@ -194,6 +200,7 @@ pub async fn handle_tls_connection(
                     let metrics = metrics.clone();
                     let keep_alive = keep_alive.clone();
                     let security = security.clone();
+                    let client_pool = client_pool.clone();
 
                     async move {
                         let preserve_host = config.preserve_host;
@@ -210,6 +217,7 @@ pub async fn handle_tls_connection(
                             peer,
                             true,
                             preserve_host,
+                            &client_pool,
                         )
                         .await;
 

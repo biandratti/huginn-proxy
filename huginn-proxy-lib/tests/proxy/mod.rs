@@ -1,3 +1,4 @@
+mod client_pool;
 mod connection_limit;
 mod edge_cases;
 mod forwarding;

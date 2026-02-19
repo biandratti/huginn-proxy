@@ -14,6 +14,7 @@ fn test_pick_route_no_match() {
             replace_path: None,
             rate_limit: None,
             headers: None,
+            force_new_connection: false,
         },
         Route {
             prefix: "/static".to_string(),
@@ -22,6 +23,7 @@ fn test_pick_route_no_match() {
             replace_path: None,
             rate_limit: None,
             headers: None,
+            force_new_connection: false,
         },
     ];
 
@@ -38,6 +40,7 @@ fn test_pick_route_exact_match() {
             replace_path: None,
             rate_limit: None,
             headers: None,
+            force_new_connection: false,
         },
         Route {
             prefix: "/".to_string(),
@@ -46,6 +49,7 @@ fn test_pick_route_exact_match() {
             replace_path: None,
             rate_limit: None,
             headers: None,
+            force_new_connection: false,
         },
     ];
 
@@ -63,6 +67,7 @@ fn test_pick_route_longest_prefix() {
             replace_path: None,
             rate_limit: None,
             headers: None,
+            force_new_connection: false,
         },
         Route {
             prefix: "/api".to_string(),
@@ -71,6 +76,7 @@ fn test_pick_route_longest_prefix() {
             replace_path: None,
             rate_limit: None,
             headers: None,
+            force_new_connection: false,
         },
         Route {
             prefix: "/".to_string(),
@@ -79,6 +85,7 @@ fn test_pick_route_longest_prefix() {
             replace_path: None,
             rate_limit: None,
             headers: None,
+            force_new_connection: false,
         },
     ];
 
@@ -136,6 +143,7 @@ fn test_pick_route_with_empty_prefix() {
         replace_path: None,
         rate_limit: None,
         headers: None,
+        force_new_connection: false,
     }];
 
     assert_eq!(pick_route("/any/path", &routes), Some("backend-default:9000"));

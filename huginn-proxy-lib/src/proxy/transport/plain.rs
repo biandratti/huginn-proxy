@@ -6,6 +6,7 @@ use tokio::net::TcpStream;
 
 use super::timeout_helper::serve_with_timeout;
 use crate::proxy::synthetic_response::synthetic_error_response;
+use crate::proxy::ClientPool;
 use crate::telemetry::Metrics;
 use http::StatusCode;
 use http_body_util::BodyExt;
@@ -20,6 +21,7 @@ pub struct PlainConnectionConfig {
     pub builder: ConnBuilder<TokioExecutor>,
     pub preserve_host: bool,
     pub connection_handling_timeout: tokio::time::Duration,
+    pub client_pool: Arc<ClientPool>,
 }
 
 /// Handle a plain HTTP connection
@@ -33,6 +35,7 @@ pub async fn handle_plain_connection(
     let routes_template = config.routes.clone();
     let keep_alive = config.keep_alive.clone();
     let security = config.security.clone();
+    let client_pool = config.client_pool.clone();
 
     let svc = hyper::service::service_fn(move |req: hyper::Request<hyper::body::Incoming>| {
         let routes = routes_template.clone();
@@ -40,6 +43,7 @@ pub async fn handle_plain_connection(
         let metrics = metrics.clone();
         let keep_alive = keep_alive.clone();
         let security = security.clone();
+        let client_pool = client_pool.clone();
 
         async move {
             let preserve_host = config.preserve_host;
@@ -56,6 +60,7 @@ pub async fn handle_plain_connection(
                 peer,
                 false, // is_https = false for plain HTTP connections
                 preserve_host,
+                &client_pool,
             )
             .await;
 

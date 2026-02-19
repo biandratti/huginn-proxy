@@ -100,6 +100,18 @@ Per-route control to enable/disable fingerprinting. The extraction happens trans
 
 Limitation: Fingerprints are only extracted and forwarded, not validated or used for blocking. Backend services need to handle the actual fingerprint analysis and decision making.
 
+## Connection Pooling
+
+**HTTP/1.1 and HTTP/2 connection reuse**
+
+Reuses TCP connections to backend services to reduce latency and overhead from repeated TCP and TLS handshakes. Configurable idle timeout and max idle connections per host.
+
+Enabled by default with 90s idle timeout and 128 max idle connections per host. Can be disabled globally via `backend_pool.enabled = false`.
+
+Per-route override available via `force_new_connection = true` to bypass pooling for specific routes (useful for TCP/TLS fingerprinting scenarios where fresh handshakes are required).
+
+Limitation: Pooling is global or per-route only. No per-backend configuration for pool limits.
+
 ## Forwarding Headers
 
 **X-Forwarded-* headers**
@@ -144,32 +156,72 @@ Limitation: No API for dynamic config changes. No config validation endpoint.
 
 **Prometheus metrics and health checks**
 
-Metrics server runs on a separate port. Exposes request counters, TLS handshake metrics, rate limit metrics, and connection counts.
+Metrics server runs on a separate port (configurable via `telemetry.metrics_port`). Exposes **35 comprehensive metrics** covering connections, requests, TLS, fingerprinting, backends, throughput, rate limiting, IP filtering, header manipulation, and mTLS.
 
-Health endpoints: /health (general), /ready (Kubernetes readiness), /live (Kubernetes liveness), /metrics (Prometheus).
+Health endpoints: `/health` (general), `/ready` (Kubernetes readiness), `/live` (Kubernetes liveness), `/metrics` (Prometheus).
 
 **Available Metrics:**
+
+*Connection Metrics:*
 - `huginn_connections_total` - Total connections established
 - `huginn_connections_active` - Active connections (gauge)
 - `huginn_connections_rejected_total` - Connections rejected due to limits
+
+*Request Metrics:*
 - `huginn_requests_total` - Total HTTP requests processed
 - `huginn_requests_duration_seconds` - Request duration histogram
+
+*Throughput Metrics:*
+- `huginn_bytes_received_total` - Total bytes received from clients
+- `huginn_bytes_sent_total` - Total bytes sent to clients
+- `huginn_backend_bytes_received_total` - Total bytes received from backends
+- `huginn_backend_bytes_sent_total` - Total bytes sent to backends
+
+*TLS Metrics:*
 - `huginn_tls_connections_active` - Active TLS connections (gauge)
 - `huginn_tls_handshakes_total` - Total TLS handshakes completed
 - `huginn_tls_handshake_duration_seconds` - TLS handshake duration histogram
 - `huginn_tls_handshake_errors_total` - TLS handshake errors
-- `huginn_tls_fingerprints_extracted_total` - TLS (JA4) fingerprints extracted
-- `huginn_tls_fingerprint_extraction_duration_seconds` - TLS fingerprint extraction duration
-- `huginn_tls_fingerprint_failures_total` - TLS fingerprint extraction failures
-- `huginn_http2_fingerprints_extracted_total` - HTTP/2 (Akamai) fingerprints extracted
-- `huginn_http2_fingerprint_extraction_duration_seconds` - HTTP/2 fingerprint extraction duration
-- `huginn_http2_fingerprint_failures_total` - HTTP/2 fingerprint extraction failures
+
+*TLS Fingerprinting (JA4):*
+- `huginn_tls_fingerprints_extracted_total` - TLS fingerprints extracted
+- `huginn_tls_fingerprint_extraction_duration_seconds` - Extraction duration
+- `huginn_tls_fingerprint_failures_total` - Extraction failures
+
+*HTTP/2 Fingerprinting (Akamai):*
+- `huginn_http2_fingerprints_extracted_total` - HTTP/2 fingerprints extracted
+- `huginn_http2_fingerprint_extraction_duration_seconds` - Extraction duration
+- `huginn_http2_fingerprint_failures_total` - Extraction failures
+
+*Backend Metrics:*
 - `huginn_backend_requests_total` - Total requests forwarded to backends
 - `huginn_backend_errors_total` - Backend errors
 - `huginn_backend_duration_seconds` - Backend request duration histogram
 - `huginn_backend_selections_total` - Backend selections (load balancing)
+
+*Rate Limiting Metrics:*
+- `huginn_rate_limit_requests_total` - Total requests evaluated by rate limiter
+- `huginn_rate_limit_allowed_total` - Total requests allowed
+- `huginn_rate_limit_rejected_total` - Total requests rejected (429)
+
+*IP Filtering Metrics:*
+- `huginn_ip_filter_requests_total` - Total requests evaluated by IP filter
+- `huginn_ip_filter_allowed_total` - Total requests allowed
+- `huginn_ip_filter_denied_total` - Total requests denied (403)
+
+*Header Manipulation Metrics:*
+- `huginn_headers_added_total` - Total headers added
+- `huginn_headers_removed_total` - Total headers removed
+
+*mTLS Metrics:*
+- `huginn_mtls_connections_total` - Connections with client certificates
+
+*Other Metrics:*
 - `huginn_errors_total` - Total errors by type
-- `huginn_timeouts_total` - Timeouts by type (tls_handshake, connection_handling)
+- `huginn_timeouts_total` - Timeouts by type
+- `huginn_build_info` - Build information (version, rust_version)
+
+For detailed metric documentation, labels, and example queries, see [TELEMETRY.md](TELEMETRY.md).
 
 Limitation: No distributed tracing. No request logging to files. No custom metrics.
 

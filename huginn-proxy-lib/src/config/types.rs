@@ -38,6 +38,12 @@ pub struct Route {
     /// Default: true (fingerprinting enabled)
     #[serde(default = "default_true")]
     pub fingerprinting: bool,
+    /// Force new TCP/TLS connection for each request (bypasses connection pooling)
+    /// When true, a new connection is established for every request, enabling per-request
+    /// TCP and TLS fingerprinting at the cost of higher latency (extra per request)
+    /// Default: false (use connection pooling for better performance)
+    #[serde(default)]
+    pub force_new_connection: bool,
     /// Path that will be used to replace the "prefix" part of incoming url
     /// If specified, the matched prefix will be replaced with this path before forwarding to backend
     /// Example: prefix = "/api", replace_path = "/v1"
@@ -302,6 +308,45 @@ impl Default for KeepAliveConfig {
     fn default() -> Self {
         Self { enabled: true, timeout_secs: default_keep_alive_timeout() }
     }
+}
+
+/// Configuration for backend connection pool
+///
+/// Controls how the proxy manages connections to backend servers.
+/// Connection pooling reuses TCP connections to reduce latency by avoiding
+/// repeated TCP and TLS handshakes.
+#[derive(Clone, Debug, Deserialize)]
+pub struct BackendPoolConfig {
+    /// Enable connection pooling globally
+    /// Default: true
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+
+    /// Idle timeout in seconds for pooled connections
+    /// How long to keep idle connections in the pool before closing them
+    /// Default: 90 seconds
+    #[serde(default = "default_backend_pool_idle_timeout")]
+    pub idle_timeout: u64,
+
+    /// Maximum number of idle connections to maintain per host
+    /// 0 = unlimited (hyper default)
+    /// Default: 0 (unlimited)
+    #[serde(default)]
+    pub pool_max_idle_per_host: usize,
+}
+
+impl Default for BackendPoolConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            idle_timeout: default_backend_pool_idle_timeout(),
+            pool_max_idle_per_host: 0,
+        }
+    }
+}
+
+fn default_backend_pool_idle_timeout() -> u64 {
+    90
 }
 
 impl Default for TimeoutConfig {

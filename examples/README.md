@@ -73,11 +73,11 @@ curl http://localhost:9090/metrics | grep huginn_proxy
 
 ## Available Endpoints
 
-| Service | Endpoint | Description |
-|---------|----------|-------------|
-| Proxy (HTTPS) | `https://localhost:7000/` | Main proxy endpoint |
-| Health Check | `http://localhost:9090/health` | Service health status |
-| Metrics | `http://localhost:9090/metrics` | Prometheus metrics |
+| Service       | Endpoint                        | Description           |
+|---------------|---------------------------------|-----------------------|
+| Proxy (HTTPS) | `https://localhost:7000/`       | Main proxy endpoint   |
+| Health Check  | `http://localhost:9090/health`  | Service health status |
+| Metrics       | `http://localhost:9090/metrics` | Prometheus metrics    |
 
 ---
 
@@ -99,13 +99,14 @@ To switch configurations, edit `docker-compose.yml` and change the `command` and
 To test rate limiting, switch to `rate-limit-example.toml` in `docker-compose.yml`:
 
 ```yaml
-command: ["/usr/local/bin/huginn-proxy", "/config/rate-limit-example.toml"]
+command: [ "/usr/local/bin/huginn-proxy", "/config/rate-limit-example.toml" ]
 volumes:
   - ./config/rate-limit-example.toml:/config/rate-limit-example.toml:ro
   - ./certs:/config/certs:ro
 ```
 
 This configuration demonstrates:
+
 - IP-based rate limiting
 - Per-route rate limits
 - Header-based limits (API keys)
@@ -133,10 +134,11 @@ curl -sk https://localhost:7000/premium/test | jq .    # Header-based
 Verify that TLS and HTTP/2 fingerprints are injected:
 
 ```bash
-curl -sk https://localhost:7000/api/test | jq '.headers | with_entries(select(.key | startswith("x-huginn")))'
+curl -sk https://localhost:7000/api/test | jq '.headers | with_entries(select(.key | startswith("x-")))'
 ```
 
 Expected headers:
+
 - `x-huginn-net-ja4` - TLS fingerprint
 - `x-huginn-net-akamai` - HTTP/2 fingerprint
 
@@ -145,15 +147,19 @@ Expected headers:
 ## Troubleshooting
 
 **Connection refused?**
+
 - Ensure services are running: `docker compose -f examples/docker-compose.yml ps`
 - Check logs: `docker compose -f examples/docker-compose.yml logs proxy`
 
 **Rate limits not working?**
+
 - Verify configuration is loaded correctly in logs
 - Check that you're making parallel requests (sequential requests may not hit the limit)
 
 **TLS errors in browser (`ERR_CERT_AUTHORITY_INVALID`)?**
-- **Self-signed certificates:** Browsers will show a security warning. Click "Advanced" → "Continue to localhost (unsafe)" to proceed, or use `mkcert` (Option B above) for trusted certificates
+
+- **Self-signed certificates:** Browsers will show a security warning. Click "Advanced" → "Continue to localhost (
+  unsafe)" to proceed, or use `mkcert` (Option B above) for trusted certificates
 - **Command-line testing:** Use `curl -k` flag to ignore certificate validation
 - **Certificate expired:** Regenerate certificates using the commands above
 - **Docker Compose:** Ensure certificates are mounted correctly in `docker-compose.yml` volumes section

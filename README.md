@@ -1,23 +1,28 @@
 <div align="center">
   <img src="https://raw.githubusercontent.com/biandratti/huginn-net/master/huginn-net.png" alt="Huginn Proxy Logo" width="200"/>
-  
-  # Huginn Proxy
 
-  [![License](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg)](https://github.com/biandratti/huginn-proxy#license)
-  [![CI](https://github.com/biandratti/huginn-proxy/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/biandratti/huginn-proxy/actions/workflows/ci.yml)
-  [![Security](https://github.com/biandratti/huginn-proxy/actions/workflows/security.yml/badge.svg?branch=master)](https://github.com/biandratti/huginn-proxy/actions/workflows/security.yml)
-  [![Audit](https://github.com/biandratti/huginn-proxy/actions/workflows/audit.yml/badge.svg?branch=master)](https://github.com/biandratti/huginn-proxy/actions/workflows/audit.yml)
-  [![Pure Rust](https://img.shields.io/badge/pure-Rust-brightgreen.svg)](https://deps.rs/repo/github/biandratti/huginn-proxy)
-  [![codecov](https://codecov.io/gh/biandratti/huginn-proxy/graph/badge.svg)](https://codecov.io/gh/biandratti/huginn-proxy)
+# Huginn Proxy
 
-  **High-performance reverse proxy with passive fingerprinting capabilities powered by Huginn Net.**
+[![License](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg)](https://github.com/biandratti/huginn-proxy#license)
+[![CI](https://github.com/biandratti/huginn-proxy/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/biandratti/huginn-proxy/actions/workflows/ci.yml)
+[![Security](https://github.com/biandratti/huginn-proxy/actions/workflows/security.yml/badge.svg?branch=master)](https://github.com/biandratti/huginn-proxy/actions/workflows/security.yml)
+[![Audit](https://github.com/biandratti/huginn-proxy/actions/workflows/audit.yml/badge.svg?branch=master)](https://github.com/biandratti/huginn-proxy/actions/workflows/audit.yml)
+[![Pure Rust](https://img.shields.io/badge/pure-Rust-brightgreen.svg)](https://deps.rs/repo/github/biandratti/huginn-proxy)
+[![codecov](https://codecov.io/gh/biandratti/huginn-proxy/graph/badge.svg)](https://codecov.io/gh/biandratti/huginn-proxy)
+
+**High-performance reverse proxy with passive fingerprinting capabilities powered by Huginn Net.**
 </div>
 
 ## Overview
 
-**Huginn Proxy** is a reverse proxy built in Rust that combines traditional load balancing and request forwarding with advanced passive fingerprinting capabilities. It leverages the [Huginn Net](https://github.com/biandratti/huginn-net) fingerprinting libraries to extract TLS (JA4) and HTTP/2 (Akamai) fingerprints from client connections, injecting them as headers for downstream services.
+**Huginn Proxy** is a reverse proxy built in Rust that combines traditional load balancing and request forwarding with
+advanced passive fingerprinting capabilities. It leverages the [Huginn Net](https://github.com/biandratti/huginn-net)
+fingerprinting libraries to extract TLS (JA4) and HTTP/2 (Akamai) fingerprints from client connections, injecting them
+as headers for downstream services.
 
-Inspired by production-grade proxies like [Pingora](https://github.com/cloudflare/pingora), [Sozu](https://github.com/sozu-proxy/sozu), and [rust-rpxy](https://github.com/junkurihara/rust-rpxy).
+Inspired by production-grade proxies
+like [Pingora](https://github.com/cloudflare/pingora), [Sozu](https://github.com/sozu-proxy/sozu),
+and [rust-rpxy](https://github.com/junkurihara/rust-rpxy).
 
 > **Note:** This project is currently in active development.
 
@@ -37,11 +42,11 @@ Create `config.toml`:
 listen = "0.0.0.0:7000"
 
 backends = [
-  { address = "backend:8080", http_version = "preserve" }
+    { address = "backend:8080", http_version = "preserve" }
 ]
 
 routes = [
-  { prefix = "/", backend = "backend:8080" }
+    { prefix = "/", backend = "backend:8080" }
 ]
 
 [tls]
@@ -75,8 +80,11 @@ docker run -v /path/to/config.toml:/config.toml huginn-proxy /config.toml
 
 - **HTTP/1.x & HTTP/2** - Full support for both protocol versions
 - **Load Balancing** - Round-robin load balancing across multiple backends
+- **Connection Pooling** - Automatic connection reuse to backends for reduced latency (bypasses pooling per-route for
+  fingerprinting)
 - **Path-based Routing** - Route matching with prefix support, path stripping, and path rewriting
-- **Rate Limiting** - Token bucket algorithm with multiple strategies (IP, Header, Route, Combined), global and per-route limits
+- **Rate Limiting** - Token bucket algorithm with multiple strategies (IP, Header, Route, Combined), global and
+  per-route limits
 - **Header Manipulation** - Add or remove request/response headers globally or per-route for security and customization
 - **Security Headers** - HSTS, CSP, X-Frame-Options, and custom headers
 - **IP Filtering (ACL)** - Allowlist/denylist with CIDR notation support
@@ -87,7 +95,8 @@ docker run -v /path/to/config.toml:/config.toml huginn-proxy /config.toml
 - **Host Header Preservation** - Configurable forwarding of original Host header for virtual hosting
 - **Passive Fingerprinting** - Automatic TLS (JA4) and HTTP/2 (Akamai) fingerprint extraction
 - **X-Forwarded-* Headers** - Automatic injection of proxy forwarding headers
-- **[Comprehensive Telemetry](TELEMETRY.md)** - Prometheus metrics covering requests, throughput, rate limiting, TLS, backends, and security features
+- **[Comprehensive Telemetry](TELEMETRY.md)** - Prometheus metrics covering requests, throughput, rate limiting, TLS,
+  backends, and security features
 - **High Performance** - Built on Tokio and Hyper
 - **Easy Deployment** - Single binary, Docker-ready
 
@@ -97,16 +106,21 @@ See [FEATURES.md](FEATURES.md) for detailed descriptions and limitations of each
 
 Fingerprints are automatically extracted and injected as headers:
 
-- **TLS (JA4)**: `x-huginn-net-ja4` - Extracted from all TLS connections using [huginn-net-tls](https://crates.io/crates/huginn-net-tls)
-- **HTTP/2 (Akamai)**: `x-huginn-net-akamai` - Extracted from HTTP/2 connections only using [huginn-net-http](https://crates.io/crates/huginn-net-http)
+- **TLS (JA4)**: `x-huginn-net-ja4` - Extracted from all TLS connections
+  using [huginn-net-tls](https://crates.io/crates/huginn-net-tls)
+- **HTTP/2 (Akamai)**: `x-huginn-net-akamai` - Extracted from HTTP/2 connections only
+  using [huginn-net-http](https://crates.io/crates/huginn-net-http)
 
 **Examples:**
+
 ```
 x-huginn-net-ja4: t13d1516h2_8afaf4b9491c_00_0403040303030103010302_01
 x-huginn-net-akamai: 1:65536,2:0,3:1000,4:6291456,6:262144|15663105|0|m,p,a,s
 ```
 
-See [JA4 specification](https://github.com/FoxIO-LLC/ja4) and [Blackhat EU 2017](https://www.blackhat.com/docs/eu-17/materials/eu-17-Shuster-Passive-Fingerprinting-Of-HTTP2-Clients-wp.pdf) for details.
+See [JA4 specification](https://github.com/FoxIO-LLC/ja4)
+and [Blackhat EU 2017](https://www.blackhat.com/docs/eu-17/materials/eu-17-Shuster-Passive-Fingerprinting-Of-HTTP2-Clients-wp.pdf)
+for details.
 
 ## Proxy Headers
 
@@ -119,20 +133,34 @@ The proxy automatically injects standard `X-Forwarded-*` headers to inform backe
 
 These headers always override any client-provided values to prevent spoofing.
 
+## Advanced Configuration Options
+
+### Per-Route Settings
+
+- **`fingerprinting`** (bool, default: `true`) - Enable/disable TLS (JA4) and HTTP/2 (Akamai) fingerprint extraction and
+  header injection
+- **`force_new_connection`** (bool, default: `false`) - Force new TCP + TLS handshake per request, bypassing connection
+  pooling
+    - Use case: Per-request TLS fingerprinting, TCP fingerprinting (future), testing/debugging
+    - Performance: Adds ~50-200ms latency per request when enabled
+
 ## Health Check Endpoints
 
-When `telemetry.metrics_port` is configured, Huginn Proxy exposes health check endpoints on the observability server (separate from the main proxy port):
+When `telemetry.metrics_port` is configured, Huginn Proxy exposes health check endpoints on the observability server (
+separate from the main proxy port):
 
 - **`/health`** - General health check (`200 OK` if process is running)
 - **`/ready`** - Readiness check (`200 OK` if backends configured, `503` otherwise) - for Kubernetes readiness probes
 - **`/live`** - Liveness check (`200 OK` if process is running) - for Kubernetes liveness probes
 - **`/metrics`** - Prometheus metrics endpoint
 
-All endpoints return JSON responses (except `/metrics` which returns Prometheus format) and follow Kubernetes health check conventions.
+All endpoints return JSON responses (except `/metrics` which returns Prometheus format) and follow Kubernetes health
+check conventions.
 
 ## Examples
 
 See the [`examples/`](examples/) directory for:
+
 - Docker Compose setup with TLS termination
 - Rate limiting configurations
 - Advanced routing examples
@@ -164,7 +192,8 @@ Dual-licensed under [MIT](LICENSE-MIT) or [Apache 2.0](LICENSE-APACHE).
 Huginn Proxy uses the [Huginn Net](https://github.com/biandratti/huginn-net) fingerprinting libraries:
 
 - **JA4**: TLS fingerprinting follows the [JA4 specification by FoxIO, LLC](https://github.com/FoxIO-LLC/ja4)
-- **Akamai HTTP/2**: HTTP/2 fingerprinting follows the [Blackhat EU 2017 specification](https://www.blackhat.com/docs/eu-17/materials/eu-17-Shuster-Passive-Fingerprinting-Of-HTTP2-Clients-wp.pdf)
+- **Akamai HTTP/2**: HTTP/2 fingerprinting follows
+  the [Blackhat EU 2017 specification](https://www.blackhat.com/docs/eu-17/materials/eu-17-Shuster-Passive-Fingerprinting-Of-HTTP2-Clients-wp.pdf)
 
 ## Contributing
 
