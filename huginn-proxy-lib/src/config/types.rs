@@ -304,6 +304,50 @@ impl Default for KeepAliveConfig {
     }
 }
 
+/// Configuration for backend connection pool
+///
+/// Controls how the proxy manages connections to backend servers.
+/// Connection pooling reuses TCP connections to reduce latency by avoiding
+/// repeated TCP and TLS handshakes.
+///
+/// # Performance Impact
+///
+/// - **With pooling**: Request latency = Processing time (~10-50ms)
+/// - **Without pooling**: Request latency = TCP handshake (~1-5ms) + TLS handshake (~50-200ms) + Processing (~10-50ms)
+#[derive(Clone, Debug, Deserialize)]
+pub struct BackendPoolConfig {
+    /// Enable connection pooling globally
+    /// Default: true
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+
+    /// Idle timeout in seconds for pooled connections
+    /// How long to keep idle connections in the pool before closing them
+    /// Default: 90 seconds
+    #[serde(default = "default_backend_pool_idle_timeout")]
+    pub idle_timeout: u64,
+
+    /// Maximum number of idle connections to maintain per host
+    /// 0 = unlimited (hyper default)
+    /// Default: 0 (unlimited)
+    #[serde(default)]
+    pub pool_max_idle_per_host: usize,
+}
+
+impl Default for BackendPoolConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            idle_timeout: default_backend_pool_idle_timeout(),
+            pool_max_idle_per_host: 0,
+        }
+    }
+}
+
+fn default_backend_pool_idle_timeout() -> u64 {
+    90
+}
+
 impl Default for TimeoutConfig {
     fn default() -> Self {
         Self {

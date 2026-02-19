@@ -12,6 +12,7 @@ use crate::fingerprinting::{read_client_hello, CapturingStream};
 use crate::proxy::connection::{PrefixedStream, TlsConnectionGuard};
 use crate::proxy::handler::headers::tls_header_value;
 use crate::proxy::synthetic_response::synthetic_error_response;
+use crate::proxy::ClientPool;
 use crate::telemetry::Metrics;
 use crate::tls::record_tls_handshake_metrics;
 use http::StatusCode;
@@ -30,6 +31,7 @@ pub struct TlsConnectionConfig {
     pub preserve_host: bool,
     pub tls_handshake_timeout: tokio::time::Duration,
     pub connection_handling_timeout: tokio::time::Duration,
+    pub client_pool: Arc<ClientPool>,
 }
 
 /// Handle a TLS connection

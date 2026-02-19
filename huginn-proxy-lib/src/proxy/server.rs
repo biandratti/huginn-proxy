@@ -9,12 +9,13 @@ use tokio::sync::watch;
 use tokio::time::{Duration, Instant};
 use tracing::{info, warn};
 
-use crate::config::Config;
+use crate::config::{BackendPoolConfig, Config};
 use crate::error::Result;
 use crate::proxy::connection::{ConnectionError, ConnectionManager};
 use crate::proxy::transport::{
     handle_plain_connection, handle_tls_connection, PlainConnectionConfig, TlsConnectionConfig,
 };
+use crate::proxy::ClientPool;
 use crate::telemetry::Metrics;
 use crate::tls::setup_tls_with_hot_reload;
 
@@ -65,6 +66,10 @@ pub async fn run(config: Arc<Config>, metrics: Option<Arc<Metrics>>) -> Result<(
         connections_closed_tx.clone(),
     );
     let active_connections = connection_manager.active_connections();
+
+    // Setup client pool for backend connections
+    let pool_config = BackendPoolConfig::default();
+    let client_pool = Arc::new(ClientPool::new(&config.timeout.keep_alive, pool_config.clone()));
 
     // Setup signal handlers
     let mut sigterm = signal::unix::signal(signal::unix::SignalKind::terminate()).map_err(|e| {
@@ -129,6 +134,7 @@ pub async fn run(config: Arc<Config>, metrics: Option<Arc<Metrics>>) -> Result<(
                 let security = security_context.clone();
                 let metrics_clone = metrics.clone();
                 let preserve_host = config.preserve_host;
+                let client_pool_clone = client_pool.clone();
 
                 let metrics_for_connection = metrics_clone.clone();
                 tokio::spawn(async move {
@@ -150,6 +156,7 @@ pub async fn run(config: Arc<Config>, metrics: Option<Arc<Metrics>>) -> Result<(
                                 preserve_host,
                                 tls_handshake_timeout,
                                 connection_handling_timeout,
+                                client_pool: client_pool_clone.clone(),
                             },
                         )
                         .await;
@@ -166,6 +173,7 @@ pub async fn run(config: Arc<Config>, metrics: Option<Arc<Metrics>>) -> Result<(
                                 builder: builder_clone,
                                 preserve_host,
                                 connection_handling_timeout,
+                                client_pool: client_pool_clone,
                             },
                         )
                         .await;

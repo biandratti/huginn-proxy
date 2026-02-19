@@ -6,6 +6,7 @@ use tokio::net::TcpStream;
 
 use super::timeout_helper::serve_with_timeout;
 use crate::proxy::synthetic_response::synthetic_error_response;
+use crate::proxy::ClientPool;
 use crate::telemetry::Metrics;
 use http::StatusCode;
 use http_body_util::BodyExt;
@@ -20,6 +21,7 @@ pub struct PlainConnectionConfig {
     pub builder: ConnBuilder<TokioExecutor>,
     pub preserve_host: bool,
     pub connection_handling_timeout: tokio::time::Duration,
+    pub client_pool: Arc<ClientPool>,
 }
 
 /// Handle a plain HTTP connection
