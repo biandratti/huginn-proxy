@@ -7,7 +7,6 @@ use hyper::body::Incoming;
 use hyper_util::client::legacy::connect::HttpConnector;
 use hyper_util::client::legacy::Client;
 use hyper_util::rt::TokioExecutor;
-use opentelemetry::KeyValue;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::Instant;
@@ -151,8 +150,7 @@ pub async fn forward(
         if let Some(content_length) = parts.headers.get(hyper::header::CONTENT_LENGTH) {
             if let Ok(length_str) = content_length.to_str() {
                 if let Ok(length) = length_str.parse::<u64>() {
-                    m.backend_bytes_sent_total
-                        .add(length, &[KeyValue::new("backend_address", backend.clone())]);
+                    m.record_backend_bytes_sent(length, &backend, config.route);
                 }
             }
         }
@@ -182,8 +180,7 @@ pub async fn forward(
                 if let Some(content_length) = resp.headers().get(hyper::header::CONTENT_LENGTH) {
                     if let Ok(length_str) = content_length.to_str() {
                         if let Ok(length) = length_str.parse::<u64>() {
-                            m.backend_bytes_received_total
-                                .add(length, &[KeyValue::new("backend_address", backend.clone())]);
+                            m.record_backend_bytes_received(length, &backend, config.route);
                         }
                     }
                 }
@@ -196,38 +193,15 @@ pub async fn forward(
             );
 
             if let Some(ref m) = config.metrics {
-                m.backend_requests_total.add(
-                    1,
-                    &[
-                        KeyValue::new("backend_address", backend.clone()),
-                        KeyValue::new("status_code", status_code.to_string()),
-                        KeyValue::new("protocol", protocol.clone()),
-                        KeyValue::new("route", config.route.to_string()),
-                    ],
-                );
-                m.backend_duration_seconds.record(
-                    duration,
-                    &[
-                        KeyValue::new("backend_address", backend.clone()),
-                        KeyValue::new("status_code", status_code.to_string()),
-                        KeyValue::new("protocol", protocol),
-                        KeyValue::new("route", config.route.to_string()),
-                    ],
-                );
+                m.record_backend_request(&backend, status_code, &protocol, config.route);
+                m.record_backend_duration(duration, &backend, status_code, &protocol, config.route);
             }
             Ok(resp.map(|b| b.boxed()))
         }
         Err(e) => {
             let error = HttpError::FailedToGetResponseFromBackend(e.to_string());
             if let Some(ref m) = config.metrics {
-                m.backend_errors_total.add(
-                    1,
-                    &[
-                        KeyValue::new("backend_address", backend.clone()),
-                        KeyValue::new("error_type", error.error_type()),
-                        KeyValue::new("route", config.route.to_string()),
-                    ],
-                );
+                m.record_backend_error(&backend, error.error_type(), config.route);
             }
             Err(error)
         }

@@ -1,7 +1,6 @@
 use crate::config::{HeaderManipulation, HeaderManipulationGroup};
 use crate::telemetry::Metrics;
 use http::{HeaderMap, HeaderName, HeaderValue};
-use opentelemetry::KeyValue;
 use std::sync::Arc;
 
 /// Apply header manipulation group (add and remove headers)
@@ -33,8 +32,7 @@ pub fn apply_header_manipulation_group(
     if !manipulation.remove.is_empty() {
         let removed_count = remove_headers(headers, &manipulation.remove);
         if let Some(m) = metrics {
-            m.headers_removed_total
-                .add(removed_count, &[KeyValue::new("context", context.to_string())]);
+            m.record_headers_removed(removed_count, context);
         }
     }
 
@@ -47,8 +45,7 @@ pub fn apply_header_manipulation_group(
             .collect();
         let added_count = add_headers(headers, &to_add);
         if let Some(m) = metrics {
-            m.headers_added_total
-                .add(added_count, &[KeyValue::new("context", context.to_string())]);
+            m.record_headers_added(added_count, context);
         }
     }
 }

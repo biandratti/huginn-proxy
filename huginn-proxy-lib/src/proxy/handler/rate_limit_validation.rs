@@ -1,7 +1,6 @@
 use http::StatusCode;
 use http_body_util::{combinators::BoxBody, BodyExt, Full};
 use hyper::Response;
-use opentelemetry::KeyValue;
 use std::sync::Arc;
 use tracing::debug;
 
@@ -49,13 +48,7 @@ pub fn check_rate_limit(
 
     let strategy = format!("{:?}", limit_by).to_lowercase();
     if let Some(m) = metrics {
-        m.rate_limit_requests_total.add(
-            1,
-            &[
-                KeyValue::new("strategy", strategy.clone()),
-                KeyValue::new("route", route_match.matched_prefix.to_string()),
-            ],
-        );
+        m.record_rate_limit_request(&strategy, route_match.matched_prefix);
     }
 
     let rate_limit_result = manager.check(&rate_limit_key, Some(route_match.matched_prefix));
@@ -63,15 +56,7 @@ pub fn check_rate_limit(
     match rate_limit_result {
         RateLimitResult::Limited { limit, reset_after, .. } => {
             if let Some(m) = metrics {
-                m.errors_total
-                    .add(1, &[KeyValue::new("error_type", "rate_limited")]);
-                m.rate_limit_rejected_total.add(
-                    1,
-                    &[
-                        KeyValue::new("strategy", strategy),
-                        KeyValue::new("route", route_match.matched_prefix.to_string()),
-                    ],
-                );
+                m.record_rate_limit_rejection(&strategy, route_match.matched_prefix);
             }
 
             Some(create_429_response(limit, reset_after.as_secs()))
@@ -80,13 +65,7 @@ pub fn check_rate_limit(
             debug!(limit = limit, remaining = remaining, "Rate limit check passed");
 
             if let Some(m) = metrics {
-                m.rate_limit_allowed_total.add(
-                    1,
-                    &[
-                        KeyValue::new("strategy", strategy),
-                        KeyValue::new("route", route_match.matched_prefix.to_string()),
-                    ],
-                );
+                m.record_rate_limit_allowed(&strategy, route_match.matched_prefix);
             }
 
             None

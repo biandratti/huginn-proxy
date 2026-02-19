@@ -29,22 +29,18 @@ fn check_ip_access(
 ) -> HttpResult<()> {
     let client_ip = peer.ip();
 
-    if let Some(m) = metrics {
-        m.ip_filter_requests_total.add(1, &[]);
-    }
-
     if !crate::security::is_ip_allowed(client_ip, ip_filter) {
         debug!(?peer, "IP blocked by filter");
         if let Some(m) = metrics {
+            m.record_ip_filter_denied();
             m.errors_total
                 .add(1, &[KeyValue::new("error_type", "ip_blocked")]);
-            m.ip_filter_denied_total.add(1, &[]);
         }
         return Err(HttpError::Forbidden);
     }
 
     if let Some(m) = metrics {
-        m.ip_filter_allowed_total.add(1, &[]);
+        m.record_ip_filter_allowed();
     }
 
     Ok(())
@@ -73,8 +69,7 @@ pub async fn handle_proxy_request(
         if let Some(content_length) = req.headers().get(hyper::header::CONTENT_LENGTH) {
             if let Ok(length_str) = content_length.to_str() {
                 if let Ok(length) = length_str.parse::<u64>() {
-                    m.bytes_received_total
-                        .add(length, &[KeyValue::new("protocol", protocol.clone())]);
+                    m.record_bytes_received(length, &protocol);
                 }
             }
         }
@@ -182,8 +177,7 @@ pub async fn handle_proxy_request(
             if let Some(content_length) = response.headers().get(hyper::header::CONTENT_LENGTH) {
                 if let Ok(length_str) = content_length.to_str() {
                     if let Ok(length) = length_str.parse::<u64>() {
-                        m.bytes_sent_total
-                            .add(length, &[KeyValue::new("protocol", protocol.clone())]);
+                        m.record_bytes_sent(length, &protocol);
                     }
                 }
             }
@@ -207,23 +201,13 @@ pub async fn handle_proxy_request(
     };
 
     if let Some(ref m) = metrics {
-        m.requests_total.add(
-            1,
-            &[
-                KeyValue::new("method", method.clone()),
-                KeyValue::new("status_code", status_code.to_string()),
-                KeyValue::new("protocol", protocol.clone()),
-                KeyValue::new("route", route_match.matched_prefix.to_string()),
-            ],
-        );
-        m.requests_duration_seconds.record(
+        m.record_request(&method, status_code, &protocol, route_match.matched_prefix);
+        m.record_request_duration(
             duration,
-            &[
-                KeyValue::new("method", method),
-                KeyValue::new("status_code", status_code.to_string()),
-                KeyValue::new("protocol", protocol),
-                KeyValue::new("route", route_match.matched_prefix.to_string()),
-            ],
+            &method,
+            status_code,
+            &protocol,
+            route_match.matched_prefix,
         );
     }
 

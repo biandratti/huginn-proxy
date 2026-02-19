@@ -5,6 +5,30 @@ use opentelemetry_sdk::metrics::SdkMeterProvider;
 use prometheus::Registry;
 use std::sync::Arc;
 
+pub mod labels {
+    pub const ERROR_TYPE: &str = "error_type";
+    pub const STRATEGY: &str = "strategy";
+    pub const ROUTE: &str = "route";
+    pub const PROTOCOL: &str = "protocol";
+    pub const STATUS_CODE: &str = "status_code";
+    pub const METHOD: &str = "method";
+    pub const CONTEXT: &str = "context";
+    pub const BACKEND_ADDRESS: &str = "backend_address";
+    pub const TLS_VERSION: &str = "tls_version";
+    pub const CIPHER_SUITE: &str = "cipher_suite";
+    pub const TIMEOUT_TYPE: &str = "timeout_type";
+    pub const REASON: &str = "reason";
+    pub const COMPONENT: &str = "component";
+    pub const VERSION: &str = "version";
+    pub const RUST_VERSION: &str = "rust_version";
+}
+
+pub mod values {
+    pub const ERROR_RATE_LIMITED: &str = "rate_limited";
+    pub const CONTEXT_REQUEST: &str = "request";
+    pub const CONTEXT_RESPONSE: &str = "response";
+}
+
 #[derive(Clone)]
 pub struct Metrics {
     pub connections_total: Counter<u64>,
@@ -240,7 +264,201 @@ impl Metrics {
 
         self.build_info.record(
             1,
-            &[KeyValue::new("version", version), KeyValue::new("rust_version", rust_version)],
+            &[
+                KeyValue::new(labels::VERSION, version),
+                KeyValue::new(labels::RUST_VERSION, rust_version),
+            ],
+        );
+    }
+
+    // Helper methods for common metric operations
+
+    /// Record a rate limit rejection
+    pub fn record_rate_limit_rejection(&self, strategy: &str, route: &str) {
+        self.errors_total
+            .add(1, &[KeyValue::new(labels::ERROR_TYPE, values::ERROR_RATE_LIMITED)]);
+        self.rate_limit_rejected_total.add(
+            1,
+            &[
+                KeyValue::new(labels::STRATEGY, strategy.to_string()),
+                KeyValue::new(labels::ROUTE, route.to_string()),
+            ],
+        );
+    }
+
+    /// Record a rate limit allowance
+    pub fn record_rate_limit_allowed(&self, strategy: &str, route: &str) {
+        self.rate_limit_allowed_total.add(
+            1,
+            &[
+                KeyValue::new(labels::STRATEGY, strategy.to_string()),
+                KeyValue::new(labels::ROUTE, route.to_string()),
+            ],
+        );
+    }
+
+    /// Record a rate limit request evaluation
+    pub fn record_rate_limit_request(&self, strategy: &str, route: &str) {
+        self.rate_limit_requests_total.add(
+            1,
+            &[
+                KeyValue::new(labels::STRATEGY, strategy.to_string()),
+                KeyValue::new(labels::ROUTE, route.to_string()),
+            ],
+        );
+    }
+
+    /// Record headers added
+    pub fn record_headers_added(&self, count: u64, context: &str) {
+        if count > 0 {
+            self.headers_added_total
+                .add(count, &[KeyValue::new(labels::CONTEXT, context.to_string())]);
+        }
+    }
+
+    /// Record headers removed
+    pub fn record_headers_removed(&self, count: u64, context: &str) {
+        if count > 0 {
+            self.headers_removed_total
+                .add(count, &[KeyValue::new(labels::CONTEXT, context.to_string())]);
+        }
+    }
+
+    /// Record IP filter allowance
+    pub fn record_ip_filter_allowed(&self) {
+        self.ip_filter_requests_total.add(1, &[]);
+        self.ip_filter_allowed_total.add(1, &[]);
+    }
+
+    /// Record IP filter denial
+    pub fn record_ip_filter_denied(&self) {
+        self.ip_filter_requests_total.add(1, &[]);
+        self.ip_filter_denied_total.add(1, &[]);
+    }
+
+    /// Record throughput - bytes received from client
+    pub fn record_bytes_received(&self, bytes: u64, protocol: &str) {
+        if bytes > 0 {
+            self.bytes_received_total
+                .add(bytes, &[KeyValue::new(labels::PROTOCOL, protocol.to_string())]);
+        }
+    }
+
+    /// Record throughput - bytes sent to client
+    pub fn record_bytes_sent(&self, bytes: u64, protocol: &str) {
+        if bytes > 0 {
+            self.bytes_sent_total
+                .add(bytes, &[KeyValue::new(labels::PROTOCOL, protocol.to_string())]);
+        }
+    }
+
+    /// Record throughput - bytes received from backend
+    pub fn record_backend_bytes_received(&self, bytes: u64, backend: &str, route: &str) {
+        if bytes > 0 {
+            self.backend_bytes_received_total.add(
+                bytes,
+                &[
+                    KeyValue::new(labels::BACKEND_ADDRESS, backend.to_string()),
+                    KeyValue::new(labels::ROUTE, route.to_string()),
+                ],
+            );
+        }
+    }
+
+    /// Record throughput - bytes sent to backend
+    pub fn record_backend_bytes_sent(&self, bytes: u64, backend: &str, route: &str) {
+        if bytes > 0 {
+            self.backend_bytes_sent_total.add(
+                bytes,
+                &[
+                    KeyValue::new(labels::BACKEND_ADDRESS, backend.to_string()),
+                    KeyValue::new(labels::ROUTE, route.to_string()),
+                ],
+            );
+        }
+    }
+
+    /// Record a backend request
+    pub fn record_backend_request(
+        &self,
+        backend: &str,
+        status_code: u16,
+        protocol: &str,
+        route: &str,
+    ) {
+        self.backend_requests_total.add(
+            1,
+            &[
+                KeyValue::new(labels::BACKEND_ADDRESS, backend.to_string()),
+                KeyValue::new(labels::STATUS_CODE, status_code.to_string()),
+                KeyValue::new(labels::PROTOCOL, protocol.to_string()),
+                KeyValue::new(labels::ROUTE, route.to_string()),
+            ],
+        );
+    }
+
+    /// Record backend request duration
+    pub fn record_backend_duration(
+        &self,
+        duration: f64,
+        backend: &str,
+        status_code: u16,
+        protocol: &str,
+        route: &str,
+    ) {
+        self.backend_duration_seconds.record(
+            duration,
+            &[
+                KeyValue::new(labels::BACKEND_ADDRESS, backend.to_string()),
+                KeyValue::new(labels::STATUS_CODE, status_code.to_string()),
+                KeyValue::new(labels::PROTOCOL, protocol.to_string()),
+                KeyValue::new(labels::ROUTE, route.to_string()),
+            ],
+        );
+    }
+
+    /// Record a backend error
+    pub fn record_backend_error(&self, backend: &str, error_type: &str, route: &str) {
+        self.backend_errors_total.add(
+            1,
+            &[
+                KeyValue::new(labels::BACKEND_ADDRESS, backend.to_string()),
+                KeyValue::new(labels::ERROR_TYPE, error_type.to_string()),
+                KeyValue::new(labels::ROUTE, route.to_string()),
+            ],
+        );
+    }
+
+    /// Record a request
+    pub fn record_request(&self, method: &str, status_code: u16, protocol: &str, route: &str) {
+        self.requests_total.add(
+            1,
+            &[
+                KeyValue::new(labels::METHOD, method.to_string()),
+                KeyValue::new(labels::STATUS_CODE, status_code.to_string()),
+                KeyValue::new(labels::PROTOCOL, protocol.to_string()),
+                KeyValue::new(labels::ROUTE, route.to_string()),
+            ],
+        );
+    }
+
+    /// Record request duration
+    pub fn record_request_duration(
+        &self,
+        duration: f64,
+        method: &str,
+        status_code: u16,
+        protocol: &str,
+        route: &str,
+    ) {
+        self.requests_duration_seconds.record(
+            duration,
+            &[
+                KeyValue::new(labels::METHOD, method.to_string()),
+                KeyValue::new(labels::STATUS_CODE, status_code.to_string()),
+                KeyValue::new(labels::PROTOCOL, protocol.to_string()),
+                KeyValue::new(labels::ROUTE, route.to_string()),
+            ],
         );
     }
 }
