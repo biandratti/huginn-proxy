@@ -1,30 +1,41 @@
 use crate::config::{HeaderManipulation, HeaderManipulationGroup};
+use crate::telemetry::metrics::values;
+use crate::telemetry::Metrics;
 use http::{HeaderMap, HeaderName, HeaderValue};
+use std::sync::Arc;
 
 /// Apply header manipulation group (add and remove headers)
 ///
 /// # Arguments
 /// * `headers` - The header map to modify
 /// * `manipulation` - The header manipulation configuration
+/// * `context` - Context string (use `values::CONTEXT_REQUEST` or `values::CONTEXT_RESPONSE`) for metrics
+/// * `metrics` - Optional metrics for tracking header operations
 ///
 /// # Example
 /// ```
 /// use http::HeaderMap;
 /// use huginn_proxy_lib::config::HeaderManipulationGroup;
 /// use huginn_proxy_lib::proxy::handler::header_manipulation::apply_header_manipulation_group;
+/// use huginn_proxy_lib::telemetry::metrics::values;
 ///
 /// let mut headers = HeaderMap::new();
 /// let manipulation = HeaderManipulationGroup::default();
 ///
-/// apply_header_manipulation_group(&mut headers, &manipulation);
+/// apply_header_manipulation_group(&mut headers, &manipulation, values::CONTEXT_REQUEST, None);
 /// ```
 pub fn apply_header_manipulation_group(
     headers: &mut HeaderMap,
     manipulation: &HeaderManipulationGroup,
+    context: &str,
+    metrics: Option<&Arc<Metrics>>,
 ) {
     // Remove headers first
     if !manipulation.remove.is_empty() {
-        remove_headers(headers, &manipulation.remove);
+        let removed_count = remove_headers(headers, &manipulation.remove);
+        if let Some(m) = metrics {
+            m.record_headers_removed(removed_count, context);
+        }
     }
 
     // Then add headers
@@ -34,7 +45,10 @@ pub fn apply_header_manipulation_group(
             .iter()
             .map(|h| (h.name.clone(), h.value.clone()))
             .collect();
-        add_headers(headers, &to_add);
+        let added_count = add_headers(headers, &to_add);
+        if let Some(m) = metrics {
+            m.record_headers_added(added_count, context);
+        }
     }
 }
 
@@ -51,15 +65,16 @@ pub fn apply_request_header_manipulation(
     headers: &mut HeaderMap,
     global_manipulation: Option<&HeaderManipulation>,
     route_manipulation: Option<&HeaderManipulation>,
+    metrics: Option<&Arc<Metrics>>,
 ) {
     // Apply global request header manipulation
     if let Some(global) = global_manipulation {
-        apply_header_manipulation_group(headers, &global.request);
+        apply_header_manipulation_group(headers, &global.request, values::CONTEXT_REQUEST, metrics);
     }
 
     // Apply per-route request header manipulation (overrides global)
     if let Some(route) = route_manipulation {
-        apply_header_manipulation_group(headers, &route.request);
+        apply_header_manipulation_group(headers, &route.request, values::CONTEXT_REQUEST, metrics);
     }
 }
 
@@ -76,15 +91,26 @@ pub fn apply_response_header_manipulation(
     headers: &mut HeaderMap,
     global_manipulation: Option<&HeaderManipulation>,
     route_manipulation: Option<&HeaderManipulation>,
+    metrics: Option<&Arc<Metrics>>,
 ) {
     // Apply global response header manipulation
     if let Some(global) = global_manipulation {
-        apply_header_manipulation_group(headers, &global.response);
+        apply_header_manipulation_group(
+            headers,
+            &global.response,
+            values::CONTEXT_RESPONSE,
+            metrics,
+        );
     }
 
     // Apply per-route response header manipulation (overrides global)
     if let Some(route) = route_manipulation {
-        apply_header_manipulation_group(headers, &route.response);
+        apply_header_manipulation_group(
+            headers,
+            &route.response,
+            values::CONTEXT_RESPONSE,
+            metrics,
+        );
     }
 }
 
@@ -105,15 +131,17 @@ pub fn apply_response_header_manipulation(
 /// remove_headers(&mut headers, &["server".to_string()]);
 /// assert!(headers.get("server").is_none());
 /// ```
-pub fn remove_headers(headers: &mut HeaderMap, headers_to_remove: &[String]) {
+pub fn remove_headers(headers: &mut HeaderMap, headers_to_remove: &[String]) -> u64 {
+    let mut removed_count = 0u64;
     for header_name in headers_to_remove {
         if let Ok(name) = HeaderName::from_bytes(header_name.to_lowercase().as_bytes()) {
-            headers.remove(&name);
-
-            tracing::trace!(
-                header = %header_name,
-                "Removed header"
-            );
+            if headers.remove(&name).is_some() {
+                removed_count = removed_count.saturating_add(1);
+                tracing::trace!(
+                    header = %header_name,
+                    "Removed header"
+                );
+            }
         } else {
             tracing::warn!(
                 header = %header_name,
@@ -121,6 +149,7 @@ pub fn remove_headers(headers: &mut HeaderMap, headers_to_remove: &[String]) {
             );
         }
     }
+    removed_count
 }
 
 /// Add headers to a header map (overwrite if exists)
@@ -140,11 +169,13 @@ pub fn remove_headers(headers: &mut HeaderMap, headers_to_remove: &[String]) {
 /// add_headers(&mut headers, &to_add);
 /// assert_eq!(headers.get("x-custom").unwrap(), "value");
 /// ```
-pub fn add_headers(headers: &mut HeaderMap, headers_to_add: &[(String, String)]) {
+pub fn add_headers(headers: &mut HeaderMap, headers_to_add: &[(String, String)]) -> u64 {
+    let mut added_count = 0u64;
     for (name, value) in headers_to_add {
         match (HeaderName::from_bytes(name.as_bytes()), HeaderValue::from_str(value)) {
             (Ok(header_name), Ok(header_value)) => {
                 headers.insert(header_name, header_value);
+                added_count = added_count.saturating_add(1);
 
                 tracing::trace!(
                     header = %name,
@@ -169,4 +200,5 @@ pub fn add_headers(headers: &mut HeaderMap, headers_to_add: &[(String, String)])
             }
         }
     }
+    added_count
 }

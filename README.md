@@ -87,6 +87,7 @@ docker run -v /path/to/config.toml:/config.toml huginn-proxy /config.toml
 - **Host Header Preservation** - Configurable forwarding of original Host header for virtual hosting
 - **Passive Fingerprinting** - Automatic TLS (JA4) and HTTP/2 (Akamai) fingerprint extraction
 - **X-Forwarded-* Headers** - Automatic injection of proxy forwarding headers
+- **[Comprehensive Telemetry](TELEMETRY.md)** - Prometheus metrics covering requests, throughput, rate limiting, TLS, backends, and security features
 - **High Performance** - Built on Tokio and Hyper
 - **Easy Deployment** - Single binary, Docker-ready
 

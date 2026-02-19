@@ -4,7 +4,7 @@
 
 ### Documentation
 - [ ] Usage examples (Kubernetes, Docker)
-- [ ] Metrics documentation
+- [ ] Grafana dashboard templates
 
 ### Operational Features
 - [ ] Backend health checks (active polling)
@@ -18,9 +18,6 @@
 
 ### Advanced Features
 - [ ] Advanced load balancing algorithms (least connections, weighted)
-- [ ] Request/response transformation
 - [ ] Circuit breakers
-- [ ] Throughput metrics (bytes received/sent)
-- [ ] Timeout metrics by type
 - [ ] TCP fingerprinting
 - [ ] Production hardening and security audit

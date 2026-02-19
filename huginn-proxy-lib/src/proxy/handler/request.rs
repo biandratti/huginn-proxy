@@ -2,7 +2,6 @@ use http::Version;
 use hyper::body::Incoming;
 use hyper::header::HeaderName;
 use hyper::Request;
-use opentelemetry::KeyValue;
 use std::sync::Arc;
 use tokio::sync::watch;
 use tokio::time::Instant;
@@ -17,6 +16,7 @@ use crate::proxy::handler::header_manipulation::{
 use crate::proxy::handler::headers::{add_forwarded_headers, akamai_header_value};
 use crate::proxy::handler::rate_limit_validation::check_rate_limit;
 use crate::proxy::http_result::{HttpError, HttpResult};
+use crate::telemetry::metrics::values;
 use crate::telemetry::Metrics;
 use http::StatusCode;
 
@@ -28,14 +28,20 @@ fn check_ip_access(
     metrics: Option<&Arc<Metrics>>,
 ) -> HttpResult<()> {
     let client_ip = peer.ip();
+
     if !crate::security::is_ip_allowed(client_ip, ip_filter) {
         debug!(?peer, "IP blocked by filter");
         if let Some(m) = metrics {
-            m.errors_total
-                .add(1, &[KeyValue::new("error_type", "ip_blocked")]);
+            m.record_ip_filter_denied();
+            m.record_error(values::ERROR_IP_BLOCKED);
         }
         return Err(HttpError::Forbidden);
     }
+
+    if let Some(m) = metrics {
+        m.record_ip_filter_allowed();
+    }
+
     Ok(())
 }
 
@@ -58,6 +64,16 @@ pub async fn handle_proxy_request(
     let method = req.method().to_string();
     let protocol = format!("{:?}", req.version());
 
+    if let Some(ref m) = metrics {
+        if let Some(content_length) = req.headers().get(hyper::header::CONTENT_LENGTH) {
+            if let Ok(length_str) = content_length.to_str() {
+                if let Ok(length) = length_str.parse::<u64>() {
+                    m.record_bytes_received(length, &protocol);
+                }
+            }
+        }
+    }
+
     check_ip_access(peer, &security.ip_filter, metrics.as_ref())?;
 
     let path = req.uri().path();
@@ -66,16 +82,14 @@ pub async fn handle_proxy_request(
     {
         // Route matched: use route's fingerprinting configuration
         if let Some(ref m) = metrics {
-            m.backend_selections_total
-                .add(1, &[KeyValue::new("backend", route.backend.to_string())]);
+            m.record_backend_selection(route.backend);
         }
         route
     } else {
         // No route matched: return 404
         let error = HttpError::NoMatchingRoute;
         if let Some(ref m) = metrics {
-            m.errors_total
-                .add(1, &[KeyValue::new("error_type", error.error_type())]);
+            m.record_error(error.error_type());
         }
         return Err(error);
     };
@@ -133,6 +147,7 @@ pub async fn handle_proxy_request(
         req.headers_mut(),
         security.global_header_manipulation.as_ref(),
         route_match.headers,
+        metrics.as_ref(),
     );
 
     // Forward request
@@ -148,16 +163,28 @@ pub async fn handle_proxy_request(
             security_headers: Some(&security.headers),
             is_https,
             preserve_host,
+            route: route_match.matched_prefix,
         },
     )
     .await;
 
     let mut result = result;
     if let Ok(ref mut response) = result {
+        if let Some(ref m) = metrics {
+            if let Some(content_length) = response.headers().get(hyper::header::CONTENT_LENGTH) {
+                if let Ok(length_str) = content_length.to_str() {
+                    if let Ok(length) = length_str.parse::<u64>() {
+                        m.record_bytes_sent(length, &protocol);
+                    }
+                }
+            }
+        }
+
         apply_response_header_manipulation(
             response.headers_mut(),
             security.global_header_manipulation.as_ref(),
             route_match.headers,
+            metrics.as_ref(),
         );
     }
 
@@ -171,21 +198,13 @@ pub async fn handle_proxy_request(
     };
 
     if let Some(ref m) = metrics {
-        m.requests_total.add(
-            1,
-            &[
-                KeyValue::new("method", method.clone()),
-                KeyValue::new("status_code", status_code.to_string()),
-                KeyValue::new("protocol", protocol.clone()),
-            ],
-        );
-        m.requests_duration_seconds.record(
+        m.record_request(&method, status_code, &protocol, route_match.matched_prefix);
+        m.record_request_duration(
             duration,
-            &[
-                KeyValue::new("method", method),
-                KeyValue::new("status_code", status_code.to_string()),
-                KeyValue::new("protocol", protocol),
-            ],
+            &method,
+            status_code,
+            &protocol,
+            route_match.matched_prefix,
         );
     }
 

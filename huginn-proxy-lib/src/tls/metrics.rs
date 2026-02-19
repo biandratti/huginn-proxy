@@ -1,4 +1,3 @@
-use opentelemetry::KeyValue;
 use std::sync::Arc;
 
 use crate::telemetry::Metrics;
@@ -26,21 +25,17 @@ pub fn record_tls_handshake_metrics<S>(
 ) {
     if let Some(ref m) = metrics {
         let (tls_version, cipher_suite) = extract_tls_info(tls);
+        let (_, connection) = tls.get_ref();
 
-        m.tls_handshakes_total.add(
-            1,
-            &[
-                KeyValue::new("tls_version", tls_version.clone()),
-                KeyValue::new("cipher_suite", cipher_suite.clone()),
-            ],
-        );
-        m.tls_handshake_duration_seconds.record(
-            handshake_duration,
-            &[
-                KeyValue::new("tls_version", tls_version),
-                KeyValue::new("cipher_suite", cipher_suite),
-            ],
-        );
-        m.tls_connections_active.add(1, &[]);
+        m.record_tls_handshake(&tls_version, &cipher_suite, handshake_duration);
+        m.record_tls_connection_active();
+
+        if connection.peer_certificates().is_some() {
+            let protocol = connection
+                .protocol_version()
+                .map(|v| format!("{v:?}"))
+                .unwrap_or_else(|| "unknown".to_string());
+            m.record_mtls_connection(&protocol);
+        }
     }
 }

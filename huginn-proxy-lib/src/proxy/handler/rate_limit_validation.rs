@@ -1,7 +1,6 @@
 use http::StatusCode;
 use http_body_util::{combinators::BoxBody, BodyExt, Full};
 use hyper::Response;
-use opentelemetry::KeyValue;
 use std::sync::Arc;
 use tracing::debug;
 
@@ -47,19 +46,28 @@ pub fn check_rate_limit(
         headers,
     );
 
+    let strategy = format!("{:?}", limit_by).to_lowercase();
+    if let Some(m) = metrics {
+        m.record_rate_limit_request(&strategy, route_match.matched_prefix);
+    }
+
     let rate_limit_result = manager.check(&rate_limit_key, Some(route_match.matched_prefix));
 
     match rate_limit_result {
         RateLimitResult::Limited { limit, reset_after, .. } => {
             if let Some(m) = metrics {
-                m.errors_total
-                    .add(1, &[KeyValue::new("error_type", "rate_limited")]);
+                m.record_rate_limit_rejection(&strategy, route_match.matched_prefix);
             }
 
             Some(create_429_response(limit, reset_after.as_secs()))
         }
         RateLimitResult::Allowed { limit, remaining } => {
             debug!(limit = limit, remaining = remaining, "Rate limit check passed");
+
+            if let Some(m) = metrics {
+                m.record_rate_limit_allowed(&strategy, route_match.matched_prefix);
+            }
+
             None
         }
     }

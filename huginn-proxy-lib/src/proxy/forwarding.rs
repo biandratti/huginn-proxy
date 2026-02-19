@@ -7,7 +7,6 @@ use hyper::body::Incoming;
 use hyper_util::client::legacy::connect::HttpConnector;
 use hyper_util::client::legacy::Client;
 use hyper_util::rt::TokioExecutor;
-use opentelemetry::KeyValue;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::Instant;
@@ -34,6 +33,7 @@ pub struct ForwardConfig<'a> {
     pub security_headers: Option<&'a crate::config::SecurityHeaders>,
     pub is_https: bool,
     pub preserve_host: bool,
+    pub route: &'a str,
 }
 
 pub fn find_backend_config<'a>(
@@ -146,6 +146,16 @@ pub async fn forward(
 
     let (mut parts, body) = req.into_parts();
 
+    if let Some(ref m) = config.metrics {
+        if let Some(content_length) = parts.headers.get(hyper::header::CONTENT_LENGTH) {
+            if let Ok(length_str) = content_length.to_str() {
+                if let Ok(length) = length_str.parse::<u64>() {
+                    m.record_backend_bytes_sent(length, &backend, config.route);
+                }
+            }
+        }
+    }
+
     let original_host = config
         .preserve_host
         .then(|| parts.headers.get("host").cloned())
@@ -166,6 +176,16 @@ pub async fn forward(
         Ok(mut resp) => {
             let status_code = resp.status().as_u16();
 
+            if let Some(ref m) = config.metrics {
+                if let Some(content_length) = resp.headers().get(hyper::header::CONTENT_LENGTH) {
+                    if let Ok(length_str) = content_length.to_str() {
+                        if let Ok(length) = length_str.parse::<u64>() {
+                            m.record_backend_bytes_received(length, &backend, config.route);
+                        }
+                    }
+                }
+            }
+
             crate::security::apply_security_headers(
                 &mut resp,
                 config.security_headers,
@@ -173,35 +193,15 @@ pub async fn forward(
             );
 
             if let Some(ref m) = config.metrics {
-                m.backend_requests_total.add(
-                    1,
-                    &[
-                        KeyValue::new("backend_address", backend.clone()),
-                        KeyValue::new("status_code", status_code.to_string()),
-                        KeyValue::new("protocol", protocol.clone()),
-                    ],
-                );
-                m.backend_duration_seconds.record(
-                    duration,
-                    &[
-                        KeyValue::new("backend_address", backend.clone()),
-                        KeyValue::new("status_code", status_code.to_string()),
-                        KeyValue::new("protocol", protocol),
-                    ],
-                );
+                m.record_backend_request(&backend, status_code, &protocol, config.route);
+                m.record_backend_duration(duration, &backend, status_code, &protocol, config.route);
             }
             Ok(resp.map(|b| b.boxed()))
         }
         Err(e) => {
             let error = HttpError::FailedToGetResponseFromBackend(e.to_string());
             if let Some(ref m) = config.metrics {
-                m.backend_errors_total.add(
-                    1,
-                    &[
-                        KeyValue::new("backend_address", backend.clone()),
-                        KeyValue::new("error_type", error.error_type()),
-                    ],
-                );
+                m.record_backend_error(&backend, error.error_type(), config.route);
             }
             Err(error)
         }
