@@ -17,9 +17,6 @@ async fn test_fingerprint_route_with_force_new_connection(
         .danger_accept_invalid_certs(true)
         .build()?;
 
-    // Test /fingerprint route (force_new_connection = true)
-    // Each request creates a new proxy→backend connection (no pooling)
-    // This is useful for future TCP fingerprinting or per-request backend TLS analysis
     for _ in 0..3 {
         let resp = client
             .get(format!("{}/fingerprint/get", PROXY_HTTPS_URL))
@@ -33,8 +30,6 @@ async fn test_fingerprint_route_with_force_new_connection(
         );
     }
 
-    // Test /api route (force_new_connection = false, connection pooling enabled)
-    // Proxy→backend connections are reused for better performance
     for _ in 0..3 {
         let resp = client
             .get(format!("{}/api/get", PROXY_HTTPS_URL))
@@ -61,7 +56,6 @@ async fn test_pooling_vs_force_new_performance(
         .danger_accept_invalid_certs(true)
         .build()?;
 
-    // Measure /api (pooled) - after first request
     let _ = client
         .get(format!("{}/api/get", PROXY_HTTPS_URL))
         .send()
@@ -74,7 +68,6 @@ async fn test_pooling_vs_force_new_performance(
     let pooled_duration = start.elapsed();
     assert_eq!(resp.status(), 200);
 
-    // Measure /fingerprint (force_new_connection) - always establishes new backend connection
     let start = Instant::now();
     let resp = client
         .get(format!("{}/fingerprint/get", PROXY_HTTPS_URL))
@@ -91,7 +84,6 @@ async fn test_pooling_vs_force_new_performance(
         println!("Force new connection overhead: {:.2}x slower", overhead);
     }
 
-    // Both routes should work correctly regardless of pooling strategy
     Ok(())
 }
 
@@ -145,9 +137,6 @@ async fn test_connection_pooling_multiple_requests(
         let speedup = first_duration.as_secs_f64() / avg_subsequent.as_secs_f64();
         println!("Connection pooling speedup: {:.2}x", speedup);
     }
-
-    // Note: We don't assert specific speedup here because network variability can affect results.
-    // The important part is that all requests succeed consistently, indicating pooling works.
 
     Ok(())
 }

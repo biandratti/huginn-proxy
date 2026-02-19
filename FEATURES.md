@@ -100,6 +100,18 @@ Per-route control to enable/disable fingerprinting. The extraction happens trans
 
 Limitation: Fingerprints are only extracted and forwarded, not validated or used for blocking. Backend services need to handle the actual fingerprint analysis and decision making.
 
+## Connection Pooling
+
+**HTTP/1.1 and HTTP/2 connection reuse**
+
+Reuses TCP connections to backend services to reduce latency and overhead from repeated TCP and TLS handshakes. Configurable idle timeout and max idle connections per host.
+
+Enabled by default with 90s idle timeout and 128 max idle connections per host. Can be disabled globally via `backend_pool.enabled = false`.
+
+Per-route override available via `force_new_connection = true` to bypass pooling for specific routes (useful for TCP/TLS fingerprinting scenarios where fresh handshakes are required).
+
+Limitation: Pooling is global or per-route only. No per-backend configuration for pool limits.
+
 ## Forwarding Headers
 
 **X-Forwarded-* headers**

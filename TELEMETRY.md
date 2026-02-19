@@ -6,7 +6,8 @@
 
 Huginn Proxy provides comprehensive telemetry through:
 
-- **Prometheus Metrics** - 35 metrics covering connections, requests, TLS, fingerprinting, backends, throughput, rate limiting, IP filtering, header manipulation, and mTLS
+- **Prometheus Metrics** - 35 metrics covering connections, requests, TLS, fingerprinting, backends, throughput, rate
+  limiting, IP filtering, header manipulation, and mTLS
 - **Health Check Endpoints** - Kubernetes-ready health and readiness probes
 - **OpenTelemetry** - Built on modern OpenTelemetry standards for future extensibility
 
@@ -52,18 +53,20 @@ scrape_configs:
 
 ### 1. Throughput Metrics
 
-| Metric | Type | Description | Labels |
-|--------|------|-------------|--------|
-| `huginn_bytes_received_total` | Counter | Total bytes received from clients | `protocol` |
-| `huginn_bytes_sent_total` | Counter | Total bytes sent to clients | `protocol` |
+| Metric                                | Type    | Description                        | Labels            |
+|---------------------------------------|---------|------------------------------------|-------------------|
+| `huginn_bytes_received_total`         | Counter | Total bytes received from clients  | `protocol`        |
+| `huginn_bytes_sent_total`             | Counter | Total bytes sent to clients        | `protocol`        |
 | `huginn_backend_bytes_received_total` | Counter | Total bytes received from backends | `backend_address` |
-| `huginn_backend_bytes_sent_total` | Counter | Total bytes sent to backends | `backend_address` |
+| `huginn_backend_bytes_sent_total`     | Counter | Total bytes sent to backends       | `backend_address` |
 
 **Labels**:
+
 - `protocol`: Connection protocol (`http/1.1`, `h2`, `https`)
 - `backend_address`: Backend server address (e.g., `backend-1:9000`)
 
 **Example queries**:
+
 ```promql
 # Client throughput rate (bytes/sec received)
 rate(huginn_bytes_received_total[5m])
@@ -82,7 +85,8 @@ rate(huginn_backend_bytes_sent_total[5m])
 sum by (backend_address) (rate(huginn_backend_bytes_received_total[5m]))
 ```
 
-**Note**: Throughput metrics are based on `Content-Length` headers when available. Chunked transfer encoding (without `Content-Length`) will not be counted.
+**Note**: Throughput metrics are based on `Content-Length` headers when available. Chunked transfer encoding (without
+`Content-Length`) will not be counted.
 
 ---
 
@@ -117,10 +121,10 @@ rate(huginn_connections_rejected_total[5m])
 
 ### 3. Request Metrics
 
-| Metric                             | Type      | Description                   | Labels                                        |
-|------------------------------------|-----------|-------------------------------|-----------------------------------------------|
-| `huginn_requests_total`            | Counter   | Total HTTP requests processed | `method`, `status_code`, `protocol`, `route`  |
-| `huginn_requests_duration_seconds` | Histogram | Request duration in seconds   | `method`, `status_code`, `protocol`, `route`  |
+| Metric                             | Type      | Description                   | Labels                                       |
+|------------------------------------|-----------|-------------------------------|----------------------------------------------|
+| `huginn_requests_total`            | Counter   | Total HTTP requests processed | `method`, `status_code`, `protocol`, `route` |
+| `huginn_requests_duration_seconds` | Histogram | Request duration in seconds   | `method`, `status_code`, `protocol`, `route` |
 
 **Labels**:
 
@@ -281,17 +285,19 @@ sum by (backend_address, route) (rate(huginn_backend_errors_total[5m]))
 
 ### 7. Rate Limiting Metrics
 
-| Metric | Type | Description | Labels |
-|--------|------|-------------|--------|
-| `huginn_rate_limit_requests_total` | Counter | Total requests evaluated by rate limiter | `strategy`, `route` |
-| `huginn_rate_limit_allowed_total` | Counter | Total requests allowed by rate limiter | `strategy`, `route` |
+| Metric                             | Type    | Description                                   | Labels              |
+|------------------------------------|---------|-----------------------------------------------|---------------------|
+| `huginn_rate_limit_requests_total` | Counter | Total requests evaluated by rate limiter      | `strategy`, `route` |
+| `huginn_rate_limit_allowed_total`  | Counter | Total requests allowed by rate limiter        | `strategy`, `route` |
 | `huginn_rate_limit_rejected_total` | Counter | Total requests rejected (429) by rate limiter | `strategy`, `route` |
 
 **Labels**:
+
 - `strategy`: Rate limiting strategy (`ip`, `header`, `route`, `combined`)
 - `route`: Route prefix (e.g., `/api`, `/`)
 
 **Example queries**:
+
 ```promql
 # Rate limit evaluation rate
 rate(huginn_rate_limit_requests_total[5m])
@@ -340,13 +346,14 @@ rate(huginn_errors_total[5m])
 
 ### 9. IP Filtering Metrics
 
-| Metric | Type | Description | Labels |
-|--------|------|-------------|--------|
-| `huginn_ip_filter_requests_total` | Counter | Total requests evaluated by IP filter | - |
-| `huginn_ip_filter_allowed_total` | Counter | Total requests allowed by IP filter | - |
-| `huginn_ip_filter_denied_total` | Counter | Total requests denied by IP filter (403) | - |
+| Metric                            | Type    | Description                              | Labels |
+|-----------------------------------|---------|------------------------------------------|--------|
+| `huginn_ip_filter_requests_total` | Counter | Total requests evaluated by IP filter    | -      |
+| `huginn_ip_filter_allowed_total`  | Counter | Total requests allowed by IP filter      | -      |
+| `huginn_ip_filter_denied_total`   | Counter | Total requests denied by IP filter (403) | -      |
 
 **Example queries**:
+
 ```promql
 # IP filter evaluation rate
 rate(huginn_ip_filter_requests_total[5m])
@@ -366,15 +373,17 @@ rate(huginn_ip_filter_allowed_total[5m])
 
 ### 10. Header Manipulation Metrics
 
-| Metric | Type | Description | Labels |
-|--------|------|-------------|--------|
-| `huginn_headers_added_total` | Counter | Total headers added by header manipulation | `context` |
+| Metric                         | Type    | Description                                  | Labels    |
+|--------------------------------|---------|----------------------------------------------|-----------|
+| `huginn_headers_added_total`   | Counter | Total headers added by header manipulation   | `context` |
 | `huginn_headers_removed_total` | Counter | Total headers removed by header manipulation | `context` |
 
 **Labels**:
+
 - `context`: Context where headers were manipulated (`request`, `response`)
 
 **Example queries**:
+
 ```promql
 # Headers added rate
 rate(huginn_headers_added_total[5m])
@@ -393,14 +402,16 @@ sum by (context) (rate(huginn_headers_removed_total[5m]))
 
 ### 11. mTLS Metrics
 
-| Metric | Type | Description | Labels |
-|--------|------|-------------|--------|
+| Metric                          | Type    | Description                                                       | Labels     |
+|---------------------------------|---------|-------------------------------------------------------------------|------------|
 | `huginn_mtls_connections_total` | Counter | Total connections with mTLS enabled (client certificate verified) | `protocol` |
 
 **Labels**:
+
 - `protocol`: TLS protocol version (e.g., `TLSv1.2`, `TLSv1.3`)
 
 **Example queries**:
+
 ```promql
 # mTLS connection rate
 rate(huginn_mtls_connections_total[5m])
@@ -413,24 +424,28 @@ rate(huginn_mtls_connections_total[5m])
 sum by (protocol) (rate(huginn_mtls_connections_total[5m]))
 ```
 
-**Note**: 
+**Note**:
+
 - This metric only counts successful TLS handshakes where a client certificate was present and verified.
 - mTLS verification failures are captured in `huginn_tls_handshake_errors_total`.
-- When mTLS is required but client certificate is invalid/absent, the TLS handshake fails before this metric is recorded.
+- When mTLS is required but client certificate is invalid/absent, the TLS handshake fails before this metric is
+  recorded.
 
 ---
 
 ### 12. Build Info
 
-| Metric | Type | Description | Labels |
-|--------|------|-------------|--------|
+| Metric              | Type  | Description                  | Labels                    |
+|---------------------|-------|------------------------------|---------------------------|
 | `huginn_build_info` | Gauge | Build information (always 1) | `version`, `rust_version` |
 
 **Labels**:
+
 - `version`: Proxy version (e.g., `0.0.1`)
 - `rust_version`: Rust version used to compile (e.g., `1.85`)
 
 **Example queries**:
+
 ```promql
 # Get current version
 huginn_build_info
@@ -627,7 +642,8 @@ spec:
 - Backend request rate: `sum by (backend) (rate(huginn_backend_requests_total[5m]))`
 - Backend error rate: `rate(huginn_backend_errors_total[5m]) / rate(huginn_backend_requests_total[5m])`
 - Backend latency P95: `histogram_quantile(0.95, rate(huginn_backend_duration_seconds_bucket[5m]))`
-- Backend throughput: `sum by (backend_address) (rate(huginn_backend_bytes_received_total[5m]) + rate(huginn_backend_bytes_sent_total[5m]))`
+- Backend throughput:
+  `sum by (backend_address) (rate(huginn_backend_bytes_received_total[5m]) + rate(huginn_backend_bytes_sent_total[5m]))`
 
 ---
 

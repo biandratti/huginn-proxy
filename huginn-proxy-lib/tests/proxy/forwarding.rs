@@ -155,10 +155,6 @@ fn test_pick_route_empty() {
     assert_eq!(pick_route("/api", &routes), None);
 }
 
-// Note: Tests for client creation moved to tests/proxy/client_pool.rs
-// The create_client() function has been replaced by ClientPool which provides
-// connection pooling and reusable clients for better performance.
-
 #[test]
 fn test_pick_route_with_fingerprinting_basic() {
     use huginn_proxy_lib::proxy::forwarding::pick_route_with_fingerprinting;

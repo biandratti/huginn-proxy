@@ -139,7 +139,6 @@ pub async fn forward(
 
     let out_req = Request::from_parts(parts, body);
 
-    // Use pooled client for better performance (reuses TCP connections)
     let result = if let Some(pooled_client) = config
         .client_pool
         .get_client(target_version, config.force_new_connection)

@@ -14,18 +14,12 @@ pub type HttpClient = Client<HttpConnector, Incoming>;
 /// This pool maintains reusable HTTP/1.1 and HTTP/2 clients to avoid
 /// creating new TCP and TLS connections for every request.
 ///
-/// # Performance Impact
-///
-/// - **With pooling**: Request latency = Processing time (~10-50ms)
-/// - **Without pooling**: Request latency = TCP handshake (~1-5ms) + TLS handshake (~50-200ms) + Processing (~10-50ms)
-///
 /// # Force New Connection
 ///
 /// Routes can bypass pooling by setting `force_new_connection = true`.
 /// Use cases:
 /// - TCP fingerprinting (future feature)
 /// - Per-request TLS fingerprinting
-/// - Testing/debugging connection behavior
 #[derive(Clone)]
 pub struct ClientPool {
     /// Client for HTTP/1.1 requests (supports keep-alive and pooling)
@@ -43,7 +37,6 @@ pub struct ClientPool {
 }
 
 impl ClientPool {
-    /// Create a new client pool with the given configuration
     pub fn new(keep_alive: &KeepAliveConfig, config: BackendPoolConfig) -> Self {
         let http11_client = Self::create_http11_client(keep_alive, &config);
         let http2_client = Self::create_http2_client(keep_alive, &config);
@@ -56,7 +49,6 @@ impl ClientPool {
         }
     }
 
-    /// Create HTTP/1.1 client with keep-alive and pooling support
     fn create_http11_client(
         keep_alive: &KeepAliveConfig,
         config: &BackendPoolConfig,
@@ -80,7 +72,6 @@ impl ClientPool {
         builder.build(connector)
     }
 
-    /// Create HTTP/2-only client with keep-alive and pooling support
     fn create_http2_client(keep_alive: &KeepAliveConfig, config: &BackendPoolConfig) -> HttpClient {
         let mut connector = HttpConnector::new();
         // TCP keep-alive: sends periodic packets to keep TCP connection alive
@@ -119,7 +110,7 @@ impl ClientPool {
     /// - `None` - Create one-off client via `create_oneoff_client()`
     pub fn get_client(&self, version: Version, force_new: bool) -> Option<&Arc<HttpClient>> {
         if force_new {
-            None // Signal to create a one-off client
+            None
         } else {
             Some(match version {
                 Version::HTTP_2 => &self.http2,
@@ -141,7 +132,7 @@ impl ClientPool {
     ///
     /// # Performance Warning
     ///
-    /// Creating a new client per request adds 51-205ms of latency
+    /// Creating a new client per request adds latency
     /// (TCP handshake + TLS handshake). Only use when necessary.
     pub fn create_oneoff_client(&self, version: Version) -> HttpClient {
         // For one-off clients, disable pooling by setting max idle to 0

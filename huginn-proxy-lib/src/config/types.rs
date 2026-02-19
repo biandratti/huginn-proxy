@@ -40,7 +40,7 @@ pub struct Route {
     pub fingerprinting: bool,
     /// Force new TCP/TLS connection for each request (bypasses connection pooling)
     /// When true, a new connection is established for every request, enabling per-request
-    /// TCP and TLS fingerprinting at the cost of higher latency (~50-200ms extra per request)
+    /// TCP and TLS fingerprinting at the cost of higher latency (extra per request)
     /// Default: false (use connection pooling for better performance)
     #[serde(default)]
     pub force_new_connection: bool,
@@ -315,11 +315,6 @@ impl Default for KeepAliveConfig {
 /// Controls how the proxy manages connections to backend servers.
 /// Connection pooling reuses TCP connections to reduce latency by avoiding
 /// repeated TCP and TLS handshakes.
-///
-/// # Performance Impact
-///
-/// - **With pooling**: Request latency = Processing time (~10-50ms)
-/// - **Without pooling**: Request latency = TCP handshake (~1-5ms) + TLS handshake (~50-200ms) + Processing (~10-50ms)
 #[derive(Clone, Debug, Deserialize)]
 pub struct BackendPoolConfig {
     /// Enable connection pooling globally
