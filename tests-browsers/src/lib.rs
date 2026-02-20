@@ -16,7 +16,7 @@ pub struct BrowserFingerprints {
 }
 
 pub const CHROME_FINGERPRINTS: BrowserFingerprints = BrowserFingerprints {
-    version: "145",
+    version: "latest",
     http2_akamai: "1:65536;2:0;4:6291456;6:262144|15663105|0|",
     tls_ja4: "t13d1516h2_8daaf6152771_d8a2da3f94cd",
 };
