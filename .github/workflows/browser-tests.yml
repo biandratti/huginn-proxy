@@ -62,7 +62,6 @@ jobs:
       - name: Setup Chrome
         uses: ./.github/actions/setup-chrome
         with:
-          chrome-version: "144"
           chromedriver-port: ${{ env.CHROMEDRIVER_PORT }}
 
       - name: Run Chrome browser tests

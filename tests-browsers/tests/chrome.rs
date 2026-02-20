@@ -73,6 +73,11 @@ async fn test_chrome_fingerprint() -> Result<(), Box<dyn std::error::Error>> {
             .and_then(|v| v.as_str())
             .ok_or(format!("Missing {} header", HEADER_TLS_JA4_RAW))?;
 
+        println!("Chrome fingerprints:");
+        println!("  TLS JA4: {}", ja4_fp);
+        println!("  TLS JA4 Raw: {}", ja4_fp_raw);
+        println!("  HTTP/2: {}", http2_fp);
+
         assert!(!ja4_fp_raw.is_empty(), "JA4 raw fingerprint should not be empty");
 
         assert_eq!(

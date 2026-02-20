@@ -4,7 +4,6 @@
 
 ### Documentation
 
-- [ ] Usage examples (Kubernetes, Docker)
 - [ ] Grafana dashboard templates
 
 ### Operational Features

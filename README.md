@@ -102,6 +102,8 @@ docker run -v /path/to/config.toml:/config.toml huginn-proxy /config.toml
 
 See [FEATURES.md](FEATURES.md) for detailed descriptions and limitations of each feature.
 
+For deployment instructions, see [DEPLOYMENT.md](DEPLOYMENT.md).
+
 ## Fingerprinting
 
 Fingerprints are automatically extracted and injected as headers:

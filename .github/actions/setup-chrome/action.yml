@@ -1,9 +1,6 @@
 name: 'Setup Chrome and chromedriver'
 description: 'Install Chrome browser, chromedriver, and start chromedriver service'
 inputs:
-  chrome-version:
-    description: 'Chrome version to install (e.g., "144")'
-    required: true
   chromedriver-port:
     description: 'Port for chromedriver'
     required: true
@@ -13,7 +10,7 @@ runs:
     - name: Install Chrome
       uses: browser-actions/setup-chrome@v2
       with:
-        chrome-version: ${{ inputs.chrome-version }}
+        chrome-version: latest
     
     - name: Install chromedriver
       shell: bash
