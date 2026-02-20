@@ -4,13 +4,13 @@
 pub mod names {
     /// Header name for TLS (JA4) fingerprint injection
     ///
-    /// This header contains the JA4 fingerprint extracted from the TLS ClientHello.
+    /// This header contains the JA4 fingerprint normalized from the TLS ClientHello.
     /// It is injected for all TLS connections when fingerprinting is enabled.
     pub const TLS_JA4: &str = "x-huginn-net-ja4";
 
     /// Header name for TLS (JA4) raw fingerprint injection
     ///
-    /// This header contains the raw/original JA4 fingerprint string.
+    /// This header contains the JA4 not normalized from the TLS ClientHello.
     /// It is injected for all TLS connections when fingerprinting is enabled.
     pub const TLS_JA4_RAW: &str = "x-huginn-net-ja4-raw";
 
