@@ -5,6 +5,7 @@ use crate::config::{
     Backend, HeaderManipulation, IpFilterConfig, KeepAliveConfig, RateLimitConfig, Route,
     SecurityHeaders,
 };
+use crate::fingerprinting::Ja4Fingerprints;
 use crate::security::RateLimitManager;
 use crate::telemetry::Metrics;
 
@@ -40,7 +41,7 @@ impl SecurityContext {
 pub struct RequestContext {
     pub routes: Vec<Route>,
     pub backends: Arc<Vec<Backend>>,
-    pub tls_header: Option<hyper::header::HeaderValue>,
+    pub ja4_fingerprints: Option<Ja4Fingerprints>,
     pub fingerprint_rx: Option<watch::Receiver<Option<huginn_net_http::AkamaiFingerprint>>>,
     pub keep_alive: KeepAliveConfig,
     pub security: SecurityContext,

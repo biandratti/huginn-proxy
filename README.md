@@ -108,14 +108,16 @@ Fingerprints are automatically extracted and injected as headers:
 
 - **TLS (JA4)**: `x-huginn-net-ja4` - Extracted from all TLS connections
   using [huginn-net-tls](https://crates.io/crates/huginn-net-tls)
+- **TLS (JA4 Raw)**: `x-huginn-net-ja4-raw` - Raw/original JA4 fingerprint format
 - **HTTP/2 (Akamai)**: `x-huginn-net-akamai` - Extracted from HTTP/2 connections only
   using [huginn-net-http](https://crates.io/crates/huginn-net-http)
 
 **Examples:**
 
 ```
-x-huginn-net-ja4: t13d1516h2_8afaf4b9491c_00_0403040303030103010302_01
-x-huginn-net-akamai: 1:65536,2:0,3:1000,4:6291456,6:262144|15663105|0|m,p,a,s
+x-huginn-net-ja4: t13d3112h2_e8f1e7e78f70_b26ce05bbdd6
+x-huginn-net-ja4-raw: t13d3112h2_d7c3e2abb617_cad92ccb4254
+x-huginn-net-akamai: 3:100;4:10485760;2:0|1048510465|0|
 ```
 
 See [JA4 specification](https://github.com/FoxIO-LLC/ja4)

@@ -1,14 +1,14 @@
-use huginn_net_tls::Ja4Payload;
 use std::sync::Arc;
 use tokio::time::Instant;
 
+use super::ja4::Ja4Fingerprints;
 use crate::telemetry::Metrics;
 
 /// Reads TLS ClientHello from the stream and extracts JA4 fingerprint
 pub async fn read_client_hello(
     stream: &mut tokio::net::TcpStream,
     metrics: Option<Arc<Metrics>>,
-) -> std::io::Result<(Vec<u8>, Option<Ja4Payload>)> {
+) -> std::io::Result<(Vec<u8>, Option<Ja4Fingerprints>)> {
     use huginn_net_tls::tls_process::parse_tls_client_hello;
     use tokio::io::AsyncReadExt;
 
@@ -31,22 +31,23 @@ pub async fn read_client_hello(
         }
     }
 
-    let ja4 = parse_tls_client_hello(&buf)
-        .ok()
-        .and_then(|opt_signature| opt_signature.map(|signature| signature.generate_ja4()));
+    let fingerprints = parse_tls_client_hello(&buf).ok().and_then(|opt_signature| {
+        opt_signature.map(|signature| {
+            Ja4Fingerprints::new(signature.generate_ja4(), signature.generate_ja4_original())
+        })
+    });
 
     let duration = start.elapsed().as_secs_f64();
 
     if let Some(ref m) = metrics {
-        if ja4.is_some() {
+        if fingerprints.is_some() {
             m.tls_fingerprints_extracted_total.add(1, &[]);
             m.tls_fingerprint_extraction_duration_seconds
                 .record(duration, &[]);
         } else {
-            // Failed to extract TLS fingerprint
             m.tls_fingerprint_failures_total.add(1, &[]);
         }
     }
 
-    Ok((buf, ja4))
+    Ok((buf, fingerprints))
 }

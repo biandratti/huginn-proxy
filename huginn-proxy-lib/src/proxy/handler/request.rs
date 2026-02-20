@@ -52,7 +52,7 @@ pub async fn handle_proxy_request(
     mut req: Request<Incoming>,
     routes: Vec<Route>,
     backends: Arc<Vec<Backend>>,
-    tls_header: Option<hyper::header::HeaderValue>,
+    ja4_fingerprints: Option<crate::fingerprinting::Ja4Fingerprints>,
     fingerprint_rx: Option<watch::Receiver<Option<huginn_net_http::AkamaiFingerprint>>>,
     keep_alive: &KeepAliveConfig,
     security: &crate::proxy::SecurityContext,
@@ -110,9 +110,18 @@ pub async fn handle_proxy_request(
     // Extract and inject fingerprints first (fingerprints are extracted from TLS handshake/HTTP2 frames,
     // not from HTTP headers, so adding X-Forwarded-* headers won't affect fingerprint generation)
     if route_match.fingerprinting {
-        if let Some(hv) = tls_header {
-            req.headers_mut()
-                .insert(HeaderName::from_static(names::TLS_JA4), hv);
+        if let Some(ref fingerprints) = ja4_fingerprints {
+            if let Ok(hv) = hyper::header::HeaderValue::from_str(&fingerprints.ja4.full.to_string())
+            {
+                req.headers_mut()
+                    .insert(HeaderName::from_static(names::TLS_JA4), hv);
+            }
+            if let Ok(hv) =
+                hyper::header::HeaderValue::from_str(&fingerprints.ja4_raw.full.to_string())
+            {
+                req.headers_mut()
+                    .insert(HeaderName::from_static(names::TLS_JA4_RAW), hv);
+            }
         }
         if let Some(ref rx) = fingerprint_rx {
             if req.version() == Version::HTTP_2 {

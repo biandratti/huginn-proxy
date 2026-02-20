@@ -6,6 +6,7 @@ use thirtyfour::prelude::*;
 pub const PROXY_URL: &str = "https://localhost:7000";
 pub const HEADER_HTTP2_AKAMAI: &str = "x-huginn-net-akamai";
 pub const HEADER_TLS_JA4: &str = "x-huginn-net-ja4";
+pub const HEADER_TLS_JA4_RAW: &str = "x-huginn-net-ja4-raw";
 
 #[derive(Debug, Clone)]
 pub struct BrowserFingerprints {
@@ -188,6 +189,9 @@ pub fn verify_fingerprint_headers(
     }
     if !headers.contains_key(HEADER_TLS_JA4) {
         return Err(format!("Missing {} header", HEADER_TLS_JA4).into());
+    }
+    if !headers.contains_key(HEADER_TLS_JA4_RAW) {
+        return Err(format!("Missing {} header", HEADER_TLS_JA4_RAW).into());
     }
     Ok(())
 }
