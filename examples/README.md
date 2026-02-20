@@ -140,6 +140,7 @@ curl -sk https://localhost:7000/api/test | jq '.headers | with_entries(select(.k
 Expected headers:
 
 - `x-huginn-net-ja4` - TLS fingerprint
+- `x-huginn-net-ja4-raw` - TLS fingerprint not normalized
 - `x-huginn-net-akamai` - HTTP/2 fingerprint
 
 ---
