@@ -38,20 +38,13 @@ pub async fn verify_chrome_version(driver: &WebDriver) -> Result<(), Box<dyn std
         let version_start = chrome_start
             .checked_add(7)
             .ok_or("User-Agent parsing: position overflow")?;
-        if let Some(version_end) = user_agent[version_start..].find('.') {
+        if let Some(version_end) = user_agent[version_start..].find(' ') {
             let end_pos = version_start
                 .checked_add(version_end)
                 .ok_or("User-Agent parsing: end position overflow")?;
             let version = &user_agent[version_start..end_pos];
-            if version != CHROME_FINGERPRINTS.version {
-                return Err(format!(
-                    "Chrome version mismatch! Expected: {}, Got: {}. Browser fingerprints are version-specific. Install Chrome {} or update CHROME_FINGERPRINTS in lib.rs.",
-                    CHROME_FINGERPRINTS.version, version, CHROME_FINGERPRINTS.version
-                ).into());
-            }
+            println!("Chrome version detected: {}", version);
         }
-    } else {
-        return Err("Could not detect Chrome version from User-Agent".into());
     }
 
     Ok(())

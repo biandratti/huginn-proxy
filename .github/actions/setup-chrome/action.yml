@@ -13,13 +13,25 @@ runs:
   steps:
     - name: Install Chrome
       uses: browser-actions/setup-chrome@v2
+      id: setup-chrome
       with:
         chrome-version: ${{ inputs.chrome-version }}
+    
+    - name: Update PATH to use installed Chrome
+      shell: bash
+      run: |
+        echo "${{ steps.setup-chrome.outputs.chrome-path }}" >> $GITHUB_PATH
+        export PATH="${{ steps.setup-chrome.outputs.chrome-path }}:$PATH"
+        which google-chrome || which chrome
     
     - name: Get Chrome version and install matching chromedriver
       shell: bash
       run: |
-        CHROME_VERSION=$(google-chrome --version | sed 's/Google Chrome \([0-9.]*\).*/\1/g')
+        CHROME_BIN="${{ steps.setup-chrome.outputs.chrome-path }}/chrome"
+        if [ ! -f "$CHROME_BIN" ]; then
+          CHROME_BIN="$(which google-chrome || which chrome)"
+        fi
+        CHROME_VERSION=$($CHROME_BIN --version | sed 's/Google Chrome.*\([0-9.]*\).*/\1/g')
         CHROME_MAJOR=$(echo $CHROME_VERSION | cut -d. -f1)
         echo "Chrome version: $CHROME_VERSION"
         echo "Chrome major: $CHROME_MAJOR"
