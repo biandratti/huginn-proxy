@@ -10,7 +10,6 @@ use tracing::warn;
 use super::timeout_helper::serve_with_timeout;
 use crate::fingerprinting::{read_client_hello, CapturingStream};
 use crate::proxy::connection::{PrefixedStream, TlsConnectionGuard};
-use crate::proxy::handler::headers::tls_header_value;
 use crate::proxy::synthetic_response::synthetic_error_response;
 use crate::proxy::ClientPool;
 use crate::telemetry::Metrics;
@@ -44,7 +43,7 @@ pub async fn handle_tls_connection(
     let acc_opt = config.tls_acceptor.read().await.clone();
     if let Some(acc) = acc_opt {
         let handshake_start = Instant::now();
-        let (prefix, ja4) =
+        let (prefix, ja4_fingerprints) =
             match read_client_hello(&mut stream, metrics_for_connection.clone()).await {
                 Ok(v) => v,
                 Err(e) => {
@@ -90,8 +89,8 @@ pub async fn handle_tls_connection(
                 .map(|m| m.tls_connections_active.clone()),
         );
 
-        let tls_header = if config.fingerprint_config.tls_enabled {
-            tls_header_value(ja4.as_ref())
+        let ja4_fingerprints = if config.fingerprint_config.tls_enabled {
+            ja4_fingerprints
         } else {
             None
         };
@@ -121,7 +120,7 @@ pub async fn handle_tls_connection(
                 hyper::service::service_fn(move |req: hyper::Request<hyper::body::Incoming>| {
                     let routes = routes_template.clone();
                     let backends = backends.clone();
-                    let tls_header = tls_header.clone();
+                    let ja4_fingerprints = ja4_fingerprints.clone();
                     let fingerprint_rx = fingerprint_rx.clone();
                     let metrics = metrics.clone();
                     let keep_alive = keep_alive.clone();
@@ -135,7 +134,7 @@ pub async fn handle_tls_connection(
                             req,
                             routes,
                             backends,
-                            tls_header,
+                            ja4_fingerprints,
                             Some(fingerprint_rx),
                             &keep_alive,
                             &security,
@@ -196,7 +195,7 @@ pub async fn handle_tls_connection(
                 hyper::service::service_fn(move |req: hyper::Request<hyper::body::Incoming>| {
                     let routes = routes_template.clone();
                     let backends = backends.clone();
-                    let tls_header = tls_header.clone();
+                    let ja4_fingerprints = ja4_fingerprints.clone();
                     let metrics = metrics.clone();
                     let keep_alive = keep_alive.clone();
                     let security = security.clone();
@@ -209,7 +208,7 @@ pub async fn handle_tls_connection(
                             req,
                             routes,
                             backends,
-                            tls_header,
+                            ja4_fingerprints,
                             None,
                             &keep_alive,
                             &security,

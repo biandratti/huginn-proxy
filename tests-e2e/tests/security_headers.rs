@@ -128,9 +128,12 @@ async fn test_security_headers_with_fingerprinting(
 
     // Backend should receive fingerprint headers
     if let Some(headers) = body.get("headers") {
-        // Check if TLS fingerprint header exists
+        // Check if TLS fingerprint headers exist
         if let Some(ja4) = headers.get("x-huginn-net-ja4") {
             println!("JA4 fingerprint present: {}", ja4);
+        }
+        if let Some(ja4_raw) = headers.get("x-huginn-net-ja4-raw") {
+            println!("JA4 raw fingerprint present: {}", ja4_raw);
         }
 
         // Check if HTTP/2 fingerprint header exists (if H2 connection)

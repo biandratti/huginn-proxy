@@ -23,7 +23,7 @@
 
 use tests_browsers::{
     get_chrome_json, parse_response, verify_chrome_version, verify_fingerprint_headers,
-    CHROME_FINGERPRINTS, HEADER_HTTP2_AKAMAI, HEADER_TLS_JA4, PROXY_URL,
+    CHROME_FINGERPRINTS, HEADER_HTTP2_AKAMAI, HEADER_TLS_JA4, HEADER_TLS_JA4_RAW, PROXY_URL,
 };
 use thirtyfour::prelude::*;
 
@@ -67,6 +67,13 @@ async fn test_chrome_fingerprint() -> Result<(), Box<dyn std::error::Error>> {
             .get(HEADER_TLS_JA4)
             .and_then(|v| v.as_str())
             .ok_or(format!("Missing {} header", HEADER_TLS_JA4))?;
+
+        let ja4_fp_raw = headers
+            .get(HEADER_TLS_JA4_RAW)
+            .and_then(|v| v.as_str())
+            .ok_or(format!("Missing {} header", HEADER_TLS_JA4_RAW))?;
+
+        assert!(!ja4_fp_raw.is_empty(), "JA4 raw fingerprint should not be empty");
 
         assert_eq!(
             ja4_fp, CHROME_FINGERPRINTS.tls_ja4,

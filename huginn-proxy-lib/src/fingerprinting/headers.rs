@@ -8,6 +8,12 @@ pub mod names {
     /// It is injected for all TLS connections when fingerprinting is enabled.
     pub const TLS_JA4: &str = "x-huginn-net-ja4";
 
+    /// Header name for TLS (JA4) raw fingerprint injection
+    ///
+    /// This header contains the raw/original JA4 fingerprint string.
+    /// It is injected for all TLS connections when fingerprinting is enabled.
+    pub const TLS_JA4_RAW: &str = "x-huginn-net-ja4-raw";
+
     /// Header name for HTTP/2 (Akamai) fingerprint injection
     ///
     /// This header contains the Akamai-style fingerprint extracted from HTTP/2 frames.
