@@ -2,8 +2,9 @@ name: 'Setup Chrome and chromedriver'
 description: 'Install Chrome browser, chromedriver, and start chromedriver service'
 inputs:
   chrome-version:
-    description: 'Chrome version to install (e.g., "144")'
-    required: true
+    description: 'Chrome version to install (e.g., "145", or "latest")'
+    required: false
+    default: "145"
   chromedriver-port:
     description: 'Port for chromedriver'
     required: true
@@ -15,12 +16,56 @@ runs:
       with:
         chrome-version: ${{ inputs.chrome-version }}
     
-    - name: Install chromedriver
+    - name: Get Chrome version and install matching chromedriver
       shell: bash
       run: |
-        sudo apt-get update
-        sudo apt-get install -y chromium-chromedriver
-        chromedriver --version
+        CHROME_VERSION=$(google-chrome --version | sed 's/Google Chrome \([0-9.]*\).*/\1/g')
+        CHROME_MAJOR=$(echo $CHROME_VERSION | cut -d. -f1)
+        echo "Chrome version: $CHROME_VERSION"
+        echo "Chrome major: $CHROME_MAJOR"
+        
+        # For Chrome 115+, use chrome-for-testing endpoint
+        if [ "$CHROME_MAJOR" -ge 115 ]; then
+          echo "Using chrome-for-testing endpoint for Chrome $CHROME_MAJOR+"
+          CHROMEDRIVER_URL="https://googlechromelabs.github.io/chrome-for-testing/known-good-versions-with-downloads.json"
+          CHROMEDRIVER_VERSION=$(curl -s $CHROMEDRIVER_URL | jq -r ".versions[] | select(.version | startswith(\"$CHROME_VERSION\")) | .version" | head -n1)
+          if [ -z "$CHROMEDRIVER_VERSION" ]; then
+            echo "Exact version not found, trying major version match"
+            CHROMEDRIVER_VERSION=$(curl -s $CHROMEDRIVER_URL | jq -r ".versions[] | select(.version | startswith(\"$CHROME_MAJOR.\")) | .version" | tail -n1)
+          fi
+          DOWNLOAD_URL="https://storage.googleapis.com/chrome-for-testing-public/${CHROMEDRIVER_VERSION}/linux64/chromedriver-linux64.zip"
+        else
+          # For Chrome < 115, use old endpoint
+          echo "Using legacy endpoint for Chrome $CHROME_MAJOR"
+          wget -q https://chromedriver.storage.googleapis.com/LATEST_RELEASE_${CHROME_MAJOR} -O /tmp/chromedriver_version
+          CHROMEDRIVER_VERSION=$(cat /tmp/chromedriver_version)
+          DOWNLOAD_URL="https://chromedriver.storage.googleapis.com/${CHROMEDRIVER_VERSION}/chromedriver_linux64.zip"
+        fi
+        
+        echo "Downloading chromedriver version: $CHROMEDRIVER_VERSION"
+        wget -q $DOWNLOAD_URL -O /tmp/chromedriver.zip
+        unzip -q /tmp/chromedriver.zip -d /tmp/
+        
+        # Handle different directory structures
+        if [ -d "/tmp/chromedriver-linux64" ]; then
+          sudo mv /tmp/chromedriver-linux64/chromedriver /usr/local/bin/
+        else
+          sudo mv /tmp/chromedriver /usr/local/bin/
+        fi
+        
+        sudo chmod +x /usr/local/bin/chromedriver
+        
+        # Verify versions match
+        DRIVER_VERSION=$(chromedriver --version | sed 's/ChromeDriver \([0-9.]*\).*/\1/g')
+        DRIVER_MAJOR=$(echo $DRIVER_VERSION | cut -d. -f1)
+        echo "Chromedriver version: $DRIVER_VERSION"
+        
+        if [ "$CHROME_MAJOR" != "$DRIVER_MAJOR" ]; then
+          echo "VERSION MISMATCH! Chrome: $CHROME_MAJOR, Chromedriver: $DRIVER_MAJOR"
+          exit 1
+        fi
+        
+        echo "Versions match! Chrome: $CHROME_VERSION, Chromedriver: $DRIVER_VERSION"
     
     - name: Start chromedriver
       shell: bash
