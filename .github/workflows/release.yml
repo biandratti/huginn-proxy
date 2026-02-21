@@ -145,7 +145,7 @@ jobs:
       - name: Run Trivy vulnerability scanner
         id: trivy
         continue-on-error: true
-        uses: aquasecurity/trivy-action@0.34.0
+        uses: aquasecurity/trivy-action@0.34.1
         with:
           image-ref: local-scan:${{ steps.version.outputs.tag }}
           format: 'sarif'
