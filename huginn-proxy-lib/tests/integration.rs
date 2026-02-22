@@ -18,6 +18,7 @@ fn create_test_config(listen: &str, backends: Vec<Backend>) -> Config {
             tls_enabled: true,
             http_enabled: true,
             max_capture: 64 * 1024,
+            ebpf_tcp_interface: None,
         },
         logging: LoggingConfig { level: "info".to_string(), show_target: false },
         timeout: TimeoutConfig {

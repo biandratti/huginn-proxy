@@ -31,6 +31,9 @@ pub struct TlsConnectionConfig {
     pub tls_handshake_timeout: tokio::time::Duration,
     pub connection_handling_timeout: tokio::time::Duration,
     pub client_pool: Arc<ClientPool>,
+    /// TCP SYN fingerprint captured via eBPF at connection accept time.
+    /// None if eBPF is disabled or the SYN was not captured.
+    pub syn_fingerprint: Option<crate::fingerprinting::SynFingerprint>,
 }
 
 /// Handle a TLS connection
@@ -95,6 +98,9 @@ pub async fn handle_tls_connection(
             None
         };
 
+        // Extract syn_fingerprint from config before moving into closures
+        let syn_fingerprint = config.syn_fingerprint.clone();
+
         let _tls_guard = tls_connection_guard;
 
         if config.fingerprint_config.http_enabled {
@@ -122,6 +128,7 @@ pub async fn handle_tls_connection(
                     let backends = backends.clone();
                     let ja4_fingerprints = ja4_fingerprints.clone();
                     let fingerprint_rx = fingerprint_rx.clone();
+                    let syn_fingerprint = syn_fingerprint.clone();
                     let metrics = metrics.clone();
                     let keep_alive = keep_alive.clone();
                     let security = security.clone();
@@ -136,6 +143,7 @@ pub async fn handle_tls_connection(
                             backends,
                             ja4_fingerprints,
                             Some(fingerprint_rx),
+                            syn_fingerprint,
                             &keep_alive,
                             &security,
                             metrics,
@@ -196,6 +204,7 @@ pub async fn handle_tls_connection(
                     let routes = routes_template.clone();
                     let backends = backends.clone();
                     let ja4_fingerprints = ja4_fingerprints.clone();
+                    let syn_fingerprint = syn_fingerprint.clone();
                     let metrics = metrics.clone();
                     let keep_alive = keep_alive.clone();
                     let security = security.clone();
@@ -210,6 +219,7 @@ pub async fn handle_tls_connection(
                             backends,
                             ja4_fingerprints,
                             None,
+                            syn_fingerprint,
                             &keep_alive,
                             &security,
                             metrics,

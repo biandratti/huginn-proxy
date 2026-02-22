@@ -12,6 +12,7 @@ bytes.workspace = true
 http.workspace = true
 http-body-util.workspace = true
 huginn-net-http.workspace = true
+huginn-net-tcp.workspace = true
 huginn-net-tls.workspace = true
 hyper.workspace = true
 hyper-util.workspace = true

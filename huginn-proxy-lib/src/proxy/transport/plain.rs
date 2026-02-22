@@ -22,6 +22,9 @@ pub struct PlainConnectionConfig {
     pub preserve_host: bool,
     pub connection_handling_timeout: tokio::time::Duration,
     pub client_pool: Arc<ClientPool>,
+    /// TCP SYN fingerprint captured via eBPF at connection accept time.
+    /// None if eBPF is disabled or the SYN was not captured.
+    pub syn_fingerprint: Option<crate::fingerprinting::SynFingerprint>,
 }
 
 /// Handle a plain HTTP connection
@@ -36,10 +39,12 @@ pub async fn handle_plain_connection(
     let keep_alive = config.keep_alive.clone();
     let security = config.security.clone();
     let client_pool = config.client_pool.clone();
+    let syn_fingerprint = config.syn_fingerprint.clone();
 
     let svc = hyper::service::service_fn(move |req: hyper::Request<hyper::body::Incoming>| {
         let routes = routes_template.clone();
         let backends = backends.clone();
+        let syn_fingerprint = syn_fingerprint.clone();
         let metrics = metrics.clone();
         let keep_alive = keep_alive.clone();
         let security = security.clone();
@@ -54,6 +59,7 @@ pub async fn handle_plain_connection(
                 backends,
                 None,
                 None,
+                syn_fingerprint,
                 &keep_alive,
                 &security,
                 metrics,

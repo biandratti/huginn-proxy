@@ -48,9 +48,68 @@ async fn main() -> Result<(), BoxError> {
         (None, None)
     };
 
+    // Initialize TCP SYN eBPF probe when feature is enabled.
+    // Requires `fingerprint.ebpf_tcp_interface` in the config (e.g. "eth0").
+    // On failure or missing interface, logs a warning and continues without eBPF
+    // (graceful degradation).
+    #[cfg(feature = "ebpf-tcp")]
+    let syn_probe: Option<huginn_proxy_lib::SynProbe> = {
+        use huginn_proxy_ebpf::EbpfProbe;
+        use huginn_proxy_lib::fingerprinting::{parse_syn_raw, SynFingerprint, TcpSynData};
+        use std::net::SocketAddr;
+
+        if let Some(ref iface) = config.fingerprint.ebpf_tcp_interface {
+            let listen_ip = match config.listen {
+                SocketAddr::V4(a) => Some(*a.ip()),
+                SocketAddr::V6(_) => {
+                    tracing::warn!("eBPF TCP SYN probe requires IPv4 listen address; skipping");
+                    None
+                }
+            };
+            let listen_port = config.listen.port();
+
+            if let Some(ip) = listen_ip {
+                match EbpfProbe::new(iface, Some(ip), Some(listen_port)) {
+                    Ok(probe) => {
+                        info!(interface = %iface, "eBPF TCP SYN probe initialized");
+                        let probe = Arc::new(probe);
+                        Some(Arc::new(
+                            move |peer: std::net::SocketAddr| -> Option<SynFingerprint> {
+                                let (peer_ip, peer_port) = match peer {
+                                    SocketAddr::V4(a) => (*a.ip(), a.port()),
+                                    SocketAddr::V6(_) => return None,
+                                };
+                                let raw = probe.lookup(peer_ip, peer_port)?;
+                                let data = TcpSynData {
+                                    ip_ttl: raw.ip_ttl,
+                                    window: raw.window,
+                                    optlen: raw.optlen,
+                                    options: raw.options,
+                                };
+                                parse_syn_raw(&data)
+                            },
+                        ))
+                    }
+                    Err(e) => {
+                        tracing::warn!("eBPF TCP SYN probe failed to initialize: {e}. Continuing without SYN fingerprinting.");
+                        None
+                    }
+                }
+            } else {
+                None
+            }
+        } else {
+            tracing::info!("eBPF TCP SYN fingerprinting compiled in but `fingerprint.ebpf_tcp_interface` not set; skipping");
+            None
+        }
+    };
+
+    #[cfg(not(feature = "ebpf-tcp"))]
+    let syn_probe: Option<huginn_proxy_lib::SynProbe> = None;
+
     info!("huginn-proxy starting");
 
-    let result = run(config, metrics).await;
+    let result = run(config, metrics, syn_probe).await;
 
     if let Some(handle) = metrics_handle {
         info!("Shutting down observability server");

@@ -1,3 +1,4 @@
+use std::net::SocketAddr;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
@@ -11,6 +12,7 @@ use tracing::{info, warn};
 
 use crate::config::{BackendPoolConfig, Config};
 use crate::error::Result;
+use crate::fingerprinting::SynFingerprint;
 use crate::proxy::connection::{ConnectionError, ConnectionManager};
 use crate::proxy::transport::{
     handle_plain_connection, handle_tls_connection, PlainConnectionConfig, TlsConnectionConfig,
@@ -19,7 +21,18 @@ use crate::proxy::ClientPool;
 use crate::telemetry::Metrics;
 use crate::tls::setup_tls_with_hot_reload;
 
-pub async fn run(config: Arc<Config>, metrics: Option<Arc<Metrics>>) -> Result<()> {
+/// Callback type for TCP SYN fingerprint lookup.
+///
+/// Accepts a peer `SocketAddr`, returns an optional `SynFingerprint`.
+/// Implemented by `huginn-proxy` when the `ebpf-tcp` feature is enabled;
+/// passes `None` otherwise (graceful degradation).
+pub type SynProbe = Arc<dyn Fn(SocketAddr) -> Option<SynFingerprint> + Send + Sync>;
+
+pub async fn run(
+    config: Arc<Config>,
+    metrics: Option<Arc<Metrics>>,
+    syn_probe: Option<SynProbe>,
+) -> Result<()> {
     let addr = config.listen;
     let listener = TcpListener::bind(addr)
         .await
@@ -121,6 +134,11 @@ pub async fn run(config: Arc<Config>, metrics: Option<Arc<Metrics>>) -> Result<(
                     }
                 };
 
+                // TCP SYN lookup: happens here, right after accept(), before TLS handshake.
+                // The BPF map entry is freshest at this point.
+                let syn_fingerprint: Option<SynFingerprint> =
+                    syn_probe.as_ref().and_then(|probe| probe(peer));
+
                 let builder_clone = builder.clone();
                 let backends_clone = Arc::clone(&backends_for_loop);
                 let routes_clone = routes.clone();
@@ -157,6 +175,7 @@ pub async fn run(config: Arc<Config>, metrics: Option<Arc<Metrics>>) -> Result<(
                                 tls_handshake_timeout,
                                 connection_handling_timeout,
                                 client_pool: client_pool_clone.clone(),
+                                syn_fingerprint: syn_fingerprint.clone(),
                             },
                         )
                         .await;
@@ -174,6 +193,7 @@ pub async fn run(config: Arc<Config>, metrics: Option<Arc<Metrics>>) -> Result<(
                                 preserve_host,
                                 connection_handling_timeout,
                                 client_pool: client_pool_clone,
+                                syn_fingerprint,
                             },
                         )
                         .await;
