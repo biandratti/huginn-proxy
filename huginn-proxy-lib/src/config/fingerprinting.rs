@@ -12,14 +12,20 @@ pub struct FingerprintConfig {
     /// Default: true
     #[serde(default = "default_true")]
     pub http_enabled: bool,
+    /// Enable TCP SYN fingerprinting via eBPF/XDP (p0f-style raw signature).
+    /// Requires the `ebpf-tcp` Cargo feature and `ebpf_tcp_interface` to be set.
+    /// When false the eBPF probe is never started, even if the feature is compiled in.
+    /// Default: false
+    #[serde(default)]
+    pub tcp_enabled: bool,
     /// Maximum bytes to capture for HTTP/2 fingerprinting
     /// This limits the amount of data buffered for fingerprint extraction
     /// Default: 65536 (64 KB)
     #[serde(default = "default_max_capture")]
     pub max_capture: usize,
     /// Network interface name for eBPF TCP SYN fingerprinting (e.g. "eth0", "ens3").
-    /// Required only when the `ebpf-tcp` Cargo feature is enabled.
-    /// Default: None (eBPF SYN probe disabled even if feature is compiled in)
+    /// Only used when `tcp_enabled = true` and the `ebpf-tcp` feature is compiled in.
+    /// Default: None
     #[serde(default)]
     pub ebpf_tcp_interface: Option<String>,
 }
@@ -29,6 +35,7 @@ impl Default for FingerprintConfig {
         Self {
             tls_enabled: default_true(),
             http_enabled: default_true(),
+            tcp_enabled: false,
             max_capture: default_max_capture(),
             ebpf_tcp_interface: None,
         }

@@ -9,7 +9,8 @@ use crate::types::SynRawData;
 use crate::EbpfError;
 
 /// Raw bytes of the compiled XDP BPF object, embedded at compile time.
-static XDP_BPF_BYTES: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/xdp.bpf.o"));
+/// `include_bytes_aligned!` ensures 8-byte alignment required by aya's ELF parser.
+static XDP_BPF_BYTES: &[u8] = aya::include_bytes_aligned!(concat!(env!("OUT_DIR"), "/xdp.bpf.o"));
 
 /// Manages the eBPF XDP program lifecycle and provides SYN data lookups.
 ///

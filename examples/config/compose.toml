@@ -70,7 +70,9 @@ preserve_host = false
 [fingerprint]
 tls_enabled = true
 http_enabled = true
+tcp_enabled = true
 max_capture = 65536
+ebpf_tcp_interface = "eth0"
 
 [logging]
 level = "info"

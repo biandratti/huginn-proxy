@@ -1,0 +1,20 @@
+listen = "127.0.0.1:17000"
+
+backends = [
+    { address = "127.0.0.1:9999", http_version = "http1" }
+]
+
+routes = [
+    { prefix = "/", backend = "127.0.0.1:9999" }
+]
+
+[tls]
+cert_path = "examples/certs/server.crt"
+key_path  = "examples/certs/server.key"
+
+[fingerprint]
+tcp_enabled = true
+ebpf_tcp_interface = "wlp0s20f3"
+
+[logging]
+level = "debug"

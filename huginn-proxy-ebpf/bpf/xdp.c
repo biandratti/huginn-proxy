@@ -46,8 +46,6 @@ volatile __be32 dst_ip = 0;
  * Mirror of the Rust SynRawData struct — layout must match exactly.
  */
 struct tcp_syn_val {
-    __u64  tick;          /* monotonic counter used for ordering */
-    __be32 seq;           /* TCP sequence number from the SYN */
     __be32 src_addr;      /* client IP (network byte order) */
     __be16 src_port;      /* client port (network byte order) */
     __be16 window;        /* TCP window size */
@@ -68,16 +66,6 @@ struct {
     __type(value, struct tcp_syn_val);
 } tcp_syn_map SEC(".maps");
 
-/*
- * Counter incremented on every TCP SYN captured.
- * Used as a monotonic tick value stored in each entry.
- */
-struct {
-    __uint(type, BPF_MAP_TYPE_ARRAY);
-    __type(key, __u32);
-    __type(value, __u64);
-    __uint(max_entries, 1);
-} syn_counter SEC(".maps");
 
 /*
  * Build the map key from source IP and source port.
@@ -107,17 +95,7 @@ static void __always_inline handle_tcp_syn(struct iphdr *ip,
     if (tcp_hdr_len < sizeof(*tcp))
         return;
 
-    __u32 counterkey = 0;
-    __u64 tick = 0;
-    __u64 *count = bpf_map_lookup_elem(&syn_counter, &counterkey);
-    if (count) {
-        tick = *count;
-        __sync_fetch_and_add(count, 1);
-    }
-
     struct tcp_syn_val val = {
-        .tick     = tick,
-        .seq      = tcp->seq,
         .src_addr = ip->saddr,
         .src_port = tcp->source,
         .window   = tcp->window,

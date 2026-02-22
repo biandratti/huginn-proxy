@@ -29,8 +29,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .ok_or("OUT_DIR path contains non-UTF-8 characters")?;
 
     let mut args: Vec<&str> = vec![
-        "-O2",
         "-g",
+        "-O2",
         "-Wall",
         "-target",
         "bpf",

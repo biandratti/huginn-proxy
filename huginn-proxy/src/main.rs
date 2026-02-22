@@ -49,16 +49,18 @@ async fn main() -> Result<(), BoxError> {
     };
 
     // Initialize TCP SYN eBPF probe when feature is enabled.
-    // Requires `fingerprint.ebpf_tcp_interface` in the config (e.g. "eth0").
-    // On failure or missing interface, logs a warning and continues without eBPF
-    // (graceful degradation).
+    // Both `fingerprint.tcp_enabled = true` and `fingerprint.ebpf_tcp_interface` must be set.
+    // On failure, logs a warning and continues without eBPF (graceful degradation).
     #[cfg(feature = "ebpf-tcp")]
     let syn_probe: Option<huginn_proxy_lib::SynProbe> = {
         use huginn_proxy_ebpf::EbpfProbe;
         use huginn_proxy_lib::fingerprinting::{parse_syn_raw, SynFingerprint, TcpSynData};
         use std::net::SocketAddr;
 
-        if let Some(ref iface) = config.fingerprint.ebpf_tcp_interface {
+        if !config.fingerprint.tcp_enabled {
+            tracing::info!("TCP SYN fingerprinting disabled (`fingerprint.tcp_enabled = false`)");
+            None
+        } else if let Some(ref iface) = config.fingerprint.ebpf_tcp_interface {
             let listen_ip = match config.listen {
                 SocketAddr::V4(a) => Some(*a.ip()),
                 SocketAddr::V6(_) => {
@@ -91,7 +93,7 @@ async fn main() -> Result<(), BoxError> {
                         ))
                     }
                     Err(e) => {
-                        tracing::warn!("eBPF TCP SYN probe failed to initialize: {e}. Continuing without SYN fingerprinting.");
+                        tracing::warn!("eBPF TCP SYN probe failed to initialize: {e:#?}. Continuing without SYN fingerprinting.");
                         None
                     }
                 }
@@ -99,7 +101,9 @@ async fn main() -> Result<(), BoxError> {
                 None
             }
         } else {
-            tracing::info!("eBPF TCP SYN fingerprinting compiled in but `fingerprint.ebpf_tcp_interface` not set; skipping");
+            tracing::warn!(
+                "TCP SYN fingerprinting enabled but `fingerprint.ebpf_tcp_interface` is not set; skipping"
+            );
             None
         }
     };
