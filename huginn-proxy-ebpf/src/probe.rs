@@ -2,7 +2,7 @@ use std::net::Ipv4Addr;
 
 use aya::maps::HashMap;
 use aya::programs::{Xdp, XdpFlags};
-use aya::Ebpf;
+use aya::{Ebpf, EbpfLoader};
 use tracing::{info, warn};
 
 use crate::types::SynRawData;
@@ -30,14 +30,32 @@ impl EbpfProbe {
     ///
     /// # Parameters
     /// - `interface`: network interface name (e.g., `"eth0"`)
-    /// - `dst_ip`: optional filter — only capture SYNs to this IP (pass `None` to capture all)
-    /// - `dst_port`: optional filter — only capture SYNs to this port (pass `None` to capture all)
-    pub fn new(
-        interface: &str,
-        _dst_ip: Option<Ipv4Addr>,
-        _dst_port: Option<u16>,
-    ) -> Result<Self, EbpfError> {
-        let mut ebpf = Ebpf::load(XDP_BPF_BYTES).map_err(EbpfError::Load)?;
+    /// - `dst_ip`: proxy listen IP. `0.0.0.0` disables the IP filter (listen on all interfaces).
+    /// - `dst_port`: proxy listen port. Always active as a filter.
+    ///
+    /// Both values are patched into the XDP program's `.rodata` via `EbpfLoader::set_global`
+    /// before the kernel loads the program, matching `cilium/ebpf`'s `spec.Variables` pattern.
+    pub fn new(interface: &str, dst_ip: Ipv4Addr, dst_port: u16) -> Result<Self, EbpfError> {
+        // XDP compares ip->daddr and tcp->dest (both network-byte-order fields) against these
+        // globals. On a little-endian CPU, network-order bytes [a,b,c,d] in the packet are read
+        // as u32::from_ne_bytes([a,b,c,d]). We replicate the same encoding here so the
+        // comparison in xdp.c works correctly.
+        //
+        // 0.0.0.0 → bpf_dst_ip = 0 → XDP skips the IP check (captures all destinations).
+        let bpf_dst_ip: u32 = if dst_ip.is_unspecified() {
+            0
+        } else {
+            u32::from_ne_bytes(dst_ip.octets())
+        };
+
+        // tcp->dest in network byte order as read by LE CPU = port.to_be()
+        let bpf_dst_port: u16 = dst_port.to_be();
+
+        let mut ebpf = EbpfLoader::new()
+            .set_global("dst_ip", &bpf_dst_ip, false)
+            .set_global("dst_port", &bpf_dst_port, false)
+            .load(XDP_BPF_BYTES)
+            .map_err(EbpfError::Load)?;
 
         let program: &mut Xdp = ebpf
             .program_mut("huginn_xdp_syn")
@@ -50,7 +68,12 @@ impl EbpfProbe {
             .attach(interface, XdpFlags::default())
             .map_err(EbpfError::Attach)?;
 
-        info!(interface, "eBPF XDP TCP SYN fingerprinting attached");
+        let filter_ip = if dst_ip.is_unspecified() {
+            "any".to_string()
+        } else {
+            dst_ip.to_string()
+        };
+        info!(interface, filter_ip, dst_port, "eBPF XDP TCP SYN fingerprinting attached");
 
         Ok(Self { _ebpf: ebpf, interface: interface.to_string() })
     }

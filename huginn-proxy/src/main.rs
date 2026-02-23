@@ -57,54 +57,54 @@ async fn main() -> Result<(), BoxError> {
         use huginn_proxy_lib::fingerprinting::{parse_syn_raw, SynFingerprint, TcpSynData};
         use std::net::SocketAddr;
 
+        // eBPF filter parameters are infrastructure-specific — read from env vars set in
+        // docker-compose or K8s Deployment YAML. Not part of the application config file.
+        // When tcp_enabled = true all three are required; missing vars are a startup error.
+        //   HUGINN_EBPF_INTERFACE — network interface the XDP program attaches to
+        //   HUGINN_EBPF_DST_IP   — destination IP filter (0.0.0.0 = all interfaces)
+        //   HUGINN_EBPF_DST_PORT — destination port filter (must match proxy listen port)
         if !config.fingerprint.tcp_enabled {
             tracing::info!("TCP SYN fingerprinting disabled (`fingerprint.tcp_enabled = false`)");
             None
-        } else if let Some(ref iface) = config.fingerprint.ebpf_tcp_interface {
-            let listen_ip = match config.listen {
-                SocketAddr::V4(a) => Some(*a.ip()),
-                SocketAddr::V6(_) => {
-                    tracing::warn!("eBPF TCP SYN probe requires IPv4 listen address; skipping");
-                    None
-                }
-            };
-            let listen_port = config.listen.port();
-
-            if let Some(ip) = listen_ip {
-                match EbpfProbe::new(iface, Some(ip), Some(listen_port)) {
-                    Ok(probe) => {
-                        info!(interface = %iface, "eBPF TCP SYN probe initialized");
-                        let probe = Arc::new(probe);
-                        Some(Arc::new(
-                            move |peer: std::net::SocketAddr| -> Option<SynFingerprint> {
-                                let (peer_ip, peer_port) = match peer {
-                                    SocketAddr::V4(a) => (*a.ip(), a.port()),
-                                    SocketAddr::V6(_) => return None,
-                                };
-                                let raw = probe.lookup(peer_ip, peer_port)?;
-                                let data = TcpSynData {
-                                    ip_ttl: raw.ip_ttl,
-                                    window: raw.window,
-                                    optlen: raw.optlen,
-                                    options: raw.options,
-                                };
-                                parse_syn_raw(&data)
-                            },
-                        ))
-                    }
-                    Err(e) => {
-                        tracing::warn!("eBPF TCP SYN probe failed to initialize: {e:#?}. Continuing without SYN fingerprinting.");
-                        None
-                    }
-                }
-            } else {
-                None
-            }
         } else {
-            tracing::warn!(
-                "TCP SYN fingerprinting enabled but `fingerprint.ebpf_tcp_interface` is not set; skipping"
-            );
-            None
+            let iface = env::var("HUGINN_EBPF_INTERFACE")
+                .map_err(|_| "HUGINN_EBPF_INTERFACE env var is required when tcp_enabled = true")?;
+
+            let dst_ip: std::net::Ipv4Addr = env::var("HUGINN_EBPF_DST_IP")
+                .map_err(|_| "HUGINN_EBPF_DST_IP env var is required when tcp_enabled = true")?
+                .parse()
+                .map_err(|_| "HUGINN_EBPF_DST_IP must be a valid IPv4 address (e.g. 0.0.0.0)")?;
+
+            let dst_port: u16 = env::var("HUGINN_EBPF_DST_PORT")
+                .map_err(|_| "HUGINN_EBPF_DST_PORT env var is required when tcp_enabled = true")?
+                .parse()
+                .map_err(|_| "HUGINN_EBPF_DST_PORT must be a valid port number (1-65535)")?;
+
+            match config.listen {
+                SocketAddr::V6(_) => {
+                    return Err("eBPF TCP SYN probe requires an IPv4 listen address".into());
+                }
+                SocketAddr::V4(_) => {}
+            }
+
+            let probe = EbpfProbe::new(&iface, dst_ip, dst_port)
+                .map_err(|e| format!("eBPF TCP SYN probe failed to initialize: {e:#?}"))?;
+
+            let probe = Arc::new(probe);
+            Some(Arc::new(move |peer: SocketAddr| -> Option<SynFingerprint> {
+                let (peer_ip, peer_port) = match peer {
+                    SocketAddr::V4(a) => (*a.ip(), a.port()),
+                    SocketAddr::V6(_) => return None,
+                };
+                let raw = probe.lookup(peer_ip, peer_port)?;
+                let data = TcpSynData {
+                    ip_ttl: raw.ip_ttl,
+                    window: raw.window,
+                    optlen: raw.optlen,
+                    options: raw.options,
+                };
+                parse_syn_raw(&data)
+            }))
         }
     };
 

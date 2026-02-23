@@ -28,18 +28,20 @@ char __license[] SEC("license") = "Dual MIT/GPL";
 #define TCPOPT_MAXLEN 40
 
 /*
- * TCP destination port the proxy listens on.
- * Injected at program load time by the Rust userspace code.
- * Defaults to 443 when not set.
+ * TCP destination port the proxy listens on (network byte order).
+ * Patched at load time by EbpfLoader::set_global before the kernel loads the program.
+ * 0 = no port filter (capture all TCP SYN).
+ * Must be volatile const so clang places it in .rodata (readable by set_global).
  */
-volatile __be16 dst_port = 0;
+volatile const __be16 dst_port = 0;
 
 /*
  * Destination IP the proxy listens on (network byte order).
- * Injected at program load time by the Rust userspace code.
- * Defaults to 0.0.0.0 when not set.
+ * Patched at load time by EbpfLoader::set_global before the kernel loads the program.
+ * 0 = no IP filter (capture all destinations, e.g. listen on 0.0.0.0).
+ * Must be volatile const so clang places it in .rodata (readable by set_global).
  */
-volatile __be32 dst_ip = 0;
+volatile const __be32 dst_ip = 0;
 
 /*
  * Data extracted from each TCP SYN packet.
