@@ -55,8 +55,9 @@ impl Default for SynRawData {
     }
 }
 
-/// Safety: SynRawData is #[repr(C)], Copy, and has no padding beyond the explicit _pad field.
-/// It can be safely read from/written to BPF maps via aya.
+// SAFETY: SynRawData is #[repr(C)], Copy, and has no padding beyond the explicit _pad fields.
+// It can be safely read from/written to BPF maps via aya.
+#[allow(unsafe_code)]
 unsafe impl aya::Pod for SynRawData {}
 
 #[cfg(test)]

@@ -195,6 +195,21 @@ See [ROADMAP.md](ROADMAP.md) for a detailed list of planned features and upcomin
 - **[huginn-net-tls](https://crates.io/crates/huginn-net-tls)** - JA4 TLS fingerprinting
 - **[huginn-net-http](https://crates.io/crates/huginn-net-http)** - HTTP/2 Akamai fingerprinting
 
+## Artifacts Matrix
+
+Each release publishes the following artifacts:
+
+| Artifact | eBPF | OS | Notes |
+|---|---|---|---|
+| `huginn-proxy-{tag}-x86_64-unknown-linux-musl` | ❌ | Linux amd64 | Standard binary, no extra capabilities needed |
+| `huginn-proxy-{tag}-aarch64-unknown-linux-musl` | ❌ | Linux arm64 | Standard binary, no extra capabilities needed |
+| `huginn-proxy-{tag}-x86_64-unknown-linux-musl-ebpf` | ✅ | Linux amd64 | Requires `CAP_BPF`, `CAP_NET_ADMIN`, `CAP_PERFMON` |
+| `huginn-proxy-{tag}-aarch64-unknown-linux-musl-ebpf` | ✅ | Linux arm64 | Requires `CAP_BPF`, `CAP_NET_ADMIN`, `CAP_PERFMON` |
+| `huginn-proxy-{tag}-x86_64-apple-darwin` | ❌ | macOS amd64 | eBPF is Linux-only |
+| `huginn-proxy-{tag}-aarch64-apple-darwin` | ❌ | macOS arm64 | eBPF is Linux-only |
+
+Docker images (`ghcr.io/biandratti/huginn-proxy`) are built with eBPF support. See [EBPF-SETUP.md](EBPF-SETUP.md) for runtime requirements.
+
 ## License
 
 Dual-licensed under [MIT](LICENSE-MIT) or [Apache 2.0](LICENSE-APACHE).

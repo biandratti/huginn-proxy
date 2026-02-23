@@ -47,7 +47,8 @@ impl EbpfProbe {
     /// Both values are patched into the XDP program's `.rodata` via `EbpfLoader::set_global`
     /// before the kernel loads the program, matching `cilium/ebpf`'s `spec.Variables` pattern.
     pub fn new(interface: &str, dst_ip: Ipv4Addr, dst_port: u16) -> Result<Self, EbpfError> {
-        // Safety: setrlimit is always safe to call; we discard errors intentionally.
+        // SAFETY: setrlimit is always safe to call; we discard errors intentionally.
+        #[allow(unsafe_code)]
         unsafe {
             let rlim =
                 libc::rlimit { rlim_cur: libc::RLIM_INFINITY, rlim_max: libc::RLIM_INFINITY };
