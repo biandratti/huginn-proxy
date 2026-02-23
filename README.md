@@ -93,7 +93,7 @@ docker run -v /path/to/config.toml:/config.toml huginn-proxy /config.toml
 - **mTLS (Mutual TLS)** - Client certificate authentication for secure service-to-service communication
 - **Granular Timeouts** - TLS handshake and connection handling timeouts for resource protection
 - **Host Header Preservation** - Configurable forwarding of original Host header for virtual hosting
-- **Passive Fingerprinting** - Automatic TLS (JA4) and HTTP/2 (Akamai) fingerprint extraction
+- **Passive Fingerprinting** - Automatic TLS (JA4), HTTP/2 (Akamai), and TCP SYN (p0f-style via eBPF) fingerprint extraction
 - **X-Forwarded-* Headers** - Automatic injection of proxy forwarding headers
 - **[Comprehensive Telemetry](TELEMETRY.md)** - Prometheus metrics covering requests, throughput, rate limiting, TLS,
   backends, and security features
@@ -113,6 +113,11 @@ Fingerprints are automatically extracted and injected as headers:
 - **TLS (JA4 Raw)**: `x-huginn-net-ja4-raw` - Raw/original JA4 fingerprint format
 - **HTTP/2 (Akamai)**: `x-huginn-net-akamai` - Extracted from HTTP/2 connections only
   using [huginn-net-http](https://crates.io/crates/huginn-net-http)
+- **TCP SYN (p0f-style)**: `x-huginn-net-tcp` - Raw TCP SYN signature extracted via eBPF/XDP
+  using [huginn-net-tcp](https://crates.io/crates/huginn-net-tcp). Requires `tcp_enabled = true`
+  and the `ebpf-tcp` feature. Only present on the first request of each connection (not on
+  HTTP keep-alive requests, which do not generate a new SYN). See [EBPF-SETUP.md](EBPF-SETUP.md)
+  for setup, kernel requirements, and deployment options.
 
 **Examples:**
 
@@ -145,9 +150,10 @@ These headers always override any client-provided values to prevent spoofing.
 - **`fingerprinting`** (bool, default: `true`) - Enable/disable TLS (JA4) and HTTP/2 (Akamai) fingerprint extraction and
   header injection
 - **`force_new_connection`** (bool, default: `false`) - Force new TCP + TLS handshake per request, bypassing connection
-  pooling
-    - Use case: Per-request TLS fingerprinting, TCP fingerprinting (future), testing/debugging
-    - Performance: Adds ~50-200ms latency per request when enabled
+  pooling and HTTP keep-alive reuse
+    - Use case: Per-request TLS fingerprinting, TCP SYN fingerprinting (each request generates a
+      fresh SYN, so the eBPF map always has an entry), testing/debugging
+    - Performance: Adds latency per request (benchmark pending — see ROADMAP.md)
 
 ## Health Check Endpoints
 

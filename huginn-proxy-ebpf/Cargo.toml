@@ -10,5 +10,6 @@ aya.workspace = true
 libc.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
+tracing-subscriber.workspace = true
 
 [build-dependencies]

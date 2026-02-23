@@ -1,0 +1,13 @@
+name: 'Setup eBPF build dependencies'
+description: 'Install clang and linux kernel headers required by the huginn-proxy-ebpf build script'
+runs:
+  using: 'composite'
+  steps:
+    - name: Install clang and kernel headers
+      shell: bash
+      run: |
+        if command -v sudo &> /dev/null; then
+          sudo apt-get update -q && sudo apt-get install -y clang linux-headers-generic
+        else
+          apt-get update -q && apt-get install -y clang linux-headers-generic
+        fi

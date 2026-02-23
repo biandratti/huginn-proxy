@@ -104,6 +104,8 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-
+      - name: Setup eBPF build dependencies
+        uses: ./.github/actions/setup-ebpf-build
       - name: Install Rust ${{ env.rust_stable }}
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -144,6 +146,8 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-
+      - name: Setup eBPF build dependencies
+        uses: ./.github/actions/setup-ebpf-build
       - name: Install Rust ${{ env.rust_stable }}
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -169,6 +173,8 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-
+      - name: Setup eBPF build dependencies
+        uses: ./.github/actions/setup-ebpf-build
       - name: Install Rust ${{ env.rust_min }}
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -193,6 +199,8 @@ jobs:
           key: ${{ runner.os }}-cargo-beta-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-beta-
+      - name: Setup eBPF build dependencies
+        uses: ./.github/actions/setup-ebpf-build
       - name: Install Rust beta
         uses: dtolnay/rust-toolchain@beta
         with:
@@ -211,6 +219,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+      - name: Setup eBPF build dependencies
+        uses: ./.github/actions/setup-ebpf-build
       - name: Generate code coverage
         run: |
           cargo +nightly tarpaulin --workspace --exclude tests-e2e --exclude tests-browsers --verbose --all-features --timeout 120 --out xml --output-dir .
