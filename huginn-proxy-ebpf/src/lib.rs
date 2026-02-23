@@ -1,3 +1,6 @@
+// eBPF/XDP is Linux-only. This crate does not compile for other targets.
+#![cfg(target_os = "linux")]
+
 pub mod probe;
 pub mod types;
 

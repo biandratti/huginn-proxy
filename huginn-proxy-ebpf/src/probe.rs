@@ -1,6 +1,5 @@
 use std::net::Ipv4Addr;
 
-#[cfg(target_os = "linux")]
 use libc;
 
 use aya::maps::{Array, HashMap};
@@ -48,7 +47,7 @@ impl EbpfProbe {
     /// Both values are patched into the XDP program's `.rodata` via `EbpfLoader::set_global`
     /// before the kernel loads the program, matching `cilium/ebpf`'s `spec.Variables` pattern.
     pub fn new(interface: &str, dst_ip: Ipv4Addr, dst_port: u16) -> Result<Self, EbpfError> {
-        #[cfg(target_os = "linux")]
+        // Safety: setrlimit is always safe to call; we discard errors intentionally.
         unsafe {
             let rlim =
                 libc::rlimit { rlim_cur: libc::RLIM_INFINITY, rlim_max: libc::RLIM_INFINITY };
@@ -167,6 +166,9 @@ impl EbpfProbe {
 /// the LE CPU (i.e., the raw BE bytes interpreted as a LE integer value).
 ///
 /// From Rust's `Ipv4Addr` and host-byte-order port, we reconstruct the same key.
+///
+/// **IPv4 only** — the XDP program filters `ETH_P_IP` and ignores IPv6 packets.
+/// IPv6 listen addresses are rejected at startup in `main.rs`.
 pub fn make_bpf_key(src_ip: Ipv4Addr, src_port: u16) -> u64 {
     // ip->saddr: network-order bytes [a,b,c,d] read by LE CPU = u32::from_ne_bytes([a,b,c,d])
     let ip_ne = u32::from_ne_bytes(src_ip.octets());

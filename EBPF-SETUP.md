@@ -18,6 +18,27 @@ require either running the full proxy as a DaemonSet, or decoupling the eBPF pro
 standalone agent that shares BPF maps with the proxy via a pinned path (`/sys/fs/bpf/`).
 That decoupled model is not yet implemented and it is not part for the current ROADMAP.
 
+## Known limitations
+
+### IPv4 only
+
+The XDP program captures only `ETH_P_IP` (IPv4) packets. IPv6 packets are passed through
+without fingerprinting. As a result:
+
+- `tcp_enabled = true` requires the proxy to listen on an IPv4 address. Configuring an IPv6
+  listen address causes a hard startup failure.
+- IPv6 clients that connect **directly** to the proxy are not fingerprinted — the connection
+  works but `x-huginn-net-tcp` will not be injected.
+
+**In practice this is not a limitation** for most deployments: when a load balancer or
+ingress (Traefik, NGINX, K8s Ingress) sits in front and terminates external connections,
+the proxy only sees IPv4 connections internally — regardless of whether the client connected
+over IPv4 or IPv6. The fingerprint is captured correctly in this setup.
+
+Only direct IPv6 exposure (proxy reachable via `::` without an intermediary) is affected.
+
+---
+
 ## Requirements
 
 ### Kernel
@@ -120,7 +141,8 @@ services:
 
 ## Kubernetes
 
-The intended deployment model is a **DaemonSet — one pod per node, no HPA**. the proxy handles all traffic on the node and the eBPF probe captures SYNs on that node's interface. No cross-node coordination is needed.
+The intended deployment model is a **DaemonSet — one pod per node, no HPA**. the proxy handles all traffic on the node and the eBPF probe captures SYNs on that node's interface.
+No cross-node coordination is needed.
 
 Requirements for the pod:
 

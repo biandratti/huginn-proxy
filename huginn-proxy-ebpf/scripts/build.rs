@@ -1,16 +1,20 @@
 use std::path::PathBuf;
 use std::process::Command;
 
+// This build script compiles bpf/xdp.c to BPF bytecode using clang.
+// The output is architecture-independent BPF ELF — the same .o is embedded
+// in both amd64 and arm64 binaries. clang's `-target bpf` handles this automatically.
+// Requires: clang + linux kernel headers (see EBPF-SETUP.md).
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    println!("cargo:rerun-if-changed=bpf/xdp.c");
-    println!("cargo:rerun-if-changed=bpf/headers/bpf_helpers.h");
-    println!("cargo:rerun-if-changed=bpf/headers/bpf_endian.h");
+    println!("cargo:rerun-if-changed=scripts/bpf/xdp.c");
+    println!("cargo:rerun-if-changed=scripts/bpf/headers/bpf_helpers.h");
+    println!("cargo:rerun-if-changed=scripts/bpf/headers/bpf_endian.h");
 
     let out_dir = PathBuf::from(std::env::var("OUT_DIR")?);
     let out_file = out_dir.join("xdp.bpf.o");
 
-    let bpf_src = PathBuf::from("bpf/xdp.c");
-    let bpf_headers = PathBuf::from("bpf/headers");
+    let bpf_src = PathBuf::from("scripts/bpf/xdp.c");
+    let bpf_headers = PathBuf::from("scripts/bpf/headers");
 
     // On Debian/Ubuntu (multiarch), arch-specific headers live under
     // /usr/include/<triple>/ (e.g. /usr/include/x86_64-linux-gnu/).

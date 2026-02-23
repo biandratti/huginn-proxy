@@ -116,8 +116,9 @@ Fingerprints are automatically extracted and injected as headers:
 - **TCP SYN (p0f-style)**: `x-huginn-net-tcp` - Raw TCP SYN signature extracted via eBPF/XDP
   using [huginn-net-tcp](https://crates.io/crates/huginn-net-tcp). Requires `tcp_enabled = true`
   and the `ebpf-tcp` feature. Only present on the first request of each connection (not on
-  HTTP keep-alive requests, which do not generate a new SYN). See [EBPF-SETUP.md](EBPF-SETUP.md)
-  for setup, kernel requirements, and deployment options.
+  HTTP keep-alive requests, which do not generate a new SYN). **IPv4 only** — not captured for
+  direct IPv6 connections (transparent when a load balancer forwards internally over IPv4).
+  See [EBPF-SETUP.md](EBPF-SETUP.md) for setup, kernel requirements, and deployment options.
 
 **Examples:**
 
