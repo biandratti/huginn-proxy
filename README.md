@@ -120,6 +120,7 @@ Fingerprints are automatically extracted and injected as headers:
 x-huginn-net-ja4: t13d3112h2_e8f1e7e78f70_b26ce05bbdd6
 x-huginn-net-ja4-raw: t13d3112h2_d7c3e2abb617_cad92ccb4254
 x-huginn-net-akamai: 3:100;4:10485760;2:0|1048510465|0|
+x-huginn-net-tcp: 4:64:0:1460:mss*44,10:mss,sok,ts,nop,ws
 ```
 
 See [JA4 specification](https://github.com/FoxIO-LLC/ja4)

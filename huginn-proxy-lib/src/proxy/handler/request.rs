@@ -147,11 +147,18 @@ pub async fn handle_proxy_request(
                 }
             }
         }
-        if let Some(ref syn_fp) = syn_fingerprint {
-            debug!("Handler: injecting {} header: {}", names::TCP_SYN, syn_fp.raw_signature);
-            if let Ok(hv) = hyper::header::HeaderValue::from_str(&syn_fp.raw_signature) {
-                req.headers_mut()
-                    .insert(HeaderName::from_static(names::TCP_SYN), hv);
+        match syn_fingerprint {
+            Some(ref syn_fp) => {
+                debug!("Handler: injecting {} header: {}", names::TCP_SYN, syn_fp.raw_signature);
+                if let Ok(hv) = hyper::header::HeaderValue::from_str(&syn_fp.raw_signature) {
+                    req.headers_mut()
+                        .insert(HeaderName::from_static(names::TCP_SYN), hv);
+                }
+            }
+            None => {
+                debug!(
+                    "Handler: no TCP SYN fingerprint available — keep-alive request or SYN not captured"
+                );
             }
         }
     }

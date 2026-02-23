@@ -1,9 +1,12 @@
 use std::net::Ipv4Addr;
 
-use aya::maps::HashMap;
+#[cfg(target_os = "linux")]
+use libc;
+
+use aya::maps::{Array, HashMap};
 use aya::programs::{Xdp, XdpFlags};
 use aya::{Ebpf, EbpfLoader};
-use tracing::{info, warn};
+use tracing::{debug, info, warn};
 
 use crate::types::SynRawData;
 use crate::EbpfError;
@@ -11,6 +14,15 @@ use crate::EbpfError;
 /// Raw bytes of the compiled XDP BPF object, embedded at compile time.
 /// `include_bytes_aligned!` ensures 8-byte alignment required by aya's ELF parser.
 static XDP_BPF_BYTES: &[u8] = aya::include_bytes_aligned!(concat!(env!("OUT_DIR"), "/xdp.bpf.o"));
+
+/// If `current_syn_counter - stored_tick > STALE_TICK_THRESHOLD`, the map entry
+/// is considered stale. This guards against port reuse: a new client on the same
+/// src_ip:src_port after many intervening connections would get the wrong fingerprint.
+///
+/// Value chosen to be 2× the LRU map capacity (8192) so that a legitimately slow
+/// HTTP session still gets a valid result even under moderate load, while obvious
+/// port-reuse cases (thousands of intervening SYNs) are discarded.
+const STALE_TICK_THRESHOLD: u64 = 16_384;
 
 /// Manages the eBPF XDP program lifecycle and provides SYN data lookups.
 ///
@@ -36,6 +48,16 @@ impl EbpfProbe {
     /// Both values are patched into the XDP program's `.rodata` via `EbpfLoader::set_global`
     /// before the kernel loads the program, matching `cilium/ebpf`'s `spec.Variables` pattern.
     pub fn new(interface: &str, dst_ip: Ipv4Addr, dst_port: u16) -> Result<Self, EbpfError> {
+        // Remove the locked memory limit so BPF maps can be created without depending on
+        // `ulimits: memlock: -1` in the deployment environment. Equivalent to
+        // ebpf-web-fingerprint's `rlimit.RemoveMemlock()` in Go.
+        #[cfg(target_os = "linux")]
+        unsafe {
+            let rlim =
+                libc::rlimit { rlim_cur: libc::RLIM_INFINITY, rlim_max: libc::RLIM_INFINITY };
+            let _ = libc::setrlimit(libc::RLIMIT_MEMLOCK, &rlim);
+        }
+
         // XDP compares ip->daddr and tcp->dest (both network-byte-order fields) against these
         // globals. On a little-endian CPU, network-order bytes [a,b,c,d] in the packet are read
         // as u32::from_ne_bytes([a,b,c,d]). We replicate the same encoding here so the
@@ -81,30 +103,59 @@ impl EbpfProbe {
     /// Look up the TCP SYN data for a client connection.
     ///
     /// Should be called immediately after `TcpStream::accept()` while the BPF
-    /// map entry is still fresh. Returns `None` if the SYN was not captured
-    /// (e.g., program just started, IPv6 client, or map entry evicted).
+    /// map entry is still fresh. Returns `None` if:
+    /// - the SYN was not captured (program just started, IPv6 client, map entry evicted), or
+    /// - the entry is stale (more than `STALE_TICK_THRESHOLD` SYNs have arrived since capture).
     pub fn lookup(&self, src_ip: Ipv4Addr, src_port: u16) -> Option<SynRawData> {
         let map_data = self._ebpf.map("tcp_syn_map")?;
         let map = HashMap::<_, u64, SynRawData>::try_from(map_data).ok()?;
 
         let key = make_bpf_key(src_ip, src_port);
-        match map.get(&key, 0) {
-            Ok(val) => {
-                // Sanity check: verify src_port matches to detect hash collisions
-                let stored_port = u16::from_be(val.src_port);
-                if stored_port != src_port {
-                    warn!(
-                        ?src_ip,
-                        src_port,
-                        stored_port,
-                        "BPF map port mismatch — possible hash collision, ignoring"
-                    );
-                    return None;
-                }
-                Some(val)
+        let val = match map.get(&key, 0) {
+            Ok(v) => v,
+            Err(_) => {
+                debug!(?src_ip, src_port, "SYN map miss — no entry (keep-alive or not captured)");
+                return None;
             }
-            Err(_) => None,
+        };
+
+        // Sanity: verify src_port matches to detect map key collisions.
+        let stored_port = u16::from_be(val.src_port);
+        if stored_port != src_port {
+            warn!(
+                ?src_ip,
+                src_port, stored_port, "BPF map port mismatch — possible hash collision, ignoring"
+            );
+            return None;
         }
+
+        // Stale detection: compare stored tick against the current global counter.
+        // If many SYNs have arrived since this entry was written, the entry may
+        // belong to an earlier connection that reused the same src_ip:src_port.
+        if let Some(current_tick) = self.read_current_tick() {
+            let age = current_tick.saturating_sub(val.tick);
+            if age > STALE_TICK_THRESHOLD {
+                warn!(
+                    ?src_ip,
+                    src_port,
+                    stored_tick = val.tick,
+                    current_tick,
+                    age,
+                    threshold = STALE_TICK_THRESHOLD,
+                    "SYN map entry is stale — discarding"
+                );
+                return None;
+            }
+        }
+
+        Some(val)
+    }
+
+    /// Read the current value of the global SYN counter from the `syn_counter` BPF map.
+    fn read_current_tick(&self) -> Option<u64> {
+        let map_data = self._ebpf.map("syn_counter")?;
+        let map = Array::<_, u64>::try_from(map_data).ok()?;
+        map.get(&0, 0).ok()
     }
 
     pub fn interface(&self) -> &str {

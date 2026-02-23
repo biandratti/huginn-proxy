@@ -33,6 +33,7 @@ huginn-net-tls = "1.7.2"
 hyper = { version = "1.8.1", features = ["full"] }
 hyper-util = { version = "0.1.20", features = ["full"] }
 ipnet = "2.11.0"
+libc = "0.2.182"
 notify = "8.2.0"
 opentelemetry = { version = "0.31.0", features = ["metrics"] }
 opentelemetry-prometheus = "0.31.0"

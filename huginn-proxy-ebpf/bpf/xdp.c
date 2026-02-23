@@ -46,15 +46,28 @@ volatile const __be32 dst_ip = 0;
 /*
  * Data extracted from each TCP SYN packet.
  * Mirror of the Rust SynRawData struct — layout must match exactly.
+ *
+ * Layout (64 bytes total):
+ *   offset  0: src_addr  (4)
+ *   offset  4: src_port  (2)
+ *   offset  6: window    (2)
+ *   offset  8: optlen    (2)
+ *   offset 10: ip_ttl    (1)
+ *   offset 11: _pad      (1)
+ *   offset 12: options   (40)
+ *   offset 52: _pad2     (4) — align tick to 8-byte boundary
+ *   offset 56: tick      (8)
  */
 struct tcp_syn_val {
-    __be32 src_addr;      /* client IP (network byte order) */
-    __be16 src_port;      /* client port (network byte order) */
-    __be16 window;        /* TCP window size */
-    __u16  optlen;        /* length of the TCP options captured */
-    __u8   ip_ttl;        /* IP TTL */
-    __u8   _pad;          /* explicit padding — Rust struct has this too */
+    __be32 src_addr;               /* client IP (network byte order) */
+    __be16 src_port;               /* client port (network byte order) */
+    __be16 window;                 /* TCP window size */
+    __u16  optlen;                 /* length of the TCP options captured */
+    __u8   ip_ttl;                 /* IP TTL */
+    __u8   _pad;                   /* explicit padding — mirrors Rust struct */
     __u8   options[TCPOPT_MAXLEN]; /* raw TCP options bytes */
+    __u8   _pad2[4];               /* align tick to 8-byte boundary */
+    __u64  tick;                   /* global SYN counter at capture time */
 };
 
 /*
@@ -67,6 +80,20 @@ struct {
     __type(key, __u64);
     __type(value, struct tcp_syn_val);
 } tcp_syn_map SEC(".maps");
+
+/*
+ * Monotonic SYN counter — single element ARRAY used as a global tick.
+ * Incremented atomically on every captured SYN. Stored in each map entry
+ * so userspace can detect stale lookups (entries whose tick is far behind
+ * the current counter were captured a long time ago and may belong to a
+ * different connection on the same src_ip:src_port).
+ */
+struct {
+    __uint(type, BPF_MAP_TYPE_ARRAY);
+    __uint(max_entries, 1);
+    __type(key, __u32);
+    __type(value, __u64);
+} syn_counter SEC(".maps");
 
 
 /*
@@ -97,6 +124,13 @@ static void __always_inline handle_tcp_syn(struct iphdr *ip,
     if (tcp_hdr_len < sizeof(*tcp))
         return;
 
+    /* Atomically increment the global SYN counter and capture its value. */
+    __u64 tick = 0;
+    __u32 zero = 0;
+    __u64 *counter = bpf_map_lookup_elem(&syn_counter, &zero);
+    if (counter)
+        tick = __sync_fetch_and_add(counter, 1);
+
     struct tcp_syn_val val = {
         .src_addr = ip->saddr,
         .src_port = tcp->source,
@@ -104,6 +138,8 @@ static void __always_inline handle_tcp_syn(struct iphdr *ip,
         .optlen   = tcp_hdr_len - sizeof(*tcp),
         .ip_ttl   = ip->ttl,
         ._pad     = 0,
+        ._pad2    = {0},
+        .tick     = tick,
     };
 
     __u8 *options = (__u8 *)(tcp + 1);
