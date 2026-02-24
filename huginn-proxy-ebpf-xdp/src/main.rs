@@ -161,10 +161,11 @@ static syn_counter: Array<u64> = Array::with_max_entries(1, 0);
 unsafe fn ptr_at<T>(ctx: &XdpContext, offset: usize) -> Option<*const T> {
     let start = ctx.data();
     let end = ctx.data_end();
-    if start + offset + mem::size_of::<T>() > end {
+    let access_end = start.checked_add(offset)?.checked_add(mem::size_of::<T>())?;
+    if access_end > end {
         return None;
     }
-    Some((start + offset) as *const T)
+    Some(start.checked_add(offset)? as *const T)
 }
 
 // ── Entry point ──────────────────────────────────────────────────────────────
@@ -182,19 +183,19 @@ fn try_xdp_syn(ctx: &XdpContext) -> Result<(), ()> {
 
     // ── Ethernet ─────────────────────────────────────────────────────────────
     let eth = unsafe { ptr_at::<EthHdr>(ctx, offset).ok_or(())? };
-    offset += mem::size_of::<EthHdr>();
+    offset = offset.saturating_add(mem::size_of::<EthHdr>());
 
     let mut eth_type = unsafe { (*eth).h_proto };
 
     // Up to two VLAN tags (QinQ / 802.1ad)
     if eth_type == ETH_P_8021Q || eth_type == ETH_P_8021AD {
         let vlan = unsafe { ptr_at::<VlanHdr>(ctx, offset).ok_or(())? };
-        offset += mem::size_of::<VlanHdr>();
+        offset = offset.saturating_add(mem::size_of::<VlanHdr>());
         eth_type = unsafe { (*vlan).encapsulated_proto };
     }
     if eth_type == ETH_P_8021Q || eth_type == ETH_P_8021AD {
         let vlan = unsafe { ptr_at::<VlanHdr>(ctx, offset).ok_or(())? };
-        offset += mem::size_of::<VlanHdr>();
+        offset = offset.saturating_add(mem::size_of::<VlanHdr>());
         eth_type = unsafe { (*vlan).encapsulated_proto };
     }
 
@@ -205,11 +206,11 @@ fn try_xdp_syn(ctx: &XdpContext) -> Result<(), ()> {
     // ── IPv4 ─────────────────────────────────────────────────────────────────
     let ip = unsafe { ptr_at::<IpHdr>(ctx, offset).ok_or(())? };
 
-    let ip_hdr_len = unsafe { (*ip).ihl() as usize * 4 };
+    let ip_hdr_len = unsafe { usize::from((*ip).ihl()).saturating_mul(4) };
     if ip_hdr_len < mem::size_of::<IpHdr>() {
         return Ok(());
     }
-    offset += mem::size_of::<IpHdr>();
+    offset = offset.saturating_add(mem::size_of::<IpHdr>());
 
     // Drop fragmented packets
     let frag_off = unsafe { (*ip).frag_off };
@@ -228,12 +229,12 @@ fn try_xdp_syn(ctx: &XdpContext) -> Result<(), ()> {
     }
 
     // Skip IP options if present
-    offset += ip_hdr_len - mem::size_of::<IpHdr>();
+    offset = offset.saturating_add(ip_hdr_len.saturating_sub(mem::size_of::<IpHdr>()));
 
     // ── TCP ──────────────────────────────────────────────────────────────────
     let tcp = unsafe { ptr_at::<TcpHdr>(ctx, offset).ok_or(())? };
 
-    let tcp_hdr_len = unsafe { (*tcp).doff() as usize * 4 };
+    let tcp_hdr_len = unsafe { usize::from((*tcp).doff()).saturating_mul(4) };
     if tcp_hdr_len < mem::size_of::<TcpHdr>() {
         return Ok(());
     }
@@ -308,8 +309,8 @@ fn handle_tcp_syn(
     }
 
     // ── Build map value ──────────────────────────────────────────────────────
-    let tcp_hdr_len = unsafe { (*tcp).doff() as usize * 4 };
-    let optlen = (tcp_hdr_len - mem::size_of::<TcpHdr>()).min(TCPOPT_MAXLEN);
+    let tcp_hdr_len = unsafe { usize::from((*tcp).doff()).saturating_mul(4) };
+    let optlen = tcp_hdr_len.saturating_sub(mem::size_of::<TcpHdr>()).min(TCPOPT_MAXLEN);
 
     let mut val = SynRawData {
         src_addr: unsafe { (*ip).saddr },
@@ -317,7 +318,7 @@ fn handle_tcp_syn(
         window: unsafe { (*tcp).window },
         optlen: optlen as u16,
         ip_ttl: unsafe { (*ip).ttl },
-        ip_olen: (ip_hdr_len - mem::size_of::<IpHdr>()) as u8,
+        ip_olen: ip_hdr_len.saturating_sub(mem::size_of::<IpHdr>()) as u8,
         options: [0u8; 40],
         quirks,
         tick,
@@ -339,7 +340,12 @@ fn handle_tcp_syn(
             break;
         }
         let byte_ptr = unsafe { opts_ptr.add(i) };
-        if (byte_ptr as usize) + 1 > data_end {
+        // Use pointer arithmetic (not integer +1) so the BPF verifier keeps
+        // PTR_TO_PACKET type on the bounds-check register and extends the
+        // readable range after the check. Integer saturating_add(1) demotes
+        // the register to SCALAR, breaking the verifier's range tracking.
+        let next_ptr = unsafe { byte_ptr.add(1) };
+        if next_ptr as usize > data_end {
             break;
         }
         val.options[i] = unsafe { *byte_ptr };

@@ -1,5 +1,5 @@
 name: 'Setup eBPF build dependencies'
-description: 'Install Rust nightly + rust-src required to compile huginn-proxy-ebpf-programs for bpfel-unknown-none'
+description: 'Install Rust nightly + rust-src required to compile huginn-proxy-ebpf-xdp for bpfel-unknown-none'
 runs:
   using: 'composite'
   steps:

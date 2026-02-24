@@ -5,7 +5,7 @@
 [workspace]
 
 [package]
-name = "huginn-proxy-ebpf-programs"
+name = "huginn-proxy-ebpf-xdp"
 version = "0.1.0"
 edition = "2021"
 publish = false
@@ -15,5 +15,5 @@ aya-ebpf = "0.1"
 huginn-proxy-ebpf-common = { path = "../huginn-proxy-ebpf-common" }
 
 [[bin]]
-name = "huginn-proxy-ebpf-programs"
+name = "huginn-proxy-ebpf-xdp"
 path = "src/main.rs"

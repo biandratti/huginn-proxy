@@ -99,7 +99,7 @@ name = "huginn-proxy-ebpf-common"
 version = "0.1.0"
 
 [[package]]
-name = "huginn-proxy-ebpf-programs"
+name = "huginn-proxy-ebpf-xdp"
 version = "0.1.0"
 dependencies = [
  "aya-ebpf",

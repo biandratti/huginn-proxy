@@ -8,7 +8,7 @@ members = [
     "tests-browsers",
     "tests-e2e",
 ]
-# huginn-proxy-ebpf-programs is intentionally NOT a workspace member:
+# huginn-proxy-ebpf-xdp is intentionally NOT a workspace member:
 # it uses a different toolchain (nightly) and target (bpfel-unknown-none),
 # and is compiled independently by huginn-proxy-ebpf's build.rs.
 resolver = "2"
