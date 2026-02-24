@@ -18,8 +18,25 @@
 
 char __license[] SEC("license") = "Dual MIT/GPL";
 
-#define IP_MF     0x2000
-#define IP_OFFSET 0x1FFF
+#define IP_RF     0x8000  /* reserved / must-be-zero bit */
+#define IP_DF     0x4000  /* don't fragment */
+#define IP_MF     0x2000  /* more fragments */
+#define IP_OFFSET 0x1FFF  /* fragment offset mask */
+
+/*
+ * Quirk bitmask flags — mirror of the QUIRK_* constants in huginn-proxy-ebpf/src/types.rs.
+ * Both sides must stay in sync.
+ */
+#define QUIRK_DF           (1u << 0)  /* IP don't-fragment bit set */
+#define QUIRK_NONZERO_ID   (1u << 1)  /* non-zero IP ID with DF set (id+) */
+#define QUIRK_ZERO_ID      (1u << 2)  /* zero IP ID without DF (id-) */
+#define QUIRK_MUST_BE_ZERO (1u << 3)  /* reserved bit in frag_off set (0+) */
+#define QUIRK_ECN          (1u << 4)  /* ECE or CWR flag in TCP (ecn) */
+#define QUIRK_SEQ_ZERO     (1u << 5)  /* TCP sequence number is zero (seq-) */
+#define QUIRK_ACK_NONZERO  (1u << 6)  /* non-zero ACK in SYN (ack+) */
+#define QUIRK_NONZERO_URG  (1u << 7)  /* non-zero urgent pointer (uptr+) */
+#define QUIRK_URG          (1u << 8)  /* URG flag set (urgf+) */
+#define QUIRK_PUSH         (1u << 9)  /* PUSH flag set (pushf+) */
 
 /*
  * Maximum bytes of TCP options we copy from the SYN packet.
@@ -55,7 +72,7 @@ volatile const __be32 dst_ip = 0;
  *   offset 10: ip_ttl    (1)
  *   offset 11: ip_olen   (1)  — IP options length: ip->ihl*4 - 20
  *   offset 12: options   (40)
- *   offset 52: _pad2     (4) — align tick to 8-byte boundary
+ *   offset 52: quirks    (4) — QUIRK_* bitmask from IP/TCP headers
  *   offset 56: tick      (8)
  */
 struct tcp_syn_val {
@@ -66,7 +83,7 @@ struct tcp_syn_val {
     __u8   ip_ttl;                 /* IP TTL */
     __u8   ip_olen;                /* IP options length in bytes (ip->ihl*4 - 20) */
     __u8   options[TCPOPT_MAXLEN]; /* raw TCP options bytes */
-    __u8   _pad2[4];               /* align tick to 8-byte boundary */
+    __u32  quirks;                 /* QUIRK_* bitmask from IP and TCP headers */
     __u64  tick;                   /* global SYN counter at capture time */
 };
 
@@ -132,6 +149,20 @@ static void __always_inline handle_tcp_syn(struct iphdr *ip,
     if (counter)
         tick = __sync_fetch_and_add(counter, 1);
 
+    /* Build quirk bitmask from IP and TCP headers. */
+    __u32 quirks = 0;
+    int df = !!(ip->frag_off & __constant_htons(IP_DF));
+    if (df)                                              quirks |= QUIRK_DF;
+    if (df && ip->id != 0)                               quirks |= QUIRK_NONZERO_ID;
+    if (!df && ip->id == 0)                              quirks |= QUIRK_ZERO_ID;
+    if (ip->frag_off & __constant_htons(IP_RF))          quirks |= QUIRK_MUST_BE_ZERO;
+    if (tcp->ece || tcp->cwr)                            quirks |= QUIRK_ECN;
+    if (tcp->seq == 0)                                   quirks |= QUIRK_SEQ_ZERO;
+    if (tcp->ack_seq != 0)                               quirks |= QUIRK_ACK_NONZERO;
+    if (tcp->urg_ptr != 0)                               quirks |= QUIRK_NONZERO_URG;
+    if (tcp->urg)                                        quirks |= QUIRK_URG;
+    if (tcp->psh)                                        quirks |= QUIRK_PUSH;
+
     struct tcp_syn_val val = {
         .src_addr = ip->saddr,
         .src_port = tcp->source,
@@ -139,7 +170,7 @@ static void __always_inline handle_tcp_syn(struct iphdr *ip,
         .optlen   = tcp_hdr_len - sizeof(*tcp),
         .ip_ttl   = ip->ttl,
         .ip_olen  = (__u8)(ip_hdr_len - sizeof(*ip)), /* IP options: ihl*4 - 20 */
-        ._pad2    = {0},
+        .quirks   = quirks,
         .tick     = tick,
     };
 

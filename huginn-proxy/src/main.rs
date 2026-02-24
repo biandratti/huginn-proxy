@@ -108,8 +108,7 @@ async fn main() -> Result<(), BoxError> {
                     // XDP program filters non-IPv4 at entry; V4 is always correct here.
                     ip_version: IpVersion::V4,
                     olen: raw.ip_olen,
-                    // DF, ECN, seq=0, ack+, push/urg flags — readable in XDP, not yet extracted.
-                    quirks: vec![],
+                    quirks: raw.decode_quirks(),
                     // SYN packets never carry payload — invariant by TCP spec.
                     pclass: PayloadSize::Zero,
                 };

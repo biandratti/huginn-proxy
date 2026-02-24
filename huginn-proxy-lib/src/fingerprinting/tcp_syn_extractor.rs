@@ -5,6 +5,72 @@ use huginn_net_tcp::tcp::{IpVersion, PayloadSize, TcpOption};
 use huginn_net_tcp::{ttl, window_size};
 use tracing::warn;
 
+/// Results of scanning raw TCP option bytes for quirk-relevant values.
+///
+/// `parse_options_raw` gives us option *types* and `mss`/`wscale` values but
+/// does not expose timestamp values or trailing padding. We scan the bytes once
+/// ourselves to fill those gaps.
+struct OptionQuirks {
+    /// `ts_val` from the Timestamp option (kind=8). `None` if TS not present.
+    ts_val: Option<u32>,
+    /// `ts_ecr` from the Timestamp option (kind=8). `None` if TS not present.
+    ts_ecr: Option<u32>,
+    /// Non-zero bytes found after an EOL option — maps to quirk `opt+`.
+    trailing_nonzero: bool,
+}
+
+/// Scan raw TCP option bytes for values needed to derive option-based quirks.
+///
+/// Assumes the bytes are already validated as non-malformed by `parse_options_raw`.
+fn scan_option_quirks(opts: &[u8]) -> OptionQuirks {
+    let mut i = 0;
+    let mut ts_val = None;
+    let mut ts_ecr = None;
+
+    while i < opts.len() {
+        match opts[i] {
+            0 => {
+                // EOL: remaining padding bytes should be zero; non-zero → opt+.
+                let trailing = opts.get(i + 1..).unwrap_or(&[]);
+                return OptionQuirks {
+                    ts_val,
+                    ts_ecr,
+                    trailing_nonzero: trailing.iter().any(|&b| b != 0),
+                };
+            }
+            1 => i += 1, // NOP: single byte, no length field
+            kind => {
+                let Some(&len_byte) = opts.get(i + 1) else {
+                    break;
+                };
+                let len = len_byte as usize;
+                if len < 2 || i + len > opts.len() {
+                    break;
+                }
+                // TS option: kind=8, len=10, ts_val(4 B) | ts_ecr(4 B)
+                if kind == 8 && len == 10 {
+                    ts_val = Some(u32::from_be_bytes([
+                        opts[i + 2],
+                        opts[i + 3],
+                        opts[i + 4],
+                        opts[i + 5],
+                    ]));
+                    ts_ecr = Some(u32::from_be_bytes([
+                        opts[i + 6],
+                        opts[i + 7],
+                        opts[i + 8],
+                        opts[i + 9],
+                    ]));
+                }
+                i += len;
+            }
+        }
+    }
+
+    // Reached end of buffer without EOL → no trailing non-zero bytes.
+    OptionQuirks { ts_val, ts_ecr, trailing_nonzero: false }
+}
+
 /// Raw TCP SYN data as extracted by the eBPF XDP program.
 ///
 /// This is a transport type: `huginn-proxy-ebpf` populates it from the BPF map,
@@ -34,8 +100,8 @@ pub struct TcpSynData {
     /// in `SynRawData` and forwarded here.
     pub olen: u8,
     /// IP/TCP header quirks (DF bit, ECN, zero-seq, non-zero ACK, URG/PUSH flags, …).
-    /// All are readable from the IP/TCP headers already parsed by the XDP program;
-    /// not yet implemented in `xdp.c`.
+    /// Extracted from IP/TCP headers in `xdp.c` and decoded via `decode_quirks` in `main.rs`.
+    /// `parse_syn_raw` merges these with option-derived quirks (exws, ts1-, ts2+, opt+).
     pub quirks: Vec<Quirk>,
     /// Payload size classification.
     /// TCP SYN packets never carry a payload, so this is always `PayloadSize::Zero`
@@ -87,6 +153,26 @@ pub fn parse_syn_raw(data: &TcpSynData) -> Option<TcpObservation> {
         &data.ip_version,
     );
 
+    // Merge IP/TCP-header quirks (from XDP) with option-derived quirks computed here.
+    let mut quirks = data.quirks.clone();
+
+    // exws: window scale > 14 is considered excessive by p0f.
+    if parsed.wscale.map(|ws| ws > 14).unwrap_or(false) {
+        quirks.push(Quirk::ExcessiveWindowScaling);
+    }
+
+    // ts1-, ts2+, opt+: scan raw bytes for values parse_options_raw doesn't expose.
+    let oq = scan_option_quirks(valid_opts);
+    if oq.ts_val == Some(0) {
+        quirks.push(Quirk::OwnTimestampZero);
+    }
+    if oq.ts_ecr.map(|v| v != 0).unwrap_or(false) {
+        quirks.push(Quirk::PeerTimestampNonZero);
+    }
+    if oq.trailing_nonzero {
+        quirks.push(Quirk::TrailinigNonZero);
+    }
+
     Some(TcpObservation {
         version: data.ip_version,
         ittl,
@@ -95,7 +181,7 @@ pub fn parse_syn_raw(data: &TcpSynData) -> Option<TcpObservation> {
         wsize,
         wscale: parsed.wscale,
         olayout: parsed.olayout,
-        quirks: data.quirks.clone(),
+        quirks,
         pclass: data.pclass,
     })
 }

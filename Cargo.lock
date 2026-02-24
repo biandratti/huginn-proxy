@@ -973,6 +973,7 @@ name = "huginn-proxy-ebpf"
 version = "0.1.0"
 dependencies = [
  "aya",
+ "huginn-net-db",
  "libc",
  "thiserror 2.0.18",
  "tracing",

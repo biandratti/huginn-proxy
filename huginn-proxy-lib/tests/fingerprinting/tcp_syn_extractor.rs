@@ -1,5 +1,5 @@
 use huginn_net_tcp::tcp::{IpVersion, PayloadSize};
-use huginn_proxy_lib::fingerprinting::tcp_syn::{parse_syn_raw, TcpSynData};
+use huginn_proxy_lib::fingerprinting::tcp_syn_extractor::{parse_syn_raw, TcpSynData};
 
 type TestResult = Result<(), Box<dyn std::error::Error + Send + Sync>>;
 

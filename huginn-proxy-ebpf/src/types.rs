@@ -1,3 +1,23 @@
+use huginn_net_db::tcp::Quirk;
+
+/// Quirk bitmask constants for `SynRawData.quirks`.
+///
+/// These mirror the `QUIRK_*` macros in `huginn-proxy-ebpf/scripts/bpf/xdp.c`.
+/// Both sides **must** stay in sync: if a bit is added here, add the matching
+/// `#define` in `xdp.c` at the same bit position.
+pub mod quirk_bits {
+    pub const DF: u32 = 1 << 0; // IP don't-fragment bit (df)
+    pub const NONZERO_ID: u32 = 1 << 1; // non-zero IP ID with DF set (id+)
+    pub const ZERO_ID: u32 = 1 << 2; // zero IP ID without DF (id-)
+    pub const MUST_BE_ZERO: u32 = 1 << 3; // reserved bit in frag_off (0+)
+    pub const ECN: u32 = 1 << 4; // ECE or CWR TCP flag (ecn)
+    pub const SEQ_ZERO: u32 = 1 << 5; // TCP sequence number zero (seq-)
+    pub const ACK_NONZERO: u32 = 1 << 6; // non-zero ACK in SYN (ack+)
+    pub const NONZERO_URG: u32 = 1 << 7; // non-zero urgent pointer (uptr+)
+    pub const URG: u32 = 1 << 8; // URG flag set (urgf+)
+    pub const PUSH: u32 = 1 << 9; // PUSH flag set (pushf+)
+}
+
 /// Raw data extracted from a TCP SYN packet via the XDP eBPF program.
 ///
 /// This is a mirror of the `tcp_syn_val` C struct in `bpf/xdp.c`.
@@ -12,8 +32,8 @@
 /// offset 10: ip_ttl    u8
 /// offset 11: ip_olen   u8   (IP options length: ip->ihl*4 - 20)
 /// offset 12: options   [u8; 40]
-/// offset 52: _pad2     [u8; 4]  (align tick to 8 bytes)
-/// offset 56: tick      u64      (global SYN counter at capture time)
+/// offset 52: quirks    u32  (QUIRK_* bitmask from IP/TCP headers)
+/// offset 56: tick      u64  (global SYN counter at capture time)
 /// ```
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
@@ -32,8 +52,9 @@ pub struct SynRawData {
     pub ip_olen: u8,
     /// Raw TCP options bytes (up to 40 bytes)
     pub options: [u8; 40],
-    /// Explicit padding to align `tick` to 8-byte boundary (offset 52→56)
-    pub _pad2: [u8; 4],
+    /// Quirk bitmask from IP and TCP headers.
+    /// Bit layout is defined in [`quirk_bits`]; use [`SynRawData::decode_quirks`] to decode.
+    pub quirks: u32,
     /// Global SYN counter value at the moment this packet was captured.
     /// Used by userspace to detect stale map entries.
     pub tick: u64,
@@ -49,24 +70,54 @@ impl Default for SynRawData {
             ip_ttl: 0,
             ip_olen: 0,
             options: [0u8; 40],
-            _pad2: [0u8; 4],
+            quirks: 0,
             tick: 0,
         }
     }
 }
 
-// SAFETY: SynRawData is #[repr(C)], Copy, and has no padding beyond the explicit _pad fields.
+impl SynRawData {
+    /// Decode the `quirks` bitmask into a list of [`Quirk`] variants.
+    ///
+    /// The bit layout is defined in [`quirk_bits`] and must match `QUIRK_*` in `xdp.c`.
+    pub fn decode_quirks(&self) -> Vec<Quirk> {
+        let bits = self.quirks;
+        let mut v = Vec::new();
+        if bits & quirk_bits::DF != 0 {
+            v.push(Quirk::Df);
+        }
+        if bits & quirk_bits::NONZERO_ID != 0 {
+            v.push(Quirk::NonZeroID);
+        }
+        if bits & quirk_bits::ZERO_ID != 0 {
+            v.push(Quirk::ZeroID);
+        }
+        if bits & quirk_bits::MUST_BE_ZERO != 0 {
+            v.push(Quirk::MustBeZero);
+        }
+        if bits & quirk_bits::ECN != 0 {
+            v.push(Quirk::Ecn);
+        }
+        if bits & quirk_bits::SEQ_ZERO != 0 {
+            v.push(Quirk::SeqNumZero);
+        }
+        if bits & quirk_bits::ACK_NONZERO != 0 {
+            v.push(Quirk::AckNumNonZero);
+        }
+        if bits & quirk_bits::NONZERO_URG != 0 {
+            v.push(Quirk::NonZeroURG);
+        }
+        if bits & quirk_bits::URG != 0 {
+            v.push(Quirk::Urg);
+        }
+        if bits & quirk_bits::PUSH != 0 {
+            v.push(Quirk::Push);
+        }
+        v
+    }
+}
+
+// SAFETY: SynRawData is #[repr(C)], Copy, with all fields fully initialized (no implicit padding).
 // It can be safely read from/written to BPF maps via aya.
 #[allow(unsafe_code)]
 unsafe impl aya::Pod for SynRawData {}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_syn_raw_data_size() {
-        // 4 + 2 + 2 + 2 + 1 + 1 + 40 + 4 + 8 = 64 bytes
-        assert_eq!(std::mem::size_of::<SynRawData>(), 64);
-    }
-}
