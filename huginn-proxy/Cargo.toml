@@ -11,6 +11,7 @@ publish = false
 ebpf-tcp = ["dep:huginn-proxy-ebpf"]
 
 [dependencies]
+huginn-net-tcp.workspace = true
 huginn-proxy-ebpf = { path = "../huginn-proxy-ebpf", optional = true }
 huginn-proxy-lib = { path = "../huginn-proxy-lib" }
 opentelemetry.workspace = true

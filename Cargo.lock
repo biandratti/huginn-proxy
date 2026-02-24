@@ -957,6 +957,7 @@ dependencies = [
 name = "huginn-proxy"
 version = "0.0.1"
 dependencies = [
+ "huginn-net-tcp",
  "huginn-proxy-ebpf",
  "huginn-proxy-lib",
  "opentelemetry",
