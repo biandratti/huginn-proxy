@@ -157,6 +157,7 @@ jobs:
         crate:
           - huginn-proxy
           - huginn-proxy-lib
+          - huginn-proxy-ebpf
     steps:
       - name: Checkout
         uses: actions/checkout@v6
