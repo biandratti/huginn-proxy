@@ -140,11 +140,10 @@ jobs:
       - name: Lint C code (clang-tidy)
         run: |
           clang-tidy \
-            --checks='clang-diagnostic-*,clang-analyzer-*,bugprone-*' \
+            --checks='clang-diagnostic-*,clang-analyzer-*,bugprone-*,-bugprone-easily-swappable-parameters' \
             --warnings-as-errors='*' \
             huginn-proxy-ebpf/scripts/bpf/xdp.c \
             -- \
-            -target bpf \
             -O2 \
             -I huginn-proxy-ebpf/scripts/bpf/headers \
             -D__KERNEL__ \

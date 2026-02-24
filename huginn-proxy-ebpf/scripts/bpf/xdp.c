@@ -16,7 +16,7 @@
 #include "headers/bpf_endian.h"
 // clang-format on
 
-char __license[] SEC("license") = "Dual MIT/GPL";
+char prog_license[] SEC("license") = "Dual MIT/GPL";
 
 #define IP_RF 0x8000     /* reserved / must-be-zero bit */
 #define IP_DF 0x4000     /* don't fragment */
@@ -124,7 +124,7 @@ static __u64 __always_inline make_key(__u32 ip, __u16 port) {
 /*
  * VLAN header mirror (linux/if_vlan.h not always in UAPI).
  */
-struct _vlan_hdr {
+struct vlan_hdr {
   __be16 h_vlan_TCI;
   __be16 h_vlan_encapsulated_proto;
 };
@@ -202,18 +202,18 @@ int huginn_xdp_syn(struct xdp_md *ctx) {
   // ── Ethernet ──────────────────────────────────────────────────
   struct ethhdr *eth = head;
   head += sizeof(*eth);
-  if (head + (2 * sizeof(struct _vlan_hdr)) > data_end)
+  if (head + (2 * sizeof(struct vlan_hdr)) > data_end)
     return XDP_PASS;
 
   __u16 eth_type = eth->h_proto;
 
   if (proto_is_vlan(eth_type)) {
-    struct _vlan_hdr *vlan = head;
+    struct vlan_hdr *vlan = head;
     head += sizeof(*vlan);
     eth_type = vlan->h_vlan_encapsulated_proto;
   }
   if (proto_is_vlan(eth_type)) {
-    struct _vlan_hdr *vlan = head;
+    struct vlan_hdr *vlan = head;
     head += sizeof(*vlan);
     eth_type = vlan->h_vlan_encapsulated_proto;
   }
