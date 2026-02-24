@@ -6,13 +6,15 @@
 // keyed by (src_ip, src_port). Adapted from ebpf-web-fingerprint (robalb).
 // TLS parsing is intentionally excluded.
 
-#include "headers/bpf_endian.h"
-#include "headers/bpf_helpers.h"
+// clang-format off
 #include <linux/bpf.h>
 #include <linux/if_ether.h>
-#include <linux/in.h>
 #include <linux/ip.h>
+#include <linux/in.h>
 #include <linux/tcp.h>
+#include "headers/bpf_helpers.h"
+#include "headers/bpf_endian.h"
+// clang-format on
 
 char __license[] SEC("license") = "Dual MIT/GPL";
 
