@@ -21,48 +21,49 @@ struct OptionQuirks {
 
 /// Scan raw TCP option bytes for values needed to derive option-based quirks.
 ///
-/// Assumes the bytes are already validated as non-malformed by `parse_options_raw`.
+/// Uses slice operations instead of index arithmetic to satisfy
+/// `clippy::arithmetic_side_effects`. Assumes the bytes are already validated
+/// as non-malformed by `parse_options_raw`.
 fn scan_option_quirks(opts: &[u8]) -> OptionQuirks {
-    let mut i = 0;
+    let mut rest = opts;
     let mut ts_val = None;
     let mut ts_ecr = None;
 
-    while i < opts.len() {
-        match opts[i] {
+    while let Some((&kind, tail)) = rest.split_first() {
+        match kind {
             0 => {
                 // EOL: remaining padding bytes should be zero; non-zero → opt+.
-                let trailing = opts.get(i + 1..).unwrap_or(&[]);
                 return OptionQuirks {
                     ts_val,
                     ts_ecr,
-                    trailing_nonzero: trailing.iter().any(|&b| b != 0),
+                    trailing_nonzero: tail.iter().any(|&b| b != 0),
                 };
             }
-            1 => i += 1, // NOP: single byte, no length field
-            kind => {
-                let Some(&len_byte) = opts.get(i + 1) else {
+            1 => rest = tail, // NOP: single byte, no length field
+            _ => {
+                // Options with kind >= 2: kind(1) + len(1) + data(len-2)
+                let Some((&len_byte, data)) = tail.split_first() else {
                     break;
                 };
                 let len = len_byte as usize;
-                if len < 2 || i + len > opts.len() {
+                // len encodes the total option size including kind and len bytes.
+                let data_len = len.saturating_sub(2);
+                let Some(option_data) = data.get(..data_len) else {
                     break;
-                }
-                // TS option: kind=8, len=10, ts_val(4 B) | ts_ecr(4 B)
+                };
+
+                // TS option: kind=8, len=10 → 8 data bytes: ts_val(4) | ts_ecr(4)
                 if kind == 8 && len == 10 {
-                    ts_val = Some(u32::from_be_bytes([
-                        opts[i + 2],
-                        opts[i + 3],
-                        opts[i + 4],
-                        opts[i + 5],
-                    ]));
-                    ts_ecr = Some(u32::from_be_bytes([
-                        opts[i + 6],
-                        opts[i + 7],
-                        opts[i + 8],
-                        opts[i + 9],
-                    ]));
+                    if let (Some(v), Some(e)) = (option_data.get(..4), option_data.get(4..8)) {
+                        ts_val = Some(u32::from_be_bytes([v[0], v[1], v[2], v[3]]));
+                        ts_ecr = Some(u32::from_be_bytes([e[0], e[1], e[2], e[3]]));
+                    }
                 }
-                i += len;
+
+                let Some(next) = data.get(data_len..) else {
+                    break;
+                };
+                rest = next;
             }
         }
     }
