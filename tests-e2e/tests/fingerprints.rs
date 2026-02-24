@@ -117,10 +117,10 @@ async fn test_tls_fingerprint_injection() -> Result<(), Box<dyn std::error::Erro
     );
     println!("TCP SYN fingerprint ({}): {tcp_fp}", names::TCP_SYN);
 
-    // TCP SYN fingerprint should NOT be present on the second request (HTTP keep-alive reuses TCP)
+    // TCP SYN fingerprint is injected on every request of the connection (same SYN, same fingerprint).
     assert!(
-        !headers2.contains_key(names::TCP_SYN),
-        "TCP SYN fingerprint should NOT be present on keep-alive request (no new SYN)"
+        headers2.contains_key(names::TCP_SYN),
+        "TCP SYN fingerprint should be present on keep-alive request (same TCP connection)"
     );
 
     Ok(())
@@ -342,11 +342,10 @@ async fn test_fingerprinting_disabled_per_route(
         headers2.contains_key(names::TLS_JA4_RAW),
         "TLS fingerprint raw header should be present when fingerprinting is enabled for route"
     );
-    // TCP SYN: second request reuses the same TCP connection as the first (/static request),
-    // so no new SYN is generated. The header is expected to be absent here.
+    // TCP SYN fingerprint is injected on every request of the connection (same SYN, same fingerprint).
     assert!(
-        !headers2.contains_key(names::TCP_SYN),
-        "TCP SYN fingerprint should NOT be present on keep-alive request to /api (no new SYN)"
+        headers2.contains_key(names::TCP_SYN),
+        "TCP SYN fingerprint should be present on keep-alive request to /api (same TCP connection)"
     );
 
     Ok(())

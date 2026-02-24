@@ -60,7 +60,7 @@ fn test_empty_options_returns_some() {
 }
 
 #[test]
-fn test_ttl_field_is_numeric() -> TestResult {
+fn test_ttl_field_is_valid() -> TestResult {
     let (options, optlen) = make_test_options();
     let data = TcpSynData { window: 65535u16.to_be(), ip_ttl: 64, optlen, options };
     let sig = parse_syn_raw(&data)
@@ -70,10 +70,12 @@ fn test_ttl_field_is_numeric() -> TestResult {
         .split(':')
         .nth(1)
         .ok_or("signature missing ittl field")?;
-    assert!(
-        ttl_field.parse::<u16>().is_ok(),
-        "ittl field must be a number, got: {ttl_field}"
-    );
+    // Valid p0f TTL formats: "64" (Value), "64+2" (Distance), "64+?" (Guess), "64-" (Bad)
+    let base = ttl_field
+        .split(['+', '-'])
+        .next()
+        .ok_or("ittl field is empty")?;
+    assert!(base.parse::<u8>().is_ok(), "ittl base must be a number, got: {ttl_field}");
     Ok(())
 }
 
