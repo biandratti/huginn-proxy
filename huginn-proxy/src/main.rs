@@ -54,6 +54,7 @@ async fn main() -> Result<(), BoxError> {
     #[cfg(feature = "ebpf-tcp")]
     let syn_probe: Option<huginn_proxy_lib::SynProbe> = {
         use huginn_net_tcp::tcp::{IpVersion, PayloadSize};
+        use huginn_proxy_ebpf::types::SynRawDataExt as _;
         use huginn_proxy_ebpf::EbpfProbe;
         use huginn_proxy_lib::fingerprinting::{parse_syn_raw, SynResult, TcpSynData};
         use std::net::SocketAddr;

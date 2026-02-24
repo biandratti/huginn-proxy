@@ -1,0 +1,13 @@
+[package]
+name = "huginn-proxy-ebpf-common"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+# Optional: enable aya::Pod impl for the userspace side.
+# NOT enabled when compiled for the BPF kernel target.
+[dependencies]
+aya = { workspace = true, optional = true }
+
+[features]
+aya-pod = ["dep:aya"]

@@ -1,118 +1,71 @@
 use std::path::PathBuf;
 use std::process::Command;
 
-// This build script compiles bpf/xdp.c to BPF bytecode using clang.
-// The output is architecture-independent BPF ELF — the same .o is embedded
-// in both amd64 and arm64 binaries. clang's `-target bpf` handles this automatically.
-// Requires: clang + linux kernel headers (see EBPF-SETUP.md).
+/// Compile the BPF kernel program (`huginn-proxy-ebpf-programs`) using
+/// `cargo +nightly build` for the `bpfel-unknown-none` target.
+///
+/// The resulting ELF binary is embedded into the userspace binary via
+/// `aya::include_bytes_aligned!` in `probe.rs`.
+///
+/// Requirements: Rust nightly toolchain with `rust-src` component.
+/// The `rust-toolchain.toml` in `huginn-proxy-ebpf-programs/` pins the channel.
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    println!("cargo:rerun-if-changed=scripts/bpf/xdp.c");
-    println!("cargo:rerun-if-changed=scripts/bpf/headers/bpf_helpers.h");
-    println!("cargo:rerun-if-changed=scripts/bpf/headers/bpf_endian.h");
+    let manifest_dir = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR")?);
+    let programs_dir = manifest_dir
+        .parent()
+        .ok_or("could not find workspace root")?
+        .join("huginn-proxy-ebpf-programs");
+
+    println!("cargo:rerun-if-changed={}", programs_dir.join("src/main.rs").display());
+    println!("cargo:rerun-if-changed={}", programs_dir.join("Cargo.toml").display());
 
     let out_dir = PathBuf::from(std::env::var("OUT_DIR")?);
-    let out_file = out_dir.join("xdp.bpf.o");
+    let bpf_target_dir = out_dir.join("bpf-programs-target");
 
-    let bpf_src = PathBuf::from("scripts/bpf/xdp.c");
-    let bpf_headers = PathBuf::from("scripts/bpf/headers");
-
-    // On Debian/Ubuntu (multiarch), arch-specific headers live under
-    // /usr/include/<triple>/ (e.g. /usr/include/x86_64-linux-gnu/).
-    // clang with `-target bpf` doesn't automatically add this path, so we
-    // probe common locations and add whichever exists.
-    let multiarch_include = detect_multiarch_include();
-
-    let bpf_headers_str = bpf_headers
-        .to_str()
-        .ok_or("bpf/headers path contains non-UTF-8 characters")?;
-    let bpf_src_str = bpf_src
-        .to_str()
-        .ok_or("bpf/xdp.c path contains non-UTF-8 characters")?;
-    let out_file_str = out_file
-        .to_str()
-        .ok_or("OUT_DIR path contains non-UTF-8 characters")?;
-
-    let mut args: Vec<&str> = vec![
-        "-g",
-        "-O2",
-        "-Wall",
-        "-target",
-        "bpf",
-        // Bundled BPF helper headers (bpf_helpers.h, bpf_endian.h, etc.)
-        "-I",
-        bpf_headers_str,
-        // Standard Linux UAPI headers
-        "-I",
-        "/usr/include",
-    ];
-
-    if let Some(ref path) = multiarch_include {
-        args.push("-I");
-        args.push(path.as_str());
-    }
-
-    args.extend(["-c", bpf_src_str, "-o", out_file_str]);
-
-    let status = Command::new("clang").args(&args).status();
+    // When cargo runs a build script it sets RUSTC, RUSTDOC, and RUSTUP_TOOLCHAIN
+    // pointing at the *current* (stable) toolchain. Those variables would be
+    // inherited by the child cargo process and override the nightly selection we
+    // need. We remove them so rustup can pick the toolchain from the
+    // rust-toolchain.toml that lives in huginn-proxy-ebpf-programs/.
+    let status = Command::new("cargo")
+        .args(["build", "--release", "--package", "huginn-proxy-ebpf-programs"])
+        .env("CARGO_TARGET_DIR", &bpf_target_dir)
+        .env_remove("RUSTC")
+        .env_remove("RUSTDOC")
+        .env_remove("RUSTUP_TOOLCHAIN")
+        .env_remove("RUSTC_WORKSPACE_WRAPPER")
+        .env_remove("RUSTC_WRAPPER")
+        .current_dir(&programs_dir)
+        .status();
 
     match status {
-        Ok(s) if s.success() => {
-            println!("cargo:rustc-env=XDP_BPF_OBJ={}", out_file.display());
-        }
+        Ok(s) if s.success() => {}
         Ok(s) => {
             return Err(format!(
-                "clang failed with exit code {:?}. \
-                Ensure clang and linux-headers-$(uname -r) are installed:\n  \
-                sudo apt install clang linux-headers-$(uname -r)",
+                "cargo build of huginn-proxy-ebpf-programs failed (exit {:?}).\n\
+                Ensure nightly toolchain and rust-src are installed:\n\
+                  rustup toolchain install nightly\n\
+                  rustup component add rust-src --toolchain nightly",
                 s.code()
             )
             .into());
         }
         Err(e) => {
-            return Err(format!(
-                "Failed to run clang: {e}. Install it with: sudo apt install clang"
-            )
-            .into());
+            return Err(format!("failed to run cargo: {e}").into());
         }
     }
 
+    // The compiled BPF ELF binary location
+    let bpf_bin = bpf_target_dir.join("bpfel-unknown-none/release/huginn-proxy-ebpf-programs");
+
+    if !bpf_bin.exists() {
+        return Err(format!("BPF binary not found at {}", bpf_bin.display()).into());
+    }
+
+    // Copy to OUT_DIR with the name probe.rs expects via XDP_BPF_OBJ
+    let out_file = out_dir.join("xdp.bpf.o");
+    std::fs::copy(&bpf_bin, &out_file)?;
+
+    println!("cargo:rustc-env=XDP_BPF_OBJ={}", out_file.display());
     Ok(())
-}
-
-/// Detect the multiarch include directory for the current host.
-///
-/// On Debian/Ubuntu with multiarch, arch-specific headers such as `asm/types.h`
-/// are located under `/usr/include/<triple>/` (e.g. `/usr/include/x86_64-linux-gnu/`).
-/// clang's BPF target does not add this automatically, causing "file not found" errors.
-///
-/// We first try `dpkg-architecture` for accuracy, then fall back to probing
-/// known paths for common architectures.
-fn detect_multiarch_include() -> Option<String> {
-    // Try dpkg-architecture (Debian/Ubuntu)
-    if let Ok(out) = Command::new("dpkg-architecture")
-        .arg("-qDEB_HOST_MULTIARCH")
-        .output()
-    {
-        if out.status.success() {
-            if let Ok(triple) = std::str::from_utf8(&out.stdout) {
-                let triple = triple.trim();
-                let candidate = format!("/usr/include/{triple}");
-                if std::path::Path::new(&candidate).exists() {
-                    return Some(candidate);
-                }
-            }
-        }
-    }
-
-    // Fallback: probe known multiarch paths for common architectures
-    let candidates = [
-        "/usr/include/x86_64-linux-gnu",
-        "/usr/include/aarch64-linux-gnu",
-        "/usr/include/arm-linux-gnueabihf",
-        "/usr/include/riscv64-linux-gnu",
-    ];
-    candidates
-        .iter()
-        .find(|p| std::path::Path::new(p).exists())
-        .map(|p| (*p).to_string())
 }

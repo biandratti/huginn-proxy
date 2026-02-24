@@ -1,13 +1,13 @@
 name: 'Setup eBPF build dependencies'
-description: 'Install clang and linux kernel headers required by the huginn-proxy-ebpf build script'
+description: 'Install Rust nightly + rust-src required to compile huginn-proxy-ebpf-programs for bpfel-unknown-none'
 runs:
   using: 'composite'
   steps:
-    - name: Install clang and kernel headers
+    - name: Install Rust nightly with rust-src
       shell: bash
-      run: |
-        if command -v sudo &> /dev/null; then
-          sudo apt-get update -q && sudo apt-get install -y clang linux-headers-generic
-        else
-          apt-get update -q && apt-get install -y clang linux-headers-generic
-        fi
+      run: rustup toolchain install nightly --component rust-src
+    - name: Install bpf-linker
+      shell: bash
+      # Use nightly to compile bpf-linker: its deps require rustc > the stable MSRV in this repo.
+      # --locked pins to the exact dep versions in bpf-linker's published Cargo.lock.
+      run: cargo +nightly install bpf-linker --locked

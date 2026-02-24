@@ -3,10 +3,14 @@ members = [
     "examples/backend",
     "huginn-proxy",
     "huginn-proxy-ebpf",
+    "huginn-proxy-ebpf-common",
     "huginn-proxy-lib",
     "tests-browsers",
     "tests-e2e",
 ]
+# huginn-proxy-ebpf-programs is intentionally NOT a workspace member:
+# it uses a different toolchain (nightly) and target (bpfel-unknown-none),
+# and is compiled independently by huginn-proxy-ebpf's build.rs.
 resolver = "2"
 
 [workspace.package]
