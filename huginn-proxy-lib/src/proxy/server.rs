@@ -135,7 +135,9 @@ pub async fn run(
 
                 // TCP SYN lookup: happens here, right after accept(), before TLS handshake.
                 // The BPF map entry is freshest at this point.
+                let syn_start = Instant::now();
                 let syn_result = syn_probe.as_ref().map(|probe| probe(peer));
+                let syn_duration = syn_start.elapsed().as_secs_f64();
 
                 let syn_fingerprint: Option<TcpObservation> = match syn_result {
                     Some(ref r) => {
@@ -145,7 +147,7 @@ pub async fn run(
                                 SynResult::Miss => "miss",
                                 SynResult::Malformed => "malformed",
                             };
-                            m.record_tcp_syn_fingerprint(label);
+                            m.record_tcp_syn_fingerprint(label, syn_duration);
                         }
                         match r {
                             SynResult::Hit(obs) => Some(obs.clone()),

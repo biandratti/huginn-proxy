@@ -28,53 +28,12 @@ and [rust-rpxy](https://github.com/junkurihara/rust-rpxy).
 
 ## Quick Start
 
-### Build
+See [`examples/`](examples/) for the full setup guide, including:
 
-```bash
-cargo build --release
-```
-
-### Minimal Configuration
-
-Create `config.toml`:
-
-```toml
-listen = "0.0.0.0:7000"
-
-backends = [
-    { address = "backend:8080", http_version = "preserve" }
-]
-
-routes = [
-    { prefix = "/", backend = "backend:8080" }
-]
-
-[tls]
-cert_path = "/path/to/cert.pem"
-key_path = "/path/to/key.pem"
-alpn = ["h2", "http/1.1"]
-
-[fingerprint]
-tls_enabled = true
-http_enabled = true
-```
-
-## Installation
-
-### From Source
-
-```bash
-git clone https://github.com/biandratti/huginn-proxy.git
-cd huginn-proxy
-cargo build --release
-```
-
-### Docker
-
-```bash
-docker build -t huginn-proxy .
-docker run -v /path/to/config.toml:/config.toml huginn-proxy /config.toml
-```
+- Building from source (standard and with eBPF/TCP SYN fingerprinting)
+- Generating TLS certificates
+- Running with Docker Compose
+- Configuration examples (rate limiting, routing, …)
 
 ## Features
 
@@ -154,7 +113,6 @@ These headers always override any client-provided values to prevent spoofing.
   pooling and HTTP keep-alive reuse
     - Use case: Per-request TLS fingerprinting, TCP SYN fingerprinting (each request generates a
       fresh SYN, so the eBPF map always has an entry), testing/debugging
-    - Performance: Adds latency per request (benchmark pending — see ROADMAP.md)
 
 ## Health Check Endpoints
 
@@ -168,14 +126,6 @@ separate from the main proxy port):
 
 All endpoints return JSON responses (except `/metrics` which returns Prometheus format) and follow Kubernetes health
 check conventions.
-
-## Examples
-
-See the [`examples/`](examples/) directory for:
-
-- Docker Compose setup with TLS termination
-- Rate limiting configurations
-- Advanced routing examples
 
 ## Performance
 
@@ -199,14 +149,16 @@ See [ROADMAP.md](ROADMAP.md) for a detailed list of planned features and upcomin
 
 Each release publishes the following artifacts:
 
-| Artifact | eBPF | OS | Notes |
-|---|---|---|---|
-| `huginn-proxy-{tag}-x86_64-unknown-linux-musl` | ❌ | Linux amd64 | Standard binary, no extra capabilities needed |
-| `huginn-proxy-{tag}-aarch64-unknown-linux-musl` | ❌ | Linux arm64 | Standard binary, no extra capabilities needed |
-| `huginn-proxy-{tag}-x86_64-unknown-linux-musl-ebpf` | ✅ | Linux amd64 | Requires `CAP_BPF`, `CAP_NET_ADMIN`, `CAP_PERFMON` |
-| `huginn-proxy-{tag}-aarch64-unknown-linux-musl-ebpf` | ✅ | Linux arm64 | Requires `CAP_BPF`, `CAP_NET_ADMIN`, `CAP_PERFMON` |
-| `huginn-proxy-{tag}-x86_64-apple-darwin` | ❌ | macOS amd64 | eBPF is Linux-only |
-| `huginn-proxy-{tag}-aarch64-apple-darwin` | ❌ | macOS arm64 | eBPF is Linux-only |
+| Suffix | OS | eBPF |
+|---|---|---|
+| `x86_64-unknown-linux-musl` | Linux amd64 | ❌ |
+| `aarch64-unknown-linux-musl` | Linux arm64 | ❌ |
+| `x86_64-unknown-linux-musl-ebpf` | Linux amd64 | ✅ |
+| `aarch64-unknown-linux-musl-ebpf` | Linux arm64 | ✅ |
+| `x86_64-apple-darwin` | macOS amd64 | ❌ |
+| `aarch64-apple-darwin` | macOS arm64 | ❌ |
+
+eBPF variants require `CAP_BPF`, `CAP_NET_ADMIN`, `CAP_PERFMON`. All artifacts follow the pattern `huginn-proxy-{tag}-{suffix}`.
 
 Docker images (`ghcr.io/biandratti/huginn-proxy`) are built with eBPF support. See [EBPF-SETUP.md](EBPF-SETUP.md) for runtime requirements.
 
@@ -221,6 +173,7 @@ Huginn Proxy uses the [Huginn Net](https://github.com/biandratti/huginn-net) fin
 - **JA4**: TLS fingerprinting follows the [JA4 specification by FoxIO, LLC](https://github.com/FoxIO-LLC/ja4)
 - **Akamai HTTP/2**: HTTP/2 fingerprinting follows
   the [Blackhat EU 2017 specification](https://www.blackhat.com/docs/eu-17/materials/eu-17-Shuster-Passive-Fingerprinting-Of-HTTP2-Clients-wp.pdf)
+- **p0f v3**: TCP SYN fingerprinting follows the [p0f v3 specification by Michal Zalewski](https://lcamtuf.coredump.cx/p0f3/README)
 
 ## Contributing
 

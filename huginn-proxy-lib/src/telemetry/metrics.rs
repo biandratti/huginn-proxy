@@ -58,6 +58,8 @@ pub struct Metrics {
     // TCP SYN fingerprinting metrics (p0f-style via eBPF)
     // result label: "hit" | "miss" | "malformed"
     pub tcp_syn_fingerprints_total: Counter<u64>,
+    pub tcp_syn_fingerprint_duration_seconds: Histogram<f64>,
+    pub tcp_syn_fingerprint_failures_total: Counter<u64>,
 
     pub backend_requests_total: Counter<u64>,
     pub backend_errors_total: Counter<u64>,
@@ -162,6 +164,14 @@ impl Metrics {
             tcp_syn_fingerprints_total: meter
                 .u64_counter("huginn_tcp_syn_fingerprints_total")
                 .with_description("Total TCP SYN fingerprint lookups. result=hit|miss|malformed")
+                .build(),
+            tcp_syn_fingerprint_duration_seconds: meter
+                .f64_histogram("huginn_tcp_syn_fingerprint_duration_seconds")
+                .with_description("TCP SYN fingerprint BPF map lookup and parse duration in seconds")
+                .build(),
+            tcp_syn_fingerprint_failures_total: meter
+                .u64_counter("huginn_tcp_syn_fingerprint_failures_total")
+                .with_description("Total number of TCP SYN fingerprint extraction failures (malformed BPF map entries)")
                 .build(),
 
             backend_requests_total: meter
@@ -502,15 +512,20 @@ impl Metrics {
             .add(1, &[KeyValue::new(labels::BACKEND, backend.to_string())]);
     }
 
-    /// Record a TCP SYN fingerprint lookup result.
+    /// Record a TCP SYN fingerprint lookup result and its duration.
     ///
     /// `result` is one of:
     /// - `"hit"`       — fingerprint found and injected (`SynResult::Hit`)
     /// - `"miss"`      — no BPF map entry (keep-alive reuse, IPv6 peer, stale)
     /// - `"malformed"` — BPF map entry present but TCP options bytes were undecodable
-    pub fn record_tcp_syn_fingerprint(&self, result: &str) {
-        self.tcp_syn_fingerprints_total
-            .add(1, &[KeyValue::new(labels::REASON, result.to_string())]);
+    pub fn record_tcp_syn_fingerprint(&self, result: &str, duration_secs: f64) {
+        let attrs = &[KeyValue::new(labels::REASON, result.to_string())];
+        self.tcp_syn_fingerprints_total.add(1, attrs);
+        self.tcp_syn_fingerprint_duration_seconds
+            .record(duration_secs, attrs);
+        if result == "malformed" {
+            self.tcp_syn_fingerprint_failures_total.add(1, &[]);
+        }
     }
 }
 
