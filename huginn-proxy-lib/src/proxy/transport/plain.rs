@@ -24,7 +24,7 @@ pub struct PlainConnectionConfig {
     pub client_pool: Arc<ClientPool>,
     /// TCP SYN fingerprint captured via eBPF at connection accept time.
     /// None if eBPF is disabled or the SYN was not captured.
-    pub syn_fingerprint: Option<crate::fingerprinting::SynFingerprint>,
+    pub syn_fingerprint: Option<crate::fingerprinting::TcpObservation>,
 }
 
 /// Handle a plain HTTP connection

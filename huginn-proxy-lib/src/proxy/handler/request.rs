@@ -54,7 +54,7 @@ pub async fn handle_proxy_request(
     backends: Arc<Vec<Backend>>,
     ja4_fingerprints: Option<crate::fingerprinting::Ja4Fingerprints>,
     fingerprint_rx: Option<watch::Receiver<Option<huginn_net_http::AkamaiFingerprint>>>,
-    syn_fingerprint: Option<crate::fingerprinting::SynFingerprint>,
+    syn_fingerprint: Option<crate::fingerprinting::TcpObservation>,
     keep_alive: &KeepAliveConfig,
     security: &crate::proxy::SecurityContext,
     metrics: Option<Arc<Metrics>>,
@@ -149,8 +149,8 @@ pub async fn handle_proxy_request(
         }
         match syn_fingerprint {
             Some(ref syn_fp) => {
-                debug!("Handler: injecting {} header: {}", names::TCP_SYN, syn_fp.raw_signature);
-                if let Ok(hv) = hyper::header::HeaderValue::from_str(&syn_fp.raw_signature) {
+                debug!("Handler: injecting {} header: {}", names::TCP_SYN, syn_fp);
+                if let Ok(hv) = hyper::header::HeaderValue::from_str(&syn_fp.to_string()) {
                     req.headers_mut()
                         .insert(HeaderName::from_static(names::TCP_SYN), hv);
                 }

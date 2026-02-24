@@ -112,8 +112,8 @@ async fn test_tls_fingerprint_injection() -> Result<(), Box<dyn std::error::Erro
     assert!(tcp_fp.starts_with("4:"), "TCP SYN fingerprint should start with '4:' (IPv4)");
     assert_eq!(
         tcp_fp.split(':').count(),
-        5,
-        "TCP SYN fingerprint should have 5 colon-separated fields: ver:ttl:optlen:mss:options"
+        8,
+        "TCP SYN fingerprint should have 8 colon-separated fields: ver:ittl:olen:mss:wsize,wscale:olayout:quirks:pclass"
     );
     println!("TCP SYN fingerprint ({}): {tcp_fp}", names::TCP_SYN);
 

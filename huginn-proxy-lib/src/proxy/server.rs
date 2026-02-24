@@ -12,7 +12,7 @@ use tracing::{info, warn};
 
 use crate::config::{BackendPoolConfig, Config};
 use crate::error::Result;
-use crate::fingerprinting::SynFingerprint;
+use crate::fingerprinting::{SynResult, TcpObservation};
 use crate::proxy::connection::{ConnectionError, ConnectionManager};
 use crate::proxy::transport::{
     handle_plain_connection, handle_tls_connection, PlainConnectionConfig, TlsConnectionConfig,
@@ -23,10 +23,9 @@ use crate::tls::setup_tls_with_hot_reload;
 
 /// Callback type for TCP SYN fingerprint lookup.
 ///
-/// Accepts a peer `SocketAddr`, returns an optional `SynFingerprint`.
-/// Implemented by `huginn-proxy` when the `ebpf-tcp` feature is enabled;
-/// passes `None` otherwise (graceful degradation).
-pub type SynProbe = Arc<dyn Fn(SocketAddr) -> Option<SynFingerprint> + Send + Sync>;
+/// Returns a [`SynResult`] so the server can record a precise metric label.
+/// Implemented by `huginn-proxy` when the `ebpf-tcp` feature is enabled.
+pub type SynProbe = Arc<dyn Fn(SocketAddr) -> SynResult + Send + Sync>;
 
 pub async fn run(
     config: Arc<Config>,
@@ -136,8 +135,25 @@ pub async fn run(
 
                 // TCP SYN lookup: happens here, right after accept(), before TLS handshake.
                 // The BPF map entry is freshest at this point.
-                let syn_fingerprint: Option<SynFingerprint> =
-                    syn_probe.as_ref().and_then(|probe| probe(peer));
+                let syn_result = syn_probe.as_ref().map(|probe| probe(peer));
+
+                let syn_fingerprint: Option<TcpObservation> = match syn_result {
+                    Some(ref r) => {
+                        if let Some(ref m) = metrics {
+                            let label = match r {
+                                SynResult::Hit(_) => "hit",
+                                SynResult::Miss => "miss",
+                                SynResult::Malformed => "malformed",
+                            };
+                            m.record_tcp_syn_fingerprint(label);
+                        }
+                        match r {
+                            SynResult::Hit(obs) => Some(obs.clone()),
+                            _ => None,
+                        }
+                    }
+                    None => None,
+                };
 
                 let builder_clone = builder.clone();
                 let backends_clone = Arc::clone(&backends_for_loop);

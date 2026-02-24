@@ -74,7 +74,6 @@ async fn test_chrome_fingerprint() -> Result<(), Box<dyn std::error::Error>> {
             .and_then(|v| v.as_str())
             .ok_or(format!("Missing {} header", HEADER_TLS_JA4_RAW))?;
 
-        // TCP SYN fingerprint — present on the first navigation (new TCP connection)
         let tcp_syn_fp = headers
             .get(HEADER_TCP_SYN)
             .and_then(|v| v.as_str())

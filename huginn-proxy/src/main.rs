@@ -54,7 +54,7 @@ async fn main() -> Result<(), BoxError> {
     #[cfg(feature = "ebpf-tcp")]
     let syn_probe: Option<huginn_proxy_lib::SynProbe> = {
         use huginn_proxy_ebpf::EbpfProbe;
-        use huginn_proxy_lib::fingerprinting::{parse_syn_raw, SynFingerprint, TcpSynData};
+        use huginn_proxy_lib::fingerprinting::{parse_syn_raw, SynResult, TcpSynData};
         use std::net::SocketAddr;
 
         // eBPF filter parameters are infrastructure-specific — read from env vars set in
@@ -91,19 +91,24 @@ async fn main() -> Result<(), BoxError> {
                 .map_err(|e| format!("eBPF TCP SYN probe failed to initialize: {e:#?}"))?;
 
             let probe = Arc::new(probe);
-            Some(Arc::new(move |peer: SocketAddr| -> Option<SynFingerprint> {
+            Some(Arc::new(move |peer: SocketAddr| -> SynResult {
                 let (peer_ip, peer_port) = match peer {
                     SocketAddr::V4(a) => (*a.ip(), a.port()),
-                    SocketAddr::V6(_) => return None,
+                    SocketAddr::V6(_) => return SynResult::Miss,
                 };
-                let raw = probe.lookup(peer_ip, peer_port)?;
+                let Some(raw) = probe.lookup(peer_ip, peer_port) else {
+                    return SynResult::Miss;
+                };
                 let data = TcpSynData {
                     ip_ttl: raw.ip_ttl,
                     window: raw.window,
                     optlen: raw.optlen,
                     options: raw.options,
                 };
-                parse_syn_raw(&data)
+                match parse_syn_raw(&data) {
+                    Some(obs) => SynResult::Hit(obs),
+                    None => SynResult::Malformed,
+                }
             }))
         }
     };
