@@ -52,7 +52,9 @@ fn test_parse_syn_raw_produces_signature() -> TestResult {
 fn test_signature_format_fields() -> TestResult {
     let (options, optlen) = make_test_options();
     let data = make_syn_data(65535u16.to_be(), 64, optlen, options);
-    let sig = parse_syn_raw(&data).ok_or("parse_syn_raw returned None")?.to_string();
+    let sig = parse_syn_raw(&data)
+        .ok_or("parse_syn_raw returned None")?
+        .to_string();
     // Full p0f format: ver:ittl:olen:mss:wsize,wscale:olayout:quirks:pclass (8 fields)
     let parts: Vec<&str> = sig.split(':').collect();
     assert_eq!(parts.len(), 8, "signature must have 8 colon-separated fields: {sig}");
@@ -77,10 +79,18 @@ fn test_empty_options_returns_some() {
 fn test_ttl_field_is_valid() -> TestResult {
     let (options, optlen) = make_test_options();
     let data = make_syn_data(65535u16.to_be(), 64, optlen, options);
-    let sig = parse_syn_raw(&data).ok_or("parse_syn_raw returned None")?.to_string();
-    let ttl_field = sig.split(':').nth(1).ok_or("signature missing ittl field")?;
+    let sig = parse_syn_raw(&data)
+        .ok_or("parse_syn_raw returned None")?
+        .to_string();
+    let ttl_field = sig
+        .split(':')
+        .nth(1)
+        .ok_or("signature missing ittl field")?;
     // Valid p0f TTL formats: "64" (Value), "64+2" (Distance), "64+?" (Guess), "64-" (Bad)
-    let base = ttl_field.split(['+', '-']).next().ok_or("ittl field is empty")?;
+    let base = ttl_field
+        .split(['+', '-'])
+        .next()
+        .ok_or("ittl field is empty")?;
     assert!(base.parse::<u8>().is_ok(), "ittl base must be a number, got: {ttl_field}");
     Ok(())
 }
@@ -90,9 +100,17 @@ fn test_window_byte_order_converted() -> TestResult {
     let (options, optlen) = make_test_options();
     // 8192 in network byte order; byte-swapped value would be 32 (0x0020)
     let data = make_syn_data(8192u16.to_be(), 64, optlen, options);
-    let sig = parse_syn_raw(&data).ok_or("parse_syn_raw returned None")?.to_string();
+    let sig = parse_syn_raw(&data)
+        .ok_or("parse_syn_raw returned None")?
+        .to_string();
     // wsize,wscale is at index 4
-    let wsize_part = sig.split(':').nth(4).ok_or("signature missing wsize field")?;
-    assert!(!wsize_part.contains("32"), "window must not appear byte-swapped, got: {wsize_part}");
+    let wsize_part = sig
+        .split(':')
+        .nth(4)
+        .ok_or("signature missing wsize field")?;
+    assert!(
+        !wsize_part.contains("32"),
+        "window must not appear byte-swapped, got: {wsize_part}"
+    );
     Ok(())
 }

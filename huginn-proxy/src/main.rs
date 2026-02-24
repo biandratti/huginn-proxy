@@ -53,8 +53,8 @@ async fn main() -> Result<(), BoxError> {
     // On failure, logs a warning and continues without eBPF (graceful degradation).
     #[cfg(feature = "ebpf-tcp")]
     let syn_probe: Option<huginn_proxy_lib::SynProbe> = {
-        use huginn_proxy_ebpf::EbpfProbe;
         use huginn_net_tcp::tcp::{IpVersion, PayloadSize};
+        use huginn_proxy_ebpf::EbpfProbe;
         use huginn_proxy_lib::fingerprinting::{parse_syn_raw, SynResult, TcpSynData};
         use std::net::SocketAddr;
 
@@ -107,8 +107,7 @@ async fn main() -> Result<(), BoxError> {
                     options: raw.options,
                     // XDP program filters non-IPv4 at entry; V4 is always correct here.
                     ip_version: IpVersion::V4,
-                    // ip->ihl * 4 - 20; xdp.c already computes ip_hdr_len, not yet stored in map.
-                    olen: 0,
+                    olen: raw.ip_olen,
                     // DF, ECN, seq=0, ack+, push/urg flags — readable in XDP, not yet extracted.
                     quirks: vec![],
                     // SYN packets never carry payload — invariant by TCP spec.

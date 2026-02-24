@@ -51,9 +51,9 @@ volatile const __be32 dst_ip = 0;
  *   offset  0: src_addr  (4)
  *   offset  4: src_port  (2)
  *   offset  6: window    (2)
- *   offset  8: optlen    (2)
+ *   offset  8: optlen    (2)  — TCP options length
  *   offset 10: ip_ttl    (1)
- *   offset 11: _pad      (1)
+ *   offset 11: ip_olen   (1)  — IP options length: ip->ihl*4 - 20
  *   offset 12: options   (40)
  *   offset 52: _pad2     (4) — align tick to 8-byte boundary
  *   offset 56: tick      (8)
@@ -64,7 +64,7 @@ struct tcp_syn_val {
     __be16 window;                 /* TCP window size */
     __u16  optlen;                 /* length of the TCP options captured */
     __u8   ip_ttl;                 /* IP TTL */
-    __u8   _pad;                   /* explicit padding — mirrors Rust struct */
+    __u8   ip_olen;                /* IP options length in bytes (ip->ihl*4 - 20) */
     __u8   options[TCPOPT_MAXLEN]; /* raw TCP options bytes */
     __u8   _pad2[4];               /* align tick to 8-byte boundary */
     __u64  tick;                   /* global SYN counter at capture time */
@@ -119,7 +119,8 @@ static __always_inline int proto_is_vlan(__u16 h_proto) {
 
 static void __always_inline handle_tcp_syn(struct iphdr *ip,
                                            struct tcphdr *tcp,
-                                           void *data_end) {
+                                           void *data_end,
+                                           __u32 ip_hdr_len) {
     __u16 tcp_hdr_len = tcp->doff * 4;
     if (tcp_hdr_len < sizeof(*tcp))
         return;
@@ -137,7 +138,7 @@ static void __always_inline handle_tcp_syn(struct iphdr *ip,
         .window   = tcp->window,
         .optlen   = tcp_hdr_len - sizeof(*tcp),
         .ip_ttl   = ip->ttl,
-        ._pad     = 0,
+        .ip_olen  = (__u8)(ip_hdr_len - sizeof(*ip)), /* IP options: ihl*4 - 20 */
         ._pad2    = {0},
         .tick     = tick,
     };
@@ -213,7 +214,7 @@ int huginn_xdp_syn(struct xdp_md *ctx) {
 
     // Only capture TCP SYN (not SYN+ACK)
     if (tcp->syn && !tcp->ack)
-        handle_tcp_syn(ip, tcp, data_end);
+        handle_tcp_syn(ip, tcp, data_end, ip_hdr_len);
 
     return XDP_PASS;
 }
