@@ -1,3 +1,4 @@
+use std::net::SocketAddr;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
@@ -11,6 +12,7 @@ use tracing::{info, warn};
 
 use crate::config::{BackendPoolConfig, Config};
 use crate::error::Result;
+use crate::fingerprinting::{SynResult, TcpObservation};
 use crate::proxy::connection::{ConnectionError, ConnectionManager};
 use crate::proxy::transport::{
     handle_plain_connection, handle_tls_connection, PlainConnectionConfig, TlsConnectionConfig,
@@ -19,7 +21,17 @@ use crate::proxy::ClientPool;
 use crate::telemetry::Metrics;
 use crate::tls::setup_tls_with_hot_reload;
 
-pub async fn run(config: Arc<Config>, metrics: Option<Arc<Metrics>>) -> Result<()> {
+/// Callback type for TCP SYN fingerprint lookup.
+///
+/// Returns a [`SynResult`] so the server can record a precise metric label.
+/// Implemented by `huginn-proxy` when the `ebpf-tcp` feature is enabled.
+pub type SynProbe = Arc<dyn Fn(SocketAddr) -> SynResult + Send + Sync>;
+
+pub async fn run(
+    config: Arc<Config>,
+    metrics: Option<Arc<Metrics>>,
+    syn_probe: Option<SynProbe>,
+) -> Result<()> {
     let addr = config.listen;
     let listener = TcpListener::bind(addr)
         .await
@@ -121,16 +133,36 @@ pub async fn run(config: Arc<Config>, metrics: Option<Arc<Metrics>>) -> Result<(
                     }
                 };
 
+                let syn_start = Instant::now();
+                let syn_result = syn_probe.as_ref().map(|probe| probe(peer));
+                let syn_duration = syn_start.elapsed().as_secs_f64();
+
+                let syn_fingerprint: Option<TcpObservation> = match syn_result {
+                    Some(ref r) => {
+                        if let Some(ref m) = metrics {
+                            let label = match r {
+                                SynResult::Hit(_) => "hit",
+                                SynResult::Miss => "miss",
+                                SynResult::Malformed => "malformed",
+                            };
+                            m.record_tcp_syn_fingerprint(label, syn_duration);
+                        }
+                        match r {
+                            SynResult::Hit(obs) => Some(obs.clone()),
+                            _ => None,
+                        }
+                    }
+                    None => None,
+                };
+
                 let builder_clone = builder.clone();
                 let backends_clone = Arc::clone(&backends_for_loop);
                 let routes_clone = routes.clone();
                 let tls_acceptor_clone = tls_acceptor.clone();
                 let fingerprint_config = config.fingerprint.clone();
                 let keep_alive_config = config.timeout.keep_alive.clone();
-                let tls_handshake_timeout =
-                    tokio::time::Duration::from_secs(config.timeout.tls_handshake_secs);
-                let connection_handling_timeout =
-                    tokio::time::Duration::from_secs(config.timeout.connection_handling_secs);
+                let tls_handshake_timeout = Duration::from_secs(config.timeout.tls_handshake_secs);
+                let connection_handling_timeout = Duration::from_secs(config.timeout.connection_handling_secs);
                 let security = security_context.clone();
                 let metrics_clone = metrics.clone();
                 let preserve_host = config.preserve_host;
@@ -157,6 +189,7 @@ pub async fn run(config: Arc<Config>, metrics: Option<Arc<Metrics>>) -> Result<(
                                 tls_handshake_timeout,
                                 connection_handling_timeout,
                                 client_pool: client_pool_clone.clone(),
+                                syn_fingerprint: syn_fingerprint.clone(),
                             },
                         )
                         .await;
@@ -174,6 +207,7 @@ pub async fn run(config: Arc<Config>, metrics: Option<Arc<Metrics>>) -> Result<(
                                 preserve_host,
                                 connection_handling_timeout,
                                 client_pool: client_pool_clone,
+                                syn_fingerprint,
                             },
                         )
                         .await;

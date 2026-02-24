@@ -4,12 +4,40 @@ services:
       context: ..
       dockerfile: Dockerfile
     command: ["/usr/local/bin/huginn-proxy", "/config/compose.toml"]
+    environment:
+      # eBPF/XDP TCP SYN fingerprinting.
+      # HUGINN_EBPF_INTERFACE: network interface the XDP program attaches to.
+      # HUGINN_EBPF_DST_IP:    destination IP filter (0.0.0.0 = any; use specific IP if known).
+      # HUGINN_EBPF_DST_PORT:  destination port filter (must match the proxy listen port).
+      - HUGINN_EBPF_INTERFACE=eth0
+      - HUGINN_EBPF_DST_IP=0.0.0.0
+      - HUGINN_EBPF_DST_PORT=7000
     volumes:
       - ./config/compose.toml:/config/compose.toml:ro
       - ./certs:/config/certs:ro
     ports:
       - "7000:7000"   # Proxy server (HTTPS/HTTP)
       - "9090:9090"   # Observability server (Metrics + Health checks)
+    # Required for eBPF/XDP TCP SYN fingerprinting (HUGINN_EBPF_INTERFACE).
+    # The binary has file capabilities (setcap) for cap_bpf + cap_net_admin + cap_perfmon,
+    # but those only take effect if the caps are in the container's bounding set.
+    # cap_add here ensures the bounding set includes all required capabilities.
+    cap_add:
+      - CAP_BPF      # create/attach BPF programs and maps
+      - CAP_NET_ADMIN # attach XDP to network interfaces
+      - CAP_PERFMON  # allow BPF verifier pointer arithmetic (XDP packet parsing)
+    # Docker's default seccomp profile blocks the bpf() syscall.
+    security_opt:
+      - seccomp:unconfined
+    # Kernel < 5.11: BPF maps are charged against RLIMIT_MEMLOCK.
+    # EbpfProbe::new calls setrlimit(RLIMIT_MEMLOCK, RLIM_INFINITY) programmatically,
+    # but setrlimit cannot exceed the container's hard limit without CAP_SYS_RESOURCE.
+    # Setting the hard limit here ensures the programmatic call succeeds on older kernels.
+    # Kernel >= 5.11: BPF memory is tracked via cgroup — this setting is a no-op.
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
     healthcheck:
       test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:9090/health || exit 1"]
       interval: 10s

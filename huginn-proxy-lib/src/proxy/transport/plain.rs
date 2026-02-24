@@ -1,15 +1,15 @@
 use std::sync::Arc;
 
-use hyper_util::rt::{TokioExecutor, TokioIo};
-use hyper_util::server::conn::auto::Builder as ConnBuilder;
-use tokio::net::TcpStream;
-
 use super::timeout_helper::serve_with_timeout;
+use crate::fingerprinting::TcpObservation;
 use crate::proxy::synthetic_response::synthetic_error_response;
 use crate::proxy::ClientPool;
 use crate::telemetry::Metrics;
 use http::StatusCode;
 use http_body_util::BodyExt;
+use hyper_util::rt::{TokioExecutor, TokioIo};
+use hyper_util::server::conn::auto::Builder as ConnBuilder;
+use tokio::net::TcpStream;
 
 /// Configuration for handling plain HTTP connections
 pub struct PlainConnectionConfig {
@@ -22,6 +22,7 @@ pub struct PlainConnectionConfig {
     pub preserve_host: bool,
     pub connection_handling_timeout: tokio::time::Duration,
     pub client_pool: Arc<ClientPool>,
+    pub syn_fingerprint: Option<TcpObservation>,
 }
 
 /// Handle a plain HTTP connection
@@ -36,10 +37,12 @@ pub async fn handle_plain_connection(
     let keep_alive = config.keep_alive.clone();
     let security = config.security.clone();
     let client_pool = config.client_pool.clone();
+    let syn_fingerprint = config.syn_fingerprint.clone();
 
     let svc = hyper::service::service_fn(move |req: hyper::Request<hyper::body::Incoming>| {
         let routes = routes_template.clone();
         let backends = backends.clone();
+        let syn_fingerprint = syn_fingerprint.clone();
         let metrics = metrics.clone();
         let keep_alive = keep_alive.clone();
         let security = security.clone();
@@ -54,6 +57,7 @@ pub async fn handle_plain_connection(
                 backends,
                 None,
                 None,
+                syn_fingerprint,
                 &keep_alive,
                 &security,
                 metrics,

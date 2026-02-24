@@ -1,0 +1,17 @@
+[package]
+name = "huginn-proxy-ebpf"
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+publish = false
+build = "scripts/build.rs"
+
+[dependencies]
+aya.workspace = true
+huginn-net-db.workspace = true
+libc.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+
+[build-dependencies]

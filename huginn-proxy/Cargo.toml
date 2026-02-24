@@ -5,7 +5,14 @@ edition = "2021"
 license = "MIT OR Apache-2.0"
 publish = false
 
+[features]
+# Enable TCP SYN fingerprinting via eBPF/XDP.
+# Requires: clang, linux-headers-$(uname -r), CAP_BPF or root.
+ebpf-tcp = ["dep:huginn-proxy-ebpf"]
+
 [dependencies]
+huginn-net-tcp.workspace = true
+huginn-proxy-ebpf = { path = "../huginn-proxy-ebpf", optional = true }
 huginn-proxy-lib = { path = "../huginn-proxy-lib" }
 opentelemetry.workspace = true
 opentelemetry_sdk.workspace = true

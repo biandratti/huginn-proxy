@@ -99,6 +99,30 @@ async fn test_tls_fingerprint_injection() -> Result<(), Box<dyn std::error::Erro
         "HTTP/2 fingerprint header should NOT be present in HTTP/1.1 connection"
     );
 
+    // TCP SYN fingerprint should be present on the first request (new TCP connection)
+    assert!(
+        headers.contains_key(names::TCP_SYN),
+        "TCP SYN fingerprint header should be present on first request"
+    );
+    let tcp_fp = headers
+        .get(names::TCP_SYN)
+        .and_then(|v| v.as_str())
+        .ok_or("TCP SYN fingerprint header should be a string")?;
+    assert!(!tcp_fp.is_empty(), "TCP SYN fingerprint should not be empty");
+    assert!(tcp_fp.starts_with("4:"), "TCP SYN fingerprint should start with '4:' (IPv4)");
+    assert_eq!(
+        tcp_fp.split(':').count(),
+        8,
+        "TCP SYN fingerprint should have 8 colon-separated fields: ver:ittl:olen:mss:wsize,wscale:olayout:quirks:pclass"
+    );
+    println!("TCP SYN fingerprint ({}): {tcp_fp}", names::TCP_SYN);
+
+    // TCP SYN fingerprint is injected on every request of the connection (same SYN, same fingerprint).
+    assert!(
+        headers2.contains_key(names::TCP_SYN),
+        "TCP SYN fingerprint should be present on keep-alive request (same TCP connection)"
+    );
+
     Ok(())
 }
 
@@ -155,6 +179,19 @@ async fn test_http2_fingerprint_injection() -> Result<(), Box<dyn std::error::Er
         http2_fp, EXPECTED_HTTP2_FINGERPRINT,
         "HTTP/2 fingerprint should match expected value for reqwest HTTP/2 client"
     );
+
+    // TCP SYN fingerprint should be present on the first request (new TCP connection)
+    assert!(
+        headers.contains_key(names::TCP_SYN),
+        "TCP SYN fingerprint header should be present on first HTTP/2 request"
+    );
+    let tcp_fp = headers
+        .get(names::TCP_SYN)
+        .and_then(|v| v.as_str())
+        .ok_or("TCP SYN fingerprint header should be a string")?;
+    assert!(!tcp_fp.is_empty(), "TCP SYN fingerprint should not be empty");
+    assert!(tcp_fp.starts_with("4:"), "TCP SYN fingerprint should start with '4:' (IPv4)");
+    println!("TCP SYN fingerprint ({}): {tcp_fp}", names::TCP_SYN);
 
     // Also verify TLS fingerprint is present (all TLS connections should have it)
     assert!(
@@ -274,6 +311,10 @@ async fn test_fingerprinting_disabled_per_route(
         !headers.contains_key(names::HTTP2_AKAMAI),
         "HTTP/2 fingerprint header should NOT be present when fingerprinting is disabled for route"
     );
+    assert!(
+        !headers.contains_key(names::TCP_SYN),
+        "TCP SYN fingerprint header should NOT be present when fingerprinting is disabled for route"
+    );
 
     // Request to /api route (fingerprinting enabled)
     let response2 = client
@@ -300,6 +341,11 @@ async fn test_fingerprinting_disabled_per_route(
     assert!(
         headers2.contains_key(names::TLS_JA4_RAW),
         "TLS fingerprint raw header should be present when fingerprinting is enabled for route"
+    );
+    // TCP SYN fingerprint is injected on every request of the connection (same SYN, same fingerprint).
+    assert!(
+        headers2.contains_key(names::TCP_SYN),
+        "TCP SYN fingerprint should be present on keep-alive request to /api (same TCP connection)"
     );
 
     Ok(())

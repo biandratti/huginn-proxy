@@ -1,14 +1,6 @@
-use http::Version;
-use hyper::body::Incoming;
-use hyper::header::HeaderName;
-use hyper::Request;
-use std::sync::Arc;
-use tokio::sync::watch;
-use tokio::time::Instant;
-use tracing::debug;
-
 use crate::config::{Backend, KeepAliveConfig, Route};
 use crate::fingerprinting::names;
+use crate::fingerprinting::TcpObservation;
 use crate::proxy::forwarding::forward;
 use crate::proxy::handler::header_manipulation::{
     apply_request_header_manipulation, apply_response_header_manipulation,
@@ -20,6 +12,14 @@ use crate::proxy::ClientPool;
 use crate::telemetry::metrics::values;
 use crate::telemetry::Metrics;
 use http::StatusCode;
+use http::Version;
+use hyper::body::Incoming;
+use hyper::header::HeaderName;
+use hyper::Request;
+use std::sync::Arc;
+use tokio::sync::watch;
+use tokio::time::Instant;
+use tracing::debug;
 
 type RespBody = http_body_util::combinators::BoxBody<bytes::Bytes, hyper::Error>;
 
@@ -54,6 +54,7 @@ pub async fn handle_proxy_request(
     backends: Arc<Vec<Backend>>,
     ja4_fingerprints: Option<crate::fingerprinting::Ja4Fingerprints>,
     fingerprint_rx: Option<watch::Receiver<Option<huginn_net_http::AkamaiFingerprint>>>,
+    syn_fingerprint: Option<TcpObservation>,
     keep_alive: &KeepAliveConfig,
     security: &crate::proxy::SecurityContext,
     metrics: Option<Arc<Metrics>>,
@@ -144,6 +145,20 @@ pub async fn handle_proxy_request(
                 if let Some(ref m) = metrics {
                     m.http2_fingerprint_failures_total.add(1, &[]);
                 }
+            }
+        }
+        match syn_fingerprint {
+            Some(ref syn_fp) => {
+                debug!("Handler: injecting {} header: {}", names::TCP_SYN, syn_fp);
+                if let Ok(hv) = hyper::header::HeaderValue::from_str(&syn_fp.to_string()) {
+                    req.headers_mut()
+                        .insert(HeaderName::from_static(names::TCP_SYN), hv);
+                }
+            }
+            None => {
+                debug!(
+                    "Handler: no TCP SYN fingerprint available — keep-alive request or SYN not captured"
+                );
             }
         }
     }

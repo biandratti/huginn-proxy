@@ -19,6 +19,14 @@ pub mod names {
     /// This header contains the Akamai-style fingerprint extracted from HTTP/2 frames.
     /// It is only injected for HTTP/2 connections when fingerprinting is enabled.
     pub const HTTP2_AKAMAI: &str = "x-huginn-net-akamai";
+
+    /// Header name for TCP SYN p0f-style raw signature injection
+    ///
+    /// This header contains the raw TCP SYN fingerprint extracted via eBPF/XDP.
+    /// Format: `"ver:ittl:olen:mss:wsize,wscale:olayout"`
+    /// Example: `"4:64:0:1460:8192,6:mss,nop,ws,nop,nop,ts,sok"`
+    /// Only injected when the `ebpf-tcp` feature is enabled and fingerprinting is configured.
+    pub const TCP_SYN: &str = "x-huginn-net-tcp";
 }
 
 /// HTTP header names for X-Forwarded-* headers

@@ -28,53 +28,12 @@ and [rust-rpxy](https://github.com/junkurihara/rust-rpxy).
 
 ## Quick Start
 
-### Build
+See [`examples/`](examples/) for the full setup guide, including:
 
-```bash
-cargo build --release
-```
-
-### Minimal Configuration
-
-Create `config.toml`:
-
-```toml
-listen = "0.0.0.0:7000"
-
-backends = [
-    { address = "backend:8080", http_version = "preserve" }
-]
-
-routes = [
-    { prefix = "/", backend = "backend:8080" }
-]
-
-[tls]
-cert_path = "/path/to/cert.pem"
-key_path = "/path/to/key.pem"
-alpn = ["h2", "http/1.1"]
-
-[fingerprint]
-tls_enabled = true
-http_enabled = true
-```
-
-## Installation
-
-### From Source
-
-```bash
-git clone https://github.com/biandratti/huginn-proxy.git
-cd huginn-proxy
-cargo build --release
-```
-
-### Docker
-
-```bash
-docker build -t huginn-proxy .
-docker run -v /path/to/config.toml:/config.toml huginn-proxy /config.toml
-```
+- Building from source (standard and with eBPF/TCP SYN fingerprinting)
+- Generating TLS certificates
+- Running with Docker Compose
+- Configuration examples (rate limiting, routing, …)
 
 ## Features
 
@@ -93,7 +52,7 @@ docker run -v /path/to/config.toml:/config.toml huginn-proxy /config.toml
 - **mTLS (Mutual TLS)** - Client certificate authentication for secure service-to-service communication
 - **Granular Timeouts** - TLS handshake and connection handling timeouts for resource protection
 - **Host Header Preservation** - Configurable forwarding of original Host header for virtual hosting
-- **Passive Fingerprinting** - Automatic TLS (JA4) and HTTP/2 (Akamai) fingerprint extraction
+- **Passive Fingerprinting** - Automatic TLS (JA4), HTTP/2 (Akamai), and TCP SYN (p0f-style via eBPF) fingerprint extraction
 - **X-Forwarded-* Headers** - Automatic injection of proxy forwarding headers
 - **[Comprehensive Telemetry](TELEMETRY.md)** - Prometheus metrics covering requests, throughput, rate limiting, TLS,
   backends, and security features
@@ -113,6 +72,12 @@ Fingerprints are automatically extracted and injected as headers:
 - **TLS (JA4 Raw)**: `x-huginn-net-ja4-raw` - Raw/original JA4 fingerprint format
 - **HTTP/2 (Akamai)**: `x-huginn-net-akamai` - Extracted from HTTP/2 connections only
   using [huginn-net-http](https://crates.io/crates/huginn-net-http)
+- **TCP SYN (p0f-style)**: `x-huginn-net-tcp` - Raw TCP SYN signature extracted via eBPF/XDP
+  using [huginn-net-tcp](https://crates.io/crates/huginn-net-tcp). Requires `tcp_enabled = true`
+  and the `ebpf-tcp` feature. Only present on the first request of each connection (not on
+  HTTP keep-alive requests, which do not generate a new SYN). **IPv4 only** — not captured for
+  direct IPv6 connections (transparent when a load balancer forwards internally over IPv4).
+  See [EBPF-SETUP.md](EBPF-SETUP.md) for setup, kernel requirements, and deployment options.
 
 **Examples:**
 
@@ -120,6 +85,7 @@ Fingerprints are automatically extracted and injected as headers:
 x-huginn-net-ja4: t13d3112h2_e8f1e7e78f70_b26ce05bbdd6
 x-huginn-net-ja4-raw: t13d3112h2_d7c3e2abb617_cad92ccb4254
 x-huginn-net-akamai: 3:100;4:10485760;2:0|1048510465|0|
+x-huginn-net-tcp: 4:64:0:1460:mss*44,10:mss,sok,ts,nop,ws
 ```
 
 See [JA4 specification](https://github.com/FoxIO-LLC/ja4)
@@ -144,9 +110,9 @@ These headers always override any client-provided values to prevent spoofing.
 - **`fingerprinting`** (bool, default: `true`) - Enable/disable TLS (JA4) and HTTP/2 (Akamai) fingerprint extraction and
   header injection
 - **`force_new_connection`** (bool, default: `false`) - Force new TCP + TLS handshake per request, bypassing connection
-  pooling
-    - Use case: Per-request TLS fingerprinting, TCP fingerprinting (future), testing/debugging
-    - Performance: Adds ~50-200ms latency per request when enabled
+  pooling and HTTP keep-alive reuse
+    - Use case: Per-request TLS fingerprinting, TCP SYN fingerprinting (each request generates a
+      fresh SYN, so the eBPF map always has an entry), testing/debugging
 
 ## Health Check Endpoints
 
@@ -160,14 +126,6 @@ separate from the main proxy port):
 
 All endpoints return JSON responses (except `/metrics` which returns Prometheus format) and follow Kubernetes health
 check conventions.
-
-## Examples
-
-See the [`examples/`](examples/) directory for:
-
-- Docker Compose setup with TLS termination
-- Rate limiting configurations
-- Advanced routing examples
 
 ## Performance
 
@@ -187,6 +145,23 @@ See [ROADMAP.md](ROADMAP.md) for a detailed list of planned features and upcomin
 - **[huginn-net-tls](https://crates.io/crates/huginn-net-tls)** - JA4 TLS fingerprinting
 - **[huginn-net-http](https://crates.io/crates/huginn-net-http)** - HTTP/2 Akamai fingerprinting
 
+## Artifacts Matrix
+
+Each release publishes the following artifacts:
+
+| Suffix | OS | eBPF |
+|---|---|---|
+| `x86_64-unknown-linux-musl` | Linux amd64 | ❌ |
+| `aarch64-unknown-linux-musl` | Linux arm64 | ❌ |
+| `x86_64-unknown-linux-musl-ebpf` | Linux amd64 | ✅ |
+| `aarch64-unknown-linux-musl-ebpf` | Linux arm64 | ✅ |
+| `x86_64-apple-darwin` | macOS amd64 | ❌ |
+| `aarch64-apple-darwin` | macOS arm64 | ❌ |
+
+eBPF variants require `CAP_BPF`, `CAP_NET_ADMIN`, `CAP_PERFMON`. All artifacts follow the pattern `huginn-proxy-{tag}-{suffix}`.
+
+Docker images (`ghcr.io/biandratti/huginn-proxy`) are built with eBPF support. See [EBPF-SETUP.md](EBPF-SETUP.md) for runtime requirements.
+
 ## License
 
 Dual-licensed under [MIT](LICENSE-MIT) or [Apache 2.0](LICENSE-APACHE).
@@ -198,6 +173,7 @@ Huginn Proxy uses the [Huginn Net](https://github.com/biandratti/huginn-net) fin
 - **JA4**: TLS fingerprinting follows the [JA4 specification by FoxIO, LLC](https://github.com/FoxIO-LLC/ja4)
 - **Akamai HTTP/2**: HTTP/2 fingerprinting follows
   the [Blackhat EU 2017 specification](https://www.blackhat.com/docs/eu-17/materials/eu-17-Shuster-Passive-Fingerprinting-Of-HTTP2-Clients-wp.pdf)
+- **p0f v3**: TCP SYN fingerprinting follows the [p0f v3 specification by Michal Zalewski](https://lcamtuf.coredump.cx/p0f3/README)
 
 ## Contributing
 

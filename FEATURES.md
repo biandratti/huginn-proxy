@@ -92,11 +92,25 @@ Limitation: No per-route mTLS configuration. No option for optional client certi
 
 ## Fingerprinting
 
-**TLS (JA4) and HTTP/2 (Akamai) fingerprints**
+**TLS (JA4), HTTP/2 (Akamai), and TCP SYN (p0f-style)**
 
-Passive fingerprinting extracts JA4 from the TLS ClientHello and Akamai fingerprint from HTTP/2 frames. Fingerprints are injected as headers (`x-huginn-net-ja4` and `x-huginn-net-akamai`) for backend services.
+Passive fingerprinting extracts three types of signatures from client connections:
 
-Per-route control to enable/disable fingerprinting. The extraction happens transparently with minimal overhead.
+- **TLS (JA4)** — extracted from the TLS ClientHello. Injected as `x-huginn-net-ja4` and `x-huginn-net-ja4-raw`.
+- **HTTP/2 (Akamai)** — extracted from HTTP/2 SETTINGS and WINDOW_UPDATE frames. Injected as `x-huginn-net-akamai`.
+- **TCP SYN (p0f-style)** — extracted from the raw TCP SYN packet via an eBPF/XDP program attached to the network interface. Injected as `x-huginn-net-tcp`. Requires the `ebpf-tcp` build feature and `tcp_enabled = true` in config.
+
+Per-route control to enable/disable TLS and HTTP/2 fingerprinting. TCP SYN fingerprinting is global (controlled by the `fingerprint.tcp_enabled` flag).
+
+The TCP SYN signature follows the p0f format: `ip_ver:ttl:ip_olen:mss:wsize,wscale:olayout:quirks:pclass`. Quirks extracted include IP-level flags (DF, ECN, reserved bit, IP ID anomalies) and TCP-level flags (zero-seq, non-zero ACK, URG/PUSH flags, excessive window scale, timestamps).
+
+**TCP SYN fingerprinting limitations:**
+
+- **Linux only** — eBPF/XDP does not run on macOS or Windows. Requires kernel ≥ 5.4 (≥ 5.11 recommended).
+- **IPv4 only** — IPv6 connections are not captured. Transparent when a load balancer forwards internally over IPv4.
+- Present on all requests of a connection (including HTTP keep-alive), since the fingerprint describes the TCP connection, not individual requests.
+- Option-based quirks that require deeper parsing (`ts1-`, `ts2+`, `opt+`) depend on the raw bytes captured by XDP and are computed in userspace.
+- Quirks readable from XDP but not yet extracted: none currently — all IP/TCP-header quirks and option-derived quirks are implemented.
 
 Limitation: Fingerprints are only extracted and forwarded, not validated or used for blocking. Backend services need to handle the actual fingerprint analysis and decision making.
 
@@ -156,7 +170,7 @@ Limitation: No API for dynamic config changes. No config validation endpoint.
 
 **Prometheus metrics and health checks**
 
-Metrics server runs on a separate port (configurable via `telemetry.metrics_port`). Exposes **35 comprehensive metrics** covering connections, requests, TLS, fingerprinting, backends, throughput, rate limiting, IP filtering, header manipulation, and mTLS.
+Metrics server runs on a separate port (configurable via `telemetry.metrics_port`). Exposes **37 comprehensive metrics** covering connections, requests, TLS, fingerprinting, backends, throughput, rate limiting, IP filtering, header manipulation, and mTLS.
 
 Health endpoints: `/health` (general), `/ready` (Kubernetes readiness), `/live` (Kubernetes liveness), `/metrics` (Prometheus).
 
@@ -192,6 +206,11 @@ Health endpoints: `/health` (general), `/ready` (Kubernetes readiness), `/live` 
 - `huginn_http2_fingerprints_extracted_total` - HTTP/2 fingerprints extracted
 - `huginn_http2_fingerprint_extraction_duration_seconds` - Extraction duration
 - `huginn_http2_fingerprint_failures_total` - Extraction failures
+
+*TCP SYN Fingerprinting (p0f-style, eBPF):*
+- `huginn_tcp_syn_fingerprints_total` - TCP SYN fingerprint outcomes by result (`hit`, `miss`, `malformed`)
+- `huginn_tcp_syn_fingerprint_duration_seconds` - BPF map lookup and parse duration
+- `huginn_tcp_syn_fingerprint_failures_total` - Extraction failures (malformed BPF map entries)
 
 *Backend Metrics:*
 - `huginn_backend_requests_total` - Total requests forwarded to backends

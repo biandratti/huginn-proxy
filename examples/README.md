@@ -4,7 +4,36 @@ This directory contains Docker Compose examples and configuration files to help 
 
 ---
 
-## Quick Start
+## Building from Source
+
+### Standard build (no eBPF)
+
+No extra system dependencies required.
+
+```bash
+cargo build --release -p huginn-proxy
+```
+
+### With TCP SYN fingerprinting (eBPF/XDP) — Linux only
+
+eBPF/XDP is a **Linux-only** feature. It does not compile or run on macOS or Windows.
+Requires Linux kernel ≥ 5.4 (kernel ≥ 5.11 recommended), `clang`, and Linux kernel headers.
+
+```bash
+# Install build dependencies (Debian/Ubuntu)
+sudo apt-get update -q && sudo apt-get install -y clang linux-headers-generic
+
+# Build with the ebpf-tcp feature
+cargo build --release -p huginn-proxy --features ebpf-tcp
+```
+
+> **Runtime requirements:** the resulting binary needs `CAP_BPF`, `CAP_NET_ADMIN`, and `CAP_PERFMON`
+> (or root). See [EBPF-SETUP.md](../EBPF-SETUP.md) for kernel requirements, Docker, and Kubernetes
+> deployment details.
+
+---
+
+## Quick Start (Docker Compose)
 
 ### 1. Generate TLS Certificates (first time only)
 
@@ -51,6 +80,9 @@ chmod 644 examples/certs/server.key examples/certs/server.crt
 > - Use `curl -k` for command-line testing (ignores certificate validation)
 
 ### 2. Start Services
+
+The Docker image is built **with** the `ebpf-tcp` feature. The compose file already includes the
+required `cap_add`, `seccomp`, and `ulimits` settings for eBPF.
 
 ```bash
 docker compose -f examples/docker-compose.yml up --build
