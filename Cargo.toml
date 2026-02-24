@@ -20,7 +20,6 @@ homepage = "https://github.com/biandratti/huginn-proxy"
 
 [workspace.dependencies]
 ahash = "0.8.12"
-async-trait = "0.1.89"
 aya = "0.13.1"
 bytes = "1.11.1"
 criterion = { version = "0.8.2", features = ["html_reports"] }
@@ -50,10 +49,8 @@ thirtyfour = "0.36.1"
 thiserror = "2.0.18"
 tokio = { version = "1.49.0", features = ["net", "time", "io-util", "macros", "rt-multi-thread", "sync", "signal", "fs"] }
 tokio-rustls = "0.26.4"
-tokio-util = "0.7.18"
 toml = "1.0.1"
 tracing = "0.1.44"
-tracing-opentelemetry = "0.32.1"
 tracing-subscriber = { version = "0.3.22", features = ["fmt", "env-filter"] }
 
 [profile.release]

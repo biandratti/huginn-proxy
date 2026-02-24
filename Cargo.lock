@@ -960,12 +960,8 @@ dependencies = [
  "huginn-net-tcp",
  "huginn-proxy-ebpf",
  "huginn-proxy-lib",
- "opentelemetry",
- "opentelemetry_sdk",
  "tokio",
  "tracing",
- "tracing-opentelemetry",
- "tracing-subscriber",
 ]
 
 [[package]]
@@ -985,7 +981,6 @@ name = "huginn-proxy-lib"
 version = "0.0.1"
 dependencies = [
  "ahash",
- "async-trait",
  "bytes",
  "criterion",
  "http",
@@ -1013,7 +1008,6 @@ dependencies = [
  "tokio-rustls",
  "toml",
  "tracing",
- "tracing-opentelemetry",
  "tracing-subscriber",
 ]
 
@@ -2156,9 +2150,9 @@ dependencies = [
 
 [[package]]
 name = "regex-syntax"
-version = "0.8.9"
+version = "0.8.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a96887878f22d7bad8a3b6dc5b7440e0ada9a245242924394987b21cf2210a4c"
+checksum = "dc897dd8d9e8bd1ed8cdad82b5966c3e0ecae09fb1907d58efaa013543185d0a"
 
 [[package]]
 name = "reqwest"
@@ -2716,10 +2710,8 @@ version = "0.1.0"
 dependencies = [
  "huginn-proxy-lib",
  "reqwest 0.13.2",
- "rustls-pki-types",
  "serde_json",
  "tokio",
- "tokio-rustls",
 ]
 
 [[package]]
@@ -3086,22 +3078,6 @@ dependencies = [
  "log 0.4.29",
  "once_cell",
  "tracing-core",
-]
-
-[[package]]
-name = "tracing-opentelemetry"
-version = "0.32.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1ac28f2d093c6c477eaa76b23525478f38de514fa9aeb1285738d4b97a9552fc"
-dependencies = [
- "js-sys",
- "opentelemetry",
- "smallvec",
- "tracing",
- "tracing-core",
- "tracing-log",
- "tracing-subscriber",
- "web-time",
 ]
 
 [[package]]
