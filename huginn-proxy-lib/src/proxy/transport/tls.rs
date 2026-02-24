@@ -1,13 +1,7 @@
 use std::sync::Arc;
 
-use hyper_util::rt::{TokioExecutor, TokioIo};
-use hyper_util::server::conn::auto::Builder as ConnBuilder;
-use tokio::net::TcpStream;
-use tokio::time::Instant;
-use tokio_rustls::TlsAcceptor;
-use tracing::warn;
-
 use super::timeout_helper::serve_with_timeout;
+use crate::fingerprinting::TcpObservation;
 use crate::fingerprinting::{read_client_hello, CapturingStream};
 use crate::proxy::connection::{PrefixedStream, TlsConnectionGuard};
 use crate::proxy::synthetic_response::synthetic_error_response;
@@ -16,6 +10,12 @@ use crate::telemetry::Metrics;
 use crate::tls::record_tls_handshake_metrics;
 use http::StatusCode;
 use http_body_util::BodyExt;
+use hyper_util::rt::{TokioExecutor, TokioIo};
+use hyper_util::server::conn::auto::Builder as ConnBuilder;
+use tokio::net::TcpStream;
+use tokio::time::Instant;
+use tokio_rustls::TlsAcceptor;
+use tracing::warn;
 
 /// Configuration for handling TLS connections
 pub struct TlsConnectionConfig {
@@ -31,9 +31,7 @@ pub struct TlsConnectionConfig {
     pub tls_handshake_timeout: tokio::time::Duration,
     pub connection_handling_timeout: tokio::time::Duration,
     pub client_pool: Arc<ClientPool>,
-    /// TCP SYN fingerprint captured via eBPF at connection accept time.
-    /// None if eBPF is disabled or the SYN was not captured.
-    pub syn_fingerprint: Option<crate::fingerprinting::TcpObservation>,
+    pub syn_fingerprint: Option<TcpObservation>,
 }
 
 /// Handle a TLS connection
@@ -98,7 +96,6 @@ pub async fn handle_tls_connection(
             None
         };
 
-        // Extract syn_fingerprint from config before moving into closures
         let syn_fingerprint = config.syn_fingerprint.clone();
 
         let _tls_guard = tls_connection_guard;
@@ -107,7 +104,6 @@ pub async fn handle_tls_connection(
             let (fingerprint_tx, fingerprint_rx) =
                 tokio::sync::watch::channel(None::<huginn_net_http::AkamaiFingerprint>);
 
-            // Create CapturingStream with inline fingerprint processing
             let (capturing_stream, _fingerprint_extracted) = CapturingStream::new(
                 tls,
                 config.fingerprint_config.max_capture,

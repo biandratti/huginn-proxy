@@ -133,8 +133,6 @@ pub async fn run(
                     }
                 };
 
-                // TCP SYN lookup: happens here, right after accept(), before TLS handshake.
-                // The BPF map entry is freshest at this point.
                 let syn_start = Instant::now();
                 let syn_result = syn_probe.as_ref().map(|probe| probe(peer));
                 let syn_duration = syn_start.elapsed().as_secs_f64();
@@ -163,10 +161,8 @@ pub async fn run(
                 let tls_acceptor_clone = tls_acceptor.clone();
                 let fingerprint_config = config.fingerprint.clone();
                 let keep_alive_config = config.timeout.keep_alive.clone();
-                let tls_handshake_timeout =
-                    tokio::time::Duration::from_secs(config.timeout.tls_handshake_secs);
-                let connection_handling_timeout =
-                    tokio::time::Duration::from_secs(config.timeout.connection_handling_secs);
+                let tls_handshake_timeout = Duration::from_secs(config.timeout.tls_handshake_secs);
+                let connection_handling_timeout = Duration::from_secs(config.timeout.connection_handling_secs);
                 let security = security_context.clone();
                 let metrics_clone = metrics.clone();
                 let preserve_host = config.preserve_host;

@@ -1,15 +1,15 @@
 use std::sync::Arc;
 
-use hyper_util::rt::{TokioExecutor, TokioIo};
-use hyper_util::server::conn::auto::Builder as ConnBuilder;
-use tokio::net::TcpStream;
-
 use super::timeout_helper::serve_with_timeout;
+use crate::fingerprinting::TcpObservation;
 use crate::proxy::synthetic_response::synthetic_error_response;
 use crate::proxy::ClientPool;
 use crate::telemetry::Metrics;
 use http::StatusCode;
 use http_body_util::BodyExt;
+use hyper_util::rt::{TokioExecutor, TokioIo};
+use hyper_util::server::conn::auto::Builder as ConnBuilder;
+use tokio::net::TcpStream;
 
 /// Configuration for handling plain HTTP connections
 pub struct PlainConnectionConfig {
@@ -22,9 +22,7 @@ pub struct PlainConnectionConfig {
     pub preserve_host: bool,
     pub connection_handling_timeout: tokio::time::Duration,
     pub client_pool: Arc<ClientPool>,
-    /// TCP SYN fingerprint captured via eBPF at connection accept time.
-    /// None if eBPF is disabled or the SYN was not captured.
-    pub syn_fingerprint: Option<crate::fingerprinting::TcpObservation>,
+    pub syn_fingerprint: Option<TcpObservation>,
 }
 
 /// Handle a plain HTTP connection
