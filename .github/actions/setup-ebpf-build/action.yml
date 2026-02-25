@@ -3,9 +3,9 @@ description: 'Install Rust nightly + rust-src required to compile huginn-proxy-e
 runs:
   using: 'composite'
   steps:
-    - name: Install Rust nightly with rust-src
+    - name: Install Rust nightly with rust-src and clippy
       shell: bash
-      run: rustup toolchain install nightly --component rust-src
+      run: rustup toolchain install nightly --component rust-src --component clippy
     - name: Install bpf-linker
       shell: bash
       # Use nightly to compile bpf-linker: its deps require rustc > the stable MSRV in this repo.

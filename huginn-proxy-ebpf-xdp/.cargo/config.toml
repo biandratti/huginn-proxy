@@ -2,4 +2,8 @@
 target = "bpfel-unknown-none"
 
 [unstable]
-build-std = ["core"]
+# compiler_builtins must be rebuilt alongside core to avoid the nightly
+# "cannot call functions through upstream monomorphizations" validation error,
+# which fires when a precompiled compiler_builtins is mixed with a
+# source-built core on recent nightlies.
+build-std = ["core", "compiler_builtins"]
