@@ -22,11 +22,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let out_dir = PathBuf::from(std::env::var("OUT_DIR")?);
     let bpf_target_dir = out_dir.join("bpf-programs-target");
 
-    // When cargo runs a build script it sets RUSTC, RUSTDOC, and RUSTUP_TOOLCHAIN
-    // pointing at the *current* (stable) toolchain. Those variables would be
-    // inherited by the child cargo process and override the nightly selection we
-    // need. We remove them so rustup can pick the toolchain from the
-    // rust-toolchain.toml that lives in huginn-proxy-ebpf-xdp/.
+    // When cargo runs a build script it sets several env vars pointing at the
+    // current (stable) toolchain and compilation flags.  Those would be
+    // inherited by the child cargo process and cause two classes of problems:
+    //
+    // 1. RUSTC / RUSTUP_TOOLCHAIN / RUSTC_WORKSPACE_WRAPPER / RUSTC_WRAPPER
+    //    override the nightly selection we need; we remove them so rustup picks
+    //    the toolchain from the rust-toolchain.toml inside huginn-proxy-ebpf-xdp/.
+    //
+    // 2. RUSTFLAGS / CARGO_ENCODED_RUSTFLAGS may carry coverage-instrumentation
+    //    flags (e.g. `-C instrument-coverage`) injected by tarpaulin or other
+    //    tools.  Those flags interact badly with `-Zbuild-std`: the instrumented
+    //    core pulls fmt::Debug machinery into compiler_builtins, which the
+    //    compiler then rejects with "cannot call functions through upstream
+    //    monomorphizations" (rust-lang/rust#137222).  The BPF program must be
+    //    compiled without any host-side instrumentation, so we strip these flags.
     let status = Command::new("cargo")
         .args(["build", "--release", "--package", "huginn-proxy-ebpf-xdp"])
         .env("CARGO_TARGET_DIR", &bpf_target_dir)
@@ -35,6 +45,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .env_remove("RUSTUP_TOOLCHAIN")
         .env_remove("RUSTC_WORKSPACE_WRAPPER")
         .env_remove("RUSTC_WRAPPER")
+        .env_remove("RUSTFLAGS")
+        .env_remove("CARGO_ENCODED_RUSTFLAGS")
         .current_dir(&programs_dir)
         .status();
 
