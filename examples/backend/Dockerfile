@@ -13,7 +13,7 @@ COPY tests-e2e/Cargo.toml ./tests-e2e/
 COPY tests-browsers/Cargo.toml ./tests-browsers/
 # Create minimal source files for other workspace members (Cargo requires valid packages)
 # These are not built, but Cargo needs them to resolve the workspace
-RUN mkdir -p huginn-proxy/src huginn-proxy-lib/src huginn-proxy-ebpf/src huginn-proxy-ebpf-common/src tests-e2e/src tests-browsers/src && \
+RUN mkdir -p huginn-proxy/src huginn-proxy-lib/src huginn-proxy-ebpf/src tests-e2e/src tests-browsers/src && \
     echo 'fn main() {}' > huginn-proxy/src/main.rs && \
     echo '' > huginn-proxy-lib/src/lib.rs && \
     echo '' > huginn-proxy-ebpf/src/lib.rs && \

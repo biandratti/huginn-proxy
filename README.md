@@ -15,10 +15,7 @@
 
 ## Overview
 
-**Huginn Proxy** is a reverse proxy built in Rust that combines traditional load balancing and request forwarding with
-advanced passive fingerprinting capabilities. It leverages the [Huginn Net](https://github.com/biandratti/huginn-net)
-fingerprinting libraries to extract TLS (JA4) and HTTP/2 (Akamai) fingerprints from client connections, injecting them
-as headers for downstream services.
+**Huginn Proxy** is a reverse proxy built on [Tokio](https://tokio.rs), [Hyper](https://hyper.rs), and [Rustls](https://github.com/rustls/rustls). It routes incoming connections to backend services while passively extracting TLS (JA4), HTTP/2 (Akamai), and TCP SYN (p0f-style) fingerprints and injecting them as headers. TCP SYN fingerprinting is implemented via an XDP eBPF program using [Aya](https://aya-rs.dev). Fingerprinting libraries are provided by [Huginn Net](https://github.com/biandratti/huginn-net).
 
 Inspired by production-grade proxies
 like [Pingora](https://github.com/cloudflare/pingora), [Sozu](https://github.com/sozu-proxy/sozu),
