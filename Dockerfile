@@ -29,9 +29,8 @@ COPY --from=builder /app/target/release/huginn-proxy /usr/local/bin/huginn-proxy
 #   cap_bpf       – create BPF maps and load BPF programs
 #   cap_net_admin – attach XDP programs to network interfaces
 #   cap_perfmon   – allow pointer arithmetic in BPF verifier (required for XDP packet parsing)
-# The container still runs as the unprivileged 'app' user; the host's
-# docker-compose.yml must set  privileged: true  (or cap_add the same caps)
-# so these ambient capabilities are honoured inside the container.
+# The container runs as the unprivileged 'app' user; docker-compose.yml must
+# declare the same caps via cap_add so they are included in the bounding set.
 RUN setcap cap_bpf,cap_net_admin,cap_perfmon+eip /usr/local/bin/huginn-proxy
 # Note: Certificate files mounted as volumes need to be readable by user 'app'
 # The volumes are mounted as 'ro' (read-only), so ensure proper permissions on host

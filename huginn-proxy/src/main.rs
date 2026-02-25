@@ -49,7 +49,8 @@ async fn main() -> Result<(), BoxError> {
     };
 
     // Initialize TCP SYN eBPF probe when feature is enabled.
-    // Both `fingerprint.tcp_enabled = true` and `fingerprint.ebpf_tcp_interface` must be set.
+    // Both `fingerprint.tcp_enabled = true` and the `HUGINN_EBPF_INTERFACE`,
+    // `HUGINN_EBPF_DST_IP`, and `HUGINN_EBPF_DST_PORT` environment variables must be set.
     // On failure, logs a warning and continues without eBPF (graceful degradation).
     #[cfg(feature = "ebpf-tcp")]
     let syn_probe: Option<huginn_proxy_lib::SynProbe> = {
