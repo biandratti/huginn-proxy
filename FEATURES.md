@@ -106,11 +106,9 @@ The TCP SYN signature follows the p0f format: `ip_ver:ttl:ip_olen:mss:wsize,wsca
 
 **TCP SYN fingerprinting limitations:**
 
-- **Linux only** — eBPF/XDP does not run on macOS or Windows. Requires kernel ≥ 5.4 (≥ 5.11 recommended).
+- **Linux only** — eBPF/XDP does not run on macOS or Windows. Requires kernel ≥ 5.11.
 - **IPv4 only** — IPv6 connections are not captured. Transparent when a load balancer forwards internally over IPv4.
 - Present on all requests of a connection (including HTTP keep-alive), since the fingerprint describes the TCP connection, not individual requests.
-- Option-based quirks that require deeper parsing (`ts1-`, `ts2+`, `opt+`) depend on the raw bytes captured by XDP and are computed in userspace.
-- Quirks readable from XDP but not yet extracted: none currently — all IP/TCP-header quirks and option-derived quirks are implemented.
 
 Limitation: Fingerprints are only extracted and forwarded, not validated or used for blocking. Backend services need to handle the actual fingerprint analysis and decision making.
 

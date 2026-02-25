@@ -1,0 +1,18 @@
+# Empty [workspace] table tells Cargo this is a standalone crate,
+# not a member of the parent workspace. It is compiled independently
+# by huginn-proxy-ebpf's build.rs using the nightly toolchain and
+# bpfel-unknown-none target.
+[workspace]
+
+[package]
+name = "huginn-proxy-ebpf-xdp"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+aya-ebpf = "0.1"
+
+[[bin]]
+name = "huginn-proxy-ebpf-xdp"
+path = "src/main.rs"

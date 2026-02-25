@@ -1,7 +1,6 @@
 // eBPF/XDP is Linux-only. This crate does not compile for other targets.
 #![cfg(target_os = "linux")]
-// Unsafe is required in two narrow, documented sites:
-//   - probe.rs: libc::setrlimit FFI call (RLIMIT_MEMLOCK)
+// Unsafe is required in one narrow, documented site:
 //   - types.rs: unsafe impl aya::Pod for SynRawData (kernel memory safety guarantee)
 // All other unsafe is denied.
 #![deny(unsafe_code)]
@@ -10,7 +9,7 @@ pub mod probe;
 pub mod types;
 
 pub use probe::EbpfProbe;
-pub use types::{quirk_bits, SynRawData};
+pub use types::{parse_syn, quirk_bits, SynRawData};
 
 #[derive(Debug, thiserror::Error)]
 pub enum EbpfError {

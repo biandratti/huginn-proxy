@@ -35,6 +35,8 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-
+      - name: Setup eBPF build dependencies
+        uses: ./.github/actions/setup-ebpf-build
       - name: Install Rust ${{ env.rust_stable }}
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -124,30 +126,22 @@ jobs:
             -D clippy::unimplemented \
             -D clippy::missing_panics_doc \
             -D clippy::redundant_field_names
-
-  lint-c:
-    name: Lint C (BPF/XDP)
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-      - name: Install clang-format and clang-tidy
-        run: sudo apt-get update -q && sudo apt-get install -y clang clang-format clang-tidy linux-headers-generic
-      - name: Check C formatting (clang-format)
+      - name: Check lint (huginn-proxy-ebpf-xdp)
+        # huginn-proxy-ebpf-xdp is intentionally outside the workspace (nightly + bpfel-unknown-none).
+        # Its rust-toolchain.toml pins nightly automatically; bpf-linker is already installed by setup-ebpf-build.
         run: |
-          clang-format --dry-run --Werror \
-            huginn-proxy-ebpf/scripts/bpf/xdp.c
-      - name: Lint C code (clang-tidy)
-        run: |
-          clang-tidy \
-            --checks='clang-diagnostic-*,clang-analyzer-*,bugprone-*,-bugprone-easily-swappable-parameters' \
-            --warnings-as-errors='*' \
-            huginn-proxy-ebpf/scripts/bpf/xdp.c \
-            -- \
-            -O2 \
-            -I huginn-proxy-ebpf/scripts/bpf/headers \
-            -D__KERNEL__ \
-            -D__BPF_TRACING__
+          cd huginn-proxy-ebpf-xdp
+          cargo clippy -- \
+            -D warnings \
+            -D clippy::expect_used \
+            -D clippy::unreachable \
+            -D clippy::arithmetic_side_effects \
+            -D clippy::unwrap_used \
+            -D clippy::todo \
+            -D clippy::redundant_clone \
+            -D clippy::unimplemented \
+            -D clippy::missing_panics_doc \
+            -D clippy::redundant_field_names
 
   test-individual-crates:
     name: Test individual crates
@@ -156,8 +150,8 @@ jobs:
       matrix:
         crate:
           - huginn-proxy
-          - huginn-proxy-lib
           - huginn-proxy-ebpf
+          - huginn-proxy-lib
     steps:
       - name: Checkout
         uses: actions/checkout@v6

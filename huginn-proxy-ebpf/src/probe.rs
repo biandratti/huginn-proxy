@@ -1,7 +1,5 @@
 use std::net::Ipv4Addr;
 
-use libc;
-
 use aya::maps::{Array, HashMap};
 use aya::programs::{Xdp, XdpFlags};
 use aya::{Ebpf, EbpfLoader};
@@ -47,14 +45,6 @@ impl EbpfProbe {
     /// Both values are patched into the XDP program's `.rodata` via `EbpfLoader::set_global`
     /// before the kernel loads the program, matching `cilium/ebpf`'s `spec.Variables` pattern.
     pub fn new(interface: &str, dst_ip: Ipv4Addr, dst_port: u16) -> Result<Self, EbpfError> {
-        // SAFETY: setrlimit is always safe to call; we discard errors intentionally.
-        #[allow(unsafe_code)]
-        unsafe {
-            let rlim =
-                libc::rlimit { rlim_cur: libc::RLIM_INFINITY, rlim_max: libc::RLIM_INFINITY };
-            let _ = libc::setrlimit(libc::RLIMIT_MEMLOCK, &rlim);
-        }
-
         // XDP compares ip->daddr and tcp->dest (both network-byte-order fields) against these
         // globals. On a little-endian CPU, network-order bytes [a,b,c,d] in the packet are read
         // as u32::from_ne_bytes([a,b,c,d]). We replicate the same encoding here so the

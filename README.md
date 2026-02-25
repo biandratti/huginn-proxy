@@ -15,10 +15,7 @@
 
 ## Overview
 
-**Huginn Proxy** is a reverse proxy built in Rust that combines traditional load balancing and request forwarding with
-advanced passive fingerprinting capabilities. It leverages the [Huginn Net](https://github.com/biandratti/huginn-net)
-fingerprinting libraries to extract TLS (JA4) and HTTP/2 (Akamai) fingerprints from client connections, injecting them
-as headers for downstream services.
+**Huginn Proxy** is a reverse proxy built on [Tokio](https://tokio.rs), [Hyper](https://hyper.rs), and [Rustls](https://github.com/rustls/rustls). It routes incoming connections to backend services while passively extracting TLS (JA4), HTTP/2 (Akamai), and TCP SYN (p0f-style) fingerprints and injecting them as headers. TCP SYN fingerprinting is implemented via an XDP eBPF program using [Aya](https://aya-rs.dev). Fingerprinting libraries are provided by [Huginn Net](https://github.com/biandratti/huginn-net).
 
 Inspired by production-grade proxies
 like [Pingora](https://github.com/cloudflare/pingora), [Sozu](https://github.com/sozu-proxy/sozu),
@@ -63,6 +60,8 @@ See [FEATURES.md](FEATURES.md) for detailed descriptions and limitations of each
 
 For deployment instructions, see [DEPLOYMENT.md](DEPLOYMENT.md).
 
+For module structure and design decisions, see [ARCHITECTURE.md](ARCHITECTURE.md).
+
 ## Fingerprinting
 
 Fingerprints are automatically extracted and injected as headers:
@@ -74,9 +73,9 @@ Fingerprints are automatically extracted and injected as headers:
   using [huginn-net-http](https://crates.io/crates/huginn-net-http)
 - **TCP SYN (p0f-style)**: `x-huginn-net-tcp` - Raw TCP SYN signature extracted via eBPF/XDP
   using [huginn-net-tcp](https://crates.io/crates/huginn-net-tcp). Requires `tcp_enabled = true`
-  and the `ebpf-tcp` feature. Only present on the first request of each connection (not on
-  HTTP keep-alive requests, which do not generate a new SYN). **IPv4 only** — not captured for
-  direct IPv6 connections (transparent when a load balancer forwards internally over IPv4).
+  and the `ebpf-tcp` feature. Present on all requests of a connection (the fingerprint is
+  captured once at TCP accept time and reused). **IPv4 only** — not captured for direct IPv6
+  connections (transparent when a load balancer forwards internally over IPv4).
   See [EBPF-SETUP.md](EBPF-SETUP.md) for setup, kernel requirements, and deployment options.
 
 **Examples:**

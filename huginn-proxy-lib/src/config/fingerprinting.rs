@@ -13,7 +13,8 @@ pub struct FingerprintConfig {
     #[serde(default = "default_true")]
     pub http_enabled: bool,
     /// Enable TCP SYN fingerprinting via eBPF/XDP (p0f-style raw signature).
-    /// Requires the `ebpf-tcp` Cargo feature and `ebpf_tcp_interface` to be set.
+    /// Requires the `ebpf-tcp` Cargo feature and the `HUGINN_EBPF_INTERFACE`,
+    /// `HUGINN_EBPF_DST_IP`, and `HUGINN_EBPF_DST_PORT` environment variables.
     /// When false the eBPF probe is never started, even if the feature is compiled in.
     /// Default: false
     #[serde(default)]
