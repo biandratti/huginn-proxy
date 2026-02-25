@@ -970,18 +970,11 @@ version = "0.1.0"
 dependencies = [
  "aya",
  "huginn-net-db",
- "huginn-proxy-ebpf-common",
+ "huginn-net-tcp",
  "libc",
  "thiserror 2.0.18",
  "tracing",
  "tracing-subscriber",
-]
-
-[[package]]
-name = "huginn-proxy-ebpf-common"
-version = "0.1.0"
-dependencies = [
- "aya",
 ]
 
 [[package]]

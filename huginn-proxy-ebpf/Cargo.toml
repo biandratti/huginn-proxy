@@ -9,7 +9,7 @@ build = "src/build.rs"
 [dependencies]
 aya.workspace = true
 huginn-net-db.workspace = true
-huginn-proxy-ebpf-common = { path = "../huginn-proxy-ebpf-common", features = ["aya-pod"] }
+huginn-net-tcp.workspace = true
 libc.workspace = true
 thiserror.workspace = true
 tracing.workspace = true

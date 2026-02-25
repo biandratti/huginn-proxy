@@ -13,9 +13,58 @@ use aya_ebpf::{
     maps::{Array, LruHashMap},
     programs::XdpContext,
 };
-use huginn_proxy_ebpf_common::{quirk_bits, SynRawData};
 
 use core::mem;
+
+/// Quirk bitmask constants extracted from IP and TCP headers.
+///
+/// Must match the identical module in `huginn-proxy-ebpf/src/types.rs`.
+/// The `offset_of!` block below enforces layout parity at compile time.
+mod quirk_bits {
+    pub const DF: u32 = 1 << 0;
+    pub const NONZERO_ID: u32 = 1 << 1;
+    pub const ZERO_ID: u32 = 1 << 2;
+    pub const MUST_BE_ZERO: u32 = 1 << 3;
+    pub const ECN: u32 = 1 << 4;
+    pub const SEQ_ZERO: u32 = 1 << 5;
+    pub const ACK_NONZERO: u32 = 1 << 6;
+    pub const NONZERO_URG: u32 = 1 << 7;
+    pub const URG: u32 = 1 << 8;
+    pub const PUSH: u32 = 1 << 9;
+}
+
+/// Raw data extracted from a TCP SYN packet, stored in the BPF LRU map.
+///
+/// Layout must match `SynRawData` in `huginn-proxy-ebpf/src/types.rs` exactly.
+/// Both sides use identical `offset_of!` compile-time assertions to enforce this.
+/// The canonical layout is documented in `data/huginn-proxy-analisis/bpf.md`.
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct SynRawData {
+    src_addr: u32,
+    src_port: u16,
+    window: u16,
+    optlen: u16,
+    ip_ttl: u8,
+    ip_olen: u8,
+    options: [u8; 40],
+    quirks: u32,
+    tick: u64,
+}
+
+const _: () = {
+    use core::mem::{offset_of, size_of};
+    assert!(size_of::<SynRawData>() == 64);
+    assert!(offset_of!(SynRawData, src_addr) == 0);
+    assert!(offset_of!(SynRawData, src_port) == 4);
+    assert!(offset_of!(SynRawData, window) == 6);
+    assert!(offset_of!(SynRawData, optlen) == 8);
+    assert!(offset_of!(SynRawData, ip_ttl) == 10);
+    assert!(offset_of!(SynRawData, ip_olen) == 11);
+    assert!(offset_of!(SynRawData, options) == 12);
+    assert!(offset_of!(SynRawData, quirks) == 52);
+    assert!(offset_of!(SynRawData, tick) == 56);
+};
 
 // ── Network protocol constants (network byte order on LE host) ──────────────
 

@@ -53,10 +53,8 @@ async fn main() -> Result<(), BoxError> {
     // On failure, logs a warning and continues without eBPF (graceful degradation).
     #[cfg(feature = "ebpf-tcp")]
     let syn_probe: Option<huginn_proxy_lib::SynProbe> = {
-        use huginn_net_tcp::tcp::{IpVersion, PayloadSize};
-        use huginn_proxy_ebpf::types::SynRawDataExt as _;
-        use huginn_proxy_ebpf::EbpfProbe;
-        use huginn_proxy_lib::fingerprinting::{parse_syn_raw, SynResult, TcpSynData};
+        use huginn_proxy_ebpf::{parse_syn, EbpfProbe};
+        use huginn_proxy_lib::fingerprinting::SynResult;
         use std::net::SocketAddr;
 
         // eBPF filter parameters are infrastructure-specific — read from env vars set in
@@ -101,19 +99,7 @@ async fn main() -> Result<(), BoxError> {
                 let Some(raw) = probe.lookup(peer_ip, peer_port) else {
                     return SynResult::Miss;
                 };
-                let data = TcpSynData {
-                    ip_ttl: raw.ip_ttl,
-                    window: raw.window,
-                    optlen: raw.optlen,
-                    options: raw.options,
-                    // XDP program filters non-IPv4 at entry; V4 is always correct here.
-                    ip_version: IpVersion::V4,
-                    olen: raw.ip_olen,
-                    quirks: raw.decode_quirks(),
-                    // SYN packets never carry payload — invariant by TCP spec.
-                    pclass: PayloadSize::Zero,
-                };
-                match parse_syn_raw(&data) {
+                match parse_syn(&raw) {
                     Some(obs) => SynResult::Hit(obs),
                     None => SynResult::Malformed,
                 }

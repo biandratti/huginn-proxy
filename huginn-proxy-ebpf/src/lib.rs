@@ -10,7 +10,7 @@ pub mod probe;
 pub mod types;
 
 pub use probe::EbpfProbe;
-pub use types::{quirk_bits, SynRawData};
+pub use types::{parse_syn, quirk_bits, SynRawData};
 
 #[derive(Debug, thiserror::Error)]
 pub enum EbpfError {

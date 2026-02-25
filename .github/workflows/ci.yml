@@ -151,7 +151,6 @@ jobs:
         crate:
           - huginn-proxy
           - huginn-proxy-ebpf
-          - huginn-proxy-ebpf-common
           - huginn-proxy-lib
     steps:
       - name: Checkout

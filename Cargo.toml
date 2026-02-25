@@ -3,7 +3,6 @@ members = [
     "examples/backend",
     "huginn-proxy",
     "huginn-proxy-ebpf",
-    "huginn-proxy-ebpf-common",
     "huginn-proxy-lib",
     "tests-browsers",
     "tests-e2e",
