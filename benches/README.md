@@ -156,6 +156,11 @@ This models a keep-alive HTTP client hitting the proxy repeatedly.
 Each concurrent request creates a new `reqwest::Client` (new TLS handshake).
 This models N independent clients connecting simultaneously.
 
+### Environment
+
+Measured on an Intel Core i7-1165G7 (4 cores, 2.80 GHz) with 32 GB RAM, localhost,
+release build. Results may vary ±5–10% depending on CPU thermal state.
+
 ### Baseline numbers (localhost, release build)
 
 | Benchmark | p50 |
