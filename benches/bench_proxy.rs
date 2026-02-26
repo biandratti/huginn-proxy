@@ -83,7 +83,9 @@ impl BenchFixture {
 
         // 3. Pick a free port for the proxy
         let proxy_port = free_port();
-        let proxy_addr: SocketAddr = format!("127.0.0.1:{proxy_port}").parse().unwrap();
+        let proxy_addr: SocketAddr = format!("127.0.0.1:{proxy_port}")
+            .parse()
+            .unwrap_or_else(|e| panic!("invalid proxy addr: {e}"));
         let backend_address = backend_addr.to_string();
 
         // 4. Build proxy config with two routes:
@@ -178,7 +180,8 @@ impl BenchFixture {
 // Benchmark 1: HTTP/1.1 round-trip latency (single request per iteration)
 // ---------------------------------------------------------------------------
 fn bench_http1_latency(c: &mut Criterion) {
-    let rt = tokio::runtime::Runtime::new().unwrap();
+    let rt = tokio::runtime::Runtime::new()
+        .unwrap_or_else(|e| panic!("failed to create tokio runtime: {e}"));
     let fixture = rt.block_on(BenchFixture::setup());
     let proxy_url = format!("https://{}/bench/fp", fixture.proxy_addr);
 
@@ -186,7 +189,7 @@ fn bench_http1_latency(c: &mut Criterion) {
         .danger_accept_invalid_certs(true)
         .timeout(Duration::from_secs(10))
         .build()
-        .unwrap();
+        .unwrap_or_else(|e| panic!("failed to build reqwest client: {e}"));
 
     let mut group = c.benchmark_group("http1_latency");
     group.sample_size(50);
@@ -195,7 +198,11 @@ fn bench_http1_latency(c: &mut Criterion) {
     group.bench_function("single_request_fingerprinting_on", |b| {
         b.iter(|| {
             rt.block_on(async {
-                let resp = client.get(&proxy_url).send().await.expect("request failed");
+                let resp = client
+                    .get(&proxy_url)
+                    .send()
+                    .await
+                    .unwrap_or_else(|e| panic!("request failed: {e}"));
                 assert!(resp.status().is_success(), "proxy returned non-2xx: {}", resp.status());
                 assert_fingerprint_ja4(&resp);
                 resp
@@ -211,7 +218,8 @@ fn bench_http1_latency(c: &mut Criterion) {
 // Benchmark 2: HTTP/2 round-trip latency (single request per iteration)
 // ---------------------------------------------------------------------------
 fn bench_http2_latency(c: &mut Criterion) {
-    let rt = tokio::runtime::Runtime::new().unwrap();
+    let rt = tokio::runtime::Runtime::new()
+        .unwrap_or_else(|e| panic!("failed to create tokio runtime: {e}"));
     let fixture = rt.block_on(BenchFixture::setup());
     let proxy_url = format!("https://{}/bench/fp", fixture.proxy_addr);
 
@@ -220,7 +228,7 @@ fn bench_http2_latency(c: &mut Criterion) {
         .http2_prior_knowledge()
         .timeout(Duration::from_secs(10))
         .build()
-        .unwrap();
+        .unwrap_or_else(|e| panic!("failed to build reqwest client: {e}"));
 
     let mut group = c.benchmark_group("http2_latency");
     group.sample_size(50);
@@ -229,7 +237,11 @@ fn bench_http2_latency(c: &mut Criterion) {
     group.bench_function("single_request_fingerprinting_on", |b| {
         b.iter(|| {
             rt.block_on(async {
-                let resp = client.get(&proxy_url).send().await.expect("request failed");
+                let resp = client
+                    .get(&proxy_url)
+                    .send()
+                    .await
+                    .unwrap_or_else(|e| panic!("request failed: {e}"));
                 assert!(resp.status().is_success());
                 assert_fingerprint_ja4(&resp);
                 assert_fingerprint_akamai(&resp);
@@ -249,7 +261,8 @@ fn bench_http2_latency(c: &mut Criterion) {
 // of JA4 + Akamai extraction under identical conditions.
 // ---------------------------------------------------------------------------
 fn bench_fingerprinting_overhead(c: &mut Criterion) {
-    let rt = tokio::runtime::Runtime::new().unwrap();
+    let rt = tokio::runtime::Runtime::new()
+        .unwrap_or_else(|e| panic!("failed to create tokio runtime: {e}"));
     let fixture = rt.block_on(BenchFixture::setup());
     let proxy_addr = fixture.proxy_addr;
 
@@ -257,14 +270,14 @@ fn bench_fingerprinting_overhead(c: &mut Criterion) {
         .danger_accept_invalid_certs(true)
         .timeout(Duration::from_secs(10))
         .build()
-        .unwrap();
+        .unwrap_or_else(|e| panic!("failed to build H1 client: {e}"));
 
     let client_h2 = reqwest::Client::builder()
         .danger_accept_invalid_certs(true)
         .http2_prior_knowledge()
         .timeout(Duration::from_secs(10))
         .build()
-        .unwrap();
+        .unwrap_or_else(|e| panic!("failed to build H2 client: {e}"));
 
     let mut group = c.benchmark_group("fingerprinting_overhead");
     group.sample_size(50);
@@ -277,7 +290,13 @@ fn bench_fingerprinting_overhead(c: &mut Criterion) {
     // HTTP/1.1 pair — measures JA4-only overhead (no Akamai on H1)
     group.bench_function("http1_with_fingerprinting", |b| {
         b.iter(|| {
-            rt.block_on(async { client_h1.get(&url_fp).send().await.expect("request failed") })
+            rt.block_on(async {
+                client_h1
+                    .get(&url_fp)
+                    .send()
+                    .await
+                    .unwrap_or_else(|e| panic!("request failed: {e}"))
+            })
         })
     });
 
@@ -288,7 +307,7 @@ fn bench_fingerprinting_overhead(c: &mut Criterion) {
                     .get(&url_nofp)
                     .send()
                     .await
-                    .expect("request failed")
+                    .unwrap_or_else(|e| panic!("request failed: {e}"))
             })
         })
     });
@@ -296,7 +315,13 @@ fn bench_fingerprinting_overhead(c: &mut Criterion) {
     // HTTP/2 pair — measures JA4 + Akamai overhead together
     group.bench_function("http2_with_fingerprinting", |b| {
         b.iter(|| {
-            rt.block_on(async { client_h2.get(&url_fp).send().await.expect("request failed") })
+            rt.block_on(async {
+                client_h2
+                    .get(&url_fp)
+                    .send()
+                    .await
+                    .unwrap_or_else(|e| panic!("request failed: {e}"))
+            })
         })
     });
 
@@ -307,7 +332,7 @@ fn bench_fingerprinting_overhead(c: &mut Criterion) {
                     .get(&url_nofp)
                     .send()
                     .await
-                    .expect("request failed")
+                    .unwrap_or_else(|e| panic!("request failed: {e}"))
             })
         })
     });
@@ -325,7 +350,8 @@ fn bench_fingerprinting_overhead(c: &mut Criterion) {
 // Covers both HTTP/1.1 and HTTP/2 to compare protocol scaling behaviour.
 // ---------------------------------------------------------------------------
 fn bench_concurrency(c: &mut Criterion) {
-    let rt = tokio::runtime::Runtime::new().unwrap();
+    let rt = tokio::runtime::Runtime::new()
+        .unwrap_or_else(|e| panic!("failed to create tokio runtime: {e}"));
     let fixture = rt.block_on(BenchFixture::setup());
     let proxy_addr = fixture.proxy_addr;
 
@@ -350,7 +376,7 @@ fn bench_concurrency(c: &mut Criterion) {
                                 .danger_accept_invalid_certs(true)
                                 .timeout(Duration::from_secs(10))
                                 .build()
-                                .unwrap();
+                                .unwrap_or_else(|e| panic!("failed to build H1 client: {e}"));
                             client.get(&url).send().await.is_ok()
                         }));
                     }
@@ -379,7 +405,7 @@ fn bench_concurrency(c: &mut Criterion) {
                                 .http2_prior_knowledge()
                                 .timeout(Duration::from_secs(10))
                                 .build()
-                                .unwrap();
+                                .unwrap_or_else(|e| panic!("failed to build H2 client: {e}"));
                             client.get(&url).send().await.is_ok()
                         }));
                     }
@@ -413,7 +439,7 @@ fn assert_fingerprint_ja4(resp: &reqwest::Response) {
         .get(HEADER_JA4)
         .unwrap_or_else(|| panic!("missing {HEADER_JA4} header — fingerprinting may be broken"))
         .to_str()
-        .expect("non-UTF8 JA4 header");
+        .unwrap_or_else(|e| panic!("non-UTF8 JA4 header: {e}"));
     assert_eq!(
         value, EXPECTED_JA4,
         "JA4 fingerprint changed (reqwest/rustls update?)\n\
@@ -430,7 +456,7 @@ fn assert_fingerprint_akamai(resp: &reqwest::Response) {
             panic!("missing {HEADER_AKAMAI} header — HTTP/2 fingerprinting may be broken")
         })
         .to_str()
-        .expect("non-UTF8 Akamai header");
+        .unwrap_or_else(|e| panic!("non-UTF8 Akamai header: {e}"));
     assert_eq!(
         value, EXPECTED_AKAMAI,
         "Akamai fingerprint changed (h2 crate update?)\n\
@@ -447,8 +473,12 @@ fn assert_fingerprint_akamai(resp: &reqwest::Response) {
 /// as response headers. This lets the benchmark verify that the proxy actually
 /// extracted and injected the fingerprints without modifying the proxy itself.
 async fn start_backend() -> (tokio::task::JoinHandle<()>, SocketAddr) {
-    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let addr = listener.local_addr().unwrap();
+    let listener = TcpListener::bind("127.0.0.1:0")
+        .await
+        .unwrap_or_else(|e| panic!("failed to bind backend listener: {e}"));
+    let addr = listener
+        .local_addr()
+        .unwrap_or_else(|e| panic!("failed to get backend addr: {e}"));
 
     let task = tokio::spawn(async move {
         loop {
@@ -462,7 +492,8 @@ async fn start_backend() -> (tokio::task::JoinHandle<()>, SocketAddr) {
                     for name in [HEADER_JA4, HEADER_AKAMAI] {
                         if let Some(value) = req.headers().get(name) {
                             resp.headers_mut().insert(
-                                hyper::header::HeaderName::from_bytes(name.as_bytes()).unwrap(),
+                                hyper::header::HeaderName::from_bytes(name.as_bytes())
+                                    .unwrap_or_else(|e| panic!("invalid header name {name}: {e}")),
                                 value.clone(),
                             );
                         }
@@ -482,27 +513,37 @@ async fn start_backend() -> (tokio::task::JoinHandle<()>, SocketAddr) {
 /// Find a free TCP port by binding to :0, reading the port, then releasing it.
 /// There is a small race window, but it is acceptable for benchmarks on localhost.
 fn free_port() -> u16 {
-    let l = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
-    l.local_addr().unwrap().port()
+    let l = std::net::TcpListener::bind("127.0.0.1:0")
+        .unwrap_or_else(|e| panic!("failed to bind for port probe: {e}"));
+    l.local_addr()
+        .unwrap_or_else(|e| panic!("failed to get port: {e}"))
+        .port()
 }
 
 /// Generate a self-signed TLS cert/key pair and write them to temp files.
 fn generate_cert_files() -> (tempfile::NamedTempFile, tempfile::NamedTempFile) {
     let rcgen::CertifiedKey { cert, signing_key } =
-        rcgen::generate_simple_self_signed(vec!["localhost".to_string()]).unwrap();
+        rcgen::generate_simple_self_signed(vec!["localhost".to_string()])
+            .unwrap_or_else(|e| panic!("failed to generate self-signed cert: {e}"));
 
-    let cert_file = tempfile::NamedTempFile::new().unwrap();
-    let key_file = tempfile::NamedTempFile::new().unwrap();
+    let cert_file = tempfile::NamedTempFile::new()
+        .unwrap_or_else(|e| panic!("failed to create cert tempfile: {e}"));
+    let key_file = tempfile::NamedTempFile::new()
+        .unwrap_or_else(|e| panic!("failed to create key tempfile: {e}"));
 
-    std::fs::write(cert_file.path(), cert.pem()).unwrap();
-    std::fs::write(key_file.path(), signing_key.serialize_pem()).unwrap();
+    std::fs::write(cert_file.path(), cert.pem())
+        .unwrap_or_else(|e| panic!("failed to write cert: {e}"));
+    std::fs::write(key_file.path(), signing_key.serialize_pem())
+        .unwrap_or_else(|e| panic!("failed to write key: {e}"));
 
     (cert_file, key_file)
 }
 
 /// Poll the proxy until it accepts a TCP connection, up to 5 seconds.
 async fn wait_for_ready(addr: SocketAddr) {
-    let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
+    let deadline = tokio::time::Instant::now()
+        .checked_add(Duration::from_secs(5))
+        .unwrap_or_else(|| panic!("deadline arithmetic overflow"));
     loop {
         if tokio::net::TcpStream::connect(addr).await.is_ok() {
             // Give TLS acceptor a moment to initialize

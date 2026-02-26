@@ -8,6 +8,7 @@
 //! ```bash
 //! cargo test -p huginn-proxy-lib --test capture_fixtures -- --nocapture
 //! ```
+
 //!
 //! Commit the resulting `.bin` files in `benches/fixtures/` so that
 //! `bench_fingerprinting` uses deterministic, real data.
@@ -28,7 +29,11 @@ use tokio::net::TcpListener;
 fn fixtures_dir() -> PathBuf {
     // Resolve relative to the workspace root (two levels up from huginn-proxy-lib/)
     let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    manifest.parent().unwrap().join("benches").join("fixtures")
+    manifest
+        .parent()
+        .unwrap_or_else(|| panic!("CARGO_MANIFEST_DIR has no parent"))
+        .join("benches")
+        .join("fixtures")
 }
 
 // ---------------------------------------------------------------------------
@@ -136,16 +141,24 @@ async fn capture_fingerprint_values() -> Result<(), Box<dyn std::error::Error + 
                     let akamai = Arc::clone(&akamai);
                     async move {
                         if let Some(v) = req.headers().get("x-huginn-net-ja4") {
-                            *ja4.lock().unwrap() = Some(v.to_str().unwrap_or("").to_string());
+                            *ja4.lock()
+                                .unwrap_or_else(|e| panic!("ja4 mutex poisoned: {e}")) =
+                                Some(v.to_str().unwrap_or("").to_string());
                         }
                         if let Some(v) = req.headers().get("x-huginn-net-akamai") {
-                            *akamai.lock().unwrap() = Some(v.to_str().unwrap_or("").to_string());
+                            *akamai
+                                .lock()
+                                .unwrap_or_else(|e| panic!("akamai mutex poisoned: {e}")) =
+                                Some(v.to_str().unwrap_or("").to_string());
                         }
                         let mut resp = Response::new(Full::new(Bytes::from("ok")));
                         for name in ["x-huginn-net-ja4", "x-huginn-net-akamai"] {
                             if let Some(value) = req.headers().get(name) {
                                 resp.headers_mut().insert(
-                                    hyper::header::HeaderName::from_bytes(name.as_bytes()).unwrap(),
+                                    hyper::header::HeaderName::from_bytes(name.as_bytes())
+                                        .unwrap_or_else(|e| {
+                                            panic!("invalid header name {name}: {e}")
+                                        }),
                                     value.clone(),
                                 );
                             }
