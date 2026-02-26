@@ -176,9 +176,6 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          # annotations propagates the description to the multi-arch manifest index.
-          # GHCR reads the package description from the index annotations, not from
-          # individual platform manifests where Dockerfile LABELs land.
           annotations: ${{ steps.meta.outputs.annotations }}
           cache-from: type=gha,scope=docker-${{ matrix.dockerfile }}
           cache-to: type=gha,mode=max,scope=docker-${{ matrix.dockerfile }}
