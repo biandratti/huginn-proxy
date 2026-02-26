@@ -1,0 +1,33 @@
+services:
+  proxy:
+    build:
+      context: ..
+      dockerfile: Dockerfile.plain
+    command: ["/usr/local/bin/huginn-proxy", "/config/compose.toml"]
+    volumes:
+      - ./config/compose.toml:/config/compose.toml:ro
+      - ./certs:/config/certs:ro
+    ports:
+      - "7000:7000"   # Proxy server (HTTPS/HTTP)
+      - "9090:9090"   # Observability server (Metrics + Health checks)
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/9090' 2>/dev/null"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    depends_on:
+      backend-a:
+        condition: service_started
+      backend-b:
+        condition: service_started
+
+  backend-a:
+    build:
+      context: ..
+      dockerfile: examples/backend/Dockerfile
+
+  backend-b:
+    build:
+      context: ..
+      dockerfile: examples/backend/Dockerfile

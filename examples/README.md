@@ -79,11 +79,19 @@ chmod 644 examples/certs/server.key examples/certs/server.crt
 
 ### 2. Start Services
 
-The compose file builds from `Dockerfile` (eBPF enabled) and includes the required `cap_add` and
-`seccomp` settings. Requires Linux kernel ≥ 5.11.
+Two compose files are provided depending on your environment:
+
+| Compose file | Dockerfile | Requirements |
+|---|---|---|
+| `docker-compose.yml` | `Dockerfile` (eBPF enabled) | Linux kernel ≥ 5.11, `cap_add` granted by Docker |
+| `docker-compose.plain.yml` | `Dockerfile.plain` (no eBPF) | Any Linux kernel, no extra capabilities |
 
 ```bash
+# With eBPF/XDP TCP SYN fingerprinting (Linux kernel ≥ 5.11)
 docker compose -f examples/docker-compose.yml up --build
+
+# Without eBPF (any kernel, simpler setup)
+docker compose -f examples/docker-compose.plain.yml up --build
 ```
 
 Alternatively, pull a pre-built image from the registry:
@@ -186,7 +194,7 @@ Expected headers:
 
 **Connection refused?**
 
-- Ensure services are running: `docker compose -f examples/docker-compose.yml ps`
+- Ensure services are running: `docker compose -f examples/docker-compose.yml ps` (or `docker-compose.plain.yml`)
 - Check logs: `docker compose -f examples/docker-compose.yml logs proxy`
 
 **Rate limits not working?**
