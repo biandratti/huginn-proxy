@@ -965,7 +965,7 @@ dependencies = [
 
 [[package]]
 name = "huginn-proxy-ebpf"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "aya",
  "huginn-net-db",
@@ -2695,7 +2695,7 @@ dependencies = [
 
 [[package]]
 name = "tests-browsers"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "serde_json",
  "serial_test",
@@ -2705,7 +2705,7 @@ dependencies = [
 
 [[package]]
 name = "tests-e2e"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "huginn-proxy-lib",
  "reqwest 0.13.2",

@@ -9,7 +9,7 @@ publish = false
 ebpf-tcp = ["dep:huginn-proxy-ebpf"]
 
 [dependencies]
-huginn-proxy-ebpf = { path = "../huginn-proxy-ebpf", optional = true }
-huginn-proxy-lib = { path = "../huginn-proxy-lib" }
+huginn-proxy-ebpf = { path = "../huginn-proxy-ebpf", version = "0.0.1", optional = true }
+huginn-proxy-lib = { path = "../huginn-proxy-lib", version = "0.0.1" }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "signal"] }
 tracing.workspace = true

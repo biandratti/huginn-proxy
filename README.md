@@ -158,8 +158,8 @@ Each release publishes the following artifacts as `huginn-proxy-{tag}-{suffix}`:
 | `x86_64-apple-darwin` | macOS | amd64 | — | ❌ |
 | `aarch64-apple-darwin` | macOS | arm64 | — | ❌ |
 
-**musl (static)**: zero runtime dependencies, runs on any Linux kernel and distro.  
-**glibc (eBPF)**: extracted from the Docker image; requires glibc and Linux kernel ≥ 5.11.  
+- musl (static): zero runtime dependencies, runs on any Linux kernel and distro.  
+- glibc (eBPF): extracted from the Docker image; requires glibc and Linux kernel ≥ 5.11.  
 eBPF variants require `CAP_BPF`, `CAP_NET_ADMIN`, `CAP_PERFMON`.
 
 Docker images are available at `ghcr.io/biandratti/huginn-proxy` for **Linux only** (`linux/amd64`, `linux/arm64`).
