@@ -1,1180 +1,567 @@
-//! Performance benchmarks for Huginn Proxy
+//! Integration benchmarks for Huginn Proxy.
 //!
-//! These benchmarks measure various aspects of proxy performance:
-//! - Request throughput (RPS)
-//! - Latency distribution (p50, p95, p99)
-//! - Concurrent connection handling
-//! - Fingerprinting overhead (TLS and HTTP/2)
-//! - Load balancing performance
-//! - TLS handshake overhead
+//! Measures full round-trip latency and throughput through a real proxy instance
+//! with TLS termination and fingerprinting enabled. No mocks: the proxy is started
+//! as a library, the backend is an embedded Hyper server, clients use reqwest.
 //!
-//! To run benchmarks:
+//! ## What is real
+//! - TLS handshake (rcgen self-signed cert, reqwest/rustls client)
+//! - JA4 fingerprinting (extracted from the actual TLS ClientHello bytes)
+//! - Akamai fingerprinting (extracted from real HTTP/2 frames via CapturingStream)
+//! - TCP networking (localhost, OS network stack)
+//! - Backend is a real Hyper HTTP/1.1 server
+//!
+//! ## What is simplified
+//! - TCP SYN eBPF fingerprinting: disabled (requires CAP_BPF + kernel ≥ 5.11).
+//!   Measured separately via Prometheus metrics in production.
+//! - Backend always returns 200 OK: we benchmark the proxy, not the backend.
+//!
+//! ## Run
 //! ```bash
 //! cargo bench --bench bench_proxy
-//! ```
-//!
-//! For HTML reports:
-//! ```bash
-//! cargo bench --bench bench_proxy -- --output-format html
+//! # Save a named baseline for regression comparison:
+//! cargo bench --bench bench_proxy -- --save-baseline v0_1_0
+//! # Compare against saved baseline:
+//! cargo bench --bench bench_proxy -- --baseline v0_1_0
 //! ```
 
-use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
-use huginn_proxy_lib::fingerprinting::names;
-use std::sync::Mutex;
+use std::convert::Infallible;
+use std::net::SocketAddr;
+use std::sync::Arc;
 use std::time::Duration;
 
-/// Number of requests to make per benchmark iteration
-/// Reduced from 1000 to 10 for faster benchmarks (HTTP requests are slower than in-memory packet processing)
-const REQUESTS_PER_ITERATION: usize = 10;
+use bytes::Bytes;
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
+use http_body_util::Full;
+use huginn_proxy_lib::config::{
+    Backend, FingerprintConfig, KeepAliveConfig, LoggingConfig, Route, SecurityConfig,
+    TelemetryConfig, TimeoutConfig,
+};
+use huginn_proxy_lib::{Config, TlsConfig};
+use hyper::service::service_fn;
+use hyper::Response;
+use hyper_util::rt::{TokioExecutor, TokioIo};
+use hyper_util::server::conn::auto::Builder as ConnBuilder;
+use tokio::net::TcpListener;
 
-/// Benchmark results storage for automatic reporting
-static BENCHMARK_RESULTS: Mutex<Option<BenchmarkReport>> = Mutex::new(None);
+// ---------------------------------------------------------------------------
+// Fingerprint header names (mirrors huginn_proxy_lib::fingerprinting::names)
+// ---------------------------------------------------------------------------
+const HEADER_JA4: &str = "x-huginn-net-ja4";
+const HEADER_AKAMAI: &str = "x-huginn-net-akamai";
 
-#[derive(Debug, Clone)]
-struct LoadTestResult {
-    name: String,
-    rps: f64,
-    fingerprinting_enabled: bool,
-    protocol: String, // "http1" or "http2"
+// ---------------------------------------------------------------------------
+// Expected fingerprint values — captured from a real reqwest/rustls connection.
+//
+// If these change after a reqwest/rustls/h2 update, the benchmarks will panic
+// with a clear message. Re-run the capture test to refresh:
+//   cargo test -p huginn-proxy-lib --test capture_fixtures -- --nocapture
+// Then update these constants with the new values.
+// ---------------------------------------------------------------------------
+const EXPECTED_JA4: &str = "t13i1010h2_61a7ad8aa9b6_3a8073edd8ef";
+const EXPECTED_AKAMAI: &str = "2:0;4:2097152;5:16384;6:16384|5177345|0|";
+
+// ---------------------------------------------------------------------------
+// Fixture: holds live servers for the duration of each benchmark group
+// ---------------------------------------------------------------------------
+struct BenchFixture {
+    proxy_addr: SocketAddr,
+    backend_task: tokio::task::JoinHandle<()>,
+    proxy_task: tokio::task::JoinHandle<()>,
+    /// Temp files must stay alive as long as the proxy reads them.
+    _cert_file: tempfile::NamedTempFile,
+    _key_file: tempfile::NamedTempFile,
 }
 
-impl LoadTestResult {
-    fn is_http1(&self) -> bool {
-        self.protocol == "http1"
+impl BenchFixture {
+    async fn setup() -> Self {
+        // 1. Start the plain-HTTP backend (proxy forwards to it without TLS)
+        let (backend_task, backend_addr) = start_backend().await;
+
+        // 2. Generate a self-signed TLS cert for the proxy's listen port
+        let (cert_file, key_file) = generate_cert_files();
+
+        // 3. Pick a free port for the proxy
+        let proxy_port = free_port();
+        let proxy_addr: SocketAddr = format!("127.0.0.1:{proxy_port}")
+            .parse()
+            .unwrap_or_else(|e| panic!("invalid proxy addr: {e}"));
+        let backend_address = backend_addr.to_string();
+
+        // 4. Build proxy config with two routes:
+        //    /bench/fp  → fingerprinting ON  (measures overhead)
+        //    /bench/nofp → fingerprinting OFF (baseline)
+        let config = Arc::new(Config {
+            listen: proxy_addr,
+            backends: vec![Backend { address: backend_address.clone(), http_version: None }],
+            routes: vec![
+                Route {
+                    prefix: "/bench/fp".to_string(),
+                    backend: backend_address.clone(),
+                    fingerprinting: true,
+                    force_new_connection: false,
+                    replace_path: Some("/".to_string()),
+                    rate_limit: None,
+                    headers: None,
+                },
+                Route {
+                    prefix: "/bench/nofp".to_string(),
+                    backend: backend_address.clone(),
+                    fingerprinting: false,
+                    force_new_connection: false,
+                    replace_path: Some("/".to_string()),
+                    rate_limit: None,
+                    headers: None,
+                },
+                Route {
+                    prefix: "/".to_string(),
+                    backend: backend_address,
+                    fingerprinting: true,
+                    force_new_connection: false,
+                    replace_path: None,
+                    rate_limit: None,
+                    headers: None,
+                },
+            ],
+            tls: Some(TlsConfig {
+                cert_path: cert_file.path().to_string_lossy().into_owned(),
+                key_path: key_file.path().to_string_lossy().into_owned(),
+                alpn: vec!["h2".to_string(), "http/1.1".to_string()],
+                watch_delay_secs: 60,
+                options: Default::default(),
+                client_auth: Default::default(),
+                session_resumption: Default::default(),
+            }),
+            fingerprint: FingerprintConfig {
+                tls_enabled: true,
+                http_enabled: true,
+                tcp_enabled: false, // eBPF not available in bench environment
+                max_capture: 64 * 1024,
+            },
+            logging: LoggingConfig { level: "warn".to_string(), show_target: false },
+            timeout: TimeoutConfig {
+                connect_ms: 5000,
+                idle_ms: 600_000, // 10 min — bench groups share a connection pool
+                shutdown_secs: 5,
+                tls_handshake_secs: 10,
+                connection_handling_secs: 600, // 10 min — each group runs ~15s warmup + 15s measure
+                keep_alive: KeepAliveConfig::default(),
+            },
+            security: SecurityConfig::default(),
+            telemetry: TelemetryConfig { metrics_port: None, otel_log_level: "warn".to_string() },
+            headers: None,
+            preserve_host: false,
+        });
+
+        // 5. Start proxy in a background task
+        let proxy_task = tokio::spawn(async move {
+            let _ = huginn_proxy_lib::run(config, None, None).await;
+        });
+
+        // 6. Wait for proxy to be ready (retry until it accepts connections)
+        wait_for_ready(proxy_addr).await;
+
+        BenchFixture {
+            proxy_addr,
+            backend_task,
+            proxy_task,
+            _cert_file: cert_file,
+            _key_file: key_file,
+        }
     }
 
-    fn is_http2(&self) -> bool {
-        self.protocol == "http2"
+    fn teardown(self) {
+        self.proxy_task.abort();
+        self.backend_task.abort();
     }
 }
 
-#[derive(Debug, Clone)]
-struct LatencyStats {
-    p50: Duration,
-    p95: Duration,
-    p99: Duration,
-    p99_9: Duration,
-    min: Duration,
-    max: Duration,
-    mean: Duration,
+// ---------------------------------------------------------------------------
+// Benchmark 1: HTTP/1.1 round-trip latency (single request per iteration)
+// ---------------------------------------------------------------------------
+fn bench_http1_latency(c: &mut Criterion) {
+    let rt = tokio::runtime::Runtime::new()
+        .unwrap_or_else(|e| panic!("failed to create tokio runtime: {e}"));
+    let fixture = rt.block_on(BenchFixture::setup());
+    let proxy_url = format!("https://{}/bench/fp", fixture.proxy_addr);
+
+    let client = reqwest::Client::builder()
+        .danger_accept_invalid_certs(true)
+        .timeout(Duration::from_secs(10))
+        .build()
+        .unwrap_or_else(|e| panic!("failed to build reqwest client: {e}"));
+
+    let mut group = c.benchmark_group("http1_latency");
+    group.sample_size(50);
+    group.measurement_time(Duration::from_secs(15));
+
+    group.bench_function("single_request_fingerprinting_on", |b| {
+        b.iter(|| {
+            rt.block_on(async {
+                let resp = client
+                    .get(&proxy_url)
+                    .send()
+                    .await
+                    .unwrap_or_else(|e| panic!("request failed: {e}"));
+                assert!(resp.status().is_success(), "proxy returned non-2xx: {}", resp.status());
+                assert_fingerprint_ja4(&resp);
+                resp
+            })
+        })
+    });
+
+    group.finish();
+    fixture.teardown();
 }
 
-#[derive(Debug, Clone)]
-struct BenchmarkReport {
-    request_count: usize,
-    successful_requests: usize,
-    failed_requests: usize,
-    timings: Vec<(String, Duration)>,
-    latency_stats: Option<LatencyStats>,
-    throughput_rps: f64,
-    throughput_bytes_per_sec: f64,
-    // Load test results for performance comparison
-    load_test_results: Vec<LoadTestResult>,
+// ---------------------------------------------------------------------------
+// Benchmark 2: HTTP/2 round-trip latency (single request per iteration)
+// ---------------------------------------------------------------------------
+fn bench_http2_latency(c: &mut Criterion) {
+    let rt = tokio::runtime::Runtime::new()
+        .unwrap_or_else(|e| panic!("failed to create tokio runtime: {e}"));
+    let fixture = rt.block_on(BenchFixture::setup());
+    let proxy_url = format!("https://{}/bench/fp", fixture.proxy_addr);
+
+    let client = reqwest::Client::builder()
+        .danger_accept_invalid_certs(true)
+        .http2_prior_knowledge()
+        .timeout(Duration::from_secs(10))
+        .build()
+        .unwrap_or_else(|e| panic!("failed to build reqwest client: {e}"));
+
+    let mut group = c.benchmark_group("http2_latency");
+    group.sample_size(50);
+    group.measurement_time(Duration::from_secs(15));
+
+    group.bench_function("single_request_fingerprinting_on", |b| {
+        b.iter(|| {
+            rt.block_on(async {
+                let resp = client
+                    .get(&proxy_url)
+                    .send()
+                    .await
+                    .unwrap_or_else(|e| panic!("request failed: {e}"));
+                assert!(resp.status().is_success());
+                assert_fingerprint_ja4(&resp);
+                assert_fingerprint_akamai(&resp);
+                resp
+            })
+        })
+    });
+
+    group.finish();
+    fixture.teardown();
+}
+
+// ---------------------------------------------------------------------------
+// Benchmark 3: Fingerprinting overhead
+// Compares /bench/fp (fingerprinting on) vs /bench/nofp (off) for both
+// HTTP/1.1 and HTTP/2. The delta between the two routes is the real cost
+// of JA4 + Akamai extraction under identical conditions.
+// ---------------------------------------------------------------------------
+fn bench_fingerprinting_overhead(c: &mut Criterion) {
+    let rt = tokio::runtime::Runtime::new()
+        .unwrap_or_else(|e| panic!("failed to create tokio runtime: {e}"));
+    let fixture = rt.block_on(BenchFixture::setup());
+    let proxy_addr = fixture.proxy_addr;
+
+    let client_h1 = reqwest::Client::builder()
+        .danger_accept_invalid_certs(true)
+        .timeout(Duration::from_secs(10))
+        .build()
+        .unwrap_or_else(|e| panic!("failed to build H1 client: {e}"));
+
+    let client_h2 = reqwest::Client::builder()
+        .danger_accept_invalid_certs(true)
+        .http2_prior_knowledge()
+        .timeout(Duration::from_secs(10))
+        .build()
+        .unwrap_or_else(|e| panic!("failed to build H2 client: {e}"));
+
+    let mut group = c.benchmark_group("fingerprinting_overhead");
+    group.sample_size(50);
+    group.measurement_time(Duration::from_secs(15));
+    group.throughput(Throughput::Elements(1));
+
+    let url_fp = format!("https://{proxy_addr}/bench/fp");
+    let url_nofp = format!("https://{proxy_addr}/bench/nofp");
+
+    // HTTP/1.1 pair — measures JA4-only overhead (no Akamai on H1)
+    group.bench_function("http1_with_fingerprinting", |b| {
+        b.iter(|| {
+            rt.block_on(async {
+                client_h1
+                    .get(&url_fp)
+                    .send()
+                    .await
+                    .unwrap_or_else(|e| panic!("request failed: {e}"))
+            })
+        })
+    });
+
+    group.bench_function("http1_without_fingerprinting", |b| {
+        b.iter(|| {
+            rt.block_on(async {
+                client_h1
+                    .get(&url_nofp)
+                    .send()
+                    .await
+                    .unwrap_or_else(|e| panic!("request failed: {e}"))
+            })
+        })
+    });
+
+    // HTTP/2 pair — measures JA4 + Akamai overhead together
+    group.bench_function("http2_with_fingerprinting", |b| {
+        b.iter(|| {
+            rt.block_on(async {
+                client_h2
+                    .get(&url_fp)
+                    .send()
+                    .await
+                    .unwrap_or_else(|e| panic!("request failed: {e}"))
+            })
+        })
+    });
+
+    group.bench_function("http2_without_fingerprinting", |b| {
+        b.iter(|| {
+            rt.block_on(async {
+                client_h2
+                    .get(&url_nofp)
+                    .send()
+                    .await
+                    .unwrap_or_else(|e| panic!("request failed: {e}"))
+            })
+        })
+    });
+
+    group.finish();
+    fixture.teardown();
+}
+
+// ---------------------------------------------------------------------------
+// Benchmark 4: Concurrency scaling
+// Measures cold throughput (new TLS connection per task) at c10 and c50.
+// Each iteration spawns N tasks, each building its own client (one TLS
+// handshake per task), so the result reflects proxy capacity under fresh
+// connections — different from the warm latency benchmarks above.
+// Covers both HTTP/1.1 and HTTP/2 to compare protocol scaling behaviour.
+// ---------------------------------------------------------------------------
+fn bench_concurrency(c: &mut Criterion) {
+    let rt = tokio::runtime::Runtime::new()
+        .unwrap_or_else(|e| panic!("failed to create tokio runtime: {e}"));
+    let fixture = rt.block_on(BenchFixture::setup());
+    let proxy_addr = fixture.proxy_addr;
+
+    let mut group = c.benchmark_group("concurrency_scaling");
+    group.sample_size(20);
+    group.measurement_time(Duration::from_secs(20));
+
+    for concurrency in [10usize, 50].iter() {
+        let n = *concurrency;
+        group.throughput(Throughput::Elements(n as u64));
+
+        // HTTP/1.1 — one TCP+TLS connection per task, one request per connection
+        group.bench_with_input(BenchmarkId::new("http1_c", concurrency), concurrency, |b, &n| {
+            let url = format!("https://{proxy_addr}/bench/fp");
+            b.iter(|| {
+                rt.block_on(async {
+                    let mut handles = Vec::with_capacity(n);
+                    for _ in 0..n {
+                        let url = url.clone();
+                        handles.push(tokio::spawn(async move {
+                            let client = reqwest::Client::builder()
+                                .danger_accept_invalid_certs(true)
+                                .timeout(Duration::from_secs(10))
+                                .build()
+                                .unwrap_or_else(|e| panic!("failed to build H1 client: {e}"));
+                            client.get(&url).send().await.is_ok()
+                        }));
+                    }
+                    let mut success = 0usize;
+                    for h in handles {
+                        if h.await.unwrap_or(false) {
+                            success = success.saturating_add(1);
+                        }
+                    }
+                    success
+                })
+            })
+        });
+
+        // HTTP/2 — one TCP+TLS connection per task (no multiplexing across tasks)
+        group.bench_with_input(BenchmarkId::new("http2_c", concurrency), concurrency, |b, &n| {
+            let url = format!("https://{proxy_addr}/bench/fp");
+            b.iter(|| {
+                rt.block_on(async {
+                    let mut handles = Vec::with_capacity(n);
+                    for _ in 0..n {
+                        let url = url.clone();
+                        handles.push(tokio::spawn(async move {
+                            let client = reqwest::Client::builder()
+                                .danger_accept_invalid_certs(true)
+                                .http2_prior_knowledge()
+                                .timeout(Duration::from_secs(10))
+                                .build()
+                                .unwrap_or_else(|e| panic!("failed to build H2 client: {e}"));
+                            client.get(&url).send().await.is_ok()
+                        }));
+                    }
+                    let mut success = 0usize;
+                    for h in handles {
+                        if h.await.unwrap_or(false) {
+                            success = success.saturating_add(1);
+                        }
+                    }
+                    success
+                })
+            })
+        });
+    }
+
+    group.finish();
+    fixture.teardown();
+}
+
+// ---------------------------------------------------------------------------
+// Fingerprint assertion helpers
+//
+// These verify both presence AND value of fingerprinting headers.
+// If the value changes (e.g., after a reqwest/rustls update), the bench panics
+// with a clear message pointing to the capture test.
+// ---------------------------------------------------------------------------
+
+fn assert_fingerprint_ja4(resp: &reqwest::Response) {
+    let value = resp
+        .headers()
+        .get(HEADER_JA4)
+        .unwrap_or_else(|| panic!("missing {HEADER_JA4} header — fingerprinting may be broken"))
+        .to_str()
+        .unwrap_or_else(|e| panic!("non-UTF8 JA4 header: {e}"));
+    assert_eq!(
+        value, EXPECTED_JA4,
+        "JA4 fingerprint changed (reqwest/rustls update?)\n\
+         Re-run: cargo test -p huginn-proxy-lib --test capture_fixtures -- --nocapture\n\
+         Then update EXPECTED_JA4 in bench_proxy.rs"
+    );
+}
+
+fn assert_fingerprint_akamai(resp: &reqwest::Response) {
+    let value = resp
+        .headers()
+        .get(HEADER_AKAMAI)
+        .unwrap_or_else(|| {
+            panic!("missing {HEADER_AKAMAI} header — HTTP/2 fingerprinting may be broken")
+        })
+        .to_str()
+        .unwrap_or_else(|e| panic!("non-UTF8 Akamai header: {e}"));
+    assert_eq!(
+        value, EXPECTED_AKAMAI,
+        "Akamai fingerprint changed (h2 crate update?)\n\
+         Re-run: cargo test -p huginn-proxy-lib --test capture_fixtures -- --nocapture\n\
+         Then update EXPECTED_AKAMAI in bench_proxy.rs"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/// Start a plain HTTP/1.1 Hyper backend that echoes fingerprinting headers back
+/// as response headers. This lets the benchmark verify that the proxy actually
+/// extracted and injected the fingerprints without modifying the proxy itself.
+async fn start_backend() -> (tokio::task::JoinHandle<()>, SocketAddr) {
+    let listener = TcpListener::bind("127.0.0.1:0")
+        .await
+        .unwrap_or_else(|e| panic!("failed to bind backend listener: {e}"));
+    let addr = listener
+        .local_addr()
+        .unwrap_or_else(|e| panic!("failed to get backend addr: {e}"));
+
+    let task = tokio::spawn(async move {
+        loop {
+            let Ok((stream, _)) = listener.accept().await else {
+                break;
+            };
+            tokio::spawn(async move {
+                let svc = service_fn(|req: hyper::Request<hyper::body::Incoming>| async move {
+                    let mut resp = Response::new(Full::new(Bytes::from("ok")));
+                    // Echo fingerprinting headers so the benchmark can assert on them
+                    for name in [HEADER_JA4, HEADER_AKAMAI] {
+                        if let Some(value) = req.headers().get(name) {
+                            resp.headers_mut().insert(
+                                hyper::header::HeaderName::from_bytes(name.as_bytes())
+                                    .unwrap_or_else(|e| panic!("invalid header name {name}: {e}")),
+                                value.clone(),
+                            );
+                        }
+                    }
+                    Ok::<_, Infallible>(resp)
+                });
+                let _ = ConnBuilder::new(TokioExecutor::new())
+                    .serve_connection(TokioIo::new(stream), svc)
+                    .await;
+            });
+        }
+    });
+
+    (task, addr)
+}
+
+/// Find a free TCP port by binding to :0, reading the port, then releasing it.
+/// There is a small race window, but it is acceptable for benchmarks on localhost.
+fn free_port() -> u16 {
+    let l = std::net::TcpListener::bind("127.0.0.1:0")
+        .unwrap_or_else(|e| panic!("failed to bind for port probe: {e}"));
+    l.local_addr()
+        .unwrap_or_else(|e| panic!("failed to get port: {e}"))
+        .port()
+}
+
+/// Generate a self-signed TLS cert/key pair and write them to temp files.
+fn generate_cert_files() -> (tempfile::NamedTempFile, tempfile::NamedTempFile) {
+    let rcgen::CertifiedKey { cert, signing_key } =
+        rcgen::generate_simple_self_signed(vec!["localhost".to_string()])
+            .unwrap_or_else(|e| panic!("failed to generate self-signed cert: {e}"));
+
+    let cert_file = tempfile::NamedTempFile::new()
+        .unwrap_or_else(|e| panic!("failed to create cert tempfile: {e}"));
+    let key_file = tempfile::NamedTempFile::new()
+        .unwrap_or_else(|e| panic!("failed to create key tempfile: {e}"));
+
+    std::fs::write(cert_file.path(), cert.pem())
+        .unwrap_or_else(|e| panic!("failed to write cert: {e}"));
+    std::fs::write(key_file.path(), signing_key.serialize_pem())
+        .unwrap_or_else(|e| panic!("failed to write key: {e}"));
+
+    (cert_file, key_file)
+}
+
+/// Poll the proxy until it accepts a TCP connection, up to 5 seconds.
+async fn wait_for_ready(addr: SocketAddr) {
+    let deadline = tokio::time::Instant::now()
+        .checked_add(Duration::from_secs(5))
+        .unwrap_or_else(|| panic!("deadline arithmetic overflow"));
+    loop {
+        if tokio::net::TcpStream::connect(addr).await.is_ok() {
+            // Give TLS acceptor a moment to initialize
+            tokio::time::sleep(Duration::from_millis(50)).await;
+            return;
+        }
+        if tokio::time::Instant::now() > deadline {
+            panic!("proxy at {addr} did not become ready within 5 seconds");
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
 }
 
 criterion_group!(
     proxy_benches,
-    bench_proxy_request_throughput,
-    bench_proxy_concurrent_connections,
-    bench_proxy_fingerprinting_overhead,
-    bench_proxy_load_balancing,
-    bench_proxy_tls_handshake,
-    bench_proxy_latency_distribution,
-    bench_proxy_load_test_comparison,
-    generate_final_report
+    bench_http1_latency,
+    bench_http2_latency,
+    bench_fingerprinting_overhead,
+    bench_concurrency,
 );
 criterion_main!(proxy_benches);
-
-/// Calculate throughput in requests per second
-fn calculate_throughput_rps(duration: Duration, request_count: usize) -> f64 {
-    let seconds = duration.as_secs_f64();
-    if seconds > 0.0 {
-        (request_count as f64) / seconds
-    } else {
-        0.0
-    }
-}
-
-/// Format throughput for display
-fn format_throughput(rps: f64) -> String {
-    if rps >= 1_000_000.0 {
-        format!("{:.2}M", rps / 1_000_000.0)
-    } else if rps >= 1_000.0 {
-        format!("{:.1}k", rps / 1_000.0)
-    } else {
-        format!("{rps:.0}")
-    }
-}
-
-/// Measure average execution time for a benchmark
-fn measure_average_time<F>(mut f: F, iterations: usize) -> Duration
-where
-    F: FnMut(),
-{
-    if iterations == 0 {
-        return Duration::ZERO;
-    }
-    let start = std::time::Instant::now();
-    for _ in 0..iterations {
-        f();
-    }
-    start
-        .elapsed()
-        .checked_div(iterations as u32)
-        .unwrap_or(Duration::ZERO)
-}
-
-/// Calculate latency percentiles from a sorted vector of durations
-fn calculate_latency_percentiles(mut latencies: Vec<Duration>) -> LatencyStats {
-    if latencies.is_empty() {
-        return LatencyStats {
-            p50: Duration::ZERO,
-            p95: Duration::ZERO,
-            p99: Duration::ZERO,
-            p99_9: Duration::ZERO,
-            min: Duration::ZERO,
-            max: Duration::ZERO,
-            mean: Duration::ZERO,
-        };
-    }
-
-    latencies.sort();
-
-    let count = latencies.len();
-    let min = latencies[0];
-    let max_idx = count.saturating_sub(1);
-    let max = latencies[max_idx];
-
-    let mean_nanos: u128 = latencies.iter().map(|d| d.as_nanos()).sum();
-    let mean = Duration::from_nanos((mean_nanos.checked_div(count as u128).unwrap_or(0)) as u64);
-
-    let p50_idx = ((count as f64 * 0.50) as usize).min(max_idx);
-    let p95_idx = ((count as f64 * 0.95) as usize).min(max_idx);
-    let p99_idx = ((count as f64 * 0.99) as usize).min(max_idx);
-    let p99_9_idx = ((count as f64 * 0.999) as usize).min(max_idx);
-
-    LatencyStats {
-        p50: latencies[p50_idx],
-        p95: latencies[p95_idx],
-        p99: latencies[p99_idx],
-        p99_9: latencies[p99_9_idx],
-        min,
-        max,
-        mean,
-    }
-}
-
-/// Setup HTTP client for benchmarks
-fn setup_client() -> Result<reqwest::Client, String> {
-    reqwest::Client::builder()
-        .danger_accept_invalid_certs(true)
-        .timeout(Duration::from_secs(30))
-        .build()
-        .map_err(|e| format!("Failed to create HTTP client: {e}"))
-}
-
-/// Setup HTTP/2 client for benchmarks
-fn setup_client_h2() -> Result<reqwest::Client, String> {
-    reqwest::Client::builder()
-        .danger_accept_invalid_certs(true)
-        .http2_prior_knowledge()
-        .timeout(Duration::from_secs(30))
-        .build()
-        .map_err(|e| format!("Failed to create HTTP/2 client: {e}"))
-}
-
-/// Setup Tokio runtime for async benchmarks
-fn setup_runtime() -> Result<tokio::runtime::Runtime, String> {
-    tokio::runtime::Runtime::new().map_err(|e| format!("Failed to create Tokio runtime: {e}"))
-}
-
-/// Benchmark: Request throughput (RPS)
-fn bench_proxy_request_throughput(c: &mut Criterion) {
-    let client = match setup_client() {
-        Ok(client) => client,
-        Err(e) => {
-            eprintln!("Error setting up HTTP client: {e}");
-            return;
-        }
-    };
-    let proxy_url =
-        std::env::var("PROXY_URL").unwrap_or_else(|_| "https://localhost:7000".to_string());
-
-    // Initialize benchmark report
-    if let Ok(mut guard) = BENCHMARK_RESULTS.lock() {
-        *guard = Some(BenchmarkReport {
-            request_count: REQUESTS_PER_ITERATION,
-            successful_requests: 0,
-            failed_requests: 0,
-            timings: Vec::new(),
-            latency_stats: None,
-            throughput_rps: 0.0,
-            throughput_bytes_per_sec: 0.0,
-            load_test_results: Vec::new(),
-        });
-    }
-
-    let mut group = c.benchmark_group("request_throughput");
-    group.throughput(Throughput::Elements(REQUESTS_PER_ITERATION as u64));
-    // Reduce sample count and measurement time for faster benchmarks
-    group.sample_size(10);
-    group.measurement_time(Duration::from_secs(10));
-
-    let rt = match setup_runtime() {
-        Ok(rt) => rt,
-        Err(e) => {
-            eprintln!("Error setting up Tokio runtime: {e}");
-            return;
-        }
-    };
-    group.bench_function("http1_simple", |b| {
-        b.iter(|| {
-            rt.block_on(async {
-                let mut success_count: usize = 0;
-                for _ in 0..REQUESTS_PER_ITERATION {
-                    if client.get(&proxy_url).send().await.is_ok() {
-                        success_count = success_count.saturating_add(1);
-                    }
-                }
-                success_count
-            })
-        });
-    });
-
-    let client_h2 = match setup_client_h2() {
-        Ok(client) => client,
-        Err(e) => {
-            eprintln!("Error setting up HTTP/2 client: {e}");
-            group.finish();
-            return;
-        }
-    };
-
-    group.bench_function("http2", |b| {
-        b.iter(|| {
-            rt.block_on(async {
-                let mut success_count: usize = 0;
-                for _ in 0..REQUESTS_PER_ITERATION {
-                    if client_h2.get(&proxy_url).send().await.is_ok() {
-                        success_count = success_count.saturating_add(1);
-                    }
-                }
-                success_count
-            })
-        });
-    });
-
-    group.finish();
-
-    // Measure and store actual times for reporting
-    let http1_time = measure_average_time(
-        || {
-            rt.block_on(async {
-                let mut success_count: usize = 0;
-                for _ in 0..REQUESTS_PER_ITERATION {
-                    if client.get(&proxy_url).send().await.is_ok() {
-                        success_count = success_count.saturating_add(1);
-                    }
-                }
-                let _ = success_count; // Ignore return value
-            })
-        },
-        5,
-    );
-
-    if let Ok(mut guard) = BENCHMARK_RESULTS.lock() {
-        if let Some(ref mut report) = *guard {
-            report
-                .timings
-                .push(("http1_throughput".to_string(), http1_time));
-            report.successful_requests = REQUESTS_PER_ITERATION;
-            report.throughput_rps = calculate_throughput_rps(http1_time, REQUESTS_PER_ITERATION);
-        }
-    }
-}
-
-/// Benchmark: Concurrent connections
-fn bench_proxy_concurrent_connections(c: &mut Criterion) {
-    let proxy_url =
-        std::env::var("PROXY_URL").unwrap_or_else(|_| "https://localhost:7000".to_string());
-
-    let mut group = c.benchmark_group("concurrent_connections");
-    // Reduce sample count and measurement time for faster benchmarks
-    group.sample_size(10);
-    group.measurement_time(Duration::from_secs(10));
-
-    let rt = match setup_runtime() {
-        Ok(rt) => rt,
-        Err(e) => {
-            eprintln!("Error setting up Tokio runtime: {e}");
-            return;
-        }
-    };
-    for concurrent in [10, 100, 1000].iter() {
-        group.bench_with_input(
-            BenchmarkId::from_parameter(concurrent),
-            concurrent,
-            |b, &concurrent| {
-                b.iter(|| {
-                    rt.block_on(async {
-                        let client = match setup_client() {
-                            Ok(client) => client,
-                            Err(_) => return 0,
-                        };
-                        let mut handles = Vec::new();
-
-                        for _ in 0..concurrent {
-                            let client = client.clone();
-                            let url = proxy_url.clone();
-                            handles.push(tokio::spawn(async move {
-                                client.get(&url).send().await.is_ok()
-                            }));
-                        }
-
-                        let mut success_count: usize = 0;
-                        for handle in handles {
-                            if handle.await.unwrap_or(false) {
-                                success_count = success_count.saturating_add(1);
-                            }
-                        }
-                        success_count
-                    })
-                });
-            },
-        );
-    }
-
-    group.finish();
-}
-
-/// Benchmark: Fingerprinting overhead
-fn bench_proxy_fingerprinting_overhead(c: &mut Criterion) {
-    let proxy_url =
-        std::env::var("PROXY_URL").unwrap_or_else(|_| "https://localhost:7000".to_string());
-
-    let mut group = c.benchmark_group("fingerprinting_overhead");
-    group.throughput(Throughput::Elements(REQUESTS_PER_ITERATION as u64));
-    // Reduce sample count and measurement time for faster benchmarks
-    group.sample_size(10);
-    group.measurement_time(Duration::from_secs(10));
-
-    // Baseline: requests without checking fingerprints
-    let client = match setup_client() {
-        Ok(client) => client,
-        Err(e) => {
-            eprintln!("Error setting up HTTP client: {e}");
-            return;
-        }
-    };
-    let rt = match setup_runtime() {
-        Ok(rt) => rt,
-        Err(e) => {
-            eprintln!("Error setting up Tokio runtime: {e}");
-            return;
-        }
-    };
-    group.bench_function("baseline_no_fingerprinting", |b| {
-        b.iter(|| {
-            rt.block_on(async {
-                let mut success_count: usize = 0;
-                for _ in 0..REQUESTS_PER_ITERATION {
-                    if client.get(&proxy_url).send().await.is_ok() {
-                        success_count = success_count.saturating_add(1);
-                    }
-                }
-                success_count
-            })
-        });
-    });
-
-    // With fingerprinting: requests that extract TLS and HTTP/2 fingerprints
-    group.bench_function("with_tls_fingerprinting", |b| {
-        b.iter(|| {
-            rt.block_on(async {
-                let mut success_count: usize = 0;
-                for _ in 0..REQUESTS_PER_ITERATION {
-                    if let Ok(response) = client.get(&proxy_url).send().await {
-                        // Check if fingerprint headers are present
-                        if response.headers().contains_key(names::TLS_JA4) {
-                            success_count = success_count.saturating_add(1);
-                        }
-                    }
-                }
-                success_count
-            })
-        });
-    });
-
-    let client_h2 = match setup_client_h2() {
-        Ok(client) => client,
-        Err(e) => {
-            eprintln!("Error setting up HTTP/2 client: {e}");
-            group.finish();
-            return;
-        }
-    };
-
-    group.bench_function("with_http2_fingerprinting", |b| {
-        b.iter(|| {
-            rt.block_on(async {
-                let mut success_count: usize = 0;
-                for _ in 0..REQUESTS_PER_ITERATION {
-                    if let Ok(response) = client_h2.get(&proxy_url).send().await {
-                        // Check if HTTP/2 fingerprint headers are present
-                        if response.headers().contains_key(names::HTTP2_AKAMAI) {
-                            success_count = success_count.saturating_add(1);
-                        }
-                    }
-                }
-                success_count
-            })
-        });
-    });
-
-    group.finish();
-}
-
-/// Benchmark: Load balancing performance
-fn bench_proxy_load_balancing(c: &mut Criterion) {
-    let proxy_url =
-        std::env::var("PROXY_URL").unwrap_or_else(|_| "https://localhost:7000".to_string());
-
-    let mut group = c.benchmark_group("load_balancing");
-    group.throughput(Throughput::Elements(REQUESTS_PER_ITERATION as u64));
-    // Reduce sample count and measurement time for faster benchmarks
-    group.sample_size(10);
-    group.measurement_time(Duration::from_secs(10));
-
-    let client = match setup_client() {
-        Ok(client) => client,
-        Err(e) => {
-            eprintln!("Error setting up HTTP client: {e}");
-            return;
-        }
-    };
-    let rt = match setup_runtime() {
-        Ok(rt) => rt,
-        Err(e) => {
-            eprintln!("Error setting up Tokio runtime: {e}");
-            return;
-        }
-    };
-    group.bench_function("round_robin_2_backends", |b| {
-        b.iter(|| {
-            rt.block_on(async {
-                let mut success_count: usize = 0;
-                for _ in 0..REQUESTS_PER_ITERATION {
-                    if client.get(&proxy_url).send().await.is_ok() {
-                        success_count = success_count.saturating_add(1);
-                    }
-                }
-                success_count
-            })
-        });
-    });
-
-    group.finish();
-}
-
-/// Benchmark: TLS handshake overhead
-fn bench_proxy_tls_handshake(c: &mut Criterion) {
-    let proxy_url =
-        std::env::var("PROXY_URL").unwrap_or_else(|_| "https://localhost:7000".to_string());
-
-    let mut group = c.benchmark_group("tls_handshake");
-    group.throughput(Throughput::Elements(REQUESTS_PER_ITERATION as u64));
-    // Reduce sample count and measurement time for faster benchmarks
-    group.sample_size(10);
-    group.measurement_time(Duration::from_secs(10));
-
-    let client = match setup_client() {
-        Ok(client) => client,
-        Err(e) => {
-            eprintln!("Error setting up HTTP client: {e}");
-            return;
-        }
-    };
-    let rt = match setup_runtime() {
-        Ok(rt) => rt,
-        Err(e) => {
-            eprintln!("Error setting up Tokio runtime: {e}");
-            return;
-        }
-    };
-    group.bench_function("tls_handshake_time", |b| {
-        b.iter(|| {
-            rt.block_on(async {
-                let mut success_count: usize = 0;
-                for _ in 0..REQUESTS_PER_ITERATION {
-                    let start = std::time::Instant::now();
-                    if client.get(&proxy_url).send().await.is_ok() {
-                        let _handshake_time = start.elapsed();
-                        success_count = success_count.saturating_add(1);
-                    }
-                }
-                success_count
-            })
-        });
-    });
-
-    group.finish();
-}
-
-/// Benchmark: Latency distribution
-fn bench_proxy_latency_distribution(c: &mut Criterion) {
-    let proxy_url =
-        std::env::var("PROXY_URL").unwrap_or_else(|_| "https://localhost:7000".to_string());
-
-    let mut group = c.benchmark_group("latency_distribution");
-    group.throughput(Throughput::Elements(REQUESTS_PER_ITERATION as u64));
-    // Reduce sample count and measurement time for faster benchmarks
-    group.sample_size(10);
-    group.measurement_time(Duration::from_secs(10));
-
-    let client = match setup_client() {
-        Ok(client) => client,
-        Err(e) => {
-            eprintln!("Error setting up HTTP client: {e}");
-            return;
-        }
-    };
-    let rt = match setup_runtime() {
-        Ok(rt) => rt,
-        Err(e) => {
-            eprintln!("Error setting up Tokio runtime: {e}");
-            return;
-        }
-    };
-    group.bench_function("latency_measurement", |b| {
-        b.iter(|| {
-            rt.block_on(async {
-                let mut latencies = Vec::with_capacity(REQUESTS_PER_ITERATION);
-
-                for _ in 0..REQUESTS_PER_ITERATION {
-                    let start = std::time::Instant::now();
-                    if client.get(&proxy_url).send().await.is_ok() {
-                        latencies.push(start.elapsed());
-                    }
-                }
-
-                let stats = calculate_latency_percentiles(latencies);
-                let _ = stats; // Use stats to avoid unused warning
-                stats.p99.as_nanos() as usize // Return something meaningful
-            })
-        });
-    });
-
-    group.finish();
-}
-
-/// Benchmark: Load test comparison (fingerprinting enabled vs disabled)
-/// Measures RPS with different configurations for performance analysis
-///
-/// Fingerprinting types measured:
-/// - HTTP/1.1: TLS fingerprinting only (JA4)
-/// - HTTP/2: TLS fingerprinting (JA4) + HTTP/2 fingerprinting (Akamai)
-fn bench_proxy_load_test_comparison(c: &mut Criterion) {
-    // This benchmark uses routes with different fingerprinting settings:
-    // 1. PROXY_URL + /api route (fingerprinting enabled - both TLS and HTTP/2)
-    // 2. PROXY_URL + /static route (fingerprinting disabled)
-    let proxy_url =
-        std::env::var("PROXY_URL").unwrap_or_else(|_| "https://localhost:7000".to_string());
-    let proxy_url_enabled = format!("{proxy_url}/api/test");
-    let proxy_url_disabled = format!("{proxy_url}/static/test");
-
-    // Number of requests for load test (higher than regular benchmarks)
-    // Increased for more reliable measurements
-    const LOAD_TEST_REQUESTS: usize = 10000;
-    const LOAD_TEST_CONCURRENT: usize = 50; // 50 concurrent connections for better load simulation
-    const LOAD_TEST_ITERATIONS: usize = 5; // Run 5 iterations and average
-
-    let mut group = c.benchmark_group("load_test_comparison");
-    group.sample_size(10); // Minimum 10 samples required by criterion
-    group.measurement_time(Duration::from_secs(30)); // Longer measurement time
-
-    // HTTP/1.1 with fingerprinting enabled (TLS fingerprinting only)
-    let client = match setup_client() {
-        Ok(client) => client,
-        Err(e) => {
-            eprintln!("Error setting up HTTP client: {e}");
-            return;
-        }
-    };
-    let rt = match setup_runtime() {
-        Ok(rt) => rt,
-        Err(e) => {
-            eprintln!("Error setting up Tokio runtime: {e}");
-            return;
-        }
-    };
-    group.bench_function("http1_fingerprinting_enabled", |b| {
-        b.iter(|| {
-            rt.block_on(async {
-                let mut handles = Vec::new();
-                for _ in 0..LOAD_TEST_CONCURRENT {
-                    let client = client.clone();
-                    let url = proxy_url_enabled.clone();
-                    handles.push(tokio::spawn(async move {
-                        let mut success: usize = 0;
-                        for _ in 0..(LOAD_TEST_REQUESTS / LOAD_TEST_CONCURRENT) {
-                            if client.get(&url).send().await.is_ok() {
-                                success = success.saturating_add(1);
-                            }
-                        }
-                        success
-                    }));
-                }
-                let mut total: usize = 0;
-                for handle in handles {
-                    total = total.saturating_add(handle.await.unwrap_or(0));
-                }
-                total
-            })
-        });
-    });
-
-    // HTTP/1.1 with fingerprinting disabled
-    {
-        let client = match setup_client() {
-            Ok(client) => client,
-            Err(e) => {
-                eprintln!("Error setting up HTTP client: {e}");
-                group.finish();
-                return;
-            }
-        };
-        group.bench_function("http1_fingerprinting_disabled", |b| {
-            b.iter(|| {
-                rt.block_on(async {
-                    let mut handles = Vec::new();
-                    for _ in 0..LOAD_TEST_CONCURRENT {
-                        let client = client.clone();
-                        let url = proxy_url_disabled.clone();
-                        handles.push(tokio::spawn(async move {
-                            let mut success: usize = 0;
-                            for _ in 0..(LOAD_TEST_REQUESTS / LOAD_TEST_CONCURRENT) {
-                                if client.get(&url).send().await.is_ok() {
-                                    success = success.saturating_add(1);
-                                }
-                            }
-                            success
-                        }));
-                    }
-                    let mut total: usize = 0;
-                    for handle in handles {
-                        total = total.saturating_add(handle.await.unwrap_or(0));
-                    }
-                    total
-                })
-            });
-        });
-    }
-
-    // HTTP/2 with fingerprinting enabled
-    let client_h2 = match setup_client_h2() {
-        Ok(client) => client,
-        Err(e) => {
-            eprintln!("Error setting up HTTP/2 client: {e}");
-            group.finish();
-            return;
-        }
-    };
-
-    group.bench_function("http2_fingerprinting_enabled", |b| {
-        b.iter(|| {
-            rt.block_on(async {
-                let mut handles = Vec::new();
-                for _ in 0..LOAD_TEST_CONCURRENT {
-                    let client = client_h2.clone();
-                    let url = proxy_url_enabled.clone();
-                    handles.push(tokio::spawn(async move {
-                        let mut success: usize = 0;
-                        for _ in 0..(LOAD_TEST_REQUESTS / LOAD_TEST_CONCURRENT) {
-                            if client.get(&url).send().await.is_ok() {
-                                success = success.saturating_add(1);
-                            }
-                        }
-                        success
-                    }));
-                }
-                let mut total: usize = 0;
-                for handle in handles {
-                    total = total.saturating_add(handle.await.unwrap_or(0));
-                }
-                total
-            })
-        });
-    });
-
-    // HTTP/2 with fingerprinting disabled (if proxy available)
-    if proxy_url_disabled != proxy_url_enabled {
-        let client_h2_disabled = match setup_client_h2() {
-            Ok(client) => client,
-            Err(e) => {
-                eprintln!("Error setting up HTTP/2 client: {e}");
-                group.finish();
-                return;
-            }
-        };
-
-        group.bench_function("http2_fingerprinting_disabled", |b| {
-            b.iter(|| {
-                rt.block_on(async {
-                    let mut handles = Vec::new();
-                    for _ in 0..LOAD_TEST_CONCURRENT {
-                        let client = client_h2_disabled.clone();
-                        let url = proxy_url_disabled.clone();
-                        handles.push(tokio::spawn(async move {
-                            let mut success: usize = 0;
-                            for _ in 0..(LOAD_TEST_REQUESTS / LOAD_TEST_CONCURRENT) {
-                                if client.get(&url).send().await.is_ok() {
-                                    success = success.saturating_add(1);
-                                }
-                            }
-                            success
-                        }));
-                    }
-                    let mut total: usize = 0;
-                    for handle in handles {
-                        total = total.saturating_add(handle.await.unwrap_or(0));
-                    }
-                    total
-                })
-            });
-        });
-    }
-
-    group.finish();
-
-    // Measure and store load test results for reporting
-    let rt = match setup_runtime() {
-        Ok(rt) => rt,
-        Err(e) => {
-            eprintln!("Error setting up Tokio runtime for load test reporting: {e}");
-            return;
-        }
-    };
-
-    // Measure HTTP/1.1 with fingerprinting enabled (multiple iterations for accuracy)
-    let mut enabled_rps_values = Vec::new();
-    for iteration in 0..LOAD_TEST_ITERATIONS {
-        // Warm-up on first iteration
-        if iteration == 0 {
-            rt.block_on(async {
-                let _ = client.get(&proxy_url_enabled).send().await;
-            });
-            std::thread::sleep(Duration::from_millis(100));
-        }
-
-        let start = std::time::Instant::now();
-        let enabled_success = rt.block_on(async {
-            let mut handles = Vec::new();
-            for _ in 0..LOAD_TEST_CONCURRENT {
-                let client = client.clone();
-                let url = proxy_url_enabled.clone();
-                handles.push(tokio::spawn(async move {
-                    let mut success: usize = 0;
-                    for _ in 0..(LOAD_TEST_REQUESTS / LOAD_TEST_CONCURRENT) {
-                        if client.get(&url).send().await.is_ok() {
-                            success = success.saturating_add(1);
-                        }
-                    }
-                    success
-                }));
-            }
-            let mut total: usize = 0;
-            for handle in handles {
-                total = total.saturating_add(handle.await.unwrap_or(0));
-            }
-            total
-        });
-        let enabled_duration = start.elapsed();
-        let rps = calculate_throughput_rps(enabled_duration, enabled_success);
-        enabled_rps_values.push(rps);
-
-        // Small delay between iterations
-        if iteration < LOAD_TEST_ITERATIONS - 1 {
-            std::thread::sleep(Duration::from_millis(200));
-        }
-    }
-    // Average RPS across iterations
-    let enabled_rps = enabled_rps_values.iter().sum::<f64>() / enabled_rps_values.len() as f64;
-
-    if let Ok(mut guard) = BENCHMARK_RESULTS.lock() {
-        if let Some(ref mut report) = *guard {
-            report.load_test_results.push(LoadTestResult {
-                name: "HTTP/1.1 with fingerprinting (TLS)".to_string(),
-                rps: enabled_rps,
-                fingerprinting_enabled: true,
-                protocol: "http1".to_string(),
-            });
-        }
-    }
-
-    // Measure HTTP/2 with fingerprinting enabled (TLS + HTTP/2) (multiple iterations)
-    let client_h2 = match setup_client_h2() {
-        Ok(client) => client,
-        Err(e) => {
-            eprintln!("Error setting up HTTP/2 client for load test reporting: {e}");
-            return;
-        }
-    };
-
-    let mut enabled_h2_rps_values = Vec::new();
-    for iteration in 0..LOAD_TEST_ITERATIONS {
-        // Warm-up on first iteration
-        if iteration == 0 {
-            rt.block_on(async {
-                let _ = client_h2.get(&proxy_url_enabled).send().await;
-            });
-            std::thread::sleep(Duration::from_millis(100));
-        }
-
-        let start = std::time::Instant::now();
-        let enabled_h2_success = rt.block_on(async {
-            let mut handles = Vec::new();
-            for _ in 0..LOAD_TEST_CONCURRENT {
-                let client = client_h2.clone();
-                let url = proxy_url_enabled.clone();
-                handles.push(tokio::spawn(async move {
-                    let mut success: usize = 0;
-                    for _ in 0..(LOAD_TEST_REQUESTS / LOAD_TEST_CONCURRENT) {
-                        if client.get(&url).send().await.is_ok() {
-                            success = success.saturating_add(1);
-                        }
-                    }
-                    success
-                }));
-            }
-            let mut total: usize = 0;
-            for handle in handles {
-                total = total.saturating_add(handle.await.unwrap_or(0));
-            }
-            total
-        });
-        let enabled_h2_duration = start.elapsed();
-        let rps = calculate_throughput_rps(enabled_h2_duration, enabled_h2_success);
-        enabled_h2_rps_values.push(rps);
-
-        // Small delay between iterations
-        if iteration < LOAD_TEST_ITERATIONS - 1 {
-            std::thread::sleep(Duration::from_millis(200));
-        }
-    }
-    // Average RPS across iterations
-    let enabled_h2_rps =
-        enabled_h2_rps_values.iter().sum::<f64>() / enabled_h2_rps_values.len() as f64;
-
-    if let Ok(mut guard) = BENCHMARK_RESULTS.lock() {
-        if let Some(ref mut report) = *guard {
-            report.load_test_results.push(LoadTestResult {
-                name: "HTTP/2 with fingerprinting (TLS + HTTP/2)".to_string(),
-                rps: enabled_h2_rps,
-                fingerprinting_enabled: true,
-                protocol: "http2".to_string(),
-            });
-        }
-    }
-
-    // Measure with fingerprinting disabled (if available)
-    if proxy_url_disabled != proxy_url_enabled {
-        let client_disabled = match setup_client() {
-            Ok(client) => client,
-            Err(e) => {
-                eprintln!("Error setting up HTTP client for disabled fingerprinting test: {e}");
-                return;
-            }
-        };
-        // Measure HTTP/1.1 without fingerprinting (multiple iterations)
-        let mut disabled_rps_values = Vec::new();
-        for iteration in 0..LOAD_TEST_ITERATIONS {
-            // Warm-up on first iteration
-            if iteration == 0 {
-                rt.block_on(async {
-                    let _ = client_disabled.get(&proxy_url_disabled).send().await;
-                });
-                std::thread::sleep(Duration::from_millis(100));
-            }
-
-            let start = std::time::Instant::now();
-            let disabled_success = rt.block_on(async {
-                let mut handles = Vec::new();
-                for _ in 0..LOAD_TEST_CONCURRENT {
-                    let client = client_disabled.clone();
-                    let url = proxy_url_disabled.clone();
-                    handles.push(tokio::spawn(async move {
-                        let mut success: usize = 0;
-                        for _ in 0..(LOAD_TEST_REQUESTS / LOAD_TEST_CONCURRENT) {
-                            if client.get(&url).send().await.is_ok() {
-                                success = success.saturating_add(1);
-                            }
-                        }
-                        success
-                    }));
-                }
-                let mut total: usize = 0;
-                for handle in handles {
-                    total = total.saturating_add(handle.await.unwrap_or(0));
-                }
-                total
-            });
-            let disabled_duration = start.elapsed();
-            let rps = calculate_throughput_rps(disabled_duration, disabled_success);
-            disabled_rps_values.push(rps);
-
-            // Small delay between iterations
-            if iteration < LOAD_TEST_ITERATIONS - 1 {
-                std::thread::sleep(Duration::from_millis(200));
-            }
-        }
-        // Average RPS across iterations
-        let disabled_rps =
-            disabled_rps_values.iter().sum::<f64>() / disabled_rps_values.len() as f64;
-
-        if let Ok(mut guard) = BENCHMARK_RESULTS.lock() {
-            if let Some(ref mut report) = *guard {
-                report.load_test_results.push(LoadTestResult {
-                    name: "HTTP/1.1 without fingerprinting".to_string(),
-                    rps: disabled_rps,
-                    fingerprinting_enabled: false,
-                    protocol: "http1".to_string(),
-                });
-            }
-        }
-
-        // Measure HTTP/2 without fingerprinting (multiple iterations)
-        let client_h2_disabled = match setup_client_h2() {
-            Ok(client) => client,
-            Err(e) => {
-                eprintln!("Error setting up HTTP/2 client for disabled fingerprinting test: {e}");
-                return;
-            }
-        };
-
-        let mut disabled_h2_rps_values = Vec::new();
-        for iteration in 0..LOAD_TEST_ITERATIONS {
-            // Warm-up on first iteration
-            if iteration == 0 {
-                rt.block_on(async {
-                    let _ = client_h2_disabled.get(&proxy_url_disabled).send().await;
-                });
-                std::thread::sleep(Duration::from_millis(100));
-            }
-
-            let start = std::time::Instant::now();
-            let disabled_h2_success = rt.block_on(async {
-                let mut handles = Vec::new();
-                for _ in 0..LOAD_TEST_CONCURRENT {
-                    let client = client_h2_disabled.clone();
-                    let url = proxy_url_disabled.clone();
-                    handles.push(tokio::spawn(async move {
-                        let mut success: usize = 0;
-                        for _ in 0..(LOAD_TEST_REQUESTS / LOAD_TEST_CONCURRENT) {
-                            if client.get(&url).send().await.is_ok() {
-                                success = success.saturating_add(1);
-                            }
-                        }
-                        success
-                    }));
-                }
-                let mut total: usize = 0;
-                for handle in handles {
-                    total = total.saturating_add(handle.await.unwrap_or(0));
-                }
-                total
-            });
-            let disabled_h2_duration = start.elapsed();
-            let rps = calculate_throughput_rps(disabled_h2_duration, disabled_h2_success);
-            disabled_h2_rps_values.push(rps);
-
-            // Small delay between iterations
-            if iteration < LOAD_TEST_ITERATIONS - 1 {
-                std::thread::sleep(Duration::from_millis(200));
-            }
-        }
-        // Average RPS across iterations
-        let disabled_h2_rps =
-            disabled_h2_rps_values.iter().sum::<f64>() / disabled_h2_rps_values.len() as f64;
-
-        if let Ok(mut guard) = BENCHMARK_RESULTS.lock() {
-            if let Some(ref mut report) = *guard {
-                report.load_test_results.push(LoadTestResult {
-                    name: "HTTP/2 without fingerprinting".to_string(),
-                    rps: disabled_h2_rps,
-                    fingerprinting_enabled: false,
-                    protocol: "http2".to_string(),
-                });
-            }
-        }
-    }
-}
-
-/// Generate comprehensive benchmark report
-fn generate_final_report(_c: &mut Criterion) {
-    let report = match BENCHMARK_RESULTS.lock() {
-        Ok(guard) => guard.clone(),
-        Err(_) => return,
-    };
-
-    let Some(report) = report else {
-        println!("\nNo benchmark results collected yet. Run benchmarks first.");
-        return;
-    };
-
-    println!("\n");
-    println!("===============================================================================");
-    println!("                   HUGINN PROXY BENCHMARK ANALYSIS REPORT                    ");
-    println!("===============================================================================");
-    println!();
-    println!("Request Summary:");
-    println!("  - Total requests: {}", report.request_count);
-    println!("  - Successful requests: {}", report.successful_requests);
-    println!("  - Failed requests: {}", report.failed_requests);
-    let success_rate = if report.request_count > 0 {
-        (report.successful_requests as f64 / report.request_count as f64) * 100.0
-    } else {
-        0.0
-    };
-    println!("  - Success rate: {success_rate:.1}%");
-    println!();
-
-    if let Some(stats) = &report.latency_stats {
-        println!("Latency Distribution:");
-        println!("  - Min: {:?}", stats.min);
-        println!("  - P50: {:?}", stats.p50);
-        println!("  - P95: {:?}", stats.p95);
-        println!("  - P99: {:?}", stats.p99);
-        println!("  - P99.9: {:?}", stats.p99_9);
-        println!("  - Max: {:?}", stats.max);
-        println!("  - Mean: {:?}", stats.mean);
-        println!();
-    }
-
-    println!("Throughput:");
-    println!("  - Requests per second: {} req/s", format_throughput(report.throughput_rps));
-    println!(
-        "  - Bytes per second: {} bytes/s",
-        format_throughput(report.throughput_bytes_per_sec)
-    );
-    println!();
-
-    if !report.timings.is_empty() {
-        println!("Performance Summary:");
-        println!("+--------------------------------------------------------------------------+");
-        println!("| Operation                        | Duration      | Throughput          |");
-        println!("+--------------------------------------------------------------------------+");
-
-        for (name, duration) in &report.timings {
-            let throughput = calculate_throughput_rps(*duration, report.request_count);
-            println!("| {:<32} | {:12?} | {:>18} |", name, duration, format_throughput(throughput));
-        }
-        println!("+--------------------------------------------------------------------------+");
-        println!();
-    }
-
-    // Load Test Comparison
-    if !report.load_test_results.is_empty() {
-        println!("Load Test Comparison:");
-        println!("+--------------------------------------------------------------------------+");
-        println!("| Configuration                     | RPS           | Fingerprinting      |");
-        println!("+--------------------------------------------------------------------------+");
-
-        for result in &report.load_test_results {
-            let fp_status = if result.fingerprinting_enabled {
-                "Enabled"
-            } else {
-                "Disabled"
-            };
-            println!(
-                "| {:<32} | {:>13} | {:<19} |",
-                result.name,
-                format!("{:.2}", result.rps),
-                fp_status
-            );
-        }
-        println!("+--------------------------------------------------------------------------+");
-        println!();
-
-        // Calculate overhead by protocol (HTTP/1.1 and HTTP/2 separately)
-        let http1_enabled = report
-            .load_test_results
-            .iter()
-            .find(|r| r.is_http1() && r.fingerprinting_enabled)
-            .map(|r| r.rps);
-        let http1_disabled = report
-            .load_test_results
-            .iter()
-            .find(|r| r.is_http1() && !r.fingerprinting_enabled)
-            .map(|r| r.rps);
-        let http2_enabled = report
-            .load_test_results
-            .iter()
-            .find(|r| r.is_http2() && r.fingerprinting_enabled)
-            .map(|r| r.rps);
-        let http2_disabled = report
-            .load_test_results
-            .iter()
-            .find(|r| r.is_http2() && !r.fingerprinting_enabled)
-            .map(|r| r.rps);
-
-        println!("Fingerprinting Overhead Analysis:");
-
-        if let (Some(enabled), Some(disabled)) = (http1_enabled, http1_disabled) {
-            let overhead_percent = if disabled > 0.0 {
-                ((enabled - disabled) / disabled) * 100.0
-            } else {
-                0.0
-            };
-            println!("  HTTP/1.1:");
-            println!("    - With fingerprinting (TLS):    {enabled:.2} req/s");
-            println!("    - Without fingerprinting:        {disabled:.2} req/s");
-            println!("    - Overhead:                      {overhead_percent:.2}%");
-            let ratio = disabled / enabled;
-            println!("    - Performance ratio:             {ratio:.2}x");
-        }
-
-        if let (Some(enabled), Some(disabled)) = (http2_enabled, http2_disabled) {
-            let overhead_percent = if disabled > 0.0 {
-                ((enabled - disabled) / disabled) * 100.0
-            } else {
-                0.0
-            };
-            println!("  HTTP/2:");
-            println!("    - With fingerprinting (TLS + HTTP/2): {enabled:.2} req/s");
-            println!("    - Without fingerprinting:             {disabled:.2} req/s");
-            println!("    - Overhead:                            {overhead_percent:.2}%");
-            let ratio = disabled / enabled;
-            println!("    - Performance ratio:                   {ratio:.2}x");
-        }
-
-        // Overall comparison if both protocols are available
-        if let (Some(h1_enabled), Some(h1_disabled), Some(h2_enabled), Some(h2_disabled)) =
-            (http1_enabled, http1_disabled, http2_enabled, http2_disabled)
-        {
-            let avg_enabled = (h1_enabled + h2_enabled) / 2.0;
-            let avg_disabled = (h1_disabled + h2_disabled) / 2.0;
-            let avg_overhead = if avg_disabled > 0.0 {
-                ((avg_enabled - avg_disabled) / avg_disabled) * 100.0
-            } else {
-                0.0
-            };
-            println!("  Overall Average:");
-            println!("    - With fingerprinting:    {avg_enabled:.2} req/s");
-            println!("    - Without fingerprinting: {avg_disabled:.2} req/s");
-            println!("    - Average overhead:      {avg_overhead:.2}%");
-            println!();
-        } else {
-            println!();
-        }
-
-        // Reference values for comparison (from public benchmarks)
-        println!("Reference Values (from public benchmarks):");
-        println!("  - Reverse proxy with fingerprinting:            ~2,000-16,000 req/s");
-        println!("  - Control group (simple HTTP server):            ~29,650 req/s");
-        println!("  - Reverse proxy with limiters:                   ~22-24k req/s");
-        println!();
-    }
-
-    println!("Benchmark report generation complete");
-    println!();
-}
