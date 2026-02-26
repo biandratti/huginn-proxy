@@ -38,8 +38,8 @@ use huginn_proxy_lib::config::{
     TelemetryConfig, TimeoutConfig,
 };
 use huginn_proxy_lib::{Config, TlsConfig};
-use hyper::Response;
 use hyper::service::service_fn;
+use hyper::Response;
 use hyper_util::rt::{TokioExecutor, TokioIo};
 use hyper_util::server::conn::auto::Builder as ConnBuilder;
 use tokio::net::TcpListener;
@@ -49,6 +49,17 @@ use tokio::net::TcpListener;
 // ---------------------------------------------------------------------------
 const HEADER_JA4: &str = "x-huginn-net-ja4";
 const HEADER_AKAMAI: &str = "x-huginn-net-akamai";
+
+// ---------------------------------------------------------------------------
+// Expected fingerprint values — captured from a real reqwest/rustls connection.
+//
+// If these change after a reqwest/rustls/h2 update, the benchmarks will panic
+// with a clear message. Re-run the capture test to refresh:
+//   cargo test -p huginn-proxy-lib --test capture_fixtures -- --nocapture
+// Then update these constants with the new values.
+// ---------------------------------------------------------------------------
+const EXPECTED_JA4: &str = "t13i1010h2_61a7ad8aa9b6_3a8073edd8ef";
+const EXPECTED_AKAMAI: &str = "2:0;4:2097152;5:16384;6:16384|5177345|0|";
 
 // ---------------------------------------------------------------------------
 // Fixture: holds live servers for the duration of each benchmark group
@@ -128,7 +139,7 @@ impl BenchFixture {
             logging: LoggingConfig { level: "warn".to_string(), show_target: false },
             timeout: TimeoutConfig {
                 connect_ms: 5000,
-                idle_ms: 600_000,        // 10 min — bench groups share a connection pool
+                idle_ms: 600_000, // 10 min — bench groups share a connection pool
                 shutdown_secs: 5,
                 tls_handshake_secs: 10,
                 connection_handling_secs: 600, // 10 min — each group runs ~15s warmup + 15s measure
@@ -148,7 +159,13 @@ impl BenchFixture {
         // 6. Wait for proxy to be ready (retry until it accepts connections)
         wait_for_ready(proxy_addr).await;
 
-        BenchFixture { proxy_addr, backend_task, proxy_task, _cert_file: cert_file, _key_file: key_file }
+        BenchFixture {
+            proxy_addr,
+            backend_task,
+            proxy_task,
+            _cert_file: cert_file,
+            _key_file: key_file,
+        }
     }
 
     fn teardown(self) {
@@ -180,11 +197,7 @@ fn bench_http1_latency(c: &mut Criterion) {
             rt.block_on(async {
                 let resp = client.get(&proxy_url).send().await.expect("request failed");
                 assert!(resp.status().is_success(), "proxy returned non-2xx: {}", resp.status());
-                // Verify fingerprinting headers are present
-                assert!(
-                    resp.headers().contains_key(HEADER_JA4),
-                    "missing {HEADER_JA4} header"
-                );
+                assert_fingerprint_ja4(&resp);
                 resp
             })
         })
@@ -218,9 +231,8 @@ fn bench_http2_latency(c: &mut Criterion) {
             rt.block_on(async {
                 let resp = client.get(&proxy_url).send().await.expect("request failed");
                 assert!(resp.status().is_success());
-                // HTTP/2 gets both JA4 and Akamai headers
-                assert!(resp.headers().contains_key(HEADER_JA4), "missing {HEADER_JA4}");
-                assert!(resp.headers().contains_key(HEADER_AKAMAI), "missing {HEADER_AKAMAI}");
+                assert_fingerprint_ja4(&resp);
+                assert_fingerprint_akamai(&resp);
                 resp
             })
         })
@@ -258,16 +270,18 @@ fn bench_fingerprinting_overhead(c: &mut Criterion) {
 
     group.bench_function("http2_with_fingerprinting", |b| {
         b.iter(|| {
-            rt.block_on(async {
-                client_h2.get(&url_fp).send().await.expect("request failed")
-            })
+            rt.block_on(async { client_h2.get(&url_fp).send().await.expect("request failed") })
         })
     });
 
     group.bench_function("http2_without_fingerprinting", |b| {
         b.iter(|| {
             rt.block_on(async {
-                client_h2.get(&url_nofp).send().await.expect("request failed")
+                client_h2
+                    .get(&url_nofp)
+                    .send()
+                    .await
+                    .expect("request failed")
             })
         })
     });
@@ -328,6 +342,46 @@ fn bench_concurrency(c: &mut Criterion) {
 }
 
 // ---------------------------------------------------------------------------
+// Fingerprint assertion helpers
+//
+// These verify both presence AND value of fingerprinting headers.
+// If the value changes (e.g., after a reqwest/rustls update), the bench panics
+// with a clear message pointing to the capture test.
+// ---------------------------------------------------------------------------
+
+fn assert_fingerprint_ja4(resp: &reqwest::Response) {
+    let value = resp
+        .headers()
+        .get(HEADER_JA4)
+        .unwrap_or_else(|| panic!("missing {HEADER_JA4} header — fingerprinting may be broken"))
+        .to_str()
+        .expect("non-UTF8 JA4 header");
+    assert_eq!(
+        value, EXPECTED_JA4,
+        "JA4 fingerprint changed (reqwest/rustls update?)\n\
+         Re-run: cargo test -p huginn-proxy-lib --test capture_fixtures -- --nocapture\n\
+         Then update EXPECTED_JA4 in bench_proxy.rs"
+    );
+}
+
+fn assert_fingerprint_akamai(resp: &reqwest::Response) {
+    let value = resp
+        .headers()
+        .get(HEADER_AKAMAI)
+        .unwrap_or_else(|| {
+            panic!("missing {HEADER_AKAMAI} header — HTTP/2 fingerprinting may be broken")
+        })
+        .to_str()
+        .expect("non-UTF8 Akamai header");
+    assert_eq!(
+        value, EXPECTED_AKAMAI,
+        "Akamai fingerprint changed (h2 crate update?)\n\
+         Re-run: cargo test -p huginn-proxy-lib --test capture_fixtures -- --nocapture\n\
+         Then update EXPECTED_AKAMAI in bench_proxy.rs"
+    );
+}
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
@@ -340,7 +394,9 @@ async fn start_backend() -> (tokio::task::JoinHandle<()>, SocketAddr) {
 
     let task = tokio::spawn(async move {
         loop {
-            let Ok((stream, _)) = listener.accept().await else { break };
+            let Ok((stream, _)) = listener.accept().await else {
+                break;
+            };
             tokio::spawn(async move {
                 let svc = service_fn(|req: hyper::Request<hyper::body::Incoming>| async move {
                     let mut resp = Response::new(Full::new(Bytes::from("ok")));
