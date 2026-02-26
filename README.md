@@ -4,11 +4,14 @@
 # Huginn Proxy
 
 [![License](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg)](https://github.com/biandratti/huginn-proxy#license)
+[![Release](https://github.com/biandratti/huginn-proxy/actions/workflows/release.yml/badge.svg)](https://github.com/biandratti/huginn-proxy/actions/workflows/release.yml)
 [![CI](https://github.com/biandratti/huginn-proxy/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/biandratti/huginn-proxy/actions/workflows/ci.yml)
 [![Security](https://github.com/biandratti/huginn-proxy/actions/workflows/security.yml/badge.svg?branch=master)](https://github.com/biandratti/huginn-proxy/actions/workflows/security.yml)
 [![Audit](https://github.com/biandratti/huginn-proxy/actions/workflows/audit.yml/badge.svg?branch=master)](https://github.com/biandratti/huginn-proxy/actions/workflows/audit.yml)
 [![Pure Rust](https://img.shields.io/badge/pure-Rust-brightgreen.svg)](https://deps.rs/repo/github/biandratti/huginn-proxy)
 [![codecov](https://codecov.io/gh/biandratti/huginn-proxy/graph/badge.svg)](https://codecov.io/gh/biandratti/huginn-proxy)
+[![GitHub Release](https://img.shields.io/github/v/release/biandratti/huginn-proxy)](https://github.com/biandratti/huginn-proxy/releases)
+[![Docker](https://img.shields.io/badge/ghcr.io-huginn--proxy-blue?logo=docker)](https://github.com/biandratti/huginn-proxy/pkgs/container/huginn-proxy)
 
 **High-performance reverse proxy with passive fingerprinting capabilities powered by Huginn Net.**
 </div>
