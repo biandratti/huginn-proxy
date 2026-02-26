@@ -285,18 +285,19 @@ jobs:
         with:
           toolchain: stable
 
-      - name: Install musl cross-compilation tools
+      - name: Install cargo-zigbuild
+        # cargo-zigbuild uses Zig as a cross C compiler, which has built-in support for all
+        # musl targets (x86_64 and aarch64) without requiring external toolchain downloads.
+        # This replaces musl-tools + musl.cc, both of which are either arch-limited or unreliable in CI.
         run: |
-          sudo apt-get install -y musl-tools
-          if [[ "${{ matrix.target }}" == "aarch64-unknown-linux-musl" ]]; then
-            sudo apt-get install -y gcc-aarch64-linux-gnu
-          fi
+          pip install ziglang
+          cargo install cargo-zigbuild
 
       - name: Add Rust target
         run: rustup target add ${{ matrix.target }}
 
       - name: Build plain release binary (no eBPF)
-        run: cargo build --release --target ${{ matrix.target }} -p huginn-proxy
+        run: cargo zigbuild --release --target ${{ matrix.target }} -p huginn-proxy
 
       - name: Package binary
         run: |
