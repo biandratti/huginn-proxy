@@ -23,10 +23,7 @@ allow = [
 confidence-threshold = 1.0
 
 [bans]
-multiple-versions = "allow"
 wildcards = "deny"
-# TODO: Temporal...
-allow-wildcard-paths = true
 
 [sources]
 allow-registry = ["https://github.com/rust-lang/crates.io-index"]
