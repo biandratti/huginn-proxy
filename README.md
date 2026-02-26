@@ -21,8 +21,6 @@ Inspired by production-grade proxies
 like [Pingora](https://github.com/cloudflare/pingora), [Sozu](https://github.com/sozu-proxy/sozu),
 and [rust-rpxy](https://github.com/junkurihara/rust-rpxy).
 
-> **Note:** This project is currently in active development.
-
 ## Quick Start
 
 See [`examples/`](examples/) for the full setup guide, including:
@@ -146,20 +144,32 @@ See [ROADMAP.md](ROADMAP.md) for a detailed list of planned features and upcomin
 
 ## Artifacts Matrix
 
-Each release publishes the following artifacts:
+Each release publishes the following artifacts as `huginn-proxy-{tag}-{suffix}`:
 
-| Suffix | OS | eBPF |
+| Suffix | OS | Arch | libc | eBPF |
+|---|---|---|---|---|
+| `x86_64-unknown-linux-musl` | Linux | amd64 | musl (static) | ❌ |
+| `aarch64-unknown-linux-musl` | Linux | arm64 | musl (static) | ❌ |
+| `x86_64-unknown-linux-gnu-ebpf` | Linux | amd64 | glibc | ✅ |
+| `aarch64-unknown-linux-gnu-ebpf` | Linux | arm64 | glibc | ✅ |
+| `x86_64-apple-darwin` | macOS | amd64 | — | ❌ |
+| `aarch64-apple-darwin` | macOS | arm64 | — | ❌ |
+
+**musl (static)**: zero runtime dependencies, runs on any Linux kernel and distro.  
+**glibc (eBPF)**: extracted from the Docker image; requires glibc and Linux kernel ≥ 5.11.  
+eBPF variants require `CAP_BPF`, `CAP_NET_ADMIN`, `CAP_PERFMON`.
+
+Docker images are available at `ghcr.io/biandratti/huginn-proxy` for **Linux only** (`linux/amd64`, `linux/arm64`).
+On macOS and Windows, Docker Desktop runs a Linux VM — containers still work but eBPF/XDP requires a native Linux kernel.
+
+| Tag | eBPF | Platforms |
 |---|---|---|
-| `x86_64-unknown-linux-musl` | Linux amd64 | ❌ |
-| `aarch64-unknown-linux-musl` | Linux arm64 | ❌ |
-| `x86_64-unknown-linux-musl-ebpf` | Linux amd64 | ✅ |
-| `aarch64-unknown-linux-musl-ebpf` | Linux arm64 | ✅ |
-| `x86_64-apple-darwin` | macOS amd64 | ❌ |
-| `aarch64-apple-darwin` | macOS arm64 | ❌ |
+| `:latest` / `:{tag}` | ✅ kernel ≥ 5.11 | linux/amd64, linux/arm64 |
+| `:latest-plain` / `:{tag}-plain` | ❌ any kernel | linux/amd64, linux/arm64 |
 
-eBPF variants require `CAP_BPF`, `CAP_NET_ADMIN`, `CAP_PERFMON`. All artifacts follow the pattern `huginn-proxy-{tag}-{suffix}`.
+Each tag resolves to a [multi-arch manifest index](https://docs.docker.com/build/building/multi-platform/): Docker automatically pulls the right platform. To pin a specific platform, use the per-arch digest shown in the [package page](https://github.com/biandratti/huginn-proxy/pkgs/container/huginn-proxy).
 
-Docker images (`ghcr.io/biandratti/huginn-proxy`) are built with eBPF support. See [EBPF-SETUP.md](EBPF-SETUP.md) for runtime requirements.
+See [EBPF-SETUP.md](EBPF-SETUP.md) for runtime requirements.
 
 ## License
 
