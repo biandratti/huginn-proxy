@@ -30,7 +30,7 @@ services:
     security_opt:
       - seccomp:unconfined
     healthcheck:
-      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:9090/health || exit 1"]
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/9090' 2>/dev/null"]
       interval: 10s
       timeout: 3s
       retries: 3

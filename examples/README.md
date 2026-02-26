@@ -79,12 +79,27 @@ chmod 644 examples/certs/server.key examples/certs/server.crt
 
 ### 2. Start Services
 
-The Docker image is built **with** the `ebpf-tcp` feature. The compose file already includes the
-required `cap_add`, `seccomp`, and `ulimits` settings for eBPF.
+Two compose files are provided depending on your environment:
+
+| Compose file | Dockerfile | Requirements |
+|---|---|---|
+| `docker-compose.yml` | `Dockerfile` (eBPF enabled) | Linux kernel ≥ 5.11, `cap_add` granted by Docker |
+| `docker-compose.plain.yml` | `Dockerfile.plain` (no eBPF) | Any Linux kernel, no extra capabilities |
 
 ```bash
+# With eBPF/XDP TCP SYN fingerprinting (Linux kernel ≥ 5.11)
 docker compose -f examples/docker-compose.yml up --build
+
+# Without eBPF (any kernel, simpler setup)
+docker compose -f examples/docker-compose.plain.yml up --build
 ```
+
+Alternatively, pull a pre-built image from the registry:
+
+| Image tag | Description |
+|---|---|
+| `ghcr.io/<owner>/huginn-proxy:latest` | With eBPF/XDP — requires Linux kernel ≥ 5.11 and `cap_add` |
+| `ghcr.io/<owner>/huginn-proxy:latest-plain` | Without eBPF — runs on any Linux kernel, no extra capabilities needed |
 
 ### 3. Test the Proxy
 
@@ -179,7 +194,7 @@ Expected headers:
 
 **Connection refused?**
 
-- Ensure services are running: `docker compose -f examples/docker-compose.yml ps`
+- Ensure services are running: `docker compose -f examples/docker-compose.yml ps` (or `docker-compose.plain.yml`)
 - Check logs: `docker compose -f examples/docker-compose.yml logs proxy`
 
 **Rate limits not working?**
