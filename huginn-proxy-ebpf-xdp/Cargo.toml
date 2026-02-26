@@ -11,7 +11,7 @@ edition = "2021"
 publish = false
 
 [dependencies]
-aya-ebpf = "0.1"
+aya-ebpf = "0.1.1"
 
 [[bin]]
 name = "huginn-proxy-ebpf-xdp"
