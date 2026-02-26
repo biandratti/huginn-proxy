@@ -1,192 +1,196 @@
-# Huginn Proxy Benchmarks
+# Huginn Proxy — Benchmarks
 
-This directory contains performance benchmarks for Huginn Proxy, measuring various aspects of proxy performance including throughput, latency, concurrent connections, and fingerprinting overhead.
+Two benchmark suites with different scopes:
 
-## Available Benchmarks
+| Suite | File | Scope |
+|---|---|---|
+| `bench_fingerprinting` | `benches/bench_fingerprinting.rs` | Micro — pure parsing, no network |
+| `bench_proxy` | `benches/bench_proxy.rs` | Integration — full proxy round-trip |
 
-| Benchmark | Description | Metrics |
-|-----------|-------------|---------|
-| **Request Throughput** | Measures requests per second (RPS) | RPS, latency |
-| **Concurrent Connections** | Tests performance with multiple concurrent connections | RPS by concurrency level, latency degradation |
-| **Fingerprinting Overhead** | Measures overhead of TLS and HTTP/2 fingerprinting | Overhead percentage, throughput comparison |
-| **Load Balancing** | Tests round-robin load balancing performance | Distribution, latency per backend |
-| **TLS Handshake** | Measures TLS handshake overhead | Handshake time, throughput comparison |
-| **Latency Distribution** | Analyzes latency percentiles (p50, p95, p99, p99.9) | Min, p50, p95, p99, p99.9, max, mean |
+---
 
-## Running Benchmarks
-
-### Prerequisites
-
-1. **Proxy must be running**: The benchmarks require a running Huginn Proxy instance.
-   - Default URL: `https://localhost:7000`
-   - Override with `PROXY_URL` environment variable
-
-2. **Backend services**: Ensure backend services are running and accessible through the proxy.
-
-### Basic Usage
+## Quick start
 
 ```bash
-# Run all benchmarks (single proxy with fingerprinting enabled)
+# Run all benchmarks
+cargo bench -p huginn-proxy-lib
+
+# Run a specific suite
+cargo bench --bench bench_fingerprinting
 cargo bench --bench bench_proxy
 
-# Run with custom proxy URL
-PROXY_URL=https://proxy.example.com:7000 cargo bench --bench bench_proxy
+# Save a named baseline (for regression comparison)
+cargo bench --bench bench_proxy -- --save-baseline v0_1_0
 
-# Run load test comparison (enabled vs disabled)
-# Uses different routes on the same proxy instance:
-# - /api/test: Fingerprinting enabled
-# - /static/test: Fingerprinting disabled
-#
-# The proxy must have routes configured with different fingerprinting settings:
-# routes = [
-#   { prefix = "/api", backend = "backend-a:9000", fingerprinting = true },
-#   { prefix = "/static", backend = "backend-b:9000", fingerprinting = false },
-#   { prefix = "/", backend = "backend-b:9000" }
-# ]
-#
-PROXY_URL=https://localhost:7000 cargo bench --bench bench_proxy
-
-# Run specific benchmark
-cargo bench --bench bench_proxy -- request_throughput
-
-# Generate HTML reports
-cargo bench --bench bench_proxy -- --output-format html
+# Compare against a saved baseline
+cargo bench --bench bench_proxy -- --baseline v0_1_0
 ```
 
-### Using Docker Compose
+HTML reports are written to `target/criterion/`.
 
-If you're using the Docker Compose setup from `examples/`:
+---
+
+## `bench_fingerprinting` — micro benchmarks
+
+Benchmarks the raw parsing speed of each fingerprinting algorithm.
+No network, no IO — pure CPU work on hardcoded byte fixtures.
+
+### Benchmarks
+
+| Name | What it measures |
+|---|---|
+| `akamai_parse_http2_settings_window_update` | `extract_akamai_fingerprint()` on HTTP/2 SETTINGS + WINDOW_UPDATE |
+| `ja4_parse_tls_client_hello` | `parse_tls_client_hello()` on a TLS 1.3 ClientHello |
+
+### Fixtures
+
+**HTTP/2** (`HTTP2_CLIENT_FRAMES`): hardcoded bytes representing a real `reqwest`/`h2` client
+connection start — connection preface, SETTINGS frame, WINDOW_UPDATE frame.
+Values match what the `h2` crate sends by default.
+
+**TLS ClientHello** (`CLIENT_HELLO_BYTES`): a synthetic but structurally valid TLS 1.3
+ClientHello with realistic cipher suites, extensions, and a key_share entry.
+
+#### Refreshing the TLS fixture from a real connection
+
+The TLS ClientHello fixture in `bench_fingerprinting.rs` is a synthetic approximation.
+To replace it with bytes captured from a real `reqwest` connection, add a test like this
+in `huginn-proxy-lib/tests/`:
+
+```rust
+// tests/capture_fixtures.rs
+#[tokio::test]
+async fn capture_tls_client_hello() {
+    // Start a TLS server that records the raw bytes before the handshake
+    // Print them as a Rust byte array
+    // Paste into CLIENT_HELLO_BYTES in bench_fingerprinting.rs
+}
+```
+
+Running `cargo test -- capture_tls_client_hello --nocapture` will print the bytes.
+
+---
+
+## `bench_proxy` — integration benchmarks
+
+Measures the **end-to-end latency** and **throughput** of a full proxy deployment:
+
+```
+reqwest (TLS) → proxy (TLS termination + fingerprinting) → Hyper backend (plain HTTP)
+```
+
+Everything runs in-process on localhost. No Docker, no external services.
+
+### What is real
+
+- TLS handshake (rcgen self-signed cert, reqwest/rustls client)
+- JA4 fingerprinting (extracted from the actual TLS ClientHello bytes)
+- Akamai fingerprinting (extracted from real HTTP/2 frames via `CapturingStream`)
+- TCP networking (OS network stack, localhost)
+- Backend: embedded Hyper HTTP/1.1 server
+
+### What is simplified
+
+- TCP SYN (eBPF) fingerprinting: **disabled** — requires `CAP_BPF` and kernel ≥ 5.11.
+  Measure its overhead via Prometheus metrics in a staging environment instead.
+- Backend always returns `200 OK "ok"` — we measure the proxy, not the backend.
+
+### Benchmarks
+
+| Name | Concurrency | Fingerprinting |
+|---|---|---|
+| `http1_latency/single_request_fingerprinting_on` | 1 | ON |
+| `http2_latency/single_request_fingerprinting_on` | 1 | ON |
+| `fingerprinting_overhead/http2_with_fingerprinting` | 1 | ON |
+| `fingerprinting_overhead/http2_without_fingerprinting` | 1 | OFF |
+| `concurrency_scaling/http1_concurrent_requests/1` | 1 | ON |
+| `concurrency_scaling/http1_concurrent_requests/10` | 10 | ON |
+| `concurrency_scaling/http1_concurrent_requests/50` | 50 | ON |
+
+**Fingerprinting overhead** is the delta between `with_fingerprinting` and
+`without_fingerprinting`. This is the real cost of JA4 + Akamai extraction per request.
+
+**JA4 header assertion**: the HTTP/1.1 and HTTP/2 benchmarks assert that
+`x-huginn-net-ja4` is present in every response. If it disappears (fingerprinting
+regressed or the proxy changed), the bench panics immediately.
+
+---
+
+## Sustained load testing (external)
+
+Criterion measures latency distributions under a single-client model.
+For sustained multi-client load (RPS under production-like concurrency), use an
+external tool against a running proxy instance:
 
 ```bash
-# Start services
-cd examples && docker compose up -d --build
+# Start the proxy locally (TLS mode, all fingerprinting enabled)
+cargo run -p huginn-proxy -- examples/compose.toml
 
-# Run benchmarks with comparison (from project root)
-# Uses different routes on the same proxy:
-# - /api/test: Fingerprinting enabled
-# - /static/test: Fingerprinting disabled
-PROXY_URL=https://localhost:7000 cargo bench --bench bench_proxy
+# 30-second load test: 50 concurrent users, HTTP/1.1
+oha --no-tls-verify -c 50 -z 30s https://127.0.0.1:7000/
 
-# Stop services
-cd examples && docker compose down
+# HTTP/2 load test
+oha --no-tls-verify -c 50 -z 30s --http-version 2 https://127.0.0.1:7000/
+
+# With hey (alternative)
+hey -n 10000 -c 50 -disable-compression https://127.0.0.1:7000/
 ```
 
-**Note:** The docker-compose setup includes:
-- `proxy`: Single proxy instance with fingerprinting configurable per route
-  - `/api` route: Fingerprinting enabled
-  - `/static` route: Fingerprinting disabled
-  - Default route `/`: Fingerprinting enabled (catch-all)
-- `backend-a` and `backend-b`: Backend services
+Key metrics to capture from `oha` output:
+- p50 / p95 / p99 latency
+- Requests/sec
+- Error rate
 
-## Benchmark Details
+---
 
-### Request Throughput
+## Interpreting results
 
-Measures the number of requests per second the proxy can handle:
-- **HTTP/1.1**: Simple HTTP/1.1 requests
-- **HTTP/2**: HTTP/2 requests with prior knowledge
+Two fundamentally different latency modes are measured:
 
-### Concurrent Connections
+**Warm (connection reuse)** — `http1_latency`, `http2_latency`, `fingerprinting_overhead`:
+A single client is built once and reuses its TLS connection across all iterations.
+This models a keep-alive HTTP client hitting the proxy repeatedly.
 
-Tests proxy performance under different concurrency levels:
-- 10 concurrent connections
-- 100 concurrent connections
-- 1000 concurrent connections
+**Cold (new TLS per request)** — `concurrency_scaling`:
+Each concurrent request creates a new `reqwest::Client` (new TLS handshake).
+This models N independent clients connecting simultaneously.
 
-### Fingerprinting Overhead
+### Baseline numbers (localhost, release build)
 
-Compares performance with and without fingerprinting using different routes:
-- **With fingerprinting**: Requests to `/api/test` route (fingerprinting enabled)
-- **Without fingerprinting**: Requests to `/static/test` route (fingerprinting disabled)
-- **TLS Fingerprinting**: JA4 fingerprint extraction (HTTP/1.1 and HTTP/2)
-- **HTTP/2 Fingerprinting**: Akamai HTTP/2 fingerprint extraction (HTTP/2 only)
+| Benchmark | p50 |
+|---|---|
+| HTTP/1.1 single request (warm) | ~123 µs |
+| HTTP/2 single request (warm) | ~124 µs |
+| HTTP/2 with fingerprinting (warm) | ~121 µs |
+| HTTP/2 without fingerprinting (warm) | ~102 µs |
+| **Fingerprinting overhead (JA4 + Akamai)** | **~19 µs** |
+| Cold request, c=1 (new TLS handshake) | ~39 ms |
+| Cold throughput, c=10 | ~216 req/s |
+| Cold throughput, c=50 | ~800 req/s |
 
-### Load Balancing
+Key observations:
+- Fingerprinting overhead is **~19 µs** per request.
+- HTTP/1.1 and HTTP/2 have equivalent warm latency; HTTP/2 does not add measurable overhead
+  because the Akamai capture buffer is filled incrementally in the read path.
+- Cold latency (~39 ms at c=1) is dominated by the TLS handshake, not the proxy logic.
+  Throughput scales near-linearly with concurrency (c=50 → ~800 req/s).
 
-Tests route-based load balancing:
-- Distribution across backends based on route matching
-- Latency per backend
-- Total throughput with multiple backends
-- **Note**: Round-robin only applies when routes match. Unmatched routes return 404.
+If fingerprinting overhead grows significantly after a dependency update, suspect
+`huginn-net-tls` or `huginn-net-http` parser changes — run `bench_fingerprinting`
+to isolate which parser regressed.
 
-### TLS Handshake
+---
 
-Measures TLS handshake overhead:
-- Handshake time per request
-- Throughput comparison (TLS vs non-TLS)
+## CI / regression detection
 
-### Latency Distribution
+Benchmarks are not run in CI by default (they take ~3 minutes and need dedicated CPU).
+To enable regression detection, run with a saved baseline and fail on > 10% regression:
 
-Analyzes latency percentiles:
-- Minimum latency
-- P50 (median)
-- P95
-- P99
-- P99.9
-- Maximum latency
-- Mean latency
+```bash
+cargo bench --bench bench_proxy -- --save-baseline main
+# Later, on a PR branch:
+cargo bench --bench bench_proxy -- --baseline main
+```
 
-## Output
-
-Benchmarks generate:
-1. **Criterion reports**: Detailed statistical analysis in `target/criterion/`
-2. **HTML reports**: Visual charts and graphs (when using `--output-format html`)
-3. **Console output**: Summary report with key metrics
-
-## Performance Targets
-
-Expected performance (baseline):
-- **RPS**: >10,000 req/s (without fingerprinting)
-- **RPS with fingerprinting**: >5,000 req/s
-- **Latency P99**: <100ms (local network)
-- **Fingerprinting overhead**: <50% (TLS + HTTP/2)
-
-## Contributing
-
-When adding new benchmarks:
-1. Follow the existing benchmark structure
-2. Use `criterion_group!` and `criterion_main!` macros
-3. Include comprehensive performance analysis in the final report
-4. Document any new optimization techniques or insights
-5. Update this README with new benchmark descriptions
-
-## Current Results
-
-**Note:** These benchmarks were executed on a development laptop (not production hardware). Results are provided for reference and may vary significantly in production environments.
-
-### Performance Overview
-
-| Metric | Value |
-|--------|-------|
-| **HTTP/1.1 Throughput** | ~60 req/s |
-| **HTTP/2 Throughput** | ~47 req/s |
-| **Concurrent Connections (10)** | ~72 ms |
-| **Concurrent Connections (100)** | ~187 ms |
-| **Concurrent Connections (1000)** | ~1.8 s |
-
-### Fingerprinting Overhead
-
-| Configuration | Throughput (req/s) | Overhead |
-|---------------|-------------------|----------|
-| **HTTP/1.1 with fingerprinting** | ~1,601 | -2.7% |
-| **HTTP/1.1 without fingerprinting** | ~1,646 | baseline |
-| **HTTP/2 with fingerprinting** | ~1,271 | -1.7% |
-| **HTTP/2 without fingerprinting** | ~1,293 | baseline |
-
-### Notes
-
-- **Measurement method**: 5 iterations averaged, 10,000 requests per iteration, 50 concurrent connections
-- **Overall overhead**: ~-2.2% (minimal impact)
-- **HTTP/1.1**: Fingerprinting adds ~2.7% overhead (TLS fingerprint extraction)
-- **HTTP/2**: Fingerprinting adds ~1.7% overhead (TLS + HTTP/2 fingerprint extraction)
-- **Success rate**: 100% (all requests successful)
-- **Results**: Averaged across 2 benchmark runs for consistency
-
-### Comparison with Reference Values
-
-| Benchmark | Huginn Proxy | Reference |
-|-----------|--------------|-----------|
-| Reverse proxy with fingerprinting | ~1,200-1,700 req/s | ~2,000-16,000 req/s |
-| Simple HTTP server | N/A | ~29,650 req/s |
-
-**Note**: These benchmarks were executed on a development laptop (not production hardware). They measure end-to-end performance of the full proxy stack (TLS handshake, HTTP parsing, fingerprint extraction, backend forwarding), which includes all real-world overhead. Results are averaged across multiple iterations and benchmark runs for reliability. Performance in production environments may vary significantly.
+Criterion exits with code 0 even when regressions are detected; post-process
+`target/criterion/*/change/estimates.json` to enforce thresholds in CI.

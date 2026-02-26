@@ -39,6 +39,11 @@ reqwest = { workspace = true, features = ["json", "http2"] }
 tempfile.workspace = true
 
 [[bench]]
+name = "bench_fingerprinting"
+path = "../benches/bench_fingerprinting.rs"
+harness = false
+
+[[bench]]
 name = "bench_proxy"
 path = "../benches/bench_proxy.rs"
 harness = false
