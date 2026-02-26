@@ -79,12 +79,19 @@ chmod 644 examples/certs/server.key examples/certs/server.crt
 
 ### 2. Start Services
 
-The Docker image is built **with** the `ebpf-tcp` feature. The compose file already includes the
-required `cap_add`, `seccomp`, and `ulimits` settings for eBPF.
+The compose file builds from `Dockerfile` (eBPF enabled) and includes the required `cap_add` and
+`seccomp` settings. Requires Linux kernel ≥ 5.11.
 
 ```bash
 docker compose -f examples/docker-compose.yml up --build
 ```
+
+Alternatively, pull a pre-built image from the registry:
+
+| Image tag | Description |
+|---|---|
+| `ghcr.io/<owner>/huginn-proxy:latest` | With eBPF/XDP — requires Linux kernel ≥ 5.11 and `cap_add` |
+| `ghcr.io/<owner>/huginn-proxy:latest-plain` | Without eBPF — runs on any Linux kernel, no extra capabilities needed |
 
 ### 3. Test the Proxy
 
