@@ -44,30 +44,26 @@ No network, no IO — pure CPU work on hardcoded byte fixtures.
 
 ### Fixtures
 
-**HTTP/2** (`HTTP2_CLIENT_FRAMES`): hardcoded bytes representing a real `reqwest`/`h2` client
-connection start — connection preface, SETTINGS frame, WINDOW_UPDATE frame.
-Values match what the `h2` crate sends by default.
+**TLS ClientHello** (`benches/fixtures/clienthello_reqwest.bin`): real bytes intercepted from
+a `reqwest`/`rustls` connection before the TLS handshake. Committed to the repo so benchmarks
+are deterministic without an active network connection.
 
-**TLS ClientHello** (`CLIENT_HELLO_BYTES`): a synthetic but structurally valid TLS 1.3
-ClientHello with realistic cipher suites, extensions, and a key_share entry.
+**HTTP/2 frames** (`HTTP2_CLIENT_FRAMES` in `bench_fingerprinting.rs`): hardcoded bytes
+encoding the connection preface, SETTINGS frame, and WINDOW_UPDATE frame that `reqwest`/`h2`
+sends at connection start. Values are derived from the Akamai fingerprint captured by
+`capture_fixtures`.
 
-#### Refreshing the TLS fixture from a real connection
+#### Refreshing fixtures after a dependency update
 
-The TLS ClientHello fixture in `bench_fingerprinting.rs` is a synthetic approximation.
-To replace it with bytes captured from a real `reqwest` connection, add a test like this
-in `huginn-proxy-lib/tests/`:
-
-```rust
-// tests/capture_fixtures.rs
-#[tokio::test]
-async fn capture_tls_client_hello() {
-    // Start a TLS server that records the raw bytes before the handshake
-    // Print them as a Rust byte array
-    // Paste into CLIENT_HELLO_BYTES in bench_fingerprinting.rs
-}
+```bash
+cargo test -p huginn-proxy-lib --test capture_fixtures -- --nocapture
 ```
 
-Running `cargo test -- capture_tls_client_hello --nocapture` will print the bytes.
+This re-captures real bytes from a live `reqwest` connection and writes:
+- `benches/fixtures/clienthello_reqwest.bin` — new TLS ClientHello bytes
+- `benches/fixtures/fingerprint_values.txt` — new `EXPECTED_JA4` / `EXPECTED_AKAMAI` strings
+
+Update the `EXPECTED_*` constants in `bench_fingerprinting.rs` and `bench_proxy.rs` to match.
 
 ---
 
@@ -97,22 +93,27 @@ Everything runs in-process on localhost. No Docker, no external services.
 
 ### Benchmarks
 
-| Name | Concurrency | Fingerprinting |
-|---|---|---|
-| `http1_latency/single_request_fingerprinting_on` | 1 | ON |
-| `http2_latency/single_request_fingerprinting_on` | 1 | ON |
-| `fingerprinting_overhead/http2_with_fingerprinting` | 1 | ON |
-| `fingerprinting_overhead/http2_without_fingerprinting` | 1 | OFF |
-| `concurrency_scaling/http1_concurrent_requests/1` | 1 | ON |
-| `concurrency_scaling/http1_concurrent_requests/10` | 10 | ON |
-| `concurrency_scaling/http1_concurrent_requests/50` | 50 | ON |
+| Name | Protocol | Concurrency | Fingerprinting |
+|---|---|---|---|
+| `http1_latency/single_request_fingerprinting_on` | HTTP/1.1 | 1 | ON |
+| `http2_latency/single_request_fingerprinting_on` | HTTP/2 | 1 | ON |
+| `fingerprinting_overhead/http1_with_fingerprinting` | HTTP/1.1 | 1 | ON |
+| `fingerprinting_overhead/http1_without_fingerprinting` | HTTP/1.1 | 1 | OFF |
+| `fingerprinting_overhead/http2_with_fingerprinting` | HTTP/2 | 1 | ON |
+| `fingerprinting_overhead/http2_without_fingerprinting` | HTTP/2 | 1 | OFF |
+| `concurrency_scaling/http1_c/10` | HTTP/1.1 | 10 | ON |
+| `concurrency_scaling/http1_c/50` | HTTP/1.1 | 50 | ON |
+| `concurrency_scaling/http2_c/10` | HTTP/2 | 10 | ON |
+| `concurrency_scaling/http2_c/50` | HTTP/2 | 50 | ON |
 
 **Fingerprinting overhead** is the delta between `with_fingerprinting` and
-`without_fingerprinting`. This is the real cost of JA4 + Akamai extraction per request.
+`without_fingerprinting` for each protocol. The H1 delta isolates JA4 cost;
+the H2 delta isolates JA4 + Akamai cost together.
 
-**JA4 header assertion**: the HTTP/1.1 and HTTP/2 benchmarks assert that
-`x-huginn-net-ja4` is present in every response. If it disappears (fingerprinting
-regressed or the proxy changed), the bench panics immediately.
+**Fingerprint value assertion**: every fingerprinted request asserts that
+`x-huginn-net-ja4` (and `x-huginn-net-akamai` for HTTP/2) matches the values
+captured in `benches/fixtures/fingerprint_values.txt`. If either changes after a
+dependency update, the bench panics with a message pointing to `capture_fixtures`.
 
 ---
 
@@ -159,21 +160,26 @@ This models N independent clients connecting simultaneously.
 
 | Benchmark | p50 |
 |---|---|
-| HTTP/1.1 single request (warm) | ~123 µs |
-| HTTP/2 single request (warm) | ~124 µs |
-| HTTP/2 with fingerprinting (warm) | ~121 µs |
-| HTTP/2 without fingerprinting (warm) | ~102 µs |
-| **Fingerprinting overhead (JA4 + Akamai)** | **~19 µs** |
-| Cold request, c=1 (new TLS handshake) | ~39 ms |
-| Cold throughput, c=10 | ~216 req/s |
-| Cold throughput, c=50 | ~800 req/s |
+| HTTP/1.1 single request (warm) | ~79 µs |
+| HTTP/2 single request (warm) | ~85 µs |
+| HTTP/1.1 with fingerprinting (warm) | ~77 µs |
+| HTTP/1.1 without fingerprinting (warm) | ~74 µs |
+| **Fingerprinting overhead H1 (JA4 only)** | **~2.5 µs** |
+| HTTP/2 with fingerprinting (warm) | ~79 µs |
+| HTTP/2 without fingerprinting (warm) | ~75 µs |
+| **Fingerprinting overhead H2 (JA4 + Akamai)** | **~3.6 µs** |
+| Cold throughput, c=10, H1 | ~221 req/s |
+| Cold throughput, c=10, H2 | ~217 req/s |
+| Cold throughput, c=50, H1 | ~804 req/s |
+| Cold throughput, c=50, H2 | ~818 req/s |
 
 Key observations:
-- Fingerprinting overhead is **~19 µs** per request.
-- HTTP/1.1 and HTTP/2 have equivalent warm latency; HTTP/2 does not add measurable overhead
-  because the Akamai capture buffer is filled incrementally in the read path.
-- Cold latency (~39 ms at c=1) is dominated by the TLS handshake, not the proxy logic.
-  Throughput scales near-linearly with concurrency (c=50 → ~800 req/s).
+- Fingerprinting overhead is **~2.5 µs** (H1, JA4 only) and **~3.6 µs** (H2, JA4 + Akamai).
+  The extra ~1 µs on H2 is the cost of Akamai SETTINGS/WINDOW_UPDATE parsing.
+- HTTP/1.1 and HTTP/2 have near-identical warm latency; H2 frame processing does not add
+  measurable overhead because the Akamai capture buffer is filled incrementally in the read path.
+- Cold throughput is dominated by TLS handshake cost. H1 and H2 scale equivalently:
+  c=10 → ~219 req/s, c=50 → ~811 req/s.
 
 If fingerprinting overhead grows significantly after a dependency update, suspect
 `huginn-net-tls` or `huginn-net-http` parser changes — run `bench_fingerprinting`

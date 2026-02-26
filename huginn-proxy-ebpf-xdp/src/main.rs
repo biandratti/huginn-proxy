@@ -210,7 +210,9 @@ static syn_counter: Array<u64> = Array::with_max_entries(1, 0);
 unsafe fn ptr_at<T>(ctx: &XdpContext, offset: usize) -> Option<*const T> {
     let start = ctx.data();
     let end = ctx.data_end();
-    let access_end = start.checked_add(offset)?.checked_add(mem::size_of::<T>())?;
+    let access_end = start
+        .checked_add(offset)?
+        .checked_add(mem::size_of::<T>())?;
     if access_end > end {
         return None;
     }
@@ -359,7 +361,9 @@ fn handle_tcp_syn(
 
     // ── Build map value ──────────────────────────────────────────────────────
     let tcp_hdr_len = unsafe { usize::from((*tcp).doff()).saturating_mul(4) };
-    let optlen = tcp_hdr_len.saturating_sub(mem::size_of::<TcpHdr>()).min(TCPOPT_MAXLEN);
+    let optlen = tcp_hdr_len
+        .saturating_sub(mem::size_of::<TcpHdr>())
+        .min(TCPOPT_MAXLEN);
 
     let mut val = SynRawData {
         src_addr: unsafe { (*ip).saddr },

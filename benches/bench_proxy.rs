@@ -244,15 +244,21 @@ fn bench_http2_latency(c: &mut Criterion) {
 
 // ---------------------------------------------------------------------------
 // Benchmark 3: Fingerprinting overhead
-// Compares /bench/fp (fingerprinting on) vs /bench/nofp (off)
-// The delta is the real cost of JA4 + Akamai extraction.
+// Compares /bench/fp (fingerprinting on) vs /bench/nofp (off) for both
+// HTTP/1.1 and HTTP/2. The delta between the two routes is the real cost
+// of JA4 + Akamai extraction under identical conditions.
 // ---------------------------------------------------------------------------
 fn bench_fingerprinting_overhead(c: &mut Criterion) {
     let rt = tokio::runtime::Runtime::new().unwrap();
     let fixture = rt.block_on(BenchFixture::setup());
     let proxy_addr = fixture.proxy_addr;
 
-    // HTTP/2 client: shows Akamai overhead most clearly
+    let client_h1 = reqwest::Client::builder()
+        .danger_accept_invalid_certs(true)
+        .timeout(Duration::from_secs(10))
+        .build()
+        .unwrap();
+
     let client_h2 = reqwest::Client::builder()
         .danger_accept_invalid_certs(true)
         .http2_prior_knowledge()
@@ -268,6 +274,26 @@ fn bench_fingerprinting_overhead(c: &mut Criterion) {
     let url_fp = format!("https://{proxy_addr}/bench/fp");
     let url_nofp = format!("https://{proxy_addr}/bench/nofp");
 
+    // HTTP/1.1 pair — measures JA4-only overhead (no Akamai on H1)
+    group.bench_function("http1_with_fingerprinting", |b| {
+        b.iter(|| {
+            rt.block_on(async { client_h1.get(&url_fp).send().await.expect("request failed") })
+        })
+    });
+
+    group.bench_function("http1_without_fingerprinting", |b| {
+        b.iter(|| {
+            rt.block_on(async {
+                client_h1
+                    .get(&url_nofp)
+                    .send()
+                    .await
+                    .expect("request failed")
+            })
+        })
+    });
+
+    // HTTP/2 pair — measures JA4 + Akamai overhead together
     group.bench_function("http2_with_fingerprinting", |b| {
         b.iter(|| {
             rt.block_on(async { client_h2.get(&url_fp).send().await.expect("request failed") })
@@ -292,7 +318,11 @@ fn bench_fingerprinting_overhead(c: &mut Criterion) {
 
 // ---------------------------------------------------------------------------
 // Benchmark 4: Concurrency scaling
-// Measures throughput (RPS) at different concurrency levels.
+// Measures cold throughput (new TLS connection per task) at c10 and c50.
+// Each iteration spawns N tasks, each building its own client (one TLS
+// handshake per task), so the result reflects proxy capacity under fresh
+// connections — different from the warm latency benchmarks above.
+// Covers both HTTP/1.1 and HTTP/2 to compare protocol scaling behaviour.
 // ---------------------------------------------------------------------------
 fn bench_concurrency(c: &mut Criterion) {
     let rt = tokio::runtime::Runtime::new().unwrap();
@@ -303,38 +333,66 @@ fn bench_concurrency(c: &mut Criterion) {
     group.sample_size(20);
     group.measurement_time(Duration::from_secs(20));
 
-    for concurrency in [1usize, 10, 50].iter() {
-        group.throughput(Throughput::Elements(*concurrency as u64));
-        group.bench_with_input(
-            BenchmarkId::new("http1_concurrent_requests", concurrency),
-            concurrency,
-            |b, &n| {
-                let url = format!("https://{proxy_addr}/bench/fp");
-                b.iter(|| {
-                    rt.block_on(async {
-                        let mut handles = Vec::with_capacity(n);
-                        for _ in 0..n {
-                            let url = url.clone();
-                            handles.push(tokio::spawn(async move {
-                                let client = reqwest::Client::builder()
-                                    .danger_accept_invalid_certs(true)
-                                    .timeout(Duration::from_secs(10))
-                                    .build()
-                                    .unwrap();
-                                client.get(&url).send().await.is_ok()
-                            }));
+    for concurrency in [10usize, 50].iter() {
+        let n = *concurrency;
+        group.throughput(Throughput::Elements(n as u64));
+
+        // HTTP/1.1 — one TCP+TLS connection per task, one request per connection
+        group.bench_with_input(BenchmarkId::new("http1_c", concurrency), concurrency, |b, &n| {
+            let url = format!("https://{proxy_addr}/bench/fp");
+            b.iter(|| {
+                rt.block_on(async {
+                    let mut handles = Vec::with_capacity(n);
+                    for _ in 0..n {
+                        let url = url.clone();
+                        handles.push(tokio::spawn(async move {
+                            let client = reqwest::Client::builder()
+                                .danger_accept_invalid_certs(true)
+                                .timeout(Duration::from_secs(10))
+                                .build()
+                                .unwrap();
+                            client.get(&url).send().await.is_ok()
+                        }));
+                    }
+                    let mut success = 0usize;
+                    for h in handles {
+                        if h.await.unwrap_or(false) {
+                            success = success.saturating_add(1);
                         }
-                        let mut success = 0usize;
-                        for h in handles {
-                            if h.await.unwrap_or(false) {
-                                success = success.saturating_add(1);
-                            }
-                        }
-                        success
-                    })
+                    }
+                    success
                 })
-            },
-        );
+            })
+        });
+
+        // HTTP/2 — one TCP+TLS connection per task (no multiplexing across tasks)
+        group.bench_with_input(BenchmarkId::new("http2_c", concurrency), concurrency, |b, &n| {
+            let url = format!("https://{proxy_addr}/bench/fp");
+            b.iter(|| {
+                rt.block_on(async {
+                    let mut handles = Vec::with_capacity(n);
+                    for _ in 0..n {
+                        let url = url.clone();
+                        handles.push(tokio::spawn(async move {
+                            let client = reqwest::Client::builder()
+                                .danger_accept_invalid_certs(true)
+                                .http2_prior_knowledge()
+                                .timeout(Duration::from_secs(10))
+                                .build()
+                                .unwrap();
+                            client.get(&url).send().await.is_ok()
+                        }));
+                    }
+                    let mut success = 0usize;
+                    for h in handles {
+                        if h.await.unwrap_or(false) {
+                            success = success.saturating_add(1);
+                        }
+                    }
+                    success
+                })
+            })
+        });
     }
 
     group.finish();
