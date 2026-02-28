@@ -245,7 +245,7 @@ jobs:
           ls -lh /tmp/${BINARY_NAME}
 
       - name: Upload binary artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.target }}${{ matrix.suffix }}
           path: /tmp/huginn-proxy-${{ needs.docker.outputs.tag }}-${{ matrix.target }}${{ matrix.suffix }}
@@ -307,7 +307,7 @@ jobs:
           chmod +x "${RELEASE_NAME}"
 
       - name: Upload binary artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.target }}
           path: huginn-proxy-${{ steps.version.outputs.tag }}-${{ matrix.target }}
@@ -385,7 +385,7 @@ jobs:
           ls -lh "${RELEASE_BINARY}"
 
       - name: Upload binary artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.target }}
           path: ${{ env.RELEASE_BINARY }}
