@@ -515,9 +515,9 @@ impl Metrics {
     /// Record a TCP SYN fingerprint lookup result and its duration.
     ///
     /// `result` is one of:
-    /// - `"hit"`       — fingerprint found and injected (`SynResult::Hit`)
-    /// - `"miss"`      — no BPF map entry (keep-alive reuse, IPv6 peer, stale)
-    /// - `"malformed"` — BPF map entry present but TCP options bytes were undecodable
+    /// - `"hit"`       - fingerprint found and injected (`SynResult::Hit`)
+    /// - `"miss"`      - no BPF map entry (keep-alive reuse, IPv6 peer, stale)
+    /// - `"malformed"` - BPF map entry present but TCP options bytes were undecodable
     pub fn record_tcp_syn_fingerprint(&self, result: &str, duration_secs: f64) {
         let attrs = &[KeyValue::new(labels::REASON, result.to_string())];
         self.tcp_syn_fingerprints_total.add(1, attrs);

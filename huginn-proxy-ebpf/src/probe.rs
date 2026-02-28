@@ -28,7 +28,7 @@ const STALE_TICK_THRESHOLD: u64 = 16_384;
 /// connection arrives, call `lookup()` with the client's IP+port to retrieve
 /// the SYN data captured moments earlier.
 pub struct EbpfProbe {
-    /// Loaded eBPF object — keeps maps alive while probe exists
+    /// Loaded eBPF object - keeps maps alive while probe exists
     _ebpf: Ebpf,
     /// Name of the interface this probe is attached to (for logging)
     interface: String,
@@ -101,7 +101,7 @@ impl EbpfProbe {
         let val = match map.get(&key, 0) {
             Ok(v) => v,
             Err(_) => {
-                debug!(?src_ip, src_port, "SYN map miss — no entry (keep-alive or not captured)");
+                debug!(?src_ip, src_port, "SYN map miss - no entry (keep-alive or not captured)");
                 return None;
             }
         };
@@ -111,7 +111,7 @@ impl EbpfProbe {
         if stored_port != src_port {
             warn!(
                 ?src_ip,
-                src_port, stored_port, "BPF map port mismatch — possible hash collision, ignoring"
+                src_port, stored_port, "BPF map port mismatch - possible hash collision, ignoring"
             );
             return None;
         }
@@ -129,7 +129,7 @@ impl EbpfProbe {
                     current_tick,
                     age,
                     threshold = STALE_TICK_THRESHOLD,
-                    "SYN map entry is stale — discarding"
+                    "SYN map entry is stale - discarding"
                 );
                 return None;
             }
@@ -158,7 +158,7 @@ impl EbpfProbe {
 ///
 /// From Rust's `Ipv4Addr` and host-byte-order port, we reconstruct the same key.
 ///
-/// **IPv4 only** — the XDP program filters `ETH_P_IP` and ignores IPv6 packets.
+/// **IPv4 only** - the XDP program filters `ETH_P_IP` and ignores IPv6 packets.
 /// IPv6 listen addresses are rejected at startup in `main.rs`.
 pub fn make_bpf_key(src_ip: Ipv4Addr, src_port: u16) -> u64 {
     // ip->saddr: network-order bytes [a,b,c,d] read by LE CPU = u32::from_ne_bytes([a,b,c,d])

@@ -32,12 +32,12 @@ RUN adduser --disabled-password --gecos '' --uid 10001 app
 WORKDIR /app
 COPY --from=builder /app/target/release/huginn-proxy /usr/local/bin/huginn-proxy
 # Grant the minimum Linux capabilities needed for eBPF/XDP fingerprinting:
-#   cap_bpf       – create BPF maps and load BPF programs
-#   cap_net_admin – attach XDP programs to network interfaces
-#   cap_perfmon   – allow pointer arithmetic in BPF verifier (required for XDP packet parsing)
+#   cap_bpf       - create BPF maps and load BPF programs
+#   cap_net_admin - attach XDP programs to network interfaces
+#   cap_perfmon   - allow pointer arithmetic in BPF verifier (required for XDP packet parsing)
 # The container runs as the unprivileged 'app' user; docker-compose.yml must
 # declare the same caps via cap_add so they are included in the bounding set.
-# chmod 555: binary is root-owned and read+execute only — the app user cannot overwrite it.
+# chmod 555: binary is root-owned and read+execute only - the app user cannot overwrite it.
 # libcap2-bin is only needed to run setcap; purge it immediately after.
 # apt-get/dpkg binaries are removed to prevent package installation from a compromised container.
 RUN setcap cap_bpf,cap_net_admin,cap_perfmon+eip /usr/local/bin/huginn-proxy \

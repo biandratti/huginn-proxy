@@ -148,8 +148,8 @@ Each release publishes the following artifacts as `huginn-proxy-{tag}-{suffix}`:
 | `aarch64-unknown-linux-musl` | Linux | arm64 | musl (static) | ❌ |
 | `x86_64-unknown-linux-gnu-ebpf` | Linux | amd64 | glibc | ✅ |
 | `aarch64-unknown-linux-gnu-ebpf` | Linux | arm64 | glibc | ✅ |
-| `x86_64-apple-darwin` | macOS | amd64 | — | ❌ |
-| `aarch64-apple-darwin` | macOS | arm64 | — | ❌ |
+| `x86_64-apple-darwin` | macOS | amd64 | - | ❌ |
+| `aarch64-apple-darwin` | macOS | arm64 | - | ❌ |
 
 - musl (static): zero runtime dependencies, runs on any Linux kernel and distro.  
 - glibc (eBPF): extracted from the Docker image; requires glibc and Linux kernel ≥ 5.11.  

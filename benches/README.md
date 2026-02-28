@@ -1,11 +1,11 @@
-# Huginn Proxy — Benchmarks
+# Huginn Proxy - Benchmarks
 
 Two benchmark suites with different scopes:
 
 | Suite | File | Scope |
 |---|---|---|
-| `bench_fingerprinting` | `benches/bench_fingerprinting.rs` | Micro — pure parsing, no network |
-| `bench_proxy` | `benches/bench_proxy.rs` | Integration — full proxy round-trip |
+| `bench_fingerprinting` | `benches/bench_fingerprinting.rs` | Micro - pure parsing, no network |
+| `bench_proxy` | `benches/bench_proxy.rs` | Integration - full proxy round-trip |
 
 ---
 
@@ -30,10 +30,10 @@ HTML reports are written to `target/criterion/`.
 
 ---
 
-## `bench_fingerprinting` — micro benchmarks
+## `bench_fingerprinting` - micro benchmarks
 
 Benchmarks the raw parsing speed of each fingerprinting algorithm.
-No network, no IO — pure CPU work on hardcoded byte fixtures.
+No network, no IO - pure CPU work on hardcoded byte fixtures.
 
 ### Benchmarks
 
@@ -60,14 +60,14 @@ cargo test -p huginn-proxy-lib --test capture_fixtures -- --nocapture
 ```
 
 This re-captures real bytes from a live `reqwest` connection and writes:
-- `benches/fixtures/clienthello_reqwest.bin` — new TLS ClientHello bytes
-- `benches/fixtures/fingerprint_values.txt` — new `EXPECTED_JA4` / `EXPECTED_AKAMAI` strings
+- `benches/fixtures/clienthello_reqwest.bin` - new TLS ClientHello bytes
+- `benches/fixtures/fingerprint_values.txt` - new `EXPECTED_JA4` / `EXPECTED_AKAMAI` strings
 
 Update the `EXPECTED_*` constants in `bench_fingerprinting.rs` and `bench_proxy.rs` to match.
 
 ---
 
-## `bench_proxy` — integration benchmarks
+## `bench_proxy` - integration benchmarks
 
 Measures the **end-to-end latency** and **throughput** of a full proxy deployment:
 
@@ -87,9 +87,9 @@ Everything runs in-process on localhost. No Docker, no external services.
 
 ### What is simplified
 
-- TCP SYN (eBPF) fingerprinting: **disabled** — requires `CAP_BPF` and kernel ≥ 5.11.
+- TCP SYN (eBPF) fingerprinting: **disabled** - requires `CAP_BPF` and kernel ≥ 5.11.
   Measure its overhead via Prometheus metrics in a staging environment instead.
-- Backend always returns `200 OK "ok"` — we measure the proxy, not the backend.
+- Backend always returns `200 OK "ok"` - we measure the proxy, not the backend.
 
 ### Benchmarks
 
@@ -142,13 +142,13 @@ oha --insecure -c 50 -z 30s --http-version 2 https://127.0.0.1:7000/
 | HTTP/2   | ~9,200  | 1.1 ms | 42 ms  | 44 ms  | 57 ms  |
 
 Two 30-second runs, fingerprinting enabled, backend returns `"ok"` instantly (same machine).
-The ~39–50 "errors" are connections aborted by `oha` at the 30-second deadline — not proxy errors.
+The ~39–50 "errors" are connections aborted by `oha` at the 30-second deadline - not proxy errors.
 
 **HTTP/1.1** shows a clean unimodal distribution. The vast majority of requests complete under
 11 ms; the tail is occasional connection setup, not proxy jitter.
 
 **HTTP/2** shows a bimodal distribution: p50 ≈ 1.1 ms (multiplexing reuses open connections),
-but ~10% of requests spike to ~42–48 ms. Those spikes are new TLS handshakes — `oha` opens
+but ~10% of requests spike to ~42–48 ms. Those spikes are new TLS handshakes - `oha` opens
 fresh H2 connections as the pool saturates, each costing ~40–50 ms. The bimodal shape is a
 load-tool artifact, not a proxy behavior. Real H2 clients (browsers, gRPC stubs) that maintain
 persistent connections would stay in the sub-ms range for the hot path.
@@ -166,11 +166,11 @@ load without errors and without measurable per-request degradation over time.
 
 Two fundamentally different latency modes are measured:
 
-**Warm (connection reuse)** — `http1_latency`, `http2_latency`, `fingerprinting_overhead`:
+**Warm (connection reuse)** - `http1_latency`, `http2_latency`, `fingerprinting_overhead`:
 A single client is built once and reuses its TLS connection across all iterations.
 This models a keep-alive HTTP client hitting the proxy repeatedly.
 
-**Cold (new TLS per request)** — `concurrency_scaling`:
+**Cold (new TLS per request)** - `concurrency_scaling`:
 Each concurrent request creates a new `reqwest::Client` (new TLS handshake).
 This models N independent clients connecting simultaneously.
 
@@ -205,7 +205,7 @@ Key observations:
   c=10 → ~219 req/s, c=50 → ~811 req/s.
 
 If fingerprinting overhead grows significantly after a dependency update, suspect
-`huginn-net-tls` or `huginn-net-http` parser changes — run `bench_fingerprinting`
+`huginn-net-tls` or `huginn-net-http` parser changes - run `bench_fingerprinting`
 to isolate which parser regressed.
 
 ---

@@ -14,7 +14,7 @@ No extra system dependencies required.
 cargo build --release -p huginn-proxy
 ```
 
-### With TCP SYN fingerprinting (eBPF/XDP) — Linux only
+### With TCP SYN fingerprinting (eBPF/XDP) - Linux only
 
 eBPF/XDP is a **Linux-only** feature. It does not compile or run on macOS or Windows.
 Requires Linux kernel ≥ 5.11 and the Rust nightly toolchain with `rust-src` (installed
@@ -98,8 +98,8 @@ Alternatively, pull a pre-built image from the registry:
 
 | Image tag | Description |
 |---|---|
-| `ghcr.io/<owner>/huginn-proxy:latest` | With eBPF/XDP — requires Linux kernel ≥ 5.11 and `cap_add` |
-| `ghcr.io/<owner>/huginn-proxy:latest-plain` | Without eBPF — runs on any Linux kernel, no extra capabilities needed |
+| `ghcr.io/<owner>/huginn-proxy:latest` | With eBPF/XDP - requires Linux kernel ≥ 5.11 and `cap_add` |
+| `ghcr.io/<owner>/huginn-proxy:latest-plain` | Without eBPF - runs on any Linux kernel, no extra capabilities needed |
 
 ### 3. Test the Proxy
 

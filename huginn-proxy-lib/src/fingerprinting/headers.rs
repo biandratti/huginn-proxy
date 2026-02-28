@@ -25,7 +25,7 @@ pub mod names {
     /// Header name for TLS JA4_or fingerprint injection (FoxIO naming)
     ///
     /// JA4_or: cipher suites and extensions in original ClientHello order, raw (not hashed) hex values.
-    /// Combines original order and raw values — maximum detail for analysis.
+    /// Combines original order and raw values - maximum detail for analysis.
     /// It is injected for all TLS connections when fingerprinting is enabled.
     pub const TLS_JA4_OR: &str = "x-huginn-net-ja4_or";
 

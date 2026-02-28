@@ -167,7 +167,7 @@ pub async fn handle_proxy_request(
             }
             None => {
                 debug!(
-                    "Handler: no TCP SYN fingerprint available — keep-alive request or SYN not captured"
+                    "Handler: no TCP SYN fingerprint available - keep-alive request or SYN not captured"
                 );
             }
         }

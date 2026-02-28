@@ -96,9 +96,9 @@ Limitation: No per-route mTLS configuration. No option for optional client certi
 
 Passive fingerprinting extracts three types of signatures from client connections:
 
-- **TLS (JA4)** — extracted from the TLS ClientHello. Injected as `x-huginn-net-ja4` (sorted, hashed), `x-huginn-net-ja4_r` (original order, hashed), `x-huginn-net-ja4_o` (sorted, raw), and `x-huginn-net-ja4_or` (original order, raw).
-- **HTTP/2 (Akamai)** — extracted from HTTP/2 SETTINGS and WINDOW_UPDATE frames. Injected as `x-huginn-net-akamai`.
-- **TCP SYN (p0f-style)** — extracted from the raw TCP SYN packet via an eBPF/XDP program attached to the network interface. Injected as `x-huginn-net-tcp`. Requires the `ebpf-tcp` build feature and `tcp_enabled = true` in config.
+- **TLS (JA4)** - extracted from the TLS ClientHello. Injected as `x-huginn-net-ja4` (sorted, hashed), `x-huginn-net-ja4_r` (original order, hashed), `x-huginn-net-ja4_o` (sorted, raw), and `x-huginn-net-ja4_or` (original order, raw).
+- **HTTP/2 (Akamai)** - extracted from HTTP/2 SETTINGS and WINDOW_UPDATE frames. Injected as `x-huginn-net-akamai`.
+- **TCP SYN (p0f-style)** - extracted from the raw TCP SYN packet via an eBPF/XDP program attached to the network interface. Injected as `x-huginn-net-tcp`. Requires the `ebpf-tcp` build feature and `tcp_enabled = true` in config.
 
 Per-route control to enable/disable TLS and HTTP/2 fingerprinting. TCP SYN fingerprinting is global (controlled by the `fingerprint.tcp_enabled` flag).
 
@@ -106,8 +106,8 @@ The TCP SYN signature follows the p0f format: `ip_ver:ttl:ip_olen:mss:wsize,wsca
 
 **TCP SYN fingerprinting limitations:**
 
-- **Linux only** — eBPF/XDP does not run on macOS or Windows. Requires kernel ≥ 5.11.
-- **IPv4 only** — IPv6 connections are not captured. Transparent when a load balancer forwards internally over IPv4.
+- **Linux only** - eBPF/XDP does not run on macOS or Windows. Requires kernel ≥ 5.11.
+- **IPv4 only** - IPv6 connections are not captured. Transparent when a load balancer forwards internally over IPv4.
 - Present on all requests of a connection (including HTTP keep-alive), since the fingerprint describes the TCP connection, not individual requests.
 
 Limitation: Fingerprints are only extracted and forwarded, not validated or used for blocking. Backend services need to handle the actual fingerprint analysis and decision making.

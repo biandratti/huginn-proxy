@@ -51,7 +51,7 @@ const HEADER_JA4: &str = "x-huginn-net-ja4";
 const HEADER_AKAMAI: &str = "x-huginn-net-akamai";
 
 // ---------------------------------------------------------------------------
-// Expected fingerprint values — captured from a real reqwest/rustls connection.
+// Expected fingerprint values - captured from a real reqwest/rustls connection.
 //
 // If these change after a reqwest/rustls/h2 update, the benchmarks will panic
 // with a clear message. Re-run the capture test to refresh:
@@ -141,10 +141,10 @@ impl BenchFixture {
             logging: LoggingConfig { level: "warn".to_string(), show_target: false },
             timeout: TimeoutConfig {
                 connect_ms: 5000,
-                idle_ms: 600_000, // 10 min — bench groups share a connection pool
+                idle_ms: 600_000, // 10 min - bench groups share a connection pool
                 shutdown_secs: 5,
                 tls_handshake_secs: 10,
-                connection_handling_secs: 600, // 10 min — each group runs ~15s warmup + 15s measure
+                connection_handling_secs: 600, // 10 min - each group runs ~15s warmup + 15s measure
                 keep_alive: KeepAliveConfig::default(),
             },
             security: SecurityConfig::default(),
@@ -287,7 +287,7 @@ fn bench_fingerprinting_overhead(c: &mut Criterion) {
     let url_fp = format!("https://{proxy_addr}/bench/fp");
     let url_nofp = format!("https://{proxy_addr}/bench/nofp");
 
-    // HTTP/1.1 pair — measures JA4-only overhead (no Akamai on H1)
+    // HTTP/1.1 pair - measures JA4-only overhead (no Akamai on H1)
     group.bench_function("http1_with_fingerprinting", |b| {
         b.iter(|| {
             rt.block_on(async {
@@ -312,7 +312,7 @@ fn bench_fingerprinting_overhead(c: &mut Criterion) {
         })
     });
 
-    // HTTP/2 pair — measures JA4 + Akamai overhead together
+    // HTTP/2 pair - measures JA4 + Akamai overhead together
     group.bench_function("http2_with_fingerprinting", |b| {
         b.iter(|| {
             rt.block_on(async {
@@ -346,7 +346,7 @@ fn bench_fingerprinting_overhead(c: &mut Criterion) {
 // Measures cold throughput (new TLS connection per task) at c10 and c50.
 // Each iteration spawns N tasks, each building its own client (one TLS
 // handshake per task), so the result reflects proxy capacity under fresh
-// connections — different from the warm latency benchmarks above.
+// connections - different from the warm latency benchmarks above.
 // Covers both HTTP/1.1 and HTTP/2 to compare protocol scaling behaviour.
 // ---------------------------------------------------------------------------
 fn bench_concurrency(c: &mut Criterion) {
@@ -363,7 +363,7 @@ fn bench_concurrency(c: &mut Criterion) {
         let n = *concurrency;
         group.throughput(Throughput::Elements(n as u64));
 
-        // HTTP/1.1 — one TCP+TLS connection per task, one request per connection
+        // HTTP/1.1 - one TCP+TLS connection per task, one request per connection
         group.bench_with_input(BenchmarkId::new("http1_c", concurrency), concurrency, |b, &n| {
             let url = format!("https://{proxy_addr}/bench/fp");
             b.iter(|| {
@@ -391,7 +391,7 @@ fn bench_concurrency(c: &mut Criterion) {
             })
         });
 
-        // HTTP/2 — one TCP+TLS connection per task (no multiplexing across tasks)
+        // HTTP/2 - one TCP+TLS connection per task (no multiplexing across tasks)
         group.bench_with_input(BenchmarkId::new("http2_c", concurrency), concurrency, |b, &n| {
             let url = format!("https://{proxy_addr}/bench/fp");
             b.iter(|| {
@@ -437,7 +437,7 @@ fn assert_fingerprint_ja4(resp: &reqwest::Response) {
     let value = resp
         .headers()
         .get(HEADER_JA4)
-        .unwrap_or_else(|| panic!("missing {HEADER_JA4} header — fingerprinting may be broken"))
+        .unwrap_or_else(|| panic!("missing {HEADER_JA4} header - fingerprinting may be broken"))
         .to_str()
         .unwrap_or_else(|e| panic!("non-UTF8 JA4 header: {e}"));
     assert_eq!(
@@ -453,7 +453,7 @@ fn assert_fingerprint_akamai(resp: &reqwest::Response) {
         .headers()
         .get(HEADER_AKAMAI)
         .unwrap_or_else(|| {
-            panic!("missing {HEADER_AKAMAI} header — HTTP/2 fingerprinting may be broken")
+            panic!("missing {HEADER_AKAMAI} header - HTTP/2 fingerprinting may be broken")
         })
         .to_str()
         .unwrap_or_else(|e| panic!("non-UTF8 Akamai header: {e}"));

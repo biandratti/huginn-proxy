@@ -40,7 +40,7 @@ fn fixtures_dir() -> PathBuf {
 // Fixture 1: TLS ClientHello bytes from reqwest/rustls
 //
 // Strategy: start a raw TCP server, accept one connection, read the first
-// bytes — those ARE the TLS ClientHello record (before any handshake).
+// bytes - those ARE the TLS ClientHello record (before any handshake).
 // reqwest will get a connection error but we already have the bytes.
 // ---------------------------------------------------------------------------
 #[tokio::test]
@@ -57,7 +57,7 @@ async fn capture_tls_client_hello() -> Result<(), Box<dyn std::error::Error + Se
         Ok::<Vec<u8>, Box<dyn std::error::Error + Send + Sync>>(buf)
     });
 
-    // Connect with reqwest — TLS handshake will fail (no TLS on the server side)
+    // Connect with reqwest - TLS handshake will fail (no TLS on the server side)
     // but the ClientHello bytes have already been sent
     let _ = reqwest::Client::builder()
         .danger_accept_invalid_certs(true)
@@ -104,7 +104,7 @@ async fn capture_tls_client_hello() -> Result<(), Box<dyn std::error::Error + Se
 // HTTP/2 request, and capture the Akamai fingerprint string.
 //
 // For the raw HTTP/2 bytes we use CapturingStream which is already exercised
-// by the proxy — the Akamai fingerprint string IS the processed output of those
+// by the proxy - the Akamai fingerprint string IS the processed output of those
 // bytes, so we capture the output value rather than the raw frames.
 // ---------------------------------------------------------------------------
 #[tokio::test]
@@ -261,14 +261,14 @@ async fn capture_fingerprint_values() -> Result<(), Box<dyn std::error::Error + 
         .headers()
         .get("x-huginn-net-ja4")
         .and_then(|v| v.to_str().ok())
-        .unwrap_or("(not present in response — check backend echo)")
+        .unwrap_or("(not present in response - check backend echo)")
         .to_string();
 
     let akamai_val = resp
         .headers()
         .get("x-huginn-net-akamai")
         .and_then(|v| v.to_str().ok())
-        .unwrap_or("(not present — HTTP/2 capture may need a second request)")
+        .unwrap_or("(not present - HTTP/2 capture may need a second request)")
         .to_string();
 
     println!("\n--- Captured fingerprint values ---");
