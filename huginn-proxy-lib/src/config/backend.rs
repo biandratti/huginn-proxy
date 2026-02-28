@@ -39,9 +39,10 @@ pub struct Route {
     /// Default: true (fingerprinting enabled)
     #[serde(default = "default_true")]
     pub fingerprinting: bool,
-    /// Force new TCP/TLS connection for each request (bypasses connection pooling)
-    /// When true, a new connection is established for every request, enabling per-request
-    /// TCP and TLS fingerprinting at the cost of higher latency (extra per request)
+    /// Force a new TCP/TLS connection from the proxy to the backend for each request,
+    /// bypassing the backend connection pool.
+    /// Note: this does not affect the client→proxy TLS session or JA4 fingerprints,
+    /// which are captured once at client connection time.
     /// Default: false (use connection pooling for better performance)
     #[serde(default)]
     pub force_new_connection: bool,

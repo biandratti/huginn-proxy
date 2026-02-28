@@ -14,7 +14,7 @@ No extra system dependencies required.
 cargo build --release -p huginn-proxy
 ```
 
-### With TCP SYN fingerprinting (eBPF/XDP) — Linux only
+### With TCP SYN fingerprinting (eBPF/XDP) - Linux only
 
 eBPF/XDP is a **Linux-only** feature. It does not compile or run on macOS or Windows.
 Requires Linux kernel ≥ 5.11 and the Rust nightly toolchain with `rust-src` (installed
@@ -98,8 +98,8 @@ Alternatively, pull a pre-built image from the registry:
 
 | Image tag | Description |
 |---|---|
-| `ghcr.io/<owner>/huginn-proxy:latest` | With eBPF/XDP — requires Linux kernel ≥ 5.11 and `cap_add` |
-| `ghcr.io/<owner>/huginn-proxy:latest-plain` | Without eBPF — runs on any Linux kernel, no extra capabilities needed |
+| `ghcr.io/<owner>/huginn-proxy:latest` | With eBPF/XDP - requires Linux kernel ≥ 5.11 and `cap_add` |
+| `ghcr.io/<owner>/huginn-proxy:latest-plain` | Without eBPF - runs on any Linux kernel, no extra capabilities needed |
 
 ### 3. Test the Proxy
 
@@ -184,9 +184,12 @@ curl -sk https://localhost:7000/api/test | jq '.headers | with_entries(select(.k
 
 Expected headers:
 
-- `x-huginn-net-ja4` - TLS fingerprint
-- `x-huginn-net-ja4-raw` - TLS fingerprint not normalized
-- `x-huginn-net-akamai` - HTTP/2 fingerprint
+- `x-huginn-net-ja4`: TLS fingerprint, sorted ciphers/extensions, hashed (FoxIO JA4)
+- `x-huginn-net-ja4_r`: TLS fingerprint, original ClientHello order, hashed (FoxIO JA4_r)
+- `x-huginn-net-ja4_o`: TLS fingerprint, sorted, raw hex values (FoxIO JA4_o)
+- `x-huginn-net-ja4_or`: TLS fingerprint, original order, raw hex values (FoxIO JA4_or)
+- `x-huginn-net-akamai`: HTTP/2 fingerprint
+- `x-huginn-net-tcp`: TCP SYNC fingerprint
 
 ---
 

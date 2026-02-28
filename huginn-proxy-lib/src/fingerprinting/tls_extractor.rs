@@ -33,7 +33,10 @@ pub async fn read_client_hello(
 
     let fingerprints = parse_tls_client_hello(&buf).ok().and_then(|opt_signature| {
         opt_signature.map(|signature| {
-            Ja4Fingerprints::new(signature.generate_ja4(), signature.generate_ja4_original())
+            let ja4 = signature.generate_ja4();
+            let ja4_raw = signature.generate_ja4_original();
+            let sni = signature.sni;
+            Ja4Fingerprints::new(ja4, ja4_raw, sni)
         })
     });
 

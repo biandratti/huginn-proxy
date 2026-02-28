@@ -8,11 +8,26 @@ pub mod names {
     /// It is injected for all TLS connections when fingerprinting is enabled.
     pub const TLS_JA4: &str = "x-huginn-net-ja4";
 
-    /// Header name for TLS (JA4) raw fingerprint injection
+    /// Header name for TLS JA4_r fingerprint injection (FoxIO naming)
     ///
-    /// This header contains the JA4 not normalized from the TLS ClientHello.
+    /// JA4_r: cipher suites and extensions in original ClientHello order, SHA-256 hashed.
+    /// Differs from JA4 only in sort order of the B and C components.
     /// It is injected for all TLS connections when fingerprinting is enabled.
-    pub const TLS_JA4_RAW: &str = "x-huginn-net-ja4-raw";
+    pub const TLS_JA4_R: &str = "x-huginn-net-ja4_r";
+
+    /// Header name for TLS JA4_o fingerprint injection (FoxIO naming)
+    ///
+    /// JA4_o: cipher suites and extensions sorted, raw (not hashed) hex values.
+    /// Useful for debugging and forensic analysis without needing to reverse a hash.
+    /// It is injected for all TLS connections when fingerprinting is enabled.
+    pub const TLS_JA4_O: &str = "x-huginn-net-ja4_o";
+
+    /// Header name for TLS JA4_or fingerprint injection (FoxIO naming)
+    ///
+    /// JA4_or: cipher suites and extensions in original ClientHello order, raw (not hashed) hex values.
+    /// Combines original order and raw values - maximum detail for analysis.
+    /// It is injected for all TLS connections when fingerprinting is enabled.
+    pub const TLS_JA4_OR: &str = "x-huginn-net-ja4_or";
 
     /// Header name for HTTP/2 (Akamai) fingerprint injection
     ///

@@ -37,7 +37,10 @@ pub async fn run(
         .await
         .map_err(crate::error::ProxyError::Io)?;
 
-    let builder = ConnBuilder::new(TokioExecutor::new());
+    let mut builder = ConnBuilder::new(TokioExecutor::new());
+    builder
+        .http1()
+        .keep_alive(config.timeout.keep_alive.enabled);
 
     let backends = Arc::new(config.backends.clone());
     let backends_for_loop = Arc::clone(&backends);

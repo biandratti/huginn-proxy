@@ -58,12 +58,12 @@ async fn main() -> Result<(), BoxError> {
         use huginn_proxy_lib::fingerprinting::SynResult;
         use std::net::SocketAddr;
 
-        // eBPF filter parameters are infrastructure-specific — read from env vars set in
+        // eBPF filter parameters are infrastructure-specific - read from env vars set in
         // docker-compose or K8s Deployment YAML. Not part of the application config file.
         // When tcp_enabled = true all three are required; missing vars are a startup error.
-        //   HUGINN_EBPF_INTERFACE — network interface the XDP program attaches to
-        //   HUGINN_EBPF_DST_IP   — destination IP filter (0.0.0.0 = all interfaces)
-        //   HUGINN_EBPF_DST_PORT — destination port filter (must match proxy listen port)
+        //   HUGINN_EBPF_INTERFACE - network interface the XDP program attaches to
+        //   HUGINN_EBPF_DST_IP   - destination IP filter (0.0.0.0 = all interfaces)
+        //   HUGINN_EBPF_DST_PORT - destination port filter (must match proxy listen port)
         if !config.fingerprint.tcp_enabled {
             tracing::info!("TCP SYN fingerprinting disabled (`fingerprint.tcp_enabled = false`)");
             None
