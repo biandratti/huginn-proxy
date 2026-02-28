@@ -117,11 +117,22 @@ pub async fn handle_proxy_request(
                 req.headers_mut()
                     .insert(HeaderName::from_static(names::TLS_JA4), hv);
             }
+            if let Ok(hv) = hyper::header::HeaderValue::from_str(&fingerprints.ja4.raw.to_string())
+            {
+                req.headers_mut()
+                    .insert(HeaderName::from_static(names::TLS_JA4_R), hv);
+            }
             if let Ok(hv) =
                 hyper::header::HeaderValue::from_str(&fingerprints.ja4_raw.full.to_string())
             {
                 req.headers_mut()
-                    .insert(HeaderName::from_static(names::TLS_JA4_RAW), hv);
+                    .insert(HeaderName::from_static(names::TLS_JA4_O), hv);
+            }
+            if let Ok(hv) =
+                hyper::header::HeaderValue::from_str(&fingerprints.ja4_raw.raw.to_string())
+            {
+                req.headers_mut()
+                    .insert(HeaderName::from_static(names::TLS_JA4_OR), hv);
             }
         }
         if let Some(ref rx) = fingerprint_rx {
@@ -134,7 +145,6 @@ pub async fn handle_proxy_request(
                         .insert(HeaderName::from_static(names::HTTP2_AKAMAI), hv);
                 } else {
                     debug!("Handler: no HTTP fingerprint header to inject (HTTP/2 connection but fingerprint not extracted)");
-                    // Record failure metric if metrics available
                     if let Some(ref m) = metrics {
                         m.http2_fingerprint_failures_total.add(1, &[]);
                     }
@@ -157,7 +167,7 @@ pub async fn handle_proxy_request(
             }
             None => {
                 debug!(
-                    "Handler: no TCP SYN fingerprint available — keep-alive request or SYN not captured"
+                    "Handler: no TCP SYN fingerprint available - keep-alive request or SYN not captured"
                 );
             }
         }
@@ -166,7 +176,8 @@ pub async fn handle_proxy_request(
     // Add X-Forwarded-* headers after fingerprinting
     // Note: Fingerprints are extracted from TLS handshake/HTTP2 frames (before HTTP request parsing),
     // so adding these headers doesn't affect fingerprint generation
-    add_forwarded_headers(&mut req, peer, is_https);
+    let sni = ja4_fingerprints.as_ref().and_then(|fp| fp.sni.as_deref());
+    add_forwarded_headers(&mut req, peer, is_https, sni);
 
     // Apply request header manipulation (global + per-route)
     apply_request_header_manipulation(

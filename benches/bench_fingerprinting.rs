@@ -1,5 +1,5 @@
 //! Micro benchmarks for TLS (JA4) and HTTP/2 (Akamai) fingerprinting parsers.
-//! Pure CPU — no network, no IO.
+//! Pure CPU - no network, no IO.
 //!
 //! TCP SYN fingerprinting is not included: it requires CAP_BPF and is measured
 //! separately via Prometheus metrics in a staging environment.
@@ -19,7 +19,7 @@ use huginn_net_http::akamai_extractor::extract_akamai_fingerprint_from_bytes;
 use huginn_net_tls::tls_process::parse_tls_client_hello;
 
 // ---------------------------------------------------------------------------
-// TLS ClientHello fixture — real bytes from reqwest/rustls
+// TLS ClientHello fixture - real bytes from reqwest/rustls
 //
 // Captured via `cargo test --test capture_fixtures -- --nocapture`.
 // The file is committed so benchmarks are deterministic without needing
@@ -28,7 +28,7 @@ use huginn_net_tls::tls_process::parse_tls_client_hello;
 const CLIENT_HELLO_BYTES: &[u8] = include_bytes!("fixtures/clienthello_reqwest.bin");
 
 // ---------------------------------------------------------------------------
-// HTTP/2 client frames fixture — real values from reqwest/h2
+// HTTP/2 client frames fixture - real values from reqwest/h2
 //
 // Derived from the Akamai fingerprint captured via capture_fixtures:
 //   2:0;4:2097152;5:16384;6:16384|5177345|0|
@@ -69,10 +69,10 @@ fn bench_akamai_parse(c: &mut Criterion) {
         Some(fp) => {
             assert_eq!(
                 fp.fingerprint, EXPECTED_AKAMAI,
-                "Akamai fixture mismatch — re-run capture_fixtures and update EXPECTED_AKAMAI"
+                "Akamai fixture mismatch - re-run capture_fixtures and update EXPECTED_AKAMAI"
             );
         }
-        None => panic!("HTTP2_CLIENT_FRAMES produced no Akamai fingerprint — fixture is invalid"),
+        None => panic!("HTTP2_CLIENT_FRAMES produced no Akamai fingerprint - fixture is invalid"),
     }
 
     c.bench_function("akamai_parse_http2_settings_window_update", |b| {
@@ -87,10 +87,10 @@ fn bench_ja4_parse(c: &mut Criterion) {
             assert_eq!(
                 ja4.full.to_string(),
                 EXPECTED_JA4,
-                "JA4 fixture mismatch — re-run capture_fixtures and update EXPECTED_JA4"
+                "JA4 fixture mismatch - re-run capture_fixtures and update EXPECTED_JA4"
             );
         }
-        Ok(None) => panic!("CLIENT_HELLO_BYTES produced no JA4 — fixture is invalid"),
+        Ok(None) => panic!("CLIENT_HELLO_BYTES produced no JA4 - fixture is invalid"),
         Err(e) => panic!("CLIENT_HELLO_BYTES parse error: {e}"),
     }
 

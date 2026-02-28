@@ -1,4 +1,4 @@
-# eBPF TCP SYN Fingerprinting — Setup Guide
+# eBPF TCP SYN Fingerprinting - Setup Guide
 
 TCP SYN fingerprinting is implemented via an XDP eBPF program that captures TCP SYN packets
 and stores them in a BPF LRU hash map. The proxy looks up each connection's SYN data and
@@ -17,7 +17,7 @@ supported. Check your host: `uname -r`.
 
 Linux allows only one XDP program attached to a network interface at a time. If two instances
 run on the same node, the second replaces the first's XDP program and each has its own private
-BPF map — the instance that lost the attachment stops receiving SYNs and never injects the
+BPF map - the instance that lost the attachment stops receiving SYNs and never injects the
 header. Deploy as a DaemonSet (one pod per node) or one container per host.
 
 ### IPv4 listen address
@@ -97,7 +97,7 @@ See `examples/docker-compose.yml` for the full working example.
 
 ## Kubernetes
 
-Deploy as a **DaemonSet — one pod per node, no HPA**. The proxy handles all traffic on the
+Deploy as a **DaemonSet - one pod per node, no HPA**. The proxy handles all traffic on the
 node and the eBPF probe captures SYNs on that node's interface.
 
 ```yaml
@@ -120,13 +120,13 @@ securityContext:
 
 XDP captures only TCP SYN packets. The fingerprint is looked up once at TCP accept time and
 reused for every request on that connection. As a result, **`x-huginn-net-tcp` is present on
-all requests** of a keep-alive connection — not just the first.
+all requests** of a keep-alive connection - not just the first.
 
 A `SynResult::Miss` (no header injected) happens when:
 - the SYN was not captured (proxy just started, stale entry, IPv6 client), or
 - the BPF map entry was evicted before the connection was accepted (very high load).
 
-`force_new_connection = true` is unrelated to fingerprint availability — it controls whether
+`force_new_connection = true` is unrelated to fingerprint availability - it controls whether
 the proxy opens a new TCP connection to the **backend** per request, not whether the client
 SYN is re-captured.
 

@@ -11,7 +11,7 @@ RUN cargo build --release -p huginn-proxy
 # debian:bookworm-slim (bookworm-20260202-slim, amd64)
 FROM debian:bookworm-slim@sha256:74a21da88cf4b2e8fde34558376153c5cd80b00ca81da2e659387e76524edc73
 LABEL org.opencontainers.image.description="High-performance reverse proxy with passive fingerprinting capabilities powered by Huginn Net (no eBPF/XDP)"
-# No Linux capabilities are needed without eBPF — no libcap2-bin required.
+# No Linux capabilities are needed without eBPF - no libcap2-bin required.
 RUN apt-get update -q && apt-get install -y --no-install-recommends \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/* \
@@ -20,7 +20,7 @@ RUN apt-get update -q && apt-get install -y --no-install-recommends \
 RUN adduser --disabled-password --gecos '' --uid 10001 app
 WORKDIR /app
 COPY --from=builder /app/target/release/huginn-proxy /usr/local/bin/huginn-proxy
-# Binary is root-owned and read+execute only — the app user cannot overwrite it.
+# Binary is root-owned and read+execute only - the app user cannot overwrite it.
 RUN chmod 555 /usr/local/bin/huginn-proxy
 # Note: Certificate files mounted as volumes need to be readable by user 'app'
 # The volumes are mounted as 'ro' (read-only), so ensure proper permissions on host.

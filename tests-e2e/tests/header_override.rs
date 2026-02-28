@@ -24,8 +24,9 @@ async fn test_injected_headers_override_client_headers(
         "HTTPS proxy should be ready"
     );
 
-    // Send request with malicious/spoofed headers that match our injected header names
-    // Note: We also send a spoofed Host header to test that X-Forwarded-Host uses the Host header value
+    // Send request with malicious/spoofed headers that match our injected header names.
+    // Host: evil.example.com and X-Forwarded-Host: spoofed-... are both ignored by the proxy.
+    // X-Forwarded-Host is derived exclusively from the TLS SNI, which is not client-controllable.
     let response = client
         .get(PROXY_HTTPS_URL)
         .header(names::TLS_JA4, "t13d9999h2_fake_fingerprint_12345")
@@ -130,34 +131,31 @@ async fn test_injected_headers_override_client_headers(
     );
     println!("✓ X-Forwarded-For correctly handled (spoofed value: 192.168.1.100, real IP appended: {real_ip}): {forwarded_for}");
 
-    // CRITICAL: Verify X-Forwarded-Host is our value (from Host header), not the spoofed X-Forwarded-Host
-    // Note: X-Forwarded-Host is set from the Host header of the request, not from X-Forwarded-Host
-    // The client sent Host: evil.example.com and X-Forwarded-Host: spoofed-x-forwarded-host.example.com
-    // Our code should use the Host header value (evil.example.com) and override the X-Forwarded-Host header
-    // This means X-Forwarded-Host will be evil.example.com (from Host), not spoofed-x-forwarded-host.example.com
+    // CRITICAL: Verify X-Forwarded-Host is set from the TLS SNI, not from any client-controlled header.
+    // The client sent Host: evil.example.com and X-Forwarded-Host: spoofed-x-forwarded-host.example.com,
+    // but the proxy must ignore both and use the SNI from the TLS ClientHello instead.
+    // SNI ("localhost" for this test connection) cannot be overridden by HTTP headers.
     let forwarded_host = if headers.contains_key(forwarded::HOST) {
         let host = headers
             .get(forwarded::HOST)
             .and_then(|v| v.as_str())
             .ok_or("X-Forwarded-Host should be a string")?;
-        // X-Forwarded-Host should be the Host header value (evil.example.com), not the spoofed X-Forwarded-Host value
         assert_ne!(
             host, "spoofed-x-forwarded-host.example.com",
-            "X-Forwarded-Host should NOT be the spoofed X-Forwarded-Host value from client. \
-             Our injected value (from Host header) must always override client-provided X-Forwarded-Host values."
+            "X-Forwarded-Host must NOT be the spoofed X-Forwarded-Host value from the client."
         );
-        // X-Forwarded-Host should be the Host header value that the client sent
-        // Note: The client sent Host: evil.example.com, so X-Forwarded-Host will be evil.example.com
-        // This is correct behavior - we're reporting what the client requested in the Host header
-        assert_eq!(
+        assert_ne!(
             host, "evil.example.com",
-            "X-Forwarded-Host should be the Host header value (evil.example.com), \
-             not the spoofed X-Forwarded-Host value. Current value: {host}"
+            "X-Forwarded-Host must NOT be taken from the spoofed Host header."
         );
-        println!("✓ X-Forwarded-Host correctly uses Host header value (overrides spoofed X-Forwarded-Host): {host}");
+        assert_eq!(
+            host, "localhost",
+            "X-Forwarded-Host should be the TLS SNI value (localhost), not any client-supplied header. Current value: {host}"
+        );
+        println!("✓ X-Forwarded-Host correctly uses TLS SNI (overrides spoofed Host and X-Forwarded-Host headers): {host}");
         Some(host)
     } else {
-        println!("ℹ X-Forwarded-Host not present (request had no Host header, which is valid for HTTP/2)");
+        println!("i X-Forwarded-Host not present (only set when TLS SNI is available)");
         None
     };
 
