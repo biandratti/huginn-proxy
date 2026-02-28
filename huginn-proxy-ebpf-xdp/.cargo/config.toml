@@ -1,3 +1,4 @@
+# bpfel-unknown-none uses bpf-linker as its default linker.
 [build]
 target = "bpfel-unknown-none"
 

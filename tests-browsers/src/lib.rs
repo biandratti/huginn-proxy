@@ -6,7 +6,9 @@ use thirtyfour::prelude::*;
 pub const PROXY_URL: &str = "https://localhost:7000";
 pub const HEADER_HTTP2_AKAMAI: &str = "x-huginn-net-akamai";
 pub const HEADER_TLS_JA4: &str = "x-huginn-net-ja4";
-pub const HEADER_TLS_JA4_RAW: &str = "x-huginn-net-ja4-raw";
+pub const HEADER_TLS_JA4_R: &str = "x-huginn-net-ja4_r";
+pub const HEADER_TLS_JA4_O: &str = "x-huginn-net-ja4_o";
+pub const HEADER_TLS_JA4_OR: &str = "x-huginn-net-ja4_or";
 pub const HEADER_TCP_SYN: &str = "x-huginn-net-tcp";
 
 #[derive(Debug, Clone)]
@@ -184,8 +186,14 @@ pub fn verify_fingerprint_headers(
     if !headers.contains_key(HEADER_TLS_JA4) {
         return Err(format!("Missing {} header", HEADER_TLS_JA4).into());
     }
-    if !headers.contains_key(HEADER_TLS_JA4_RAW) {
-        return Err(format!("Missing {} header", HEADER_TLS_JA4_RAW).into());
+    if !headers.contains_key(HEADER_TLS_JA4_R) {
+        return Err(format!("Missing {} header", HEADER_TLS_JA4_R).into());
+    }
+    if !headers.contains_key(HEADER_TLS_JA4_O) {
+        return Err(format!("Missing {} header", HEADER_TLS_JA4_O).into());
+    }
+    if !headers.contains_key(HEADER_TLS_JA4_OR) {
+        return Err(format!("Missing {} header", HEADER_TLS_JA4_OR).into());
     }
     Ok(())
 }

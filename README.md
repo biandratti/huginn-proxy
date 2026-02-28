@@ -67,39 +67,34 @@ For module structure and design decisions, see [ARCHITECTURE.md](ARCHITECTURE.md
 
 Fingerprints are automatically extracted and injected as headers:
 
-- **TLS (JA4)**: `x-huginn-net-ja4` - Extracted from all TLS connections
+- **TLS (JA4)**: `x-huginn-net-ja4`: sorted cipher suites and extensions, SHA-256 hashed. Standard FoxIO JA4.
   using [huginn-net-tls](https://crates.io/crates/huginn-net-tls)
-- **TLS (JA4 Raw)**: `x-huginn-net-ja4-raw` - Raw/original JA4 fingerprint format
-- **HTTP/2 (Akamai)**: `x-huginn-net-akamai` - Extracted from HTTP/2 connections only
-  using [huginn-net-http](https://crates.io/crates/huginn-net-http)
+- **TLS (JA4_r)**: `x-huginn-net-ja4_r`: original ClientHello order, SHA-256 hashed (FoxIO JA4_r)
+- **TLS (JA4_o)**: `x-huginn-net-ja4_o`: sorted, raw hex values without hashing (FoxIO JA4_o, useful for debugging)
+- **TLS (JA4_or)**: `x-huginn-net-ja4_or`: original order, raw hex values without hashing (FoxIO JA4_or)
+- **HTTP/2 (Akamai)**: `x-huginn-net-akamai`: Extracted from HTTP/2 connections only using [huginn-net-http](https://crates.io/crates/huginn-net-http)
 - **TCP SYN (p0f-style)**: `x-huginn-net-tcp` - Raw TCP SYN signature extracted via eBPF/XDP
   using [huginn-net-tcp](https://crates.io/crates/huginn-net-tcp). Requires `tcp_enabled = true`
   and the `ebpf-tcp` feature. Present on all requests of a connection (the fingerprint is
-  captured once at TCP accept time and reused). **IPv4 only** — not captured for direct IPv6
+  captured once at TCP accept time and reused). **IPv4 only**, not captured for direct IPv6
   connections (transparent when a load balancer forwards internally over IPv4).
   See [EBPF-SETUP.md](EBPF-SETUP.md) for setup, kernel requirements, and deployment options.
+- The proxy automatically injects standard `X-Forwarded-*` headers to inform backends about the original client request:
 
 **Examples:**
 
 ```
-x-huginn-net-ja4: t13d3112h2_e8f1e7e78f70_b26ce05bbdd6
-x-huginn-net-ja4-raw: t13d3112h2_d7c3e2abb617_cad92ccb4254
-x-huginn-net-akamai: 3:100;4:10485760;2:0|1048510465|0|
-x-huginn-net-tcp: 4:64:0:1460:mss*44,10:mss,sok,ts,nop,ws
+x-huginn-net-ja4: t13d3112h2_e8f1e7e78f70_b26ce05bbdd6,
+x-huginn-net-ja4_o: t13d3112h2_002f,0033,0035,0039,003c,003d,0067,006b,009c,009d,009e,009f,00ff,1301,1302,1303,c009,c00a,c013,c014,c023,c024,c027,c028,c02b,c02c,c02f,c030,cca8,cca9,ccaa_000a,000b,000d,0015,0016,0017,002b,002d,0031,0033_0403,0503,0603,0807,0808,0809,080a,080b,0804,0805,0806,0401,0501,0601,0303,0301,0302,0402,0502,0602,
+x-huginn-net-ja4_or: t13d3112h2_1302,1303,1301,c02c,c030,009f,cca9,cca8,ccaa,c02b,c02f,009e,c024,c028,006b,c023,c027,0067,c00a,c014,0039,c009,c013,0033,009d,009c,003d,003c,0035,002f,00ff_0000,000b,000a,0010,0016,0017,0031,000d,002b,002d,0033,0015_0403,0503,0603,0807,0808,0809,080a,080b,0804,0805,0806,0401,0501,0601,0303,0301,0302,0402,0502,0602,
+x-huginn-net-ja4_r: t13d3112h2_d7c3e2abb617_cad92ccb4254,
+x-huginn-net-akamai: 3:100;4:10485760;2:0|1048510465|0|,
+x-huginn-net-tcp: 4:64+0:0:1460:mss*44,10:mss,sok,ts,nop,ws:df,id+:0,
+x-forwarded-for: 172.18.0.1,
+x-forwarded-port: 50908,
+x-forwarded-proto: https,
+x-forwarded-host: ???
 ```
-
-See [JA4 specification](https://github.com/FoxIO-LLC/ja4)
-and [Blackhat EU 2017](https://www.blackhat.com/docs/eu-17/materials/eu-17-Shuster-Passive-Fingerprinting-Of-HTTP2-Clients-wp.pdf)
-for details.
-
-## Proxy Headers
-
-The proxy automatically injects standard `X-Forwarded-*` headers to inform backends about the original client request:
-
-- **X-Forwarded-For**: Client IP address (appended if already present)
-- **X-Forwarded-Host**: Original Host header value
-- **X-Forwarded-Port**: Client port number
-- **X-Forwarded-Proto**: Protocol used (`http` or `https`)
 
 These headers always override any client-provided values to prevent spoofing.
 
@@ -163,7 +158,7 @@ Each release publishes the following artifacts as `huginn-proxy-{tag}-{suffix}`:
 eBPF variants require `CAP_BPF`, `CAP_NET_ADMIN`, `CAP_PERFMON`.
 
 Docker images are available at `ghcr.io/biandratti/huginn-proxy` for **Linux only** (`linux/amd64`, `linux/arm64`).
-On macOS and Windows, Docker Desktop runs a Linux VM — containers still work but eBPF/XDP requires a native Linux kernel.
+On macOS and Windows, Docker Desktop runs a Linux VM, containers still work but eBPF/XDP requires a native Linux kernel.
 
 | Tag | eBPF | Platforms |
 |---|---|---|

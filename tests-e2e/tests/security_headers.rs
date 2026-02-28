@@ -132,8 +132,14 @@ async fn test_security_headers_with_fingerprinting(
         if let Some(ja4) = headers.get("x-huginn-net-ja4") {
             println!("JA4 fingerprint present: {}", ja4);
         }
-        if let Some(ja4_raw) = headers.get("x-huginn-net-ja4-raw") {
-            println!("JA4 raw fingerprint present: {}", ja4_raw);
+        if let Some(ja4_r) = headers.get("x-huginn-net-ja4_r") {
+            println!("JA4_r fingerprint present: {}", ja4_r);
+        }
+        if let Some(ja4_o) = headers.get("x-huginn-net-ja4_o") {
+            println!("JA4_o fingerprint present: {}", ja4_o);
+        }
+        if let Some(ja4_or) = headers.get("x-huginn-net-ja4_or") {
+            println!("JA4_or fingerprint present: {}", ja4_or);
         }
 
         // Check if HTTP/2 fingerprint header exists (if H2 connection)

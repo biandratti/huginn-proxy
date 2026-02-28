@@ -121,7 +121,18 @@ pub async fn handle_proxy_request(
                 hyper::header::HeaderValue::from_str(&fingerprints.ja4_raw.full.to_string())
             {
                 req.headers_mut()
-                    .insert(HeaderName::from_static(names::TLS_JA4_RAW), hv);
+                    .insert(HeaderName::from_static(names::TLS_JA4_R), hv);
+            }
+            if let Ok(hv) = hyper::header::HeaderValue::from_str(&fingerprints.ja4.raw.to_string())
+            {
+                req.headers_mut()
+                    .insert(HeaderName::from_static(names::TLS_JA4_O), hv);
+            }
+            if let Ok(hv) =
+                hyper::header::HeaderValue::from_str(&fingerprints.ja4_raw.raw.to_string())
+            {
+                req.headers_mut()
+                    .insert(HeaderName::from_static(names::TLS_JA4_OR), hv);
             }
         }
         if let Some(ref rx) = fingerprint_rx {

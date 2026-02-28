@@ -96,7 +96,7 @@ Limitation: No per-route mTLS configuration. No option for optional client certi
 
 Passive fingerprinting extracts three types of signatures from client connections:
 
-- **TLS (JA4)** — extracted from the TLS ClientHello. Injected as `x-huginn-net-ja4` and `x-huginn-net-ja4-raw`.
+- **TLS (JA4)** — extracted from the TLS ClientHello. Injected as `x-huginn-net-ja4` (sorted, hashed), `x-huginn-net-ja4_r` (original order, hashed), `x-huginn-net-ja4_o` (sorted, raw), and `x-huginn-net-ja4_or` (original order, raw).
 - **HTTP/2 (Akamai)** — extracted from HTTP/2 SETTINGS and WINDOW_UPDATE frames. Injected as `x-huginn-net-akamai`.
 - **TCP SYN (p0f-style)** — extracted from the raw TCP SYN packet via an eBPF/XDP program attached to the network interface. Injected as `x-huginn-net-tcp`. Requires the `ebpf-tcp` build feature and `tcp_enabled = true` in config.
 

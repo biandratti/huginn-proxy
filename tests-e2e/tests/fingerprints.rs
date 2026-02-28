@@ -32,27 +32,40 @@ async fn test_tls_fingerprint_injection() -> Result<(), Box<dyn std::error::Erro
         .and_then(|h| h.as_object())
         .ok_or("Response should contain headers object")?;
 
-    // Check for TLS fingerprint header (should be present for all TLS connections)
-    assert!(headers.contains_key(names::TLS_JA4), "TLS fingerprint header should be present");
-    assert!(
-        headers.contains_key(names::TLS_JA4_RAW),
-        "TLS fingerprint raw header should be present"
-    );
+    // Check for TLS fingerprint headers (should be present for all TLS connections)
+    assert!(headers.contains_key(names::TLS_JA4), "TLS JA4 header should be present");
+    assert!(headers.contains_key(names::TLS_JA4_R), "TLS JA4_r header should be present");
+    assert!(headers.contains_key(names::TLS_JA4_O), "TLS JA4_o header should be present");
+    assert!(headers.contains_key(names::TLS_JA4_OR), "TLS JA4_or header should be present");
 
     let tls_fp = headers
         .get(names::TLS_JA4)
         .and_then(|v| v.as_str())
-        .ok_or("TLS fingerprint header should be a string")?;
-    assert!(!tls_fp.is_empty(), "TLS fingerprint should not be empty");
+        .ok_or("TLS JA4 header should be a string")?;
+    assert!(!tls_fp.is_empty(), "TLS JA4 fingerprint should not be empty");
 
-    let tls_fp_raw = headers
-        .get(names::TLS_JA4_RAW)
+    let tls_fp_r = headers
+        .get(names::TLS_JA4_R)
         .and_then(|v| v.as_str())
-        .ok_or("TLS fingerprint raw header should be a string")?;
-    assert!(!tls_fp_raw.is_empty(), "TLS fingerprint raw should not be empty");
+        .ok_or("TLS JA4_r header should be a string")?;
+    assert!(!tls_fp_r.is_empty(), "TLS JA4_r fingerprint should not be empty");
+
+    let tls_fp_o = headers
+        .get(names::TLS_JA4_O)
+        .and_then(|v| v.as_str())
+        .ok_or("TLS JA4_o header should be a string")?;
+    assert!(!tls_fp_o.is_empty(), "TLS JA4_o fingerprint should not be empty");
+
+    let tls_fp_or = headers
+        .get(names::TLS_JA4_OR)
+        .and_then(|v| v.as_str())
+        .ok_or("TLS JA4_or header should be a string")?;
+    assert!(!tls_fp_or.is_empty(), "TLS JA4_or fingerprint should not be empty");
 
     println!("TLS fingerprint ({}): {tls_fp}", names::TLS_JA4);
-    println!("TLS fingerprint raw ({}): {tls_fp_raw}", names::TLS_JA4_RAW);
+    println!("TLS fingerprint ({}): {tls_fp_r}", names::TLS_JA4_R);
+    println!("TLS fingerprint ({}): {tls_fp_o}", names::TLS_JA4_O);
+    println!("TLS fingerprint ({}): {tls_fp_or}", names::TLS_JA4_OR);
 
     assert!(tls_fp.starts_with('t'), "TLS fingerprint should start with 't'");
     assert!(tls_fp.contains('_'), "TLS fingerprint should contain underscore separators");
@@ -193,30 +206,38 @@ async fn test_http2_fingerprint_injection() -> Result<(), Box<dyn std::error::Er
     assert!(tcp_fp.starts_with("4:"), "TCP SYN fingerprint should start with '4:' (IPv4)");
     println!("TCP SYN fingerprint ({}): {tcp_fp}", names::TCP_SYN);
 
-    // Also verify TLS fingerprint is present (all TLS connections should have it)
+    // Also verify TLS fingerprint headers are present (all TLS connections should have them)
     assert!(
         headers.contains_key(names::TLS_JA4),
-        "TLS fingerprint header should be present in HTTP/2 connection"
+        "TLS JA4 header should be present in HTTP/2 connection"
     );
     assert!(
-        headers.contains_key(names::TLS_JA4_RAW),
-        "TLS fingerprint raw header should be present in HTTP/2 connection"
+        headers.contains_key(names::TLS_JA4_R),
+        "TLS JA4_r header should be present in HTTP/2 connection"
+    );
+    assert!(
+        headers.contains_key(names::TLS_JA4_O),
+        "TLS JA4_o header should be present in HTTP/2 connection"
+    );
+    assert!(
+        headers.contains_key(names::TLS_JA4_OR),
+        "TLS JA4_or header should be present in HTTP/2 connection"
     );
 
     let tls_fp = headers
         .get(names::TLS_JA4)
         .and_then(|v| v.as_str())
-        .ok_or("TLS fingerprint header should be a string")?;
-    assert!(!tls_fp.is_empty(), "TLS fingerprint should not be empty");
+        .ok_or("TLS JA4 header should be a string")?;
+    assert!(!tls_fp.is_empty(), "TLS JA4 fingerprint should not be empty");
 
-    let tls_fp_raw = headers
-        .get(names::TLS_JA4_RAW)
+    let tls_fp_r = headers
+        .get(names::TLS_JA4_R)
         .and_then(|v| v.as_str())
-        .ok_or("TLS fingerprint raw header should be a string")?;
-    assert!(!tls_fp_raw.is_empty(), "TLS fingerprint raw should not be empty");
+        .ok_or("TLS JA4_r header should be a string")?;
+    assert!(!tls_fp_r.is_empty(), "TLS JA4_r fingerprint should not be empty");
 
     println!("TLS fingerprint ({}): {tls_fp}", names::TLS_JA4);
-    println!("TLS fingerprint raw ({}): {tls_fp_raw}", names::TLS_JA4_RAW);
+    println!("TLS fingerprint ({}): {tls_fp_r}", names::TLS_JA4_R);
 
     // Expected TLS fingerprint for reqwest client (same for HTTP/1.1 and HTTP/2)
     const EXPECTED_TLS_FINGERPRINT_HTTP2: &str = "t13d1011h2_61a7ad8aa9b6_3a8073edd8ef";
@@ -301,11 +322,19 @@ async fn test_fingerprinting_disabled_per_route(
     // Fingerprint headers should NOT be present for /static route
     assert!(
         !headers.contains_key(names::TLS_JA4),
-        "TLS fingerprint header should NOT be present when fingerprinting is disabled for route"
+        "TLS JA4 header should NOT be present when fingerprinting is disabled for route"
     );
     assert!(
-        !headers.contains_key(names::TLS_JA4_RAW),
-        "TLS fingerprint raw header should NOT be present when fingerprinting is disabled for route"
+        !headers.contains_key(names::TLS_JA4_R),
+        "TLS JA4_r header should NOT be present when fingerprinting is disabled for route"
+    );
+    assert!(
+        !headers.contains_key(names::TLS_JA4_O),
+        "TLS JA4_o header should NOT be present when fingerprinting is disabled for route"
+    );
+    assert!(
+        !headers.contains_key(names::TLS_JA4_OR),
+        "TLS JA4_or header should NOT be present when fingerprinting is disabled for route"
     );
     assert!(
         !headers.contains_key(names::HTTP2_AKAMAI),
@@ -336,11 +365,19 @@ async fn test_fingerprinting_disabled_per_route(
     // Fingerprint headers SHOULD be present for /api route
     assert!(
         headers2.contains_key(names::TLS_JA4),
-        "TLS fingerprint header should be present when fingerprinting is enabled for route"
+        "TLS JA4 header should be present when fingerprinting is enabled for route"
     );
     assert!(
-        headers2.contains_key(names::TLS_JA4_RAW),
-        "TLS fingerprint raw header should be present when fingerprinting is enabled for route"
+        headers2.contains_key(names::TLS_JA4_R),
+        "TLS JA4_r header should be present when fingerprinting is enabled for route"
+    );
+    assert!(
+        headers2.contains_key(names::TLS_JA4_O),
+        "TLS JA4_o header should be present when fingerprinting is enabled for route"
+    );
+    assert!(
+        headers2.contains_key(names::TLS_JA4_OR),
+        "TLS JA4_or header should be present when fingerprinting is enabled for route"
     );
     // TCP SYN fingerprint is injected on every request of the connection (same SYN, same fingerprint).
     assert!(

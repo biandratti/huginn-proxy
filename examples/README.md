@@ -184,9 +184,12 @@ curl -sk https://localhost:7000/api/test | jq '.headers | with_entries(select(.k
 
 Expected headers:
 
-- `x-huginn-net-ja4` - TLS fingerprint
-- `x-huginn-net-ja4-raw` - TLS fingerprint not normalized
-- `x-huginn-net-akamai` - HTTP/2 fingerprint
+- `x-huginn-net-ja4`: TLS fingerprint, sorted ciphers/extensions, hashed (FoxIO JA4)
+- `x-huginn-net-ja4_r`: TLS fingerprint, original ClientHello order, hashed (FoxIO JA4_r)
+- `x-huginn-net-ja4_o`: TLS fingerprint, sorted, raw hex values (FoxIO JA4_o)
+- `x-huginn-net-ja4_or`: TLS fingerprint, original order, raw hex values (FoxIO JA4_or)
+- `x-huginn-net-akamai`: HTTP/2 fingerprint
+- `x-huginn-net-tcp`: TCP SYNC fingerprint
 
 ---
 
