@@ -86,6 +86,7 @@ jobs:
   binaries-linux:
     name: Extract Linux binaries from Docker images (eBPF)
     runs-on: ubuntu-latest
+    environment: release
     needs: [validate, docker]
     strategy:
       fail-fast: false
@@ -155,6 +156,7 @@ jobs:
   binaries-linux-plain:
     name: Build Linux binaries without eBPF
     runs-on: ubuntu-latest
+    environment: release
     needs: validate
     strategy:
       fail-fast: false
@@ -216,6 +218,7 @@ jobs:
 
   binaries-cross-platform:
     name: Build cross-platform binaries
+    environment: release
     needs: validate
     strategy:
       fail-fast: false
