@@ -1,0 +1,164 @@
+name: Docker Build and Scan
+
+on:
+  push:
+    branches: ["master"]
+  workflow_call:
+    inputs:
+      push:
+        description: 'Push images to registry after scan'
+        type: boolean
+        default: false
+      registry:
+        description: 'Container registry (e.g. ghcr.io)'
+        type: string
+        default: 'ghcr.io'
+      image_name:
+        description: 'Image name without registry (e.g. owner/repo)'
+        type: string
+        default: ''
+    secrets:
+      registry_token:
+        required: false
+    outputs:
+      image_tag:
+        description: 'Full registry image tag (e.g. ghcr.io/owner/repo:v1.0.0)'
+        value: ${{ jobs.prepare.outputs.image_tag }}
+      tag:
+        description: 'Version tag (e.g. v1.0.0)'
+        value: ${{ jobs.prepare.outputs.tag }}
+
+concurrency:
+  group: ${{ github.ref }}-${{ github.workflow }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  # Computes image_tag and tag outside the matrix so they can be used as
+  # workflow outputs (matrix job outputs are not directly exposable).
+  prepare:
+    name: Prepare image metadata
+    runs-on: ubuntu-latest
+    outputs:
+      image_tag: ${{ steps.vars.outputs.image_tag }}
+      tag: ${{ steps.vars.outputs.tag }}
+    steps:
+      - name: Compute tag and image ref
+        id: vars
+        env:
+          REGISTRY: ${{ inputs.registry || 'ghcr.io' }}
+          IMAGE_NAME: ${{ inputs.image_name || github.repository }}
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            TAG=${GITHUB_REF#refs/tags/}
+          else
+            TAG=sha-${GITHUB_SHA::7}
+          fi
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          echo "image_tag=${REGISTRY}/${IMAGE_NAME}:${TAG}" >> $GITHUB_OUTPUT
+
+  build-scan:
+    name: Build and scan (${{ matrix.name }})
+    runs-on: ubuntu-latest
+    needs: prepare
+    environment: ${{ inputs.push == true && 'release' || '' }}
+    permissions:
+      contents: read
+      security-events: write
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: ebpf
+            dockerfile: ./Dockerfile
+            suffix: ''
+            platforms: linux/amd64,linux/arm64
+          - name: plain
+            dockerfile: ./Dockerfile.plain
+            suffix: '-plain'
+            platforms: linux/amd64,linux/arm64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            ${{ inputs.registry || 'ghcr.io' }}/${{ inputs.image_name || github.repository }}
+          flavor: |
+            suffix=${{ matrix.suffix }}
+          tags: |
+            type=ref,event=tag
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Set up QEMU
+        if: ${{ inputs.push == true }}
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to registry
+        if: ${{ inputs.push == true }}
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ inputs.registry || 'ghcr.io' }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.registry_token }}
+
+      - name: Build Docker image (amd64 for scanning)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          platforms: linux/amd64
+          push: false
+          load: true
+          tags: local-scan:${{ matrix.name }}-${{ github.sha }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=docker-${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=docker-${{ matrix.name }}
+
+      - name: Run Trivy vulnerability scanner
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@0.34.1
+        with:
+          image-ref: local-scan:${{ matrix.name }}-${{ github.sha }}
+          format: sarif
+          output: trivy-${{ matrix.name }}.sarif
+          severity: CRITICAL,HIGH,MEDIUM
+          ignore-unfixed: true
+          exit-code: '1'
+          scanners: vuln
+
+      - name: Upload Trivy results to GitHub Security
+        if: always() && hashFiles(format('trivy-{0}.sarif', matrix.name)) != ''
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: trivy-${{ matrix.name }}.sarif
+          category: trivy-${{ matrix.name }}
+
+      - name: Build and push (multi-platform, reusing cache)
+        if: ${{ inputs.push == true }}
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          platforms: ${{ matrix.platforms }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          annotations: ${{ steps.meta.outputs.annotations }}
+          cache-from: type=gha,scope=docker-${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=docker-${{ matrix.name }}
