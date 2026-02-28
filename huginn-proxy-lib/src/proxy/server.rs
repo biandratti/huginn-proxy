@@ -37,13 +37,10 @@ pub async fn run(
         .await
         .map_err(crate::error::ProxyError::Io)?;
 
-    let keep_alive_enabled = config.timeout.keep_alive.enabled;
     let mut builder = ConnBuilder::new(TokioExecutor::new());
-    // Apply keep-alive to the server side (incoming browser/client connections).
-    // When disabled, hyper sends `Connection: close` in HTTP/1.1 responses, which
-    // tells the client to close the TLS session after each request — forcing a new
-    // TLS handshake on the next request (and therefore a fresh JA4_o fingerprint).
-    builder.http1().keep_alive(keep_alive_enabled);
+    builder
+        .http1()
+        .keep_alive(config.timeout.keep_alive.enabled);
 
     let backends = Arc::new(config.backends.clone());
     let backends_for_loop = Arc::clone(&backends);

@@ -105,10 +105,7 @@ These headers always override any client-provided values to prevent spoofing.
 
 - **`fingerprinting`** (bool, default: `true`) - Enable/disable TLS (JA4) and HTTP/2 (Akamai) fingerprint extraction and
   header injection
-- **`force_new_connection`** (bool, default: `false`) - Force new TCP + TLS handshake per request, bypassing connection
-  pooling and HTTP keep-alive reuse
-    - Use case: Per-request TLS fingerprinting, TCP SYN fingerprinting (each request generates a
-      fresh SYN, so the eBPF map always has an entry), testing/debugging
+- TLS fingerprints are captured **once per TLS session** and reused for all HTTP requests on that connection this is by design. To observe per-connection variation (e.g. Chrome's extension-order randomization), set `alpn = ["http/1.1"]` and `keep_alive.enabled = false` for debugging only; this is a protocol downgrade not suitable for production.
 
 ## Health Check Endpoints
 
