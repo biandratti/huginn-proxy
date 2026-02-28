@@ -68,7 +68,7 @@ jobs:
     permissions:
       contents: read
       security-events: write
-      packages: write  # scoped here: only this job can push to the registry
+      packages: write
     strategy:
       fail-fast: false
       matrix:
