@@ -117,13 +117,13 @@ pub async fn handle_proxy_request(
                 req.headers_mut()
                     .insert(HeaderName::from_static(names::TLS_JA4), hv);
             }
-            if let Ok(hv) =
-                hyper::header::HeaderValue::from_str(&fingerprints.ja4_raw.full.to_string())
+            if let Ok(hv) = hyper::header::HeaderValue::from_str(&fingerprints.ja4.raw.to_string())
             {
                 req.headers_mut()
                     .insert(HeaderName::from_static(names::TLS_JA4_R), hv);
             }
-            if let Ok(hv) = hyper::header::HeaderValue::from_str(&fingerprints.ja4.raw.to_string())
+            if let Ok(hv) =
+                hyper::header::HeaderValue::from_str(&fingerprints.ja4_raw.full.to_string())
             {
                 req.headers_mut()
                     .insert(HeaderName::from_static(names::TLS_JA4_O), hv);
@@ -145,7 +145,6 @@ pub async fn handle_proxy_request(
                         .insert(HeaderName::from_static(names::HTTP2_AKAMAI), hv);
                 } else {
                     debug!("Handler: no HTTP fingerprint header to inject (HTTP/2 connection but fingerprint not extracted)");
-                    // Record failure metric if metrics available
                     if let Some(ref m) = metrics {
                         m.http2_fingerprint_failures_total.add(1, &[]);
                     }
