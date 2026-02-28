@@ -176,7 +176,8 @@ pub async fn handle_proxy_request(
     // Add X-Forwarded-* headers after fingerprinting
     // Note: Fingerprints are extracted from TLS handshake/HTTP2 frames (before HTTP request parsing),
     // so adding these headers doesn't affect fingerprint generation
-    add_forwarded_headers(&mut req, peer, is_https);
+    let sni = ja4_fingerprints.as_ref().and_then(|fp| fp.sni.as_deref());
+    add_forwarded_headers(&mut req, peer, is_https, sni);
 
     // Apply request header manipulation (global + per-route)
     apply_request_header_manipulation(

@@ -20,12 +20,17 @@ pub fn tls_header_value(value: Option<&huginn_net_tls::Ja4Payload>) -> Option<He
 ///
 /// This function:
 /// 1. Appends client IP to X-Forwarded-For (or creates it if missing)
-/// 2. Sets X-Forwarded-Host from the request's Host header
+/// 2. Sets X-Forwarded-Host from the TLS SNI extension (only present for TLS connections)
 /// 3. Sets X-Forwarded-Port from the peer's port
 /// 4. Sets X-Forwarded-Proto based on is_https flag
 ///
 /// This matches the behavior of Go's httputil.ProxyRequest.SetXForwarded()
-pub fn add_forwarded_headers(req: &mut Request<Incoming>, peer: SocketAddr, is_https: bool) {
+pub fn add_forwarded_headers(
+    req: &mut Request<Incoming>,
+    peer: SocketAddr,
+    is_https: bool,
+    sni: Option<&str>,
+) {
     // X-Forwarded-For: Append client IP to existing header, or create new one
     let client_ip = peer.ip().to_string();
     if let Some(existing_for) = req.headers().get(forwarded::FOR) {
@@ -43,12 +48,10 @@ pub fn add_forwarded_headers(req: &mut Request<Incoming>, peer: SocketAddr, is_h
         }
     }
 
-    // X-Forwarded-Host: Use the Host header from the original request
-    if let Some(host) = req.headers().get("host") {
-        if let Ok(host_str) = host.to_str() {
-            if let Ok(header_value) = HeaderValue::from_str(host_str) {
-                req.headers_mut().insert(forwarded::HOST, header_value);
-            }
+    // X-Forwarded-Host: set only when the TLS SNI is present in the ClientHello.
+    if let Some(host) = sni {
+        if let Ok(header_value) = HeaderValue::from_str(host) {
+            req.headers_mut().insert(forwarded::HOST, header_value);
         }
     }
 
