@@ -132,12 +132,6 @@ See [`benches/README.md`](benches/README.md) for detailed benchmark results from
 
 See [ROADMAP.md](ROADMAP.md) for a detailed list of planned features and upcoming phases.
 
-## Related Projects
-
-- **[Huginn Net](https://github.com/biandratti/huginn-net)** - Multi-protocol passive fingerprinting library
-- **[huginn-net-tls](https://crates.io/crates/huginn-net-tls)** - JA4 TLS fingerprinting
-- **[huginn-net-http](https://crates.io/crates/huginn-net-http)** - HTTP/2 Akamai fingerprinting
-
 ## Artifacts Matrix
 
 Each release publishes the following artifacts as `huginn-proxy-{tag}-{suffix}`:
