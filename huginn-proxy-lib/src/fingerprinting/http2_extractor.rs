@@ -5,7 +5,7 @@ use std::task::{Context, Poll};
 
 use huginn_net_http::akamai_extractor::extract_akamai_fingerprint;
 use huginn_net_http::http2_parser::Http2Parser;
-use huginn_net_http::AkamaiFingerprint;
+use huginn_net_http::{AkamaiFingerprint, Http2FrameType};
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 use tokio::sync::watch;
 use tokio::time::Instant;
@@ -22,6 +22,11 @@ pub struct CapturingStream<S> {
     buffer: Vec<u8>, // Inline buffer for fast processing
     parser: Http2Parser<'static>,
     parsed_offset: usize,
+    // Track whether each required frame type has been seen across multiple reads.
+    // SETTINGS and HEADERS may arrive in different TCP segments, so we accumulate
+    // across reads and only extract when both are present in the full buffer.
+    seen_settings_frame: bool,
+    seen_headers_frame: bool,
     extraction_start: Option<Instant>,
     metrics: Option<Arc<crate::telemetry::Metrics>>,
 }
@@ -44,6 +49,8 @@ impl<S> CapturingStream<S> {
                 buffer: Vec::with_capacity(max_capture),
                 parser: Http2Parser::new(),
                 parsed_offset: 0,
+                seen_settings_frame: false,
+                seen_headers_frame: false,
                 extraction_start: Some(Instant::now()),
                 metrics,
             },
@@ -92,7 +99,34 @@ impl<S: AsyncRead + Unpin> AsyncRead for CapturingStream<S> {
                                 self.parsed_offset =
                                     self.parsed_offset.saturating_add(bytes_consumed);
 
-                                if let Some(fingerprint) = extract_akamai_fingerprint(&frames) {
+                                // Track frame types across reads: SETTINGS and HEADERS
+                                // may arrive in different TCP segments. Update flags from
+                                // the frames seen in this read, then when both are present
+                                // re-parse the full buffer to get all frames together.
+                                for f in &frames {
+                                    if f.frame_type == Http2FrameType::Settings && f.stream_id == 0
+                                    {
+                                        self.seen_settings_frame = true;
+                                    }
+                                    if f.frame_type == Http2FrameType::Headers && f.stream_id > 0 {
+                                        self.seen_headers_frame = true;
+                                    }
+                                }
+
+                                let all_frames_opt = (self.seen_settings_frame
+                                    && self.seen_headers_frame)
+                                    .then(|| {
+                                        self.parser
+                                            .parse_frames_skip_preface(&self.buffer)
+                                            .ok()
+                                            .map(|(f, _)| f)
+                                    })
+                                    .flatten();
+
+                                if let Some(fingerprint) = all_frames_opt
+                                    .as_deref()
+                                    .and_then(extract_akamai_fingerprint)
+                                {
                                     debug!(
                                         "CapturingStream: extracted fingerprint inline: {}",
                                         fingerprint.fingerprint
