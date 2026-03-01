@@ -187,7 +187,7 @@ async fn test_http2_fingerprint_injection() -> Result<(), Box<dyn std::error::Er
     assert!(http2_fp.contains('|'), "HTTP/2 fingerprint should contain pipe separator");
 
     // Expected HTTP/2 fingerprint for reqwest client with HTTP/2
-    const EXPECTED_HTTP2_FINGERPRINT: &str = "2:0;4:2097152;5:16384;6:16384|5177345|0|";
+    const EXPECTED_HTTP2_FINGERPRINT: &str = "2:0;4:2097152;5:16384;6:16384|5177345|0|m,s,a,p";
     assert_eq!(
         http2_fp, EXPECTED_HTTP2_FINGERPRINT,
         "HTTP/2 fingerprint should match expected value for reqwest HTTP/2 client"
