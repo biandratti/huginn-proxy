@@ -31,7 +31,7 @@ const CLIENT_HELLO_BYTES: &[u8] = include_bytes!("fixtures/clienthello_reqwest.b
 // HTTP/2 client frames fixture - real values from reqwest/h2
 //
 // Derived from the Akamai fingerprint captured via capture_fixtures:
-//   2:0;4:2097152;5:16384;6:16384|5177345|0|
+//   2:0;4:2097152;5:16384;6:16384|5177345|0|m,s,a,p
 // SETTINGS: ENABLE_PUSH=0, INITIAL_WINDOW_SIZE=2097152,
 //           MAX_FRAME_SIZE=16384, MAX_HEADER_LIST_SIZE=16384
 // WINDOW_UPDATE: increment=5177345
@@ -61,7 +61,7 @@ const HTTP2_CLIENT_FRAMES: &[u8] = &[
 const EXPECTED_JA4: &str = "t13i1010h2_61a7ad8aa9b6_3a8073edd8ef";
 
 /// Akamai fingerprint produced by these HTTP2_CLIENT_FRAMES.
-const EXPECTED_AKAMAI: &str = "2:0;4:2097152;5:16384;6:16384|5177345|0|";
+const EXPECTED_AKAMAI: &str = "2:0;4:2097152;5:16384;6:16384|5177345|0|m,s,a,p";
 
 fn bench_akamai_parse(c: &mut Criterion) {
     let result = extract_akamai_fingerprint_from_bytes(HTTP2_CLIENT_FRAMES);
