@@ -6,44 +6,60 @@ injects the `x-huginn-net-tcp` header with the p0f-style signature.
 
 ---
 
+## Architecture
+
+TCP fingerprinting uses two separate processes:
+
+- **`huginn-ebpf-agent`** — loads the XDP program, attaches it to the network interface,
+  and pins BPF maps to `/sys/fs/bpf/huginn/`. Runs once per node (DaemonSet in K8s,
+  sidecar in Docker Compose). Requires elevated privileges but opens no ports.
+
+- **`huginn-proxy`** — opens the pinned BPF maps in read mode and injects the
+  `x-huginn-net-tcp` header. Runs as a standard Deployment with HPA.
+
+```
+huginn-ebpf-agent                    huginn-proxy
+  └→ loads XDP, attaches              └→ opens pinned maps
+  └→ pins maps to bpffs               └→ lookup per connection
+  └→ waits for SIGTERM                └→ injects x-huginn-net-tcp
+       │                                      ↑
+       └──── /sys/fs/bpf/huginn/ ─────────────┘
+              tcp_syn_map (LruHashMap)
+              syn_counter (Array)
+```
+
+---
+
 ## Preconditions
 
 ### Kernel ≥ 5.11
 
-Required. On kernels < 5.11 BPF memory uses `RLIMIT_MEMLOCK` accounting, which is not
-supported. Check your host: `uname -r`.
+Required for `CAP_BPF`-based loading. On kernels < 5.11, BPF memory uses `RLIMIT_MEMLOCK`
+accounting (still supported but deprecated). Check: `uname -r`.
 
-### One instance per node
+### One agent per node
 
-Linux allows only one XDP program attached to a network interface at a time. If two instances
-run on the same node, the second replaces the first's XDP program and each has its own private
-BPF map - the instance that lost the attachment stops receiving SYNs and never injects the
-header. Deploy as a DaemonSet (one pod per node) or one container per host.
+Linux allows only one XDP program attached to a network interface at a time. If two agents
+run on the same node, the second replaces the first's XDP program. Deploy the agent as a
+DaemonSet (K8s) or with `network_mode: "service:proxy"` (Docker Compose).
 
 ### IPv4 listen address
 
 The XDP program captures only `ETH_P_IP` (IPv4) packets. Configuring the proxy to listen on
 an IPv6 address with `tcp_enabled = true` causes a hard startup failure.
 
-This is not a limitation in practice when a load balancer or ingress (Traefik, NGINX, K8s
-Ingress) sits in front: the proxy only sees IPv4 connections internally regardless of whether
-the original client used IPv4 or IPv6.
+This is not a limitation in practice when a load balancer or ingress sits in front: the proxy
+only sees IPv4 connections internally regardless of the original client protocol.
 
-### Linux capabilities
+### bpffs
 
-Three capabilities are required. The binary has them set via `setcap` in the Dockerfile, but
-the container or pod must also include them in its bounding set:
+`/sys/fs/bpf` must be mounted as bpffs on each node. Most modern Linux distributions
+(systemd-based) do this automatically. Verify:
 
-| Capability | Purpose |
-|---|---|
-| `CAP_BPF` | Create BPF maps and load BPF programs |
-| `CAP_NET_ADMIN` | Attach XDP program to a network interface |
-| `CAP_PERFMON` | Allow pointer arithmetic in XDP (required by BPF verifier for non-root) |
-
-### Seccomp
-
-Docker's default seccomp profile blocks the `bpf()` syscall. Use `seccomp:unconfined` or a
-custom profile that allows the `bpf` syscall.
+```bash
+mount | grep bpffs
+# Expected: bpffs on /sys/fs/bpf type bpf (rw,nosuid,nodev,noexec,relatime)
+```
 
 ### CNI must preserve real client IP (Kubernetes)
 
@@ -53,66 +69,129 @@ do not SNAT.
 
 ---
 
+## Agent capabilities
+
+The agent requires the following Linux capabilities and security settings:
+
+| Capability / Setting | Purpose |
+|---|---|
+| `CAP_BPF` | Create BPF maps and load BPF programs |
+| `CAP_NET_ADMIN` | Attach XDP program to a network interface |
+| `CAP_PERFMON` | Allow pointer arithmetic in BPF verifier |
+| `seccomp: unconfined` | Docker's default seccomp blocks the `bpf()` syscall |
+| `apparmor: unconfined` | Ubuntu/Debian's AppArmor profile blocks bpffs directory creation |
+
+## Proxy capabilities
+
+The proxy only reads pinned BPF maps:
+
+| Capability | Purpose |
+|---|---|
+| `CAP_BPF` | Open pinned BPF maps via `BPF_OBJ_GET` |
+
+No `seccomp:unconfined` or `apparmor:unconfined` needed.
+
+---
+
 ## Configuration
 
-### `config.toml`
-
-```toml
-[fingerprint]
-tcp_enabled = true   # false = eBPF not initialized, no capabilities needed
-```
-
-### Environment variables
-
-Required when `tcp_enabled = true`. Missing variables cause a hard startup failure.
+### Agent environment variables
 
 | Variable | Example | Description |
 |---|---|---|
 | `HUGINN_EBPF_INTERFACE` | `eth0` | Network interface to attach XDP to |
-| `HUGINN_EBPF_DST_IP` | `0.0.0.0` | Destination IP filter. `0.0.0.0` = no filter |
-| `HUGINN_EBPF_DST_PORT` | `7000` | Destination port filter (must match proxy listen port) |
+| `HUGINN_EBPF_DST_IP` | `0.0.0.0` | Destination IP filter (`0.0.0.0` = no filter) |
+| `HUGINN_EBPF_DST_PORT` | `7000` | Destination port filter (proxy listen port) |
+| `HUGINN_EBPF_PIN_PATH` | `/sys/fs/bpf/huginn` | Pin directory (default shown) |
+
+### Proxy configuration (`config.toml`)
+
+```toml
+[fingerprint]
+tcp_enabled = true   # false = no BPF maps opened, no capabilities needed
+```
+
+| Variable | Example | Description |
+|---|---|---|
+| `HUGINN_EBPF_PIN_PATH` | `/sys/fs/bpf/huginn` | Pin directory to read maps from (default shown) |
+
+The proxy retries opening pinned maps on startup (up to 60 seconds) to handle the case
+where the agent starts after the proxy.
 
 ---
 
 ## Docker Compose
 
+See `examples/docker-compose.yml` for the full working example.
+
+The agent shares the proxy's network namespace (`network_mode: "service:proxy"`) so XDP
+on `eth0` captures the SYN packets arriving at the proxy. Both containers share a bpffs
+Docker volume for map pinning.
+
 ```yaml
 services:
-  proxy:
-    environment:
-      - HUGINN_EBPF_INTERFACE=eth0
-      - HUGINN_EBPF_DST_IP=0.0.0.0
-      - HUGINN_EBPF_DST_PORT=7000
-    cap_add:
-      - CAP_BPF
-      - CAP_NET_ADMIN
-      - CAP_PERFMON
-    security_opt:
-      - seccomp:unconfined
-```
+  ebpf-agent:
+    network_mode: "service:proxy"
+    cap_add: [CAP_BPF, CAP_NET_ADMIN, CAP_PERFMON]
+    security_opt: [seccomp:unconfined, apparmor:unconfined]
+    volumes:
+      - bpffs:/sys/fs/bpf
 
-See `examples/docker-compose.yml` for the full working example.
+  proxy:
+    cap_add: [CAP_BPF]
+    volumes:
+      - bpffs:/sys/fs/bpf
+
+volumes:
+  bpffs:
+    driver: local
+    driver_opts:
+      type: bpf
+      o: ""
+      device: bpffs
+```
 
 ---
 
 ## Kubernetes
 
-Deploy as a **DaemonSet - one pod per node, no HPA**. The proxy handles all traffic on the
-node and the eBPF probe captures SYNs on that node's interface.
+The agent runs as a **DaemonSet** (one per node). The proxy runs as a **Deployment** with
+HPA. Both mount the host's bpffs via `hostPath`.
 
 ```yaml
+# Agent DaemonSet (abbreviated)
 securityContext:
   capabilities:
-    add:
-      - CAP_BPF
-      - CAP_NET_ADMIN
-      - CAP_PERFMON
+    add: [BPF, NET_ADMIN, PERFMON]
   seccompProfile:
     type: Unconfined
+volumeMounts:
+  - name: bpffs
+    mountPath: /sys/fs/bpf
+volumes:
+  - name: bpffs
+    hostPath:
+      path: /sys/fs/bpf
+      type: DirectoryOrCreate
+
+# Proxy Deployment (abbreviated)
+securityContext:
+  capabilities:
+    add: [BPF]
+  seccompProfile:
+    type: RuntimeDefault
+volumeMounts:
+  - name: bpffs
+    mountPath: /sys/fs/bpf
+    readOnly: true
+volumes:
+  - name: bpffs
+    hostPath:
+      path: /sys/fs/bpf
+      type: Directory
 ```
 
-> A decoupled eBPF agent (probe running as a separate DaemonSet container sharing maps via
-> `/sys/fs/bpf/`) is not yet implemented and is not on the current roadmap.
+See [DEPLOYMENT.md](DEPLOYMENT.md) for the full Kubernetes section.
 
 ---
 
@@ -120,13 +199,13 @@ securityContext:
 
 XDP captures only TCP SYN packets. The fingerprint is looked up once at TCP accept time and
 reused for every request on that connection. As a result, **`x-huginn-net-tcp` is present on
-all requests** of a keep-alive connection - not just the first.
+all requests** of a keep-alive connection — not just the first.
 
 A `SynResult::Miss` (no header injected) happens when:
 - the SYN was not captured (proxy just started, stale entry, IPv6 client), or
 - the BPF map entry was evicted before the connection was accepted (very high load).
 
-`force_new_connection = true` is unrelated to fingerprint availability - it controls whether
+`force_new_connection = true` is unrelated to fingerprint availability — it controls whether
 the proxy opens a new TCP connection to the **backend** per request, not whether the client
 SYN is re-captured.
 
@@ -134,13 +213,11 @@ SYN is re-captured.
 
 ## Verify the setup
 
-The diagnostic binary needs `CAP_BPF` to create BPF maps. Two options:
+The diagnostic binary needs `CAP_BPF` to create BPF maps:
 
-**build first, then run with sudo:**
 ```bash
 cargo build -p huginn-ebpf --bin bpf_test
 sudo ./target/debug/bpf_test
-```
 ```
 
 Expected output on success:
@@ -149,7 +226,7 @@ INFO Testing BPF map creation with aya...
 INFO SUCCESS: BPF ELF loaded and all maps created OK
 ```
 
-If you get `PermissionDenied` on map creation, BPF syscall is being blocked:
+If you get `PermissionDenied` on map creation:
 
 ```bash
 # Is unprivileged BPF disabled? (0 = allowed, 1/2 = restricted)

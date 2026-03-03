@@ -36,6 +36,7 @@ docker run -d \
 ### Docker Compose
 
 See `examples/docker-compose.yml` for a complete setup with:
+- eBPF agent (TCP SYN fingerprinting)
 - Multiple backends
 - TLS termination
 - Health checks
@@ -48,224 +49,84 @@ cd examples
 docker compose up -d
 ```
 
-## Kubernetes
-
-### ConfigMap
-
-Create a ConfigMap with your proxy configuration:
-
-```yaml
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: huginn-proxy-config
-  namespace: default
-data:
-  config.toml: |
-    listen = "0.0.0.0:7000"
-    preserve_host = true
-    
-    backends = [
-      { address = "backend-service:8080", http_version = "preserve" }
-    ]
-    
-    routes = [
-      { prefix = "/api", backend = "backend-service:8080" },
-      { prefix = "/", backend = "backend-service:8080" }
-    ]
-    
-    [telemetry]
-    metrics_port = 9090
-    
-    [logging]
-    level = "info"
-    
-    [timeout]
-    connect_ms = 5000
-    idle_ms = 60000
-    shutdown_secs = 30
-    tls_handshake_secs = 15
-    connection_handling_secs = 300
-    
-    [security]
-    max_connections = 1024
-```
-
-### TLS Secret
-
-Create a Secret for TLS certificates:
-
-```yaml
-apiVersion: v1
-kind: Secret
-metadata:
-  name: huginn-proxy-tls
-  namespace: default
-type: Opaque
-data:
-  server.crt: <base64-encoded-cert>
-  server.key: <base64-encoded-key>
-```
-
-Create from files:
+Without TCP fingerprinting, use the plain variant:
 
 ```bash
-kubectl create secret generic huginn-proxy-tls \
-  --from-file=server.crt=./certs/server.crt \
-  --from-file=server.key=./certs/server.key \
-  --namespace=default
+cd examples
+docker compose -f docker-compose.plain.yml up -d
 ```
 
-### ConfigMap with TLS
+## Kubernetes
 
-Add TLS configuration to your ConfigMap:
+Two workloads: the eBPF agent as **DaemonSet** (1 per node) and the proxy as **Deployment** (N replicas).
 
-```yaml
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: huginn-proxy-config
-data:
-  config.toml: |
-    listen = "0.0.0.0:7000"
-    backends = [
-      { address = "backend-service:8080" }
-    ]
-    routes = [
-      { prefix = "/", backend = "backend-service:8080" }
-    ]
-    
-    [tls]
-    cert_path = "/config/certs/server.crt"
-    key_path = "/config/certs/server.key"
-    alpn = ["h2", "http/1.1"]
-    watch_delay_secs = 60
-    
-    [telemetry]
-    metrics_port = 9090
-```
+### eBPF Agent (DaemonSet)
 
-### Deployment
-
-Basic deployment with health checks:
+Loads XDP and pins BPF maps to `/sys/fs/bpf/huginn/`. Key security settings:
 
 ```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: huginn-proxy
-  namespace: default
 spec:
-  replicas: 2
-  selector:
-    matchLabels:
-      app: huginn-proxy
-  template:
-    metadata:
-      labels:
-        app: huginn-proxy
-    spec:
-      containers:
-      - name: proxy
-        image: huginn-proxy:latest
-        imagePullPolicy: IfNotPresent
-        args: ["/usr/local/bin/huginn-proxy", "/config/config.toml"]
-        ports:
-        - name: proxy
-          containerPort: 7000
-          protocol: TCP
-        - name: metrics
-          containerPort: 9090
-          protocol: TCP
-        resources:
-          requests:
-            cpu: 100m
-            memory: 128Mi
-          limits:
-            cpu: 500m
-            memory: 512Mi
-        livenessProbe:
-          httpGet:
-            path: /live
-            port: 9090
-          initialDelaySeconds: 10
-          periodSeconds: 10
-          timeoutSeconds: 3
-          failureThreshold: 3
-        readinessProbe:
-          httpGet:
-            path: /ready
-            port: 9090
-          initialDelaySeconds: 5
-          periodSeconds: 5
-          timeoutSeconds: 2
-          failureThreshold: 2
-        startupProbe:
-          httpGet:
-            path: /health
-            port: 9090
-          initialDelaySeconds: 0
-          periodSeconds: 2
-          timeoutSeconds: 2
-          failureThreshold: 30
-        volumeMounts:
-        - name: config
-          mountPath: /config
+  hostNetwork: true                    # XDP on the node's real interface
+  containers:
+    - name: ebpf-agent
+      securityContext:
+        capabilities:
+          add: [BPF, NET_ADMIN, PERFMON]
+        seccompProfile:
+          type: Unconfined              # bpf() syscall required
+      volumeMounts:
+        - name: bpffs
+          mountPath: /sys/fs/bpf
+  volumes:
+    - name: bpffs
+      hostPath:
+        path: /sys/fs/bpf
+        type: DirectoryOrCreate
+```
+
+### Proxy (Deployment)
+
+**With TCP fingerprinting** (`tcp_enabled = true`): requires the DaemonSet above.
+
+```yaml
+spec:
+  containers:
+    - name: proxy
+      securityContext:
+        capabilities:
+          add: [BPF]                    # BPF_OBJ_GET to read pinned maps
+        seccompProfile:
+          type: RuntimeDefault
+      volumeMounts:
+        - name: bpffs
+          mountPath: /sys/fs/bpf
           readOnly: true
-        - name: tls-certs
-          mountPath: /config/certs
-          readOnly: true
-      volumes:
-      - name: config
-        configMap:
-          name: huginn-proxy-config
-      - name: tls-certs
-        secret:
-          secretName: huginn-proxy-tls
-          defaultMode: 0400
+  volumes:
+    - name: bpffs
+      hostPath:
+        path: /sys/fs/bpf
+        type: Directory
 ```
 
-### Services
-
-Proxy service for incoming traffic:
+**Without TCP fingerprinting** (`tcp_enabled = false`): no DaemonSet, no capabilities, no volumes.
 
 ```yaml
-apiVersion: v1
-kind: Service
-metadata:
-  name: huginn-proxy
-  namespace: default
 spec:
-  type: LoadBalancer
-  selector:
-    app: huginn-proxy
-  ports:
-  - name: https
-    port: 443
-    targetPort: 7000
-    protocol: TCP
+  containers:
+    - name: proxy
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
 ```
 
-Metrics service for Prometheus:
+### Key differences vs Docker Compose
 
-```yaml
-apiVersion: v1
-kind: Service
-metadata:
-  name: huginn-proxy-metrics
-  namespace: default
-  labels:
-    app: huginn-proxy
-spec:
-  type: ClusterIP
-  selector:
-    app: huginn-proxy
-  ports:
-  - name: metrics
-    port: 9090
-    targetPort: 9090
-    protocol: TCP
-```
+| | Docker Compose | Kubernetes |
+|---|---|---|
+| bpffs | Docker named volume (`type: bpf`) | `hostPath: /sys/fs/bpf` (already mounted by systemd) |
+| Agent network | `network_mode: "service:proxy"` | `hostNetwork: true` |
+| AppArmor | `apparmor:unconfined` (Ubuntu/Debian) | Not needed (Pod Security Standards) |
+| Proxy scaling | single container | Deployment + HPA |
 
 ## Health Check Endpoints
 
