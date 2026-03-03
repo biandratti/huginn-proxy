@@ -48,16 +48,13 @@ async fn main() -> Result<(), BoxError> {
         (None, None)
     };
 
-    // Initialize TCP SYN eBPF probe when feature is enabled.
-    // Two modes controlled by `fingerprint.tcp_mode`:
-    //   - "embedded" (default): proxy loads XDP and owns BPF maps.
-    //     Requires HUGINN_EBPF_INTERFACE, HUGINN_EBPF_DST_IP, HUGINN_EBPF_DST_PORT.
-    //   - "pinned": external eBPF agent owns XDP; proxy opens pinned maps.
-    //     Requires HUGINN_EBPF_PIN_PATH (default: /sys/fs/bpf/huginn).
+    // TCP SYN fingerprinting via eBPF/XDP.
+    // When tcp_enabled = true the proxy opens BPF maps pinned by huginn-ebpf-agent.
+    // The agent may start after the proxy (e.g. network_mode: "service:proxy" in
+    // Docker Compose), so we retry with backoff until the maps appear.
     #[cfg(feature = "ebpf-tcp")]
     let syn_probe: Option<huginn_proxy_lib::SynProbe> = {
         use huginn_ebpf::{parse_syn, EbpfProbe};
-        use huginn_proxy_lib::config::TcpMode;
         use huginn_proxy_lib::fingerprinting::SynResult;
         use std::net::SocketAddr;
 
@@ -65,47 +62,33 @@ async fn main() -> Result<(), BoxError> {
             tracing::info!("TCP SYN fingerprinting disabled (`fingerprint.tcp_enabled = false`)");
             None
         } else {
-            let probe = match config.fingerprint.tcp_mode {
-                TcpMode::Embedded => {
-                    let iface = env::var("HUGINN_EBPF_INTERFACE").map_err(|_| {
-                        "HUGINN_EBPF_INTERFACE env var is required when tcp_enabled = true"
-                    })?;
+            let pin_path = env::var("HUGINN_EBPF_PIN_PATH")
+                .unwrap_or_else(|_| huginn_ebpf::pin::DEFAULT_PIN_BASE.to_string());
 
-                    let dst_ip: std::net::Ipv4Addr = env::var("HUGINN_EBPF_DST_IP")
-                        .map_err(|_| {
-                            "HUGINN_EBPF_DST_IP env var is required when tcp_enabled = true"
-                        })?
-                        .parse()
-                        .map_err(|_| {
-                            "HUGINN_EBPF_DST_IP must be a valid IPv4 address (e.g. 0.0.0.0)"
-                        })?;
+            const MAX_ATTEMPTS: u32 = 30; // TODO: Make this configurable
+            const RETRY_INTERVAL: std::time::Duration = std::time::Duration::from_secs(2);
 
-                    let dst_port: u16 = env::var("HUGINN_EBPF_DST_PORT")
-                        .map_err(|_| {
-                            "HUGINN_EBPF_DST_PORT env var is required when tcp_enabled = true"
-                        })?
-                        .parse()
-                        .map_err(|_| {
-                            "HUGINN_EBPF_DST_PORT must be a valid port number (1-65535)"
-                        })?;
-
-                    match config.listen {
-                        SocketAddr::V6(_) => {
-                            return Err("eBPF TCP SYN probe requires an IPv4 listen address".into());
+            let probe = loop {
+                match EbpfProbe::from_pinned(&pin_path) {
+                    Ok(p) => break p,
+                    Err(e) => {
+                        static ATTEMPT: std::sync::atomic::AtomicU32 =
+                            std::sync::atomic::AtomicU32::new(1);
+                        let attempt = ATTEMPT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                        if attempt > MAX_ATTEMPTS {
+                            return Err(format!(
+                                "eBPF probe failed after {MAX_ATTEMPTS} attempts: {e:#?}"
+                            )
+                            .into());
                         }
-                        SocketAddr::V4(_) => {}
+                        tracing::warn!(
+                            attempt,
+                            MAX_ATTEMPTS,
+                            "Waiting for eBPF agent to pin maps, retrying in {}s...",
+                            RETRY_INTERVAL.as_secs()
+                        );
+                        std::thread::sleep(RETRY_INTERVAL);
                     }
-
-                    EbpfProbe::new(&iface, dst_ip, dst_port)
-                        .map_err(|e| format!("eBPF TCP SYN probe failed to initialize: {e:#?}"))?
-                }
-                TcpMode::Pinned => {
-                    let pin_path = env::var("HUGINN_EBPF_PIN_PATH")
-                        .unwrap_or_else(|_| huginn_ebpf::pin::DEFAULT_PIN_BASE.to_string());
-
-                    EbpfProbe::from_pinned(&pin_path).map_err(|e| {
-                        format!("eBPF TCP SYN probe failed to open pinned maps: {e:#?}")
-                    })?
                 }
             };
 

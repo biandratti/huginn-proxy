@@ -9,7 +9,7 @@ mod timeout;
 mod tls;
 
 pub use backend::{Backend, BackendHttpVersion, BackendPoolConfig, Route};
-pub use fingerprinting::{FingerprintConfig, TcpMode};
+pub use fingerprinting::FingerprintConfig;
 pub use headers::{CustomHeader, HeaderManipulation, HeaderManipulationGroup};
 pub use loader::load_from_path;
 pub use root::Config;

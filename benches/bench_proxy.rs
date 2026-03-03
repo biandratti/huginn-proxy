@@ -135,8 +135,7 @@ impl BenchFixture {
             fingerprint: FingerprintConfig {
                 tls_enabled: true,
                 http_enabled: true,
-                tcp_enabled: false, // eBPF not available in bench environment
-                tcp_mode: Default::default(),
+                tcp_enabled: false,
                 max_capture: 64 * 1024,
             },
             logging: LoggingConfig { level: "warn".to_string(), show_target: false },

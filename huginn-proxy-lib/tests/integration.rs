@@ -18,7 +18,6 @@ fn create_test_config(listen: &str, backends: Vec<Backend>) -> Config {
             tls_enabled: true,
             http_enabled: true,
             tcp_enabled: false,
-            tcp_mode: Default::default(),
             max_capture: 64 * 1024,
         },
         logging: LoggingConfig { level: "info".to_string(), show_target: false },

@@ -1,4 +1,5 @@
 use std::net::Ipv4Addr;
+use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 
 use aya::maps::{Array, HashMap, Map, MapData};
@@ -133,6 +134,13 @@ impl EbpfProbe {
         let base = Path::new(base_path);
         std::fs::create_dir_all(base)
             .map_err(|e| EbpfError::PinDir { path: base_path.to_string(), source: e })?;
+        // bpffs root (e.g. /sys/fs/bpf) may be 0700 root:root. The non-root
+        // proxy process needs +x to traverse it, plus +x on the pin directory.
+        if let Some(parent) = base.parent() {
+            let _ = std::fs::set_permissions(parent, std::fs::Permissions::from_mode(0o755));
+        }
+        std::fs::set_permissions(base, std::fs::Permissions::from_mode(0o755))
+            .map_err(|e| EbpfError::PinDir { path: base_path.to_string(), source: e })?;
 
         let ebpf = match &mut self.inner {
             ProbeInner::Embedded { ebpf } => ebpf,
@@ -159,6 +167,13 @@ impl EbpfProbe {
         counter
             .pin(&counter_path)
             .map_err(|e| EbpfError::Pin { name: pin::COUNTER_NAME.to_string(), source: e })?;
+
+        // BPF_OBJ_GET checks inode permissions (MAY_READ | MAY_WRITE).
+        // Pin files are created as 0600 root:root — make them accessible
+        // to the non-root proxy process.
+        let open_mode = std::fs::Permissions::from_mode(0o666);
+        let _ = std::fs::set_permissions(&syn_path, open_mode.clone());
+        let _ = std::fs::set_permissions(&counter_path, open_mode);
 
         info!(base_path, "BPF maps pinned");
         Ok(())
