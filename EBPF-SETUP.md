@@ -138,7 +138,7 @@ The diagnostic binary needs `CAP_BPF` to create BPF maps. Two options:
 
 **build first, then run with sudo:**
 ```bash
-cargo build -p huginn-proxy-ebpf --bin bpf_test
+cargo build -p huginn-ebpf --bin bpf_test
 sudo ./target/debug/bpf_test
 ```
 ```

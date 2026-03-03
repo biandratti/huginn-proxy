@@ -1,5 +1,16 @@
 use serde::Deserialize;
 
+/// How the proxy obtains TCP SYN data from eBPF.
+#[derive(Debug, Deserialize, Clone, Default, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum TcpMode {
+    /// The proxy loads the XDP program and owns the BPF maps (single-process).
+    #[default]
+    Embedded,
+    /// An external eBPF agent owns the XDP program; the proxy opens pinned maps.
+    Pinned,
+}
+
 /// Fingerprinting configuration
 #[derive(Debug, Deserialize, Clone)]
 pub struct FingerprintConfig {
@@ -19,6 +30,11 @@ pub struct FingerprintConfig {
     /// Default: false
     #[serde(default)]
     pub tcp_enabled: bool,
+    /// How to obtain TCP SYN data when `tcp_enabled = true`.
+    /// - `embedded` (default): the proxy loads XDP and owns the maps.
+    /// - `pinned`: an external eBPF agent owns XDP; the proxy opens pinned maps.
+    #[serde(default)]
+    pub tcp_mode: TcpMode,
     /// Maximum bytes to capture for HTTP/2 fingerprinting
     /// This limits the amount of data buffered for fingerprint extraction
     /// Default: 65536 (64 KB)
@@ -32,6 +48,7 @@ impl Default for FingerprintConfig {
             tls_enabled: default_true(),
             http_enabled: default_true(),
             tcp_enabled: false,
+            tcp_mode: TcpMode::default(),
             max_capture: default_max_capture(),
         }
     }

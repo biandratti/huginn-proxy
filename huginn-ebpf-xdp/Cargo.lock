@@ -95,7 +95,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "huginn-proxy-ebpf-xdp"
+name = "huginn-ebpf-xdp"
 version = "0.0.1"
 dependencies = [
  "aya-ebpf",

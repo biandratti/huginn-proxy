@@ -4,7 +4,7 @@
 //! keyed by (src_ip, src_port). Direct Rust port of the former `bpf/xdp.c`.
 //!
 //! The map layout and global variable names (`dst_ip`, `dst_port`) are identical
-//! to the C version so `huginn-proxy-ebpf/src/probe.rs` requires no changes.
+//! to the C version so `huginn-ebpf/src/probe.rs` requires no changes.
 #![no_std]
 #![no_main]
 
@@ -18,7 +18,7 @@ use core::mem;
 
 /// Quirk bitmask constants extracted from IP and TCP headers.
 ///
-/// Must match the identical module in `huginn-proxy-ebpf/src/types.rs`.
+/// Must match the identical module in `huginn-ebpf/src/types.rs`.
 /// The `offset_of!` block below enforces layout parity at compile time.
 mod quirk_bits {
     pub const DF: u32 = 1 << 0;
@@ -35,7 +35,7 @@ mod quirk_bits {
 
 /// Raw data extracted from a TCP SYN packet, stored in the BPF LRU map.
 ///
-/// Layout must match `SynRawData` in `huginn-proxy-ebpf/src/types.rs` exactly.
+/// Layout must match `SynRawData` in `huginn-ebpf/src/types.rs` exactly.
 /// Both sides use identical `offset_of!` compile-time assertions to enforce this.
 /// The canonical layout is documented in `data/huginn-proxy-analisis/bpf.md`.
 #[repr(C)]

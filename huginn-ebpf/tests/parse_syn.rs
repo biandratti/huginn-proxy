@@ -1,4 +1,4 @@
-use huginn_proxy_ebpf::types::{parse_syn, SynRawData};
+use huginn_ebpf::types::{parse_syn, SynRawData};
 
 type TestResult = Result<(), Box<dyn std::error::Error + Send + Sync>>;
 

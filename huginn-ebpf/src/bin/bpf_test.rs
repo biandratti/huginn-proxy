@@ -1,8 +1,8 @@
 /// Minimal diagnostic: tries to load the BPF ELF and create maps.
 ///
 /// Log level resolution (mirrors init_tracing_with_otel, first wins):
-///   1. RUST_LOG env:  RUST_LOG=debug sudo -E cargo run -p huginn-proxy-ebpf --bin bpf_test
-///   2. CLI argument:  sudo -E cargo run -p huginn-proxy-ebpf --bin bpf_test -- debug
+///   1. RUST_LOG env:  RUST_LOG=debug sudo -E cargo run -p huginn-ebpf --bin bpf_test
+///   2. CLI argument:  sudo -E cargo run -p huginn-ebpf --bin bpf_test -- debug
 ///   3. Default:       info
 fn main() {
     let default_level = std::env::args()

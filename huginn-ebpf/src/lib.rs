@@ -8,6 +8,7 @@
 pub mod probe;
 pub mod types;
 
+pub mod pin;
 pub use probe::EbpfProbe;
 pub use types::{parse_syn, quirk_bits, SynRawData};
 
@@ -27,4 +28,25 @@ pub enum EbpfError {
 
     #[error("failed to attach XDP program to interface: {0}")]
     Attach(#[source] aya::programs::ProgramError),
+
+    #[error("failed to pin BPF map '{name}': {source}")]
+    Pin {
+        name: String,
+        #[source]
+        source: aya::pin::PinError,
+    },
+
+    #[error("failed to open pinned BPF map at '{path}': {source}")]
+    FromPin {
+        path: String,
+        #[source]
+        source: aya::maps::MapError,
+    },
+
+    #[error("failed to create pin directory '{path}': {source}")]
+    PinDir {
+        path: String,
+        #[source]
+        source: std::io::Error,
+    },
 }

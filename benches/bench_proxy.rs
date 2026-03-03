@@ -136,6 +136,7 @@ impl BenchFixture {
                 tls_enabled: true,
                 http_enabled: true,
                 tcp_enabled: false, // eBPF not available in bench environment
+                tcp_mode: Default::default(),
                 max_capture: 64 * 1024,
             },
             logging: LoggingConfig { level: "warn".to_string(), show_target: false },

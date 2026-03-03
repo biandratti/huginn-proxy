@@ -7,7 +7,7 @@ FROM rust:1.85-slim@sha256:3490aa77d179a59d67e94239cca96dd84030b564470859200f535
 RUN apt-get update -q && apt-get install -y --no-install-recommends \
     pkg-config libssl-dev libcap2-bin \
     && rm -rf /var/lib/apt/lists/*
-# Install nightly + rust-src to compile huginn-proxy-ebpf-xdp (bpfel-unknown-none).
+# Install nightly + rust-src to compile huginn-ebpf-xdp (bpfel-unknown-none).
 # bpfel-unknown-none is Tier 3: built from source via build-std, no rustup target needed.
 RUN rustup toolchain install nightly --component rust-src
 # bpf-linker links the BPF ELF produced by aya-ebpf.

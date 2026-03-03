@@ -1,6 +1,6 @@
 use std::net::Ipv4Addr;
 
-use huginn_proxy_ebpf::probe::make_bpf_key;
+use huginn_ebpf::probe::make_bpf_key;
 
 #[test]
 fn test_make_bpf_key_deterministic() {
