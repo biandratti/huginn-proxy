@@ -13,9 +13,9 @@ pub struct FingerprintConfig {
     #[serde(default = "default_true")]
     pub http_enabled: bool,
     /// Enable TCP SYN fingerprinting via eBPF/XDP (p0f-style raw signature).
-    /// Requires the `ebpf-tcp` Cargo feature and the `HUGINN_EBPF_INTERFACE`,
-    /// `HUGINN_EBPF_DST_IP`, and `HUGINN_EBPF_DST_PORT` environment variables.
-    /// When false the eBPF probe is never started, even if the feature is compiled in.
+    /// Requires the `ebpf-tcp` Cargo feature and the `huginn-ebpf-agent`
+    /// running on the same node with pinned maps at `HUGINN_EBPF_PIN_PATH`.
+    /// When false the proxy does not open BPF maps.
     /// Default: false
     #[serde(default)]
     pub tcp_enabled: bool,

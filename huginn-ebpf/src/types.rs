@@ -7,7 +7,7 @@ use tracing::warn;
 
 /// Quirk bitmask constants extracted from IP and TCP headers.
 ///
-/// Must match the identical module in `huginn-proxy-ebpf-xdp/src/main.rs`.
+/// Must match the identical module in `huginn-ebpf-xdp/src/main.rs`.
 /// The `offset_of!` block below enforces layout parity at compile time.
 pub mod quirk_bits {
     pub const DF: u32 = 1 << 0;
@@ -24,7 +24,7 @@ pub mod quirk_bits {
 
 /// Raw data extracted from a TCP SYN packet by the XDP program.
 ///
-/// Layout must match `SynRawData` in `huginn-proxy-ebpf-xdp/src/main.rs` exactly.
+/// Layout must match `SynRawData` in `huginn-ebpf-xdp/src/main.rs` exactly.
 /// Both sides use identical `offset_of!` compile-time assertions to enforce this.
 /// The canonical layout is documented in `data/huginn-proxy-analisis/bpf.md`.
 ///

@@ -1,4 +1,4 @@
-use huginn_proxy_ebpf::types::SynRawData;
+use huginn_ebpf::types::SynRawData;
 
 #[test]
 fn test_syn_raw_data_size() {

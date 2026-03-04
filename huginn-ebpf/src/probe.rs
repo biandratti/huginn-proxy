@@ -1,10 +1,13 @@
 use std::net::Ipv4Addr;
+use std::os::unix::fs::PermissionsExt;
+use std::path::Path;
 
-use aya::maps::{Array, HashMap};
+use aya::maps::{Array, HashMap, Map, MapData};
 use aya::programs::{Xdp, XdpFlags};
 use aya::{Ebpf, EbpfLoader};
 use tracing::{debug, info, warn};
 
+use crate::pin;
 use crate::types::SynRawData;
 use crate::EbpfError;
 
@@ -21,16 +24,20 @@ static XDP_BPF_BYTES: &[u8] = aya::include_bytes_aligned!(concat!(env!("OUT_DIR"
 /// port-reuse cases (thousands of intervening SYNs) are discarded.
 const STALE_TICK_THRESHOLD: u64 = 16_384;
 
-/// Manages the eBPF XDP program lifecycle and provides SYN data lookups.
+enum ProbeInner {
+    /// Used by `huginn-ebpf-agent`: owns the BPF object and XDP program.
+    /// Dropping detaches XDP from the interface.
+    Embedded { ebpf: Ebpf },
+    /// Used by `huginn-proxy`: reads maps pinned by the agent.
+    Pinned { syn_map: Map, counter: Map },
+}
+
+/// Manages eBPF XDP SYN data lookups.
 ///
-/// The probe attaches an XDP program to a network interface that captures
-/// TCP SYN packets and stores them in a BPF LRU hash map. When an HTTP
-/// connection arrives, call `lookup()` with the client's IP+port to retrieve
-/// the SYN data captured moments earlier.
+/// - The **agent** calls [`EbpfProbe::new`] to load XDP and own the maps.
+/// - The **proxy** calls [`EbpfProbe::from_pinned`] to read maps pinned by the agent.
 pub struct EbpfProbe {
-    /// Loaded eBPF object - keeps maps alive while probe exists
-    _ebpf: Ebpf,
-    /// Name of the interface this probe is attached to (for logging)
+    inner: ProbeInner,
     interface: String,
 }
 
@@ -84,7 +91,98 @@ impl EbpfProbe {
         };
         info!(interface, filter_ip, dst_port, "eBPF XDP TCP SYN fingerprinting attached");
 
-        Ok(Self { _ebpf: ebpf, interface: interface.to_string() })
+        Ok(Self { inner: ProbeInner::Embedded { ebpf }, interface: interface.to_string() })
+    }
+
+    /// Open previously pinned BPF maps created by the eBPF agent.
+    ///
+    /// The agent must have already pinned `tcp_syn_map` and `syn_counter` under
+    /// `base_path` (default: `/sys/fs/bpf/huginn/`). This constructor does not
+    /// load or attach any XDP program — the agent owns that lifecycle.
+    pub fn from_pinned(base_path: &str) -> Result<Self, EbpfError> {
+        let syn_map_path = pin::syn_map_path(base_path);
+        let counter_path = pin::counter_path(base_path);
+
+        let syn_data = MapData::from_pin(&syn_map_path).map_err(|e| EbpfError::FromPin {
+            path: syn_map_path.display().to_string(),
+            source: e,
+        })?;
+        let counter_data = MapData::from_pin(&counter_path).map_err(|e| EbpfError::FromPin {
+            path: counter_path.display().to_string(),
+            source: e,
+        })?;
+
+        info!(base_path, "eBPF TCP SYN fingerprinting connected to pinned maps");
+
+        Ok(Self {
+            inner: ProbeInner::Pinned {
+                syn_map: Map::LruHashMap(syn_data),
+                counter: Map::Array(counter_data),
+            },
+            interface: String::new(),
+        })
+    }
+
+    /// Pin the BPF maps to `base_path` so other processes can open them.
+    ///
+    /// Creates the directory if it does not exist. Removes stale pins from a
+    /// previous run before pinning. Only valid in embedded mode.
+    pub fn pin_maps(&mut self, base_path: &str) -> Result<(), EbpfError> {
+        let base = Path::new(base_path);
+        std::fs::create_dir_all(base)
+            .map_err(|e| EbpfError::PinDir { path: base_path.to_string(), source: e })?;
+        // bpffs root (e.g. /sys/fs/bpf) may be 0700 root:root. The non-root
+        // proxy process needs +x to traverse it, plus +x on the pin directory.
+        if let Some(parent) = base.parent() {
+            let _ = std::fs::set_permissions(parent, std::fs::Permissions::from_mode(0o755));
+        }
+        std::fs::set_permissions(base, std::fs::Permissions::from_mode(0o755))
+            .map_err(|e| EbpfError::PinDir { path: base_path.to_string(), source: e })?;
+
+        let ebpf = match &mut self.inner {
+            ProbeInner::Embedded { ebpf } => ebpf,
+            ProbeInner::Pinned { .. } => return Ok(()),
+        };
+
+        let syn_path = pin::syn_map_path(base_path);
+        let counter_path = pin::counter_path(base_path);
+
+        // Remove stale pins from a previous agent instance.
+        let _ = std::fs::remove_file(&syn_path);
+        let _ = std::fs::remove_file(&counter_path);
+
+        let syn_map = ebpf
+            .map_mut(pin::SYN_MAP_NAME)
+            .ok_or(EbpfError::ProgramNotFound)?;
+        syn_map
+            .pin(&syn_path)
+            .map_err(|e| EbpfError::Pin { name: pin::SYN_MAP_NAME.to_string(), source: e })?;
+
+        let counter = ebpf
+            .map_mut(pin::COUNTER_NAME)
+            .ok_or(EbpfError::ProgramNotFound)?;
+        counter
+            .pin(&counter_path)
+            .map_err(|e| EbpfError::Pin { name: pin::COUNTER_NAME.to_string(), source: e })?;
+
+        // BPF_OBJ_GET checks inode permissions (MAY_READ | MAY_WRITE).
+        // Pin files are created as 0600 root:root — make them accessible
+        // to the non-root proxy process.
+        let open_mode = std::fs::Permissions::from_mode(0o666);
+        let _ = std::fs::set_permissions(&syn_path, open_mode.clone());
+        let _ = std::fs::set_permissions(&counter_path, open_mode);
+
+        info!(base_path, "BPF maps pinned");
+        Ok(())
+    }
+
+    /// Remove pinned map files. Called during agent shutdown for clean teardown.
+    pub fn unpin_maps(base_path: &str) {
+        let syn_path = pin::syn_map_path(base_path);
+        let counter_path = pin::counter_path(base_path);
+        let _ = std::fs::remove_file(&syn_path);
+        let _ = std::fs::remove_file(&counter_path);
+        info!(base_path, "BPF map pins removed");
     }
 
     /// Look up the TCP SYN data for a client connection.
@@ -94,8 +192,8 @@ impl EbpfProbe {
     /// - the SYN was not captured (program just started, IPv6 client, map entry evicted), or
     /// - the entry is stale (more than `STALE_TICK_THRESHOLD` SYNs have arrived since capture).
     pub fn lookup(&self, src_ip: Ipv4Addr, src_port: u16) -> Option<SynRawData> {
-        let map_data = self._ebpf.map("tcp_syn_map")?;
-        let map = HashMap::<_, u64, SynRawData>::try_from(map_data).ok()?;
+        let syn_map = self.syn_map()?;
+        let map = HashMap::<_, u64, SynRawData>::try_from(syn_map).ok()?;
 
         let key = make_bpf_key(src_ip, src_port);
         let val = match map.get(&key, 0) {
@@ -138,11 +236,25 @@ impl EbpfProbe {
         Some(val)
     }
 
+    fn syn_map(&self) -> Option<&Map> {
+        match &self.inner {
+            ProbeInner::Embedded { ebpf } => ebpf.map(pin::SYN_MAP_NAME),
+            ProbeInner::Pinned { syn_map, .. } => Some(syn_map),
+        }
+    }
+
+    fn counter_map(&self) -> Option<&Map> {
+        match &self.inner {
+            ProbeInner::Embedded { ebpf } => ebpf.map(pin::COUNTER_NAME),
+            ProbeInner::Pinned { counter, .. } => Some(counter),
+        }
+    }
+
     /// Read the current value of the global SYN counter from the `syn_counter` BPF map.
     fn read_current_tick(&self) -> Option<u64> {
-        let map_data = self._ebpf.map("syn_counter")?;
-        let map = Array::<_, u64>::try_from(map_data).ok()?;
-        map.get(&0, 0).ok()
+        let map = self.counter_map()?;
+        let array = Array::<_, u64>::try_from(map).ok()?;
+        array.get(&0, 0).ok()
     }
 
     pub fn interface(&self) -> &str {

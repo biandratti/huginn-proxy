@@ -7,7 +7,7 @@ FROM rust:1.85-slim@sha256:3490aa77d179a59d67e94239cca96dd84030b564470859200f535
 RUN apt-get update -q && apt-get install -y --no-install-recommends \
     pkg-config libssl-dev libcap2-bin \
     && rm -rf /var/lib/apt/lists/*
-# Install nightly + rust-src to compile huginn-proxy-ebpf-xdp (bpfel-unknown-none).
+# Install nightly + rust-src to compile huginn-ebpf-xdp (bpfel-unknown-none).
 # bpfel-unknown-none is Tier 3: built from source via build-std, no rustup target needed.
 RUN rustup toolchain install nightly --component rust-src
 # bpf-linker links the BPF ELF produced by aya-ebpf.
@@ -31,16 +31,10 @@ RUN apt-get update -q && apt-get install -y --no-install-recommends \
 RUN adduser --disabled-password --gecos '' --uid 10001 app
 WORKDIR /app
 COPY --from=builder /app/target/release/huginn-proxy /usr/local/bin/huginn-proxy
-# Grant the minimum Linux capabilities needed for eBPF/XDP fingerprinting:
-#   cap_bpf       - create BPF maps and load BPF programs
-#   cap_net_admin - attach XDP programs to network interfaces
-#   cap_perfmon   - allow pointer arithmetic in BPF verifier (required for XDP packet parsing)
-# The container runs as the unprivileged 'app' user; docker-compose.yml must
-# declare the same caps via cap_add so they are included in the bounding set.
-# chmod 555: binary is root-owned and read+execute only - the app user cannot overwrite it.
-# libcap2-bin is only needed to run setcap; purge it immediately after.
-# apt-get/dpkg binaries are removed to prevent package installation from a compromised container.
-RUN setcap cap_bpf,cap_net_admin,cap_perfmon+eip /usr/local/bin/huginn-proxy \
+# cap_bpf: open pinned BPF maps for reading (TCP SYN fingerprinting).
+# The proxy never loads XDP — cap_net_admin and cap_perfmon are NOT needed.
+# docker-compose.yml must declare cap_add: [CAP_BPF] for the bounding set.
+RUN setcap cap_bpf+eip /usr/local/bin/huginn-proxy \
     && chmod 555 /usr/local/bin/huginn-proxy \
     && apt-get purge -y --auto-remove libcap2-bin \
     && rm -rf /var/lib/apt/lists/* /var/cache/apt \

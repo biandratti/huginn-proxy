@@ -8,15 +8,17 @@ COPY examples/backend ./examples/backend
 # Copy Cargo.toml of other workspace members (required by Cargo workspace resolution)
 COPY huginn-proxy/Cargo.toml ./huginn-proxy/
 COPY huginn-proxy-lib/Cargo.toml ./huginn-proxy-lib/
-COPY huginn-proxy-ebpf/Cargo.toml ./huginn-proxy-ebpf/
+COPY huginn-ebpf/Cargo.toml ./huginn-ebpf/
+COPY huginn-ebpf-agent/Cargo.toml ./huginn-ebpf-agent/
 COPY tests-e2e/Cargo.toml ./tests-e2e/
 COPY tests-browsers/Cargo.toml ./tests-browsers/
 # Create minimal source files for other workspace members (Cargo requires valid packages)
 # These are not built, but Cargo needs them to resolve the workspace
-RUN mkdir -p huginn-proxy/src huginn-proxy-lib/src huginn-proxy-ebpf/src tests-e2e/src tests-browsers/src && \
+RUN mkdir -p huginn-proxy/src huginn-proxy-lib/src huginn-ebpf/src huginn-ebpf-agent/src tests-e2e/src tests-browsers/src && \
     echo 'fn main() {}' > huginn-proxy/src/main.rs && \
     echo '' > huginn-proxy-lib/src/lib.rs && \
-    echo '' > huginn-proxy-ebpf/src/lib.rs && \
+    echo '' > huginn-ebpf/src/lib.rs && \
+    echo 'fn main() {}' > huginn-ebpf-agent/src/main.rs && \
     echo '' > tests-e2e/src/lib.rs && \
     echo '' > tests-browsers/src/lib.rs
 RUN cargo build --release --package backend
@@ -28,4 +30,3 @@ COPY --from=builder /app/target/release/backend /usr/local/bin/backend
 USER app
 EXPOSE 9000
 CMD ["/usr/local/bin/backend"]
-
