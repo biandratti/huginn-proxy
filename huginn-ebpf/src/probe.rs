@@ -25,20 +25,17 @@ static XDP_BPF_BYTES: &[u8] = aya::include_bytes_aligned!(concat!(env!("OUT_DIR"
 const STALE_TICK_THRESHOLD: u64 = 16_384;
 
 enum ProbeInner {
-    /// Embedded mode: the probe owns the loaded BPF object and the attached XDP
-    /// program. Maps are accessed through the `Ebpf` handle. Dropping this
-    /// variant detaches the XDP program.
+    /// Used by `huginn-ebpf-agent`: owns the BPF object and XDP program.
+    /// Dropping detaches XDP from the interface.
     Embedded { ebpf: Ebpf },
-    /// Pinned mode: maps were created and pinned by an external agent process.
-    /// The probe opens them by path and wraps them in `Map` for aya's TryFrom.
+    /// Used by `huginn-proxy`: reads maps pinned by the agent.
     Pinned { syn_map: Map, counter: Map },
 }
 
 /// Manages eBPF XDP SYN data lookups.
 ///
-/// Two construction modes:
-/// - **Embedded** (`new`): loads the XDP program, attaches it, and owns the maps.
-/// - **Pinned** (`from_pinned`): opens maps pinned by a separate agent process.
+/// - The **agent** calls [`EbpfProbe::new`] to load XDP and own the maps.
+/// - The **proxy** calls [`EbpfProbe::from_pinned`] to read maps pinned by the agent.
 pub struct EbpfProbe {
     inner: ProbeInner,
     interface: String,

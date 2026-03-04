@@ -65,26 +65,15 @@ async fn main() -> Result<(), BoxError> {
             let pin_path = env::var("HUGINN_EBPF_PIN_PATH")
                 .unwrap_or_else(|_| huginn_ebpf::pin::DEFAULT_PIN_BASE.to_string());
 
-            const MAX_ATTEMPTS: u32 = 30; // TODO: Make this configurable
             const RETRY_INTERVAL: std::time::Duration = std::time::Duration::from_secs(2);
 
             let probe = loop {
                 match EbpfProbe::from_pinned(&pin_path) {
                     Ok(p) => break p,
-                    Err(e) => {
-                        static ATTEMPT: std::sync::atomic::AtomicU32 =
-                            std::sync::atomic::AtomicU32::new(1);
-                        let attempt = ATTEMPT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                        if attempt > MAX_ATTEMPTS {
-                            return Err(format!(
-                                "eBPF probe failed after {MAX_ATTEMPTS} attempts: {e:#?}"
-                            )
-                            .into());
-                        }
+                    Err(_) => {
                         tracing::warn!(
-                            attempt,
-                            MAX_ATTEMPTS,
-                            "Waiting for eBPF agent to pin maps, retrying in {}s...",
+                            pin_path,
+                            "eBPF agent maps not available yet, retrying in {}s...",
                             RETRY_INTERVAL.as_secs()
                         );
                         std::thread::sleep(RETRY_INTERVAL);

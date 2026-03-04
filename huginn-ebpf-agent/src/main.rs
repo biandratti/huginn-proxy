@@ -7,6 +7,7 @@ use std::net::Ipv4Addr;
 use huginn_ebpf::pin::DEFAULT_PIN_BASE;
 use huginn_ebpf::EbpfProbe;
 
+//TODO: Implement error handling for all env vars
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let default_level = std::env::var("RUST_LOG").unwrap_or_else(|_| "info".to_string());
     let env_filter = tracing_subscriber::EnvFilter::try_from_default_env()
@@ -18,17 +19,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .map_err(|_| "HUGINN_EBPF_INTERFACE env var is required")?;
 
     let dst_ip: Ipv4Addr = std::env::var("HUGINN_EBPF_DST_IP")
-        .unwrap_or_else(|_| "0.0.0.0".to_string())
+        .map_err(|_| "HUGINN_EBPF_DST_IP env var is required")?
         .parse()
         .map_err(|_| "HUGINN_EBPF_DST_IP must be a valid IPv4 address")?;
 
     let dst_port: u16 = std::env::var("HUGINN_EBPF_DST_PORT")
-        .unwrap_or_else(|_| "0".to_string())
+        .map_err(|_| "HUGINN_EBPF_DST_PORT env var is required")?
         .parse()
         .map_err(|_| "HUGINN_EBPF_DST_PORT must be a valid port number")?;
 
-    let pin_path =
-        std::env::var("HUGINN_EBPF_PIN_PATH").unwrap_or_else(|_| DEFAULT_PIN_BASE.to_string());
+    let pin_path = std::env::var("HUGINN_EBPF_PIN_PATH")
+        .map_err(|_| "HUGINN_EBPF_PIN_PATH env var is required")?;
 
     let mut probe = EbpfProbe::new(&iface, dst_ip, dst_port)?;
     probe.pin_maps(&pin_path)?;
