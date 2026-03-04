@@ -2,7 +2,8 @@ services:
   proxy:
     build:
       context: ..
-      dockerfile: Dockerfile.plain
+      dockerfile: docker/proxy.Dockerfile
+      target: plain
     command: ["/usr/local/bin/huginn-proxy", "/config/compose.toml"]
     volumes:
       - ./config/compose.toml:/config/compose.toml:ro

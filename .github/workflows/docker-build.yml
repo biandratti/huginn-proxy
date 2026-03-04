@@ -37,8 +37,6 @@ permissions:
   security-events: write
 
 jobs:
-  # Computes image_tag and tag outside the matrix so they can be used as
-  # workflow outputs (matrix job outputs are not directly exposable).
   prepare:
     name: Prepare image metadata
     runs-on: ubuntu-latest
@@ -74,12 +72,19 @@ jobs:
       matrix:
         include:
           - name: ebpf
-            dockerfile: ./Dockerfile
+            dockerfile: ./docker/proxy.Dockerfile
+            target: ebpf
             suffix: ''
             platforms: linux/amd64,linux/arm64
           - name: plain
-            dockerfile: ./Dockerfile.plain
+            dockerfile: ./docker/proxy.Dockerfile
+            target: plain
             suffix: '-plain'
+            platforms: linux/amd64,linux/arm64
+          - name: ebpf-agent
+            dockerfile: ./docker/ebpf-agent.Dockerfile
+            target: ''
+            suffix: '-ebpf-agent'
             platforms: linux/amd64,linux/arm64
 
     steps:
@@ -121,6 +126,7 @@ jobs:
         with:
           context: .
           file: ${{ matrix.dockerfile }}
+          target: ${{ matrix.target || '' }}
           platforms: linux/amd64
           push: false
           load: true
@@ -155,6 +161,7 @@ jobs:
         with:
           context: .
           file: ${{ matrix.dockerfile }}
+          target: ${{ matrix.target || '' }}
           platforms: ${{ matrix.platforms }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
