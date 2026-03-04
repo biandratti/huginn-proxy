@@ -61,8 +61,6 @@ See [FEATURES.md](FEATURES.md) for detailed descriptions and limitations of each
 
 For deployment instructions, see [DEPLOYMENT.md](DEPLOYMENT.md).
 
-For module structure and design decisions, see [ARCHITECTURE.md](ARCHITECTURE.md).
-
 ## Fingerprinting
 
 Fingerprints are automatically extracted and injected as headers:
@@ -132,11 +130,25 @@ See [`benches/README.md`](benches/README.md) for detailed benchmark results from
 
 See [ROADMAP.md](ROADMAP.md) for a detailed list of planned features and upcoming phases.
 
-## Artifacts Matrix
+## Containers and Binaries Matrix
 
-### Binaries
+<details>
+<summary><strong>Docker images</strong></summary>
 
-Each release publishes the following artifacts:
+Images published to `ghcr.io/biandratti/huginn-proxy` (`linux/amd64`, `linux/arm64`).
+
+| Image tag | Base image | User | eBPF | Capabilities |
+|---|---|---|---|---|
+| `:latest` / `:v0.0.1-beta.1` | `debian:bookworm-slim` | `10001` | ✅ reads pinned maps | `CAP_BPF` |
+| `:latest-plain` / `:v0.0.1-beta.1-plain` | `debian:bookworm-slim` | `10001` | ❌ | none |
+| `:latest-ebpf-agent` / `:v0.0.1-beta.1-ebpf-agent` | `debian:bookworm-slim` | `root` | ✅ loads XDP, pins maps | `CAP_BPF` + `CAP_NET_ADMIN` + `CAP_PERFMON` |
+
+See [DEPLOYMENT.md](DEPLOYMENT.md) for Docker and Kubernetes setup, and [EBPF-SETUP.md](EBPF-SETUP.md) for eBPF runtime requirements.
+
+</details>
+
+<details>
+<summary><strong>Release binaries</strong></summary>
 
 | Artifact | Suffix | OS | Arch | libc | eBPF |
 |---|---|---|---|---|---|
@@ -150,12 +162,56 @@ Each release publishes the following artifacts:
 | `huginn-ebpf-agent` | `aarch64-unknown-linux-gnu-ebpf-agent` | Linux | arm64 | glibc | ✅ (loader) |
 
 - musl (static): zero runtime dependencies, runs on any Linux kernel and distro.
-- glibc (eBPF): extracted from the Docker image; requires glibc and Linux kernel ≥ 5.11.
-- The **proxy** (eBPF variant) only reads pinned BPF maps, needs `CAP_BPF`.
-- The **agent** loads XDP and pins maps, needs `CAP_BPF`, `CAP_NET_ADMIN`, `CAP_PERFMON`.
+- glibc (eBPF): extracted from the Docker image, requires glibc and Linux kernel ≥ 5.11.
 
-Docker images are published to `ghcr.io/biandratti/huginn-proxy` (`linux/amd64`, `linux/arm64`).
-See [DEPLOYMENT.md](DEPLOYMENT.md) for Docker and Kubernetes setup, and [EBPF-SETUP.md](EBPF-SETUP.md) for eBPF runtime requirements.
+</details>
+
+## Architecture
+
+For module structure and design decisions, see [ARCHITECTURE.md](ARCHITECTURE.md).
+
+| Fingerprint | Header | eBPF agent required |
+|---|---|---|
+| TLS (JA4) | `x-huginn-net-ja4` | No |
+| HTTP/2 (Akamai) | `x-huginn-net-akamai` | No |
+| TCP SYN (p0f) | `x-huginn-net-tcp` | **Yes** — Linux only, kernel ≥ 5.11 |
+
+<details>
+<summary><strong>TCP SYN Fingerprinting — Deployment Architecture</strong></summary>
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  Node                                                   │
+│                                                         │
+│  ┌─────────────────────────┐                            │
+│  │  huginn-ebpf-agent      │  CAP_BPF + CAP_NET_ADMIN   │
+│  │                         │  + CAP_PERFMON             │
+│  │  XDP program (kernel)   │  + seccomp:unconfined      │
+│  │  ┌─────────────────┐    │  + apparmor:unconfined     │
+│  │  │ tcp_syn_map     │    │  (no open ports)           │
+│  │  │ syn_counter     │    │                            │
+│  │  └────────┬────────┘    │                            │
+│  │           │ pin_maps()  │                            │
+│  └───────────┼─────────────┘                            │
+│              │ /sys/fs/bpf/huginn/                      │
+│  ┌───────────┼─────────────┐                            │
+│  │  huginn-proxy (×N)      │  CAP_BPF only              │
+│  │           │             │  seccomp: default          │
+│  │  ┌────────┴────────┐    │  USER 10001                │
+│  │  │ from_pinned()   │    │                            │
+│  │  │ map lookup      │    │                            │
+│  │  └─────────────────┘    │                            │
+│  │                         │                            │
+│  │  HTTP/TLS → backends    │                            │
+│  │  x-huginn-net-tcp ──►   │                            │
+│  └─────────────────────────┘                            │
+└─────────────────────────────────────────────────────────┘
+```
+
+The agent loads the XDP program once per node and pins BPF maps under `/sys/fs/bpf/huginn/`.
+Multiple proxy replicas read the shared maps in read-only mode.
+
+</details>
 
 ## License
 
