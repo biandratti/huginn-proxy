@@ -182,32 +182,3 @@ connection_handling_secs = 300
 
 Adjust resource limits based on your workload (see Deployment manifest example above).
 
-## Troubleshooting
-
-Check logs:
-
-```bash
-# Docker
-docker logs huginn-proxy
-
-# Kubernetes
-kubectl logs -f deployment/huginn-proxy
-```
-
-Enable debug logging:
-
-```toml
-[logging]
-level = "debug"
-```
-
-Verify health:
-
-```bash
-curl http://localhost:9090/health
-```
-
-## Next Steps
-
-- Review [TELEMETRY.md](TELEMETRY.md) for metrics documentation
-- Check [FEATURES.md](FEATURES.md) for available features

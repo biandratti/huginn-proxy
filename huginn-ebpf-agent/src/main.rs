@@ -4,7 +4,6 @@
 /// CAP_NET_ADMIN or seccomp:unconfined.
 use std::net::Ipv4Addr;
 
-use huginn_ebpf::pin::DEFAULT_PIN_BASE;
 use huginn_ebpf::EbpfProbe;
 
 //TODO: Implement error handling for all env vars
