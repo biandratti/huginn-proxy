@@ -83,8 +83,8 @@ Two compose files are provided depending on your environment:
 
 | Compose file | Dockerfile | Requirements |
 |---|---|---|
-| `docker-compose.yml` | `Dockerfile` (eBPF enabled) | Linux kernel ≥ 5.11, `cap_add` granted by Docker |
-| `docker-compose.plain.yml` | `Dockerfile.plain` (no eBPF) | Any Linux kernel, no extra capabilities |
+| `docker-compose.yml` | `docker/proxy.Dockerfile` (target: ebpf) + `docker/ebpf-agent.Dockerfile` | Linux kernel ≥ 5.11, `cap_add` granted by Docker |
+| `docker-compose.plain.yml` | `docker/proxy.Dockerfile` (target: plain) | Any Linux kernel, no extra capabilities |
 
 ```bash
 # With eBPF/XDP TCP SYN fingerprinting (Linux kernel ≥ 5.11)

@@ -134,32 +134,28 @@ See [ROADMAP.md](ROADMAP.md) for a detailed list of planned features and upcomin
 
 ## Artifacts Matrix
 
-Each release publishes the following artifacts as `huginn-proxy-{tag}-{suffix}`:
+### Binaries
 
-| Suffix | OS | Arch | libc | eBPF |
-|---|---|---|---|---|
-| `x86_64-unknown-linux-musl` | Linux | amd64 | musl (static) | ❌ |
-| `aarch64-unknown-linux-musl` | Linux | arm64 | musl (static) | ❌ |
-| `x86_64-unknown-linux-gnu-ebpf` | Linux | amd64 | glibc | ✅ |
-| `aarch64-unknown-linux-gnu-ebpf` | Linux | arm64 | glibc | ✅ |
-| `x86_64-apple-darwin` | macOS | amd64 | - | ❌ |
-| `aarch64-apple-darwin` | macOS | arm64 | - | ❌ |
+Each release publishes the following artifacts:
 
-- musl (static): zero runtime dependencies, runs on any Linux kernel and distro.  
-- glibc (eBPF): extracted from the Docker image; requires glibc and Linux kernel ≥ 5.11.  
-eBPF variants require `CAP_BPF`, `CAP_NET_ADMIN`, `CAP_PERFMON`.
+| Artifact | Suffix | OS | Arch | libc | eBPF |
+|---|---|---|---|---|---|
+| `huginn-proxy` | `x86_64-unknown-linux-musl` | Linux | amd64 | musl (static) | ❌ |
+| `huginn-proxy` | `aarch64-unknown-linux-musl` | Linux | arm64 | musl (static) | ❌ |
+| `huginn-proxy` | `x86_64-unknown-linux-gnu-ebpf` | Linux | amd64 | glibc | ✅ (reader) |
+| `huginn-proxy` | `aarch64-unknown-linux-gnu-ebpf` | Linux | arm64 | glibc | ✅ (reader) |
+| `huginn-proxy` | `x86_64-apple-darwin` | macOS | amd64 | - | ❌ |
+| `huginn-proxy` | `aarch64-apple-darwin` | macOS | arm64 | - | ❌ |
+| `huginn-ebpf-agent` | `x86_64-unknown-linux-gnu-ebpf-agent` | Linux | amd64 | glibc | ✅ (loader) |
+| `huginn-ebpf-agent` | `aarch64-unknown-linux-gnu-ebpf-agent` | Linux | arm64 | glibc | ✅ (loader) |
 
-Docker images are available at `ghcr.io/biandratti/huginn-proxy` for **Linux only** (`linux/amd64`, `linux/arm64`).
-On macOS and Windows, Docker Desktop runs a Linux VM, containers still work but eBPF/XDP requires a native Linux kernel.
+- musl (static): zero runtime dependencies, runs on any Linux kernel and distro.
+- glibc (eBPF): extracted from the Docker image; requires glibc and Linux kernel ≥ 5.11.
+- The **proxy** (eBPF variant) only reads pinned BPF maps, needs `CAP_BPF`.
+- The **agent** loads XDP and pins maps, needs `CAP_BPF`, `CAP_NET_ADMIN`, `CAP_PERFMON`.
 
-| Tag | eBPF                    | Platforms |
-|---|-------------------------|---|
-| `:latest` / `:{tag}` | [Enabled] kernel ≥ 5.11 | linux/amd64, linux/arm64 |
-| `:latest-plain` / `:{tag}-plain` | [Disabled] any kernel   | linux/amd64, linux/arm64 |
-
-Each tag resolves to a [multi-arch manifest index](https://docs.docker.com/build/building/multi-platform/): Docker automatically pulls the right platform. To pin a specific platform, use the per-arch digest shown in the [package page](https://github.com/biandratti/huginn-proxy/pkgs/container/huginn-proxy).
-
-See [EBPF-SETUP.md](EBPF-SETUP.md) for runtime requirements.
+Docker images are published to `ghcr.io/biandratti/huginn-proxy` (`linux/amd64`, `linux/arm64`).
+See [DEPLOYMENT.md](DEPLOYMENT.md) for Docker and Kubernetes setup, and [EBPF-SETUP.md](EBPF-SETUP.md) for eBPF runtime requirements.
 
 ## License
 

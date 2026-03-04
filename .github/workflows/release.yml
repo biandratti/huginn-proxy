@@ -52,7 +52,7 @@ jobs:
 
 
   binaries-linux:
-    name: Extract Linux binaries from Docker images (eBPF)
+    name: Extract Linux binaries from Docker images (${{ matrix.binary }})
     runs-on: ubuntu-latest
     environment: release
     needs: [validate, docker]
@@ -64,13 +64,25 @@ jobs:
       matrix:
         include:
           - platform: linux/amd64
-            arch: x86_64
             target: x86_64-unknown-linux-gnu
             suffix: "-ebpf"
+            binary: huginn-proxy
+            image_suffix: ""
           - platform: linux/arm64
-            arch: aarch64
             target: aarch64-unknown-linux-gnu
             suffix: "-ebpf"
+            binary: huginn-proxy
+            image_suffix: ""
+          - platform: linux/amd64
+            target: x86_64-unknown-linux-gnu
+            suffix: "-ebpf-agent"
+            binary: huginn-ebpf-agent
+            image_suffix: "-ebpf-agent"
+          - platform: linux/arm64
+            target: aarch64-unknown-linux-gnu
+            suffix: "-ebpf-agent"
+            binary: huginn-ebpf-agent
+            image_suffix: "-ebpf-agent"
 
     steps:
       - name: Set up Docker Buildx
@@ -85,8 +97,8 @@ jobs:
 
       - name: Extract binary from Docker image
         run: |
-          IMAGE_TAG="${{ needs.docker.outputs.image_tag }}"
-          BINARY_NAME="huginn-proxy-${{ needs.docker.outputs.tag }}-${{ matrix.target }}${{ matrix.suffix }}"
+          IMAGE_TAG="${{ needs.docker.outputs.image_tag }}${{ matrix.image_suffix }}"
+          ARTIFACT_NAME="${{ matrix.binary }}-${{ needs.docker.outputs.tag }}-${{ matrix.target }}${{ matrix.suffix }}"
           
           echo "Waiting for image to be available: ${IMAGE_TAG}"
           MAX_RETRIES=30
@@ -94,7 +106,7 @@ jobs:
           
           while [ ${RETRY_COUNT} -lt ${MAX_RETRIES} ]; do
             if docker pull --platform=${{ matrix.platform }} ${IMAGE_TAG} 2>/dev/null; then
-              echo "✓ Image pulled successfully"
+              echo "Image pulled successfully"
               break
             else
               RETRY_COUNT=$((RETRY_COUNT + 1))
@@ -102,7 +114,7 @@ jobs:
                 echo "Image not available yet, retrying... (${RETRY_COUNT}/${MAX_RETRIES})"
                 sleep 2
               else
-                echo "✗ Failed to pull image after ${MAX_RETRIES} attempts"
+                echo "Failed to pull image after ${MAX_RETRIES} attempts"
                 exit 1
               fi
             fi
@@ -110,19 +122,19 @@ jobs:
           
           echo "Extracting binary from Docker image"
           CONTAINER_ID=$(docker create --platform=${{ matrix.platform }} ${IMAGE_TAG})
-          docker cp ${CONTAINER_ID}:/usr/local/bin/huginn-proxy /tmp/${BINARY_NAME}
+          docker cp ${CONTAINER_ID}:/usr/local/bin/${{ matrix.binary }} /tmp/${ARTIFACT_NAME}
           docker rm ${CONTAINER_ID}
           
-          chmod +x /tmp/${BINARY_NAME}
+          chmod +x /tmp/${ARTIFACT_NAME}
           
-          file /tmp/${BINARY_NAME}
-          ls -lh /tmp/${BINARY_NAME}
+          file /tmp/${ARTIFACT_NAME}
+          ls -lh /tmp/${ARTIFACT_NAME}
 
       - name: Upload binary artifact
         uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.target }}${{ matrix.suffix }}
-          path: /tmp/huginn-proxy-${{ needs.docker.outputs.tag }}-${{ matrix.target }}${{ matrix.suffix }}
+          path: /tmp/${{ matrix.binary }}-${{ needs.docker.outputs.tag }}-${{ matrix.target }}${{ matrix.suffix }}
 
   binaries-linux-plain:
     name: Build Linux binaries without eBPF

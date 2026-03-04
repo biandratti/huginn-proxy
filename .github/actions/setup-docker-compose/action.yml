@@ -41,8 +41,16 @@ runs:
         docker buildx build \
           --cache-from type=gha \
           --cache-to type=gha,mode=max \
-          -f ../Dockerfile \
+          -f ../docker/proxy.Dockerfile \
+          --target ebpf \
           -t examples_proxy:latest \
+          --load \
+          ..
+        docker buildx build \
+          --cache-from type=gha \
+          --cache-to type=gha,mode=max \
+          -f ../docker/ebpf-agent.Dockerfile \
+          -t examples_ebpf-agent:latest \
           --load \
           ..
         docker buildx build \
