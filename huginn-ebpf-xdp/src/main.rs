@@ -8,15 +8,12 @@
 #![no_std]
 #![no_main]
 
-use aya_ebpf::{
-    macros::xdp,
-    programs::XdpContext,
-};
+use aya_ebpf::{bindings::xdp_action::XDP_PASS, macros::xdp, programs::XdpContext};
 
 mod constants;
+mod handlers;
 mod headers;
 mod helpers;
-mod handlers;
 mod signals;
 
 // ── Entry point ──────────────────────────────────────────────────────────────
@@ -24,8 +21,8 @@ mod signals;
 #[xdp]
 pub fn huginn_xdp_syn(ctx: XdpContext) -> u32 {
     match handlers::try_xdp_syn(&ctx) {
-        Ok(()) => aya_ebpf::bindings::xdp_action::XDP_PASS,
-        Err(()) => aya_ebpf::bindings::xdp_action::XDP_PASS,
+        Ok(()) => XDP_PASS,
+        Err(()) => XDP_PASS,
     }
 }
 
