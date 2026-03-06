@@ -14,12 +14,10 @@ use aya_ebpf::{
 };
 
 mod constants;
-mod quirk_bits;
-mod syn_raw;
 mod headers;
-mod maps;
 mod helpers;
 mod handlers;
+mod signals;
 
 // ── Entry point ──────────────────────────────────────────────────────────────
 

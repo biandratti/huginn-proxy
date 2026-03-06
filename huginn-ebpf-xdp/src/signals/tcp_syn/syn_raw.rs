@@ -2,7 +2,6 @@
 ///
 /// Layout must match `SynRawData` in `huginn-ebpf/src/types.rs` exactly.
 /// Both sides use identical `offset_of!` compile-time assertions to enforce this.
-/// The canonical layout is documented in `data/huginn-proxy-analisis/bpf.md`.
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct SynRawData {
@@ -31,11 +30,10 @@ const _: () = {
     assert!(offset_of!(SynRawData, tick) == 56);
 };
 
-/// Build the BPF map key from source IP and port.
+/// Build the BPF map key from source IP and port (IPv4).
 ///
 /// Both `src_ip` and `src_port` are in network byte order as read by the LE
-/// CPU (raw packet bytes interpreted as a LE integer). The userspace side
-/// (`huginn-ebpf/src/probe.rs`) replicates this encoding in `make_bpf_key`.
+/// CPU. The userspace side (`huginn-ebpf`) replicates this encoding in `make_bpf_key`.
 #[inline(always)]
 pub fn make_key(src_ip: u32, src_port: u16) -> u64 {
     ((src_ip as u64) << 16) | (src_port as u64)

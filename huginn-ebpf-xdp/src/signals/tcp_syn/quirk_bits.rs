@@ -1,7 +1,6 @@
-/// Quirk bitmask constants extracted from IP and TCP headers.
+/// Quirk bitmask constants extracted from IP and TCP headers (TCP SYN signal).
 ///
 /// Must match the identical module in `huginn-ebpf/src/types.rs`.
-/// Both sides use `offset_of!` compile-time assertions to enforce layout parity.
 pub const DF: u32 = 1 << 0;
 pub const NONZERO_ID: u32 = 1 << 1;
 pub const ZERO_ID: u32 = 1 << 2;
