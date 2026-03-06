@@ -96,11 +96,11 @@ impl EbpfProbe {
 
     /// Open previously pinned BPF maps created by the eBPF agent.
     ///
-    /// The agent must have already pinned `tcp_syn_map` and `syn_counter` under
+    /// The agent must have already pinned `tcp_syn_map_v4` and `syn_counter` under
     /// `base_path` (default: `/sys/fs/bpf/huginn/`). This constructor does not
     /// load or attach any XDP program — the agent owns that lifecycle.
     pub fn from_pinned(base_path: &str) -> Result<Self, EbpfError> {
-        let syn_map_path = pin::syn_map_path(base_path);
+        let syn_map_path = pin::syn_map_v4_path(base_path);
         let counter_path = pin::counter_path(base_path);
 
         let syn_data = MapData::from_pin(&syn_map_path).map_err(|e| EbpfError::FromPin {
@@ -144,7 +144,7 @@ impl EbpfProbe {
             ProbeInner::Pinned { .. } => return Ok(()),
         };
 
-        let syn_path = pin::syn_map_path(base_path);
+        let syn_path = pin::syn_map_v4_path(base_path);
         let counter_path = pin::counter_path(base_path);
 
         // Remove stale pins from a previous agent instance.
@@ -152,11 +152,11 @@ impl EbpfProbe {
         let _ = std::fs::remove_file(&counter_path);
 
         let syn_map = ebpf
-            .map_mut(pin::SYN_MAP_NAME)
+            .map_mut(pin::SYN_MAP_V4_NAME)
             .ok_or(EbpfError::ProgramNotFound)?;
         syn_map
             .pin(&syn_path)
-            .map_err(|e| EbpfError::Pin { name: pin::SYN_MAP_NAME.to_string(), source: e })?;
+            .map_err(|e| EbpfError::Pin { name: pin::SYN_MAP_V4_NAME.to_string(), source: e })?;
 
         let counter = ebpf
             .map_mut(pin::COUNTER_NAME)
@@ -178,7 +178,7 @@ impl EbpfProbe {
 
     /// Remove pinned map files. Called during agent shutdown for clean teardown.
     pub fn unpin_maps(base_path: &str) {
-        let syn_path = pin::syn_map_path(base_path);
+        let syn_path = pin::syn_map_v4_path(base_path);
         let counter_path = pin::counter_path(base_path);
         let _ = std::fs::remove_file(&syn_path);
         let _ = std::fs::remove_file(&counter_path);
@@ -238,7 +238,7 @@ impl EbpfProbe {
 
     fn syn_map(&self) -> Option<&Map> {
         match &self.inner {
-            ProbeInner::Embedded { ebpf } => ebpf.map(pin::SYN_MAP_NAME),
+            ProbeInner::Embedded { ebpf } => ebpf.map(pin::SYN_MAP_V4_NAME),
             ProbeInner::Pinned { syn_map, .. } => Some(syn_map),
         }
     }
