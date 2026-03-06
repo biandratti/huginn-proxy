@@ -16,6 +16,9 @@ use aya_ebpf::{
 
 use core::mem;
 
+mod constants;
+use constants::*;
+
 /// Quirk bitmask constants extracted from IP and TCP headers.
 ///
 /// Must match the identical module in `huginn-ebpf/src/types.rs`.
@@ -65,20 +68,6 @@ const _: () = {
     assert!(offset_of!(SynRawData, quirks) == 52);
     assert!(offset_of!(SynRawData, tick) == 56);
 };
-
-// ── Network protocol constants (network byte order on LE host) ──────────────
-
-const ETH_P_IP: u16 = 0x0800_u16.swap_bytes();
-const ETH_P_8021Q: u16 = 0x8100_u16.swap_bytes();
-const ETH_P_8021AD: u16 = 0x88A8_u16.swap_bytes();
-
-const IP_RF: u16 = 0x8000_u16.swap_bytes(); // reserved / must-be-zero
-const IP_DF: u16 = 0x4000_u16.swap_bytes(); // don't fragment
-const IP_MF: u16 = 0x2000_u16.swap_bytes(); // more fragments
-const IP_OFFSET: u16 = 0x1FFF_u16.swap_bytes(); // fragment offset mask
-
-const IPPROTO_TCP: u8 = 6;
-const TCPOPT_MAXLEN: usize = 40;
 
 // ── Globals patched at load time by EbpfLoader::set_global ──────────────────
 
