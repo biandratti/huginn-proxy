@@ -1,4 +1,5 @@
-use huginn_ebpf::types::{parse_syn, SynRawData};
+use huginn_ebpf::types::{parse_syn, quirk_bits, SynRawData};
+use huginn_net_db::tcp::Quirk;
 
 type TestResult = Result<(), Box<dyn std::error::Error + Send + Sync>>;
 
@@ -21,6 +22,16 @@ fn make_test_options() -> ([u8; 40], u16) {
 }
 
 fn make_syn_raw(window: u16, ip_ttl: u8, optlen: u16, options: [u8; 40]) -> SynRawData {
+    make_syn_raw_with_quirks(window, ip_ttl, optlen, options, 0)
+}
+
+fn make_syn_raw_with_quirks(
+    window: u16,
+    ip_ttl: u8,
+    optlen: u16,
+    options: [u8; 40],
+    quirks: u32,
+) -> SynRawData {
     SynRawData {
         src_addr: 0,
         src_port: 0,
@@ -29,7 +40,7 @@ fn make_syn_raw(window: u16, ip_ttl: u8, optlen: u16, options: [u8; 40]) -> SynR
         ip_ttl,
         ip_olen: 0,
         options,
-        quirks: 0,
+        quirks,
         tick: 0,
     }
 }
@@ -110,5 +121,36 @@ fn test_window_byte_order_converted() -> TestResult {
         !wsize_part.contains("32"),
         "window must not appear byte-swapped, got: {wsize_part}"
     );
+    Ok(())
+}
+
+/// Each quirk bit in the XDP-captured bitmask must decode to the corresponding Quirk in TcpObservation.
+/// Protects decode_quirks() and quirk_bits parity with the XDP side.
+#[test]
+fn test_all_quirk_bits_roundtrip() -> TestResult {
+    let (options, optlen) = make_test_options();
+    let cases: &[(u32, Quirk)] = &[
+        (quirk_bits::DF, Quirk::Df),
+        (quirk_bits::NONZERO_ID, Quirk::NonZeroID),
+        (quirk_bits::ZERO_ID, Quirk::ZeroID),
+        (quirk_bits::MUST_BE_ZERO, Quirk::MustBeZero),
+        (quirk_bits::ECN, Quirk::Ecn),
+        (quirk_bits::SEQ_ZERO, Quirk::SeqNumZero),
+        (quirk_bits::ACK_NONZERO, Quirk::AckNumNonZero),
+        (quirk_bits::NONZERO_URG, Quirk::NonZeroURG),
+        (quirk_bits::URG, Quirk::Urg),
+        (quirk_bits::PUSH, Quirk::Push),
+    ];
+    for (bit, expected_quirk) in cases {
+        let raw = make_syn_raw_with_quirks(65535u16.to_be(), 64, optlen, options, *bit);
+        let obs = parse_syn(&raw).ok_or("parse_syn returned None for valid options")?;
+        assert!(
+            obs.quirks.contains(expected_quirk),
+            "quirk bit 0x{:x} should decode to {:?}, got quirks: {:?}",
+            bit,
+            expected_quirk,
+            obs.quirks
+        );
+    }
     Ok(())
 }
