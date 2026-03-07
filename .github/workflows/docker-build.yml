@@ -122,7 +122,7 @@ jobs:
           password: ${{ secrets.registry_token }}
 
       - name: Build Docker image (amd64 for scanning)
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: ${{ matrix.dockerfile }}
@@ -157,7 +157,7 @@ jobs:
 
       - name: Build and push (multi-platform, reusing cache)
         if: ${{ inputs.push == true }}
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: ${{ matrix.dockerfile }}
