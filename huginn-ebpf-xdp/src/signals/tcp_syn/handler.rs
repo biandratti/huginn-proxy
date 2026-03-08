@@ -30,42 +30,7 @@ pub fn handle_tcp_syn_v4(
         0u64
     };
 
-    // ── Quirk bitmask ─────────────────────────────────────────────────────────
-    let mut quirks: u32 = 0;
-    let frag_off = ip.frag_off;
-    let ip_id = ip.id;
-    let df = frag_off & crate::constants::IP_DF != 0;
-
-    if df {
-        quirks |= quirk_bits::DF;
-    }
-    if df && ip_id != 0 {
-        quirks |= quirk_bits::NONZERO_ID;
-    }
-    if !df && ip_id == 0 {
-        quirks |= quirk_bits::ZERO_ID;
-    }
-    if frag_off & crate::constants::IP_RF != 0 {
-        quirks |= quirk_bits::MUST_BE_ZERO;
-    }
-    if tcp.ece() || tcp.cwr() {
-        quirks |= quirk_bits::ECN;
-    }
-    if tcp.seq == 0 {
-        quirks |= quirk_bits::SEQ_ZERO;
-    }
-    if tcp.ack_seq != 0 {
-        quirks |= quirk_bits::ACK_NONZERO;
-    }
-    if tcp.urg_ptr != 0 {
-        quirks |= quirk_bits::NONZERO_URG;
-    }
-    if tcp.urg() {
-        quirks |= quirk_bits::URG;
-    }
-    if tcp.psh() {
-        quirks |= quirk_bits::PUSH;
-    }
+    let quirks = quirk_bits::compute_quirks(ip, tcp);
 
     // ── Build map value ───────────────────────────────────────────────────────
     let tcp_hdr_len = usize::from(tcp.doff()).saturating_mul(4);
@@ -85,7 +50,7 @@ pub fn handle_tcp_syn_v4(
         tick,
     };
 
-    // ── Copy TCP options from packet (requires unsafe: raw pointer into ctx) ───
+    // Copy TCP options; must stay inline so the BPF verifier tracks packet bounds in this frame.
     let opts_ptr = unsafe { (tcp as *const TcpHdr as *const u8).add(mem::size_of::<TcpHdr>()) };
     let data_end = ctx.data_end();
     for i in 0..TCPOPT_MAXLEN {
