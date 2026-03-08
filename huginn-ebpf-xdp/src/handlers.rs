@@ -78,8 +78,12 @@ pub fn try_xdp_syn(ctx: &XdpContext) -> Result<(), ()> {
         return Ok(());
     }
 
+    // Only TCP SYN (no ACK) matching dst_ip/dst_port reach here. Invalid or non-SYN packets
+    // are filtered above with return Ok(()) and never call the handler.
     // SAFETY: ip and tcp were validated by ptr_at and bounds; valid for the duration of this call.
     let ip_ref = unsafe { &*ip };
     let tcp_ref = unsafe { &*tcp };
-    tcp_syn::handle_tcp_syn_v4(ctx, ip_ref, tcp_ref, ip_hdr_len)
+    // On MapInsertFailed we still pass the packet. The handler increments syn_insert_failures;
+    // the agent/proxy reads it via EbpfProbe::syn_insert_failures_count() and can expose it as a metric.
+    tcp_syn::handle_tcp_syn_v4(ctx, ip_ref, tcp_ref, ip_hdr_len).map_err(|_| ())
 }

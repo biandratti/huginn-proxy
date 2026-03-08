@@ -18,6 +18,12 @@ pub static tcp_syn_map_v4: LruHashMap<u64, SynRawData> = LruHashMap::with_max_en
 #[allow(non_upper_case_globals)]
 pub static syn_counter: Array<u64> = Array::with_max_entries(1, 0);
 
+/// Counter of SYN map insert failures (LRU full or similar).
+/// Read by the agent/proxy for observability (e.g. metric `tcp_syn_insert_failures_total`).
+#[map]
+#[allow(non_upper_case_globals)]
+pub static syn_insert_failures: Array<u64> = Array::with_max_entries(1, 0);
+
 // ── Globals patched at load time by EbpfLoader::set_global ───────────────────
 //
 // XDP reads them via read_volatile to prevent the compiler from caching.

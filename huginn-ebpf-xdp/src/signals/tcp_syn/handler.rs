@@ -6,9 +6,20 @@ use core::mem;
 use crate::constants::TCPOPT_MAXLEN;
 use crate::headers::{IpHdr, TcpHdr};
 
-use super::maps::{syn_counter, tcp_syn_map_v4};
+use super::maps::{syn_counter, syn_insert_failures, tcp_syn_map_v4};
 use super::quirk_bits;
 use super::syn_raw::{make_key, SynRawData};
+
+/// Error from the TCP SYN handler.
+///
+/// Only one variant today: the BPF map insert failed (e.g. LRU at capacity).
+/// This does **not** mean "invalid packet" or "wrong type": by the time we're called,
+/// the pipeline has already validated Ethernet, IPv4, TCP, and SYN-without-ACK.
+#[derive(Clone, Copy)]
+pub enum TcpSynError {
+    /// Could not insert (src_ip, src_port) → SynRawData into the LRU map.
+    MapInsertFailed,
+}
 
 /// Handle an IPv4 TCP SYN: compute quirks, build SynRawData, insert into map.
 ///
@@ -20,7 +31,7 @@ pub fn handle_tcp_syn_v4(
     ip: &IpHdr,
     tcp: &TcpHdr,
     ip_hdr_len: usize,
-) -> Result<(), ()> {
+) -> Result<(), TcpSynError> {
     // SAFETY: syn_counter is a BPF map; get_ptr_mut returns a valid pointer for the map slot.
     let tick = if let Some(counter_ptr) = syn_counter.get_ptr_mut(0) {
         let current = unsafe { *counter_ptr };
@@ -66,5 +77,14 @@ pub fn handle_tcp_syn_v4(
     }
 
     let key = make_key(ip.saddr, tcp.source);
-    tcp_syn_map_v4.insert(&key, &val, 0).map_err(|_| ())
+    if let Err(_) = tcp_syn_map_v4.insert(&key, &val, 0) {
+        if let Some(ptr) = syn_insert_failures.get_ptr_mut(0) {
+            unsafe {
+                let v = *ptr;
+                *ptr = v.wrapping_add(1);
+            }
+        }
+        return Err(TcpSynError::MapInsertFailed);
+    }
+    Ok(())
 }

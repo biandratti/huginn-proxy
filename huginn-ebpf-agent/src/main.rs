@@ -6,7 +6,8 @@ use std::net::Ipv4Addr;
 
 use huginn_ebpf::EbpfProbe;
 
-//TODO: Implement error handling for all env vars
+// TODO: Implement error handling for all env vars.
+// TODO: Telemetry — collect and expose metrics from the probe (e.g. probe.syn_insert_failures_count())
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let default_level = std::env::var("RUST_LOG").unwrap_or_else(|_| "info".to_string());
     let env_filter = tracing_subscriber::EnvFilter::try_from_default_env()
