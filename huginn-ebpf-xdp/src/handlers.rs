@@ -78,5 +78,8 @@ pub fn try_xdp_syn(ctx: &XdpContext) -> Result<(), ()> {
         return Ok(());
     }
 
-    tcp_syn::handle_tcp_syn_v4(ctx, ip, tcp, ip_hdr_len)
+    // SAFETY: ip and tcp were validated by ptr_at and bounds; valid for the duration of this call.
+    let ip_ref = unsafe { &*ip };
+    let tcp_ref = unsafe { &*tcp };
+    tcp_syn::handle_tcp_syn_v4(ctx, ip_ref, tcp_ref, ip_hdr_len)
 }

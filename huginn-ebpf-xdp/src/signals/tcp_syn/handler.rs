@@ -14,12 +14,14 @@ use super::syn_raw::{make_key, SynRawData};
 ///
 /// Called from the pipeline after it has parsed Ethernet, IPv4, and TCP and
 /// confirmed SYN (no ACK) and passed the destination filter.
+/// `ip` and `tcp` are references to packet memory validated by the pipeline.
 pub fn handle_tcp_syn_v4(
     ctx: &XdpContext,
-    ip: *const IpHdr,
-    tcp: *const TcpHdr,
+    ip: &IpHdr,
+    tcp: &TcpHdr,
     ip_hdr_len: usize,
 ) -> Result<(), ()> {
+    // SAFETY: syn_counter is a BPF map; get_ptr_mut returns a valid pointer for the map slot.
     let tick = if let Some(counter_ptr) = syn_counter.get_ptr_mut(0) {
         let current = unsafe { *counter_ptr };
         unsafe { *counter_ptr = current.wrapping_add(1) };
@@ -30,8 +32,8 @@ pub fn handle_tcp_syn_v4(
 
     // ── Quirk bitmask ─────────────────────────────────────────────────────────
     let mut quirks: u32 = 0;
-    let frag_off = unsafe { (*ip).frag_off };
-    let ip_id = unsafe { (*ip).id };
+    let frag_off = ip.frag_off;
+    let ip_id = ip.id;
     let df = frag_off & crate::constants::IP_DF != 0;
 
     if df {
@@ -46,45 +48,45 @@ pub fn handle_tcp_syn_v4(
     if frag_off & crate::constants::IP_RF != 0 {
         quirks |= quirk_bits::MUST_BE_ZERO;
     }
-    if unsafe { (*tcp).ece() || (*tcp).cwr() } {
+    if tcp.ece() || tcp.cwr() {
         quirks |= quirk_bits::ECN;
     }
-    if unsafe { (*tcp).seq } == 0 {
+    if tcp.seq == 0 {
         quirks |= quirk_bits::SEQ_ZERO;
     }
-    if unsafe { (*tcp).ack_seq } != 0 {
+    if tcp.ack_seq != 0 {
         quirks |= quirk_bits::ACK_NONZERO;
     }
-    if unsafe { (*tcp).urg_ptr } != 0 {
+    if tcp.urg_ptr != 0 {
         quirks |= quirk_bits::NONZERO_URG;
     }
-    if unsafe { (*tcp).urg() } {
+    if tcp.urg() {
         quirks |= quirk_bits::URG;
     }
-    if unsafe { (*tcp).psh() } {
+    if tcp.psh() {
         quirks |= quirk_bits::PUSH;
     }
 
     // ── Build map value ───────────────────────────────────────────────────────
-    let tcp_hdr_len = unsafe { usize::from((*tcp).doff()).saturating_mul(4) };
+    let tcp_hdr_len = usize::from(tcp.doff()).saturating_mul(4);
     let optlen = tcp_hdr_len
         .saturating_sub(mem::size_of::<TcpHdr>())
         .min(TCPOPT_MAXLEN);
 
     let mut val = SynRawData {
-        src_addr: unsafe { (*ip).saddr },
-        src_port: unsafe { (*tcp).source },
-        window: unsafe { (*tcp).window },
+        src_addr: ip.saddr,
+        src_port: tcp.source,
+        window: tcp.window,
         optlen: optlen as u16,
-        ip_ttl: unsafe { (*ip).ttl },
+        ip_ttl: ip.ttl,
         ip_olen: ip_hdr_len.saturating_sub(mem::size_of::<IpHdr>()) as u8,
         options: [0u8; 40],
         quirks,
         tick,
     };
 
-    // ── Copy TCP options ───────────────────────────────────────────────────────
-    let opts_ptr = unsafe { (tcp as *const u8).add(mem::size_of::<TcpHdr>()) };
+    // ── Copy TCP options from packet (requires unsafe: raw pointer into ctx) ───
+    let opts_ptr = unsafe { (tcp as *const TcpHdr as *const u8).add(mem::size_of::<TcpHdr>()) };
     let data_end = ctx.data_end();
     for i in 0..TCPOPT_MAXLEN {
         if i >= optlen {
@@ -98,6 +100,6 @@ pub fn handle_tcp_syn_v4(
         val.options[i] = unsafe { *byte_ptr };
     }
 
-    let key = make_key(unsafe { (*ip).saddr }, unsafe { (*tcp).source });
+    let key = make_key(ip.saddr, tcp.source);
     tcp_syn_map_v4.insert(&key, &val, 0).map_err(|_| ())
 }
