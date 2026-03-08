@@ -6,7 +6,7 @@ use core::mem;
 use crate::constants::TCPOPT_MAXLEN;
 use crate::headers::{IpHdr, TcpHdr};
 
-use super::maps::{syn_counter, syn_insert_failures, tcp_syn_map_v4};
+use super::maps::{increment_syn_insert_failures, read_and_increment_syn_counter, tcp_syn_map_v4};
 use super::quirk_bits;
 use super::syn_raw::{make_key, SynRawData};
 
@@ -32,14 +32,7 @@ pub fn handle_tcp_syn_v4(
     tcp: &TcpHdr,
     ip_hdr_len: usize,
 ) -> Result<(), TcpSynError> {
-    // SAFETY: syn_counter is a BPF map; get_ptr_mut returns a valid pointer for the map slot.
-    let tick = if let Some(counter_ptr) = syn_counter.get_ptr_mut(0) {
-        let current = unsafe { *counter_ptr };
-        unsafe { *counter_ptr = current.wrapping_add(1) };
-        current
-    } else {
-        0u64
-    };
+    let tick = read_and_increment_syn_counter();
 
     let quirks = quirk_bits::compute_quirks(ip, tcp);
 
@@ -62,6 +55,7 @@ pub fn handle_tcp_syn_v4(
     };
 
     // Copy TCP options; must stay inline so the BPF verifier tracks packet bounds in this frame.
+    // SAFETY: tcp is a valid ref to packet memory; options start immediately after the header.
     let opts_ptr = unsafe { (tcp as *const TcpHdr as *const u8).add(mem::size_of::<TcpHdr>()) };
     let data_end = ctx.data_end();
     for i in 0..TCPOPT_MAXLEN {
@@ -73,17 +67,13 @@ pub fn handle_tcp_syn_v4(
         if next_ptr as usize > data_end {
             break;
         }
+        // SAFETY: we checked next_ptr <= data_end before reading.
         val.options[i] = unsafe { *byte_ptr };
     }
 
     let key = make_key(ip.saddr, tcp.source);
     if let Err(_) = tcp_syn_map_v4.insert(&key, &val, 0) {
-        if let Some(ptr) = syn_insert_failures.get_ptr_mut(0) {
-            unsafe {
-                let v = *ptr;
-                *ptr = v.wrapping_add(1);
-            }
-        }
+        increment_syn_insert_failures();
         return Err(TcpSynError::MapInsertFailed);
     }
     Ok(())

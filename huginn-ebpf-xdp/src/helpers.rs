@@ -6,7 +6,11 @@ use core::mem;
 /// Returns a const pointer to `T` at `offset` bytes from the start of the
 /// packet, or `None` if the access would exceed `data_end`.
 ///
-/// The BPF verifier accepts this pattern (explicit bounds check before cast).
+/// # Safety
+///
+/// The caller may only dereference the returned pointer if `Some` was returned.
+/// Bounds are checked against `ctx.data_end()` before the cast; the verifier
+/// accepts this pattern.
 #[inline(always)]
 pub unsafe fn ptr_at<T>(ctx: &XdpContext, offset: usize) -> Option<*const T> {
     let start = ctx.data();

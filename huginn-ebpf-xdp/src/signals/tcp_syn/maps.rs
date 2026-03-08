@@ -24,6 +24,37 @@ pub static syn_counter: Array<u64> = Array::with_max_entries(1, 0);
 #[allow(non_upper_case_globals)]
 pub static syn_insert_failures: Array<u64> = Array::with_max_entries(1, 0);
 
+// ── Safe wrappers around map counter access ──────────────────────────────────
+//
+// All unsafe for these arrays is confined here. If get_ptr_mut fails we return a default
+// (no panic, no UB). Invalid pointer use would be UB; we only deref when get_ptr_mut
+// returned Some (aya guarantees that is a valid map slot).
+
+/// Read and increment the global SYN counter. Returns the value before increment.
+#[inline(always)]
+pub fn read_and_increment_syn_counter() -> u64 {
+    if let Some(ptr) = syn_counter.get_ptr_mut(0) {
+        unsafe {
+            let current = *ptr;
+            *ptr = current.wrapping_add(1);
+            current
+        }
+    } else {
+        0
+    }
+}
+
+/// Increment the insert-failures counter (for observability when map insert fails).
+#[inline(always)]
+pub fn increment_syn_insert_failures() {
+    if let Some(ptr) = syn_insert_failures.get_ptr_mut(0) {
+        unsafe {
+            let v = *ptr;
+            *ptr = v.wrapping_add(1);
+        }
+    }
+}
+
 // ── Globals patched at load time by EbpfLoader::set_global ───────────────────
 //
 // XDP reads them via read_volatile to prevent the compiler from caching.

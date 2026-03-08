@@ -15,6 +15,7 @@ pub fn try_xdp_syn(ctx: &XdpContext) -> Result<(), ()> {
     let mut offset = 0usize;
 
     // ── Ethernet ──────────────────────────────────────────────────────────────
+    // SAFETY: ptr_at checked bounds; we only deref when Some.
     let eth = unsafe { ptr_at::<EthHdr>(ctx, offset).ok_or(())? };
     offset = offset.saturating_add(mem::size_of::<EthHdr>());
 
@@ -37,6 +38,7 @@ pub fn try_xdp_syn(ctx: &XdpContext) -> Result<(), ()> {
     }
 
     // ── IPv4 ──────────────────────────────────────────────────────────────────
+    // SAFETY: ptr_at checked bounds.
     let ip = unsafe { ptr_at::<IpHdr>(ctx, offset).ok_or(())? };
 
     let ip_hdr_len = unsafe { usize::from((*ip).ihl()).saturating_mul(4) };
@@ -54,6 +56,7 @@ pub fn try_xdp_syn(ctx: &XdpContext) -> Result<(), ()> {
         return Ok(());
     }
 
+    // SAFETY: read_volatile required for loader-patched globals so the compiler does not cache.
     let dst_ip_val = unsafe { core::ptr::read_volatile(&tcp_syn::dst_ip) };
     if dst_ip_val != 0 && unsafe { (*ip).daddr } != dst_ip_val {
         return Ok(());
@@ -62,6 +65,7 @@ pub fn try_xdp_syn(ctx: &XdpContext) -> Result<(), ()> {
     offset = offset.saturating_add(ip_hdr_len.saturating_sub(mem::size_of::<IpHdr>()));
 
     // ── TCP ───────────────────────────────────────────────────────────────────
+    // SAFETY: ptr_at checked bounds.
     let tcp = unsafe { ptr_at::<TcpHdr>(ctx, offset).ok_or(())? };
 
     let tcp_hdr_len = unsafe { usize::from((*tcp).doff()).saturating_mul(4) };
@@ -69,6 +73,7 @@ pub fn try_xdp_syn(ctx: &XdpContext) -> Result<(), ()> {
         return Ok(());
     }
 
+    // SAFETY: read_volatile for loader-patched global.
     let dst_port_val = unsafe { core::ptr::read_volatile(&tcp_syn::dst_port) };
     if dst_port_val != 0 && unsafe { (*tcp).dest } != dst_port_val {
         return Ok(());
