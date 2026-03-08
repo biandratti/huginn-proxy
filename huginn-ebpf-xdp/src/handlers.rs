@@ -1,3 +1,5 @@
+#![allow(unsafe_code)]
+
 use aya_ebpf::programs::XdpContext;
 use core::mem;
 
