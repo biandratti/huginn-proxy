@@ -72,7 +72,7 @@ pub fn handle_tcp_syn_v4(
     }
 
     let key = make_key(ip.saddr, tcp.source);
-    if let Err(_) = tcp_syn_map_v4.insert(&key, &val, 0) {
+    if tcp_syn_map_v4.insert(&key, &val, 0).is_err() {
         increment_syn_insert_failures();
         return Err(TcpSynError::MapInsertFailed);
     }
