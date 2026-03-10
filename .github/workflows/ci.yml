@@ -152,6 +152,7 @@ jobs:
           - huginn-proxy
           - huginn-ebpf
           - huginn-ebpf-agent
+          - huginn-ebpf-common
           - huginn-proxy-lib
     steps:
       - name: Checkout

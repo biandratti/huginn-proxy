@@ -8,7 +8,7 @@ use crate::headers::{IpHdr, TcpHdr};
 
 use super::maps::{increment_syn_insert_failures, read_and_increment_syn_counter, tcp_syn_map_v4};
 use super::quirk_bits;
-use super::syn_raw::{make_key, SynRawData};
+use huginn_ebpf_common::{make_key, SynRawData};
 
 /// Error from the TCP SYN handler.
 ///

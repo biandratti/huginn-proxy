@@ -9,9 +9,11 @@ COPY examples/backend ./examples/backend
 COPY huginn-proxy/Cargo.toml ./huginn-proxy/
 COPY huginn-proxy-lib/Cargo.toml ./huginn-proxy-lib/
 COPY huginn-ebpf/Cargo.toml ./huginn-ebpf/
+COPY huginn-ebpf-common/Cargo.toml ./huginn-ebpf-common/
 COPY huginn-ebpf-agent/Cargo.toml ./huginn-ebpf-agent/
 COPY tests-e2e/Cargo.toml ./tests-e2e/
 COPY tests-browsers/Cargo.toml ./tests-browsers/
+COPY huginn-ebpf-common/src ./huginn-ebpf-common/src/
 # Create minimal source files for other workspace members (Cargo requires valid packages)
 # These are not built, but Cargo needs them to resolve the workspace
 RUN mkdir -p huginn-proxy/src huginn-proxy-lib/src huginn-ebpf/src huginn-ebpf-agent/src tests-e2e/src tests-browsers/src && \

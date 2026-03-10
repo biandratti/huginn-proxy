@@ -18,14 +18,20 @@ TCP fingerprinting uses two separate processes:
   `x-huginn-net-tcp` header. Runs as a standard Deployment with HPA.
 
 ```
-huginn-ebpf-agent                    huginn-proxy
-  └→ loads XDP, attaches              └→ opens pinned maps
-  └→ pins maps to bpffs               └→ lookup per connection
-  └→ waits for SIGTERM                └→ injects x-huginn-net-tcp
-       │                                      ↑
-       └──── /sys/fs/bpf/huginn/ ─────────────┘
-              tcp_syn_map (LruHashMap)
-              syn_counter (Array)
+  huginn-ebpf-agent                      huginn-proxy
+  ┌─────────────────────────┐           ┌─────────────────────────┐
+  │ • Load XDP program       │           │ • Open pinned maps      │
+  │ • Attach to interface   │           │   (read-only)           │
+  │ • Pin maps to bpffs     │           │ • Lookup per connection  │
+  │ • Wait for SIGTERM      │           │ • Inject x-huginn-net-tcp│
+  └────────────┬────────────┘           └────────────▲───────────┘
+               │                                       │
+               │    /sys/fs/bpf/huginn/                │
+               └──────────────┬────────────────────────┘
+                              │
+                    tcp_syn_map_v4 (LruHashMap)
+                    syn_counter (Array)
+                    syn_insert_failures (Array)
 ```
 
 ---

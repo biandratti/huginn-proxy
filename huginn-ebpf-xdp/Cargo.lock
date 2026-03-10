@@ -95,10 +95,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "huginn-ebpf-common"
+version = "0.0.1"
+
+[[package]]
 name = "huginn-ebpf-xdp"
 version = "0.0.1"
 dependencies = [
  "aya-ebpf",
+ "huginn-ebpf-common",
 ]
 
 [[package]]

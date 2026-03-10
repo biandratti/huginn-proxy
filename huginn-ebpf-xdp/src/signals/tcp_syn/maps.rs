@@ -6,7 +6,7 @@ use aya_ebpf::{
     maps::{Array, LruHashMap},
 };
 
-use super::syn_raw::SynRawData;
+use huginn_ebpf_common::SynRawData;
 
 // ── BPF maps (TCP SYN signal) ─────────────────────────────────────────────────
 

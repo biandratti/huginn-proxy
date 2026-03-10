@@ -1,0 +1,22 @@
+# Shared no_std logic for TCP SYN fingerprinting.
+# Used by huginn-ebpf-xdp (XDP program) and huginn-ebpf (userspace).
+# Must compile for bpfel-unknown-none and for host (tests).
+
+[package]
+name = "huginn-ebpf-common"
+version = "0.0.1"
+edition = "2021"
+publish = false
+description = "Shared quirk bits and key encoding for huginn eBPF SYN fingerprinting"
+
+[lib]
+path = "src/lib.rs"
+
+[features]
+# Implement aya::Pod for SynRawData (userspace only). Not enabled for BPF target.
+aya = ["dep:aya"]
+
+[dependencies]
+aya = { workspace = true, optional = true }
+
+[dev-dependencies]
