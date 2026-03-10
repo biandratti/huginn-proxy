@@ -11,5 +11,6 @@ publish = false
 [dependencies]
 ctrlc.workspace = true
 huginn-ebpf = { path = "../huginn-ebpf", version = "0.0.1" }
+thiserror.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
