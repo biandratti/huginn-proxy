@@ -116,11 +116,9 @@ impl EbpfProbe {
             path: counter_path.display().to_string(),
             source: e,
         })?;
-        let insert_failures_data =
-            MapData::from_pin(&insert_failures_path).map_err(|e| EbpfError::FromPin {
-                path: insert_failures_path.display().to_string(),
-                source: e,
-            })?;
+        let insert_failures_data = MapData::from_pin(&insert_failures_path).map_err(|e| {
+            EbpfError::FromPin { path: insert_failures_path.display().to_string(), source: e }
+        })?;
 
         info!(base_path, "eBPF TCP SYN fingerprinting connected to pinned maps");
 
