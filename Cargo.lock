@@ -954,6 +954,10 @@ version = "0.1.0"
 dependencies = [
  "ctrlc",
  "huginn-ebpf",
+ "opentelemetry",
+ "opentelemetry-prometheus",
+ "opentelemetry_sdk",
+ "prometheus",
  "thiserror 2.0.18",
  "tracing",
  "tracing-subscriber",

@@ -9,7 +9,7 @@ pub mod probe;
 pub mod types;
 
 pub mod pin;
-pub use probe::EbpfProbe;
+pub use probe::{syn_insert_failures_count_from_path, EbpfProbe};
 pub use types::{parse_syn, quirk_bits, SynRawData};
 
 /// For dev/diagnostics only (e.g. workspace example that loads the ELF and checks maps).

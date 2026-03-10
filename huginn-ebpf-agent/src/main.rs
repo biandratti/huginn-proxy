@@ -6,23 +6,31 @@
 #![forbid(unsafe_code)]
 
 mod config;
+mod metrics;
+
+use std::env;
 
 use huginn_ebpf::EbpfProbe;
 
-use crate::config::Config;
+use crate::config::from_env;
 
-// TODO: Telemetry — collect and expose metrics from the probe (e.g. probe.syn_insert_failures_count())
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let default_level = std::env::var("RUST_LOG").unwrap_or_else(|_| "info".to_string());
+fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let default_level = env::var("RUST_LOG").unwrap_or_else(|_| "info".to_string());
     let env_filter = tracing_subscriber::EnvFilter::try_from_default_env()
         .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new(default_level));
 
     tracing_subscriber::fmt().with_env_filter(env_filter).init();
 
-    let cfg = Config::from_env()?;
+    let get_var = |name: &str| env::var(name).ok();
+    let cfg = from_env(get_var)?;
 
     let mut probe = EbpfProbe::new(&cfg.interface, cfg.dst_ip, cfg.dst_port)?;
     probe.pin_maps(&cfg.pin_path)?;
+
+    let pin_path = std::sync::Arc::new(cfg.pin_path.clone());
+    let (registry, agent_metrics) = metrics::init_metrics(pin_path)?;
+    agent_metrics.set_ready();
+    metrics::spawn_server(std::sync::Arc::new(registry), cfg.pin_path.clone());
 
     tracing::info!(
         interface = %cfg.interface,

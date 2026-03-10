@@ -309,6 +309,18 @@ impl EbpfProbe {
     }
 }
 
+/// Read the `syn_insert_failures` counter from a pinned map at `base_path`.
+///
+/// Used by the agent's metrics server without sharing the probe (avoids `Send` on `EbpfProbe`).
+/// Returns `None` if the map cannot be opened or read.
+pub fn syn_insert_failures_count_from_path(base_path: &str) -> Option<u64> {
+    let path = pin::insert_failures_path(base_path);
+    let data = MapData::from_pin(&path).ok()?;
+    let map = Map::Array(data);
+    let array = Array::<_, u64>::try_from(map).ok()?;
+    array.get(&0, 0).ok()
+}
+
 /// Build the BPF map lookup key matching the XDP program's `make_key()`.
 ///
 /// The XDP program: `((__u64)ip->saddr << 16) | tcp->source`
