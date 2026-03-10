@@ -18,14 +18,20 @@ TCP fingerprinting uses two separate processes:
   `x-huginn-net-tcp` header. Runs as a standard Deployment with HPA.
 
 ```
-huginn-ebpf-agent                    huginn-proxy
-  └→ loads XDP, attaches              └→ opens pinned maps
-  └→ pins maps to bpffs               └→ lookup per connection
-  └→ waits for SIGTERM                └→ injects x-huginn-net-tcp
-       │                                      ↑
-       └──── /sys/fs/bpf/huginn/ ─────────────┘
-              tcp_syn_map (LruHashMap)
-              syn_counter (Array)
+  huginn-ebpf-agent                      huginn-proxy
+  ┌─────────────────────────┐           ┌─────────────────────────┐
+  │ • Load XDP program       │           │ • Open pinned maps      │
+  │ • Attach to interface   │           │   (read-only)           │
+  │ • Pin maps to bpffs     │           │ • Lookup per connection  │
+  │ • Wait for SIGTERM      │           │ • Inject x-huginn-net-tcp│
+  └────────────┬────────────┘           └────────────▲───────────┘
+               │                                       │
+               │    /sys/fs/bpf/huginn/                │
+               └──────────────┬────────────────────────┘
+                              │
+                    tcp_syn_map_v4 (LruHashMap)
+                    syn_counter (Array)
+                    syn_insert_failures (Array)
 ```
 
 ---
@@ -213,17 +219,20 @@ SYN is re-captured.
 
 ## Verify the setup
 
-The diagnostic binary needs `CAP_BPF` to create BPF maps:
+A dev-only workspace example loads the XDP ELF and checks that expected maps exist. It needs `CAP_BPF` to create BPF maps. Build as your user, then run the binary with sudo (so `cargo` is not needed under sudo):
 
 ```bash
-cargo build -p huginn-ebpf --bin bpf_test
-sudo ./target/debug/bpf_test
+cargo build -p bpf-test
+sudo ./target/debug/bpf-test
 ```
 
 Expected output on success:
 ```
-INFO Testing BPF map creation with aya...
-INFO SUCCESS: BPF ELF loaded and all maps created OK
+INFO Loading XDP ELF and checking maps...
+INFO   map 'tcp_syn_map_v4' OK
+INFO   map 'syn_counter' OK
+INFO   map 'syn_insert_failures' OK
+INFO SUCCESS: ELF loaded and all expected maps present
 ```
 
 If you get `PermissionDenied` on map creation:

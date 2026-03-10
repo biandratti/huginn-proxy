@@ -16,7 +16,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .ok_or("could not find workspace root")?
         .join("huginn-ebpf-xdp");
 
-    println!("cargo:rerun-if-changed={}", programs_dir.join("src/main.rs").display());
+    // Watch the entire src/ directory so that adding new .rs modules (e.g.
+    // constants.rs, headers.rs) triggers a rebuild of the BPF object.
+    println!("cargo:rerun-if-changed={}", programs_dir.join("src").display());
     println!("cargo:rerun-if-changed={}", programs_dir.join("Cargo.toml").display());
 
     let out_dir = PathBuf::from(std::env::var("OUT_DIR")?);

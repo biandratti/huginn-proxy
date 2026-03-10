@@ -12,6 +12,7 @@ publish = false
 
 [dependencies]
 aya-ebpf = "0.1.1"
+huginn-ebpf-common = { path = "../huginn-ebpf-common" }
 
 [[bin]]
 name = "huginn-ebpf-xdp"

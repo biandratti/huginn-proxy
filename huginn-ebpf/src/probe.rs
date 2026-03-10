@@ -15,6 +15,11 @@ use crate::EbpfError;
 /// `include_bytes_aligned!` ensures 8-byte alignment required by aya's ELF parser.
 static XDP_BPF_BYTES: &[u8] = aya::include_bytes_aligned!(concat!(env!("OUT_DIR"), "/xdp.bpf.o"));
 
+/// For dev/diagnostics only (e.g. workspace example `examples/bpf_test`).
+pub(crate) fn bpf_object_bytes() -> &'static [u8] {
+    XDP_BPF_BYTES
+}
+
 /// If `current_syn_counter - stored_tick > STALE_TICK_THRESHOLD`, the map entry
 /// is considered stale. This guards against port reuse: a new client on the same
 /// src_ip:src_port after many intervening connections would get the wrong fingerprint.
@@ -29,7 +34,11 @@ enum ProbeInner {
     /// Dropping detaches XDP from the interface.
     Embedded { ebpf: Ebpf },
     /// Used by `huginn-proxy`: reads maps pinned by the agent.
-    Pinned { syn_map: Map, counter: Map },
+    Pinned {
+        syn_map: Map,
+        counter: Map,
+        insert_failures: Map,
+    },
 }
 
 /// Manages eBPF XDP SYN data lookups.
@@ -96,12 +105,13 @@ impl EbpfProbe {
 
     /// Open previously pinned BPF maps created by the eBPF agent.
     ///
-    /// The agent must have already pinned `tcp_syn_map` and `syn_counter` under
-    /// `base_path` (default: `/sys/fs/bpf/huginn/`). This constructor does not
-    /// load or attach any XDP program — the agent owns that lifecycle.
+    /// The agent must have already pinned `tcp_syn_map_v4`, `syn_counter`, and
+    /// `syn_insert_failures` under `base_path` (default: `/sys/fs/bpf/huginn/`).
+    /// This constructor does not load or attach any XDP program — the agent owns that lifecycle.
     pub fn from_pinned(base_path: &str) -> Result<Self, EbpfError> {
-        let syn_map_path = pin::syn_map_path(base_path);
+        let syn_map_path = pin::syn_map_v4_path(base_path);
         let counter_path = pin::counter_path(base_path);
+        let insert_failures_path = pin::insert_failures_path(base_path);
 
         let syn_data = MapData::from_pin(&syn_map_path).map_err(|e| EbpfError::FromPin {
             path: syn_map_path.display().to_string(),
@@ -111,6 +121,9 @@ impl EbpfProbe {
             path: counter_path.display().to_string(),
             source: e,
         })?;
+        let insert_failures_data = MapData::from_pin(&insert_failures_path).map_err(|e| {
+            EbpfError::FromPin { path: insert_failures_path.display().to_string(), source: e }
+        })?;
 
         info!(base_path, "eBPF TCP SYN fingerprinting connected to pinned maps");
 
@@ -118,6 +131,7 @@ impl EbpfProbe {
             inner: ProbeInner::Pinned {
                 syn_map: Map::LruHashMap(syn_data),
                 counter: Map::Array(counter_data),
+                insert_failures: Map::Array(insert_failures_data),
             },
             interface: String::new(),
         })
@@ -144,19 +158,22 @@ impl EbpfProbe {
             ProbeInner::Pinned { .. } => return Ok(()),
         };
 
-        let syn_path = pin::syn_map_path(base_path);
+        let syn_path = pin::syn_map_v4_path(base_path);
         let counter_path = pin::counter_path(base_path);
+
+        let insert_failures_path = pin::insert_failures_path(base_path);
 
         // Remove stale pins from a previous agent instance.
         let _ = std::fs::remove_file(&syn_path);
         let _ = std::fs::remove_file(&counter_path);
+        let _ = std::fs::remove_file(&insert_failures_path);
 
         let syn_map = ebpf
-            .map_mut(pin::SYN_MAP_NAME)
+            .map_mut(pin::SYN_MAP_V4_NAME)
             .ok_or(EbpfError::ProgramNotFound)?;
         syn_map
             .pin(&syn_path)
-            .map_err(|e| EbpfError::Pin { name: pin::SYN_MAP_NAME.to_string(), source: e })?;
+            .map_err(|e| EbpfError::Pin { name: pin::SYN_MAP_V4_NAME.to_string(), source: e })?;
 
         let counter = ebpf
             .map_mut(pin::COUNTER_NAME)
@@ -165,12 +182,23 @@ impl EbpfProbe {
             .pin(&counter_path)
             .map_err(|e| EbpfError::Pin { name: pin::COUNTER_NAME.to_string(), source: e })?;
 
+        let insert_failures = ebpf
+            .map_mut(pin::SYN_INSERT_FAILURES_NAME)
+            .ok_or(EbpfError::ProgramNotFound)?;
+        insert_failures
+            .pin(&insert_failures_path)
+            .map_err(|e| EbpfError::Pin {
+                name: pin::SYN_INSERT_FAILURES_NAME.to_string(),
+                source: e,
+            })?;
+
         // BPF_OBJ_GET checks inode permissions (MAY_READ | MAY_WRITE).
         // Pin files are created as 0600 root:root — make them accessible
         // to the non-root proxy process.
         let open_mode = std::fs::Permissions::from_mode(0o666);
         let _ = std::fs::set_permissions(&syn_path, open_mode.clone());
-        let _ = std::fs::set_permissions(&counter_path, open_mode);
+        let _ = std::fs::set_permissions(&counter_path, open_mode.clone());
+        let _ = std::fs::set_permissions(&insert_failures_path, open_mode);
 
         info!(base_path, "BPF maps pinned");
         Ok(())
@@ -178,10 +206,12 @@ impl EbpfProbe {
 
     /// Remove pinned map files. Called during agent shutdown for clean teardown.
     pub fn unpin_maps(base_path: &str) {
-        let syn_path = pin::syn_map_path(base_path);
+        let syn_path = pin::syn_map_v4_path(base_path);
         let counter_path = pin::counter_path(base_path);
+        let insert_failures_path = pin::insert_failures_path(base_path);
         let _ = std::fs::remove_file(&syn_path);
         let _ = std::fs::remove_file(&counter_path);
+        let _ = std::fs::remove_file(&insert_failures_path);
         info!(base_path, "BPF map pins removed");
     }
 
@@ -238,7 +268,7 @@ impl EbpfProbe {
 
     fn syn_map(&self) -> Option<&Map> {
         match &self.inner {
-            ProbeInner::Embedded { ebpf } => ebpf.map(pin::SYN_MAP_NAME),
+            ProbeInner::Embedded { ebpf } => ebpf.map(pin::SYN_MAP_V4_NAME),
             ProbeInner::Pinned { syn_map, .. } => Some(syn_map),
         }
     }
@@ -250,9 +280,26 @@ impl EbpfProbe {
         }
     }
 
+    fn insert_failures_map(&self) -> Option<&Map> {
+        match &self.inner {
+            ProbeInner::Embedded { ebpf } => ebpf.map(pin::SYN_INSERT_FAILURES_NAME),
+            ProbeInner::Pinned { insert_failures, .. } => Some(insert_failures),
+        }
+    }
+
     /// Read the current value of the global SYN counter from the `syn_counter` BPF map.
     fn read_current_tick(&self) -> Option<u64> {
         let map = self.counter_map()?;
+        let array = Array::<_, u64>::try_from(map).ok()?;
+        array.get(&0, 0).ok()
+    }
+
+    /// Read the number of TCP SYN map insert failures (e.g. LRU full).
+    ///
+    /// The XDP program increments this counter when `tcp_syn_map_v4.insert()` fails.
+    /// Expose as a metric (e.g. `tcp_syn_insert_failures_total`) for observability.
+    pub fn syn_insert_failures_count(&self) -> Option<u64> {
+        let map = self.insert_failures_map()?;
         let array = Array::<_, u64>::try_from(map).ok()?;
         array.get(&0, 0).ok()
     }

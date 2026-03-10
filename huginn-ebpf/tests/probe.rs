@@ -1,6 +1,44 @@
+//! Parity between make_bpf_key (userspace) and huginn_ebpf_common::make_key (shared).
+//! Ensures the reverse proxy and the eBPF daemon use the same map key encoding.
+
 use std::net::Ipv4Addr;
 
 use huginn_ebpf::probe::make_bpf_key;
+use huginn_ebpf_common::make_key;
+
+/// make_bpf_key must produce the same u64 as common::make_key for the same (ip, port)
+/// in network order. Otherwise lookups from the proxy would never match kernel map entries.
+#[test]
+fn test_make_bpf_key_parity_with_common() {
+    let ip = Ipv4Addr::new(10, 0, 0, 1);
+    let port = 443u16;
+
+    let bpf_key = make_bpf_key(ip, port);
+    let ip_ne = u32::from_ne_bytes(ip.octets());
+    let port_ne = u16::from_ne_bytes(port.to_be_bytes());
+    let common_key = make_key(ip_ne, port_ne);
+
+    assert_eq!(
+        bpf_key, common_key,
+        "make_bpf_key and common::make_key must match for daemon/proxy interface"
+    );
+}
+
+#[test]
+fn test_make_bpf_key_parity_multiple_cases() {
+    let cases = [
+        (Ipv4Addr::new(0, 0, 0, 0), 0u16),
+        (Ipv4Addr::new(192, 168, 1, 1), 80u16),
+        (Ipv4Addr::new(255, 255, 255, 255), 65535u16),
+    ];
+    for (ip, port) in cases {
+        let bpf_key = make_bpf_key(ip, port);
+        let ip_ne = u32::from_ne_bytes(ip.octets());
+        let port_ne = u16::from_ne_bytes(port.to_be_bytes());
+        let common_key = make_key(ip_ne, port_ne);
+        assert_eq!(bpf_key, common_key, "parity for {ip}:{port}");
+    }
+}
 
 #[test]
 fn test_make_bpf_key_deterministic() {
