@@ -12,6 +12,13 @@ pub mod pin;
 pub use probe::EbpfProbe;
 pub use types::{parse_syn, quirk_bits, SynRawData};
 
+/// For dev/diagnostics only (e.g. workspace example that loads the ELF and checks maps).
+/// Returns the compiled XDP BPF object bytes.
+#[doc(hidden)]
+pub fn bpf_object_bytes() -> &'static [u8] {
+    probe::bpf_object_bytes()
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum EbpfError {
     #[error("failed to load BPF object: {0}")]

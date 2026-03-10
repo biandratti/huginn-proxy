@@ -15,6 +15,11 @@ use crate::EbpfError;
 /// `include_bytes_aligned!` ensures 8-byte alignment required by aya's ELF parser.
 static XDP_BPF_BYTES: &[u8] = aya::include_bytes_aligned!(concat!(env!("OUT_DIR"), "/xdp.bpf.o"));
 
+/// For dev/diagnostics only (e.g. workspace example `examples/bpf_test`).
+pub(crate) fn bpf_object_bytes() -> &'static [u8] {
+    XDP_BPF_BYTES
+}
+
 /// If `current_syn_counter - stored_tick > STALE_TICK_THRESHOLD`, the map entry
 /// is considered stale. This guards against port reuse: a new client on the same
 /// src_ip:src_port after many intervening connections would get the wrong fingerprint.

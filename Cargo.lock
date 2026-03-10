@@ -239,6 +239,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "bpf-test"
+version = "0.0.1"
+dependencies = [
+ "aya",
+ "huginn-ebpf",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "bumpalo"
 version = "3.20.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
