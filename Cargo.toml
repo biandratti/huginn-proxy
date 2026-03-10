@@ -26,12 +26,12 @@ homepage = "https://github.com/biandratti/huginn-proxy"
 [workspace.dependencies]
 ahash = "0.8.12"
 aya = "0.13.1"
-huginn-ebpf-common = { path = "huginn-ebpf-common" }
 bytes = "1.11.1"
 criterion = { version = "0.8.2", features = ["html_reports"] }
 ctrlc = "3.5.2"
 http = "1.4.0"
 http-body-util = "0.1.3"
+huginn-ebpf-common = { path = "huginn-ebpf-common" }
 huginn-net-db = "1.7.3"
 huginn-net-http = "1.7.3"
 huginn-net-tcp = "1.7.3"
