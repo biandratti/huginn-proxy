@@ -4,7 +4,6 @@ services:
       context: ..
       dockerfile: docker/ebpf-agent.Dockerfile
     # Share the proxy's network namespace so XDP on eth0 captures SYN
-    # packets arriving at the proxy. Docker starts the proxy first.
     network_mode: "service:proxy"
     cap_add:
       - CAP_BPF
@@ -18,8 +17,10 @@ services:
       - HUGINN_EBPF_DST_IP=0.0.0.0
       - HUGINN_EBPF_DST_PORT=7000
       - HUGINN_EBPF_PIN_PATH=/sys/fs/bpf/huginn
+      - HUGINN_EBPF_METRICS_ADDR=127.0.0.1
+      - HUGINN_EBPF_METRICS_PORT=9091
     healthcheck:
-      test: ["CMD-SHELL", "test -e /sys/fs/bpf/huginn/tcp_syn_map && test -e /sys/fs/bpf/huginn/syn_counter"]
+      test: ["CMD-SHELL", "curl -sf http://127.0.0.1:9091/ready || exit 1"]
       interval: 2s
       timeout: 1s
       retries: 30

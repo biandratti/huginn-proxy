@@ -10,6 +10,8 @@ pub struct Config {
     pub dst_ip: Ipv4Addr,
     pub dst_port: u16,
     pub pin_path: String,
+    pub metrics_listen_addr: String,
+    pub metrics_port: u16,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -47,5 +49,16 @@ pub fn from_env(get_var: impl Fn(&str) -> Option<String>) -> Result<Config, Conf
 
     let pin_path = get_var("HUGINN_EBPF_PIN_PATH").unwrap_or_else(|| DEFAULT_PIN_PATH.to_string());
 
-    Ok(Config { interface, dst_ip, dst_port, pin_path })
+    let metrics_listen_addr = get_var("HUGINN_EBPF_METRICS_ADDR")
+        .ok_or(ConfigError::Missing { name: "HUGINN_EBPF_METRICS_ADDR".to_string() })?;
+
+    let metrics_port_str = get_var("HUGINN_EBPF_METRICS_PORT")
+        .ok_or(ConfigError::Missing { name: "HUGINN_EBPF_METRICS_PORT".to_string() })?;
+    let metrics_port: u16 = metrics_port_str.parse().map_err(|_| ConfigError::Invalid {
+        name: "HUGINN_EBPF_METRICS_PORT".to_string(),
+        value: metrics_port_str.clone(),
+        reason: "must be a valid port number (1-65535)".to_string(),
+    })?;
+
+    Ok(Config { interface, dst_ip, dst_port, pin_path, metrics_listen_addr, metrics_port })
 }

@@ -9,8 +9,8 @@ homepage.workspace = true
 publish = false
 
 [dependencies]
-ctrlc.workspace = true
 huginn-ebpf = { path = "../huginn-ebpf", version = "0.0.1" }
+tokio = { workspace = true, features = ["rt", "signal", "macros"] }
 opentelemetry.workspace = true
 opentelemetry-prometheus.workspace = true
 opentelemetry_sdk = { workspace = true, features = ["metrics"] }
