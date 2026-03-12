@@ -9,12 +9,16 @@ homepage.workspace = true
 publish = false
 
 [dependencies]
+http-body-util.workspace = true
 huginn-ebpf = { path = "../huginn-ebpf", version = "0.0.1" }
-tokio = { workspace = true, features = ["rt", "signal", "macros"] }
+hyper.workspace = true
+hyper-util.workspace = true
 opentelemetry.workspace = true
 opentelemetry-prometheus.workspace = true
 opentelemetry_sdk = { workspace = true, features = ["metrics"] }
 prometheus.workspace = true
+serde_json.workspace = true
 thiserror.workspace = true
+tokio = { workspace = true, features = ["rt", "net", "signal", "macros"] }
 tracing.workspace = true
 tracing-subscriber.workspace = true

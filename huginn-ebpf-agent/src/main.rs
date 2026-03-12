@@ -6,17 +6,14 @@
 #![forbid(unsafe_code)]
 
 mod config;
-mod metrics;
 mod routes;
-
+mod telemetry;
 use std::env;
-
+use std::sync::Arc;
 use huginn_ebpf::EbpfProbe;
 use tokio::signal;
-
 use crate::config::from_env;
 
-/// Wait for SIGTERM or SIGINT (same as huginn-proxy-lib).
 async fn wait_for_shutdown_signal() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let mut sigterm = signal::unix::signal(signal::unix::SignalKind::terminate())
         .map_err(|e| std::io::Error::other(format!("Failed to setup SIGTERM handler: {e}")))?;
@@ -44,14 +41,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     probe.pin_maps(&cfg.pin_path)?;
 
     let pin_path = std::sync::Arc::new(cfg.pin_path.clone());
-    let (registry, agent_metrics) = metrics::init_metrics(pin_path)?;
-    agent_metrics.set_ready();
-    routes::spawn_server(
-        std::sync::Arc::new(registry),
-        cfg.pin_path.clone(),
-        &cfg.metrics_listen_addr,
-        cfg.metrics_port,
-    );
+    let (registry, metrics) = telemetry::init_metrics(pin_path)?;
+    metrics.set_ready();
+
+    let registry = Arc::new(registry);
+    let pin_path_str = cfg.pin_path.clone();
+    let listen_addr = cfg.metrics_listen_addr.clone();
+    let port = cfg.metrics_port;
+    tokio::spawn(async move {
+        let _ =
+            telemetry::start_observability_server(&listen_addr, port, registry, pin_path_str).await;
+    });
 
     tracing::info!(
         interface = %cfg.interface,

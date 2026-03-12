@@ -920,11 +920,15 @@ dependencies = [
 name = "huginn-ebpf-agent"
 version = "0.1.0"
 dependencies = [
+ "http-body-util",
  "huginn-ebpf",
+ "hyper",
+ "hyper-util",
  "opentelemetry",
  "opentelemetry-prometheus",
  "opentelemetry_sdk",
  "prometheus",
+ "serde_json",
  "thiserror 2.0.18",
  "tokio",
  "tracing",
