@@ -20,7 +20,7 @@ pub async fn start_observability_server(
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let addr = format!("{}:{}", listen_addr, port);
     let listener = TcpListener::bind(&addr).await?;
-    info!(%addr, "Observability server started (metrics + ready)");
+    info!(%addr, "Observability server started (health, ready, live, metrics)");
 
     loop {
         let (stream, peer) = match listener.accept().await {
@@ -52,11 +52,37 @@ pub async fn start_observability_server(
                                 Ok(resp)
                             }
                         }
+                    } else if path == "/health" {
+                        match health::health_check_response() {
+                            Ok(resp) => Ok::<_, hyper::Error>(resp),
+                            Err(e) => {
+                                warn!(%e, "health_check_response failed");
+                                let body = Full::new(Bytes::from("Internal Server Error"))
+                                    .map_err(|never| match never {})
+                                    .boxed();
+                                let mut resp = Response::new(body);
+                                *resp.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
+                                Ok(resp)
+                            }
+                        }
                     } else if path == "/ready" {
                         match health::ready_check_response(&pin_path) {
                             Ok(resp) => Ok::<_, hyper::Error>(resp),
                             Err(e) => {
                                 warn!(%e, "ready_check_response failed");
+                                let body = Full::new(Bytes::from("Internal Server Error"))
+                                    .map_err(|never| match never {})
+                                    .boxed();
+                                let mut resp = Response::new(body);
+                                *resp.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
+                                Ok(resp)
+                            }
+                        }
+                    } else if path == "/live" {
+                        match health::live_check_response() {
+                            Ok(resp) => Ok::<_, hyper::Error>(resp),
+                            Err(e) => {
+                                warn!(%e, "live_check_response failed");
                                 let body = Full::new(Bytes::from("Internal Server Error"))
                                     .map_err(|never| match never {})
                                     .boxed();
