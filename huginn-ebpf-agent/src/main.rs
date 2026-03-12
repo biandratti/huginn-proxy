@@ -37,6 +37,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let get_var = |name: &str| env::var(name).ok();
     let cfg = from_env(get_var)?;
 
+    let iface_path = std::path::Path::new("/sys/class/net").join(&cfg.interface);
+    if !iface_path.exists() {
+        return Err(std::io::Error::other(format!(
+            "interface {} not found (no such path: {})",
+            cfg.interface,
+            iface_path.display()
+        ))
+        .into());
+    }
+
     let mut probe = EbpfProbe::new(&cfg.interface, cfg.dst_ip, cfg.dst_port)?;
     probe.pin_maps(&cfg.pin_path)?;
 
@@ -56,6 +66,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     tracing::info!(
         interface = %cfg.interface,
         pin_path = %cfg.pin_path,
+        dst_ip = %cfg.dst_ip,
+        dst_port = %cfg.dst_port,
         "eBPF agent ready — waiting for SIGTERM"
     );
 
