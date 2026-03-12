@@ -20,14 +20,9 @@ pub(crate) fn bpf_object_bytes() -> &'static [u8] {
     XDP_BPF_BYTES
 }
 
-/// If `current_syn_counter - stored_tick > STALE_TICK_THRESHOLD`, the map entry
-/// is considered stale. This guards against port reuse: a new client on the same
-/// src_ip:src_port after many intervening connections would get the wrong fingerprint.
-///
-/// Value chosen to be 2× the LRU map capacity (8192) so that a legitimately slow
-/// HTTP session still gets a valid result even under moderate load, while obvious
-/// port-reuse cases (thousands of intervening SYNs) are discarded.
-const STALE_TICK_THRESHOLD: u64 = 16_384;
+/// Default max entries for the TCP SYN LRU map when not overridden by the agent.
+/// Must match huginn-ebpf-xdp's TCP_SYN_MAP_V4_MAX_ENTRIES (ELF default).
+pub const DEFAULT_SYN_MAP_MAX_ENTRIES: u32 = 8192;
 
 enum ProbeInner {
     /// Used by `huginn-ebpf-agent`: owns the BPF object and XDP program.
@@ -45,9 +40,13 @@ enum ProbeInner {
 ///
 /// - The **agent** calls [`EbpfProbe::new`] to load XDP and own the maps.
 /// - The **proxy** calls [`EbpfProbe::from_pinned`] to read maps pinned by the agent.
+///
+/// Both code paths store the SYN map capacity (`syn_map_max_entries`); the proxy uses it
+/// for stale detection in [`lookup`](Self::lookup) (entry is stale if age > 2× that value).
 pub struct EbpfProbe {
     inner: ProbeInner,
     interface: String,
+    syn_map_max_entries: u32,
 }
 
 impl EbpfProbe {
@@ -60,7 +59,15 @@ impl EbpfProbe {
     ///
     /// Both values are patched into the XDP program's `.rodata` via `EbpfLoader::set_global`
     /// before the kernel loads the program, matching `cilium/ebpf`'s `spec.Variables` pattern.
-    pub fn new(interface: &str, dst_ip: Ipv4Addr, dst_port: u16) -> Result<Self, EbpfError> {
+    ///
+    /// `syn_map_max_entries`: capacity of the LRU map (default 8192). Overridden at load
+    /// time via `set_max_entries`; also used for stale detection (threshold = 2× this value).
+    pub fn new(
+        interface: &str,
+        dst_ip: Ipv4Addr,
+        dst_port: u16,
+        syn_map_max_entries: u32,
+    ) -> Result<Self, EbpfError> {
         // XDP compares ip->daddr and tcp->dest (both network-byte-order fields) against these
         // globals. On a little-endian CPU, network-order bytes [a,b,c,d] in the packet are read
         // as u32::from_ne_bytes([a,b,c,d]). We replicate the same encoding here so the
@@ -79,6 +86,7 @@ impl EbpfProbe {
         let mut ebpf = EbpfLoader::new()
             .set_global("dst_ip", &bpf_dst_ip, false)
             .set_global("dst_port", &bpf_dst_port, false)
+            .set_max_entries(pin::SYN_MAP_V4_NAME, syn_map_max_entries)
             .load(XDP_BPF_BYTES)
             .map_err(EbpfError::Load)?;
 
@@ -100,15 +108,22 @@ impl EbpfProbe {
         };
         info!(interface, filter_ip, dst_port, "eBPF XDP TCP SYN fingerprinting attached");
 
-        Ok(Self { inner: ProbeInner::Embedded { ebpf }, interface: interface.to_string() })
+        Ok(Self {
+            inner: ProbeInner::Embedded { ebpf },
+            interface: interface.to_string(),
+            syn_map_max_entries,
+        })
     }
 
     /// Open previously pinned BPF maps created by the eBPF agent.
     ///
     /// The agent must have already pinned `tcp_syn_map_v4`, `syn_counter`, and
     /// `syn_insert_failures` under `base_path` (default: `/sys/fs/bpf/huginn/`).
+    ///
+    /// `syn_map_max_entries` must match the value the agent used when loading the program
+    /// (e.g. `HUGINN_EBPF_SYN_MAP_MAX_ENTRIES`); it is used for stale entry detection.
     /// This constructor does not load or attach any XDP program — the agent owns that lifecycle.
-    pub fn from_pinned(base_path: &str) -> Result<Self, EbpfError> {
+    pub fn from_pinned(base_path: &str, syn_map_max_entries: u32) -> Result<Self, EbpfError> {
         let syn_map_path = pin::syn_map_v4_path(base_path);
         let counter_path = pin::counter_path(base_path);
         let insert_failures_path = pin::insert_failures_path(base_path);
@@ -134,6 +149,7 @@ impl EbpfProbe {
                 insert_failures: Map::Array(insert_failures_data),
             },
             interface: String::new(),
+            syn_map_max_entries,
         })
     }
 
@@ -220,7 +236,7 @@ impl EbpfProbe {
     /// Should be called immediately after `TcpStream::accept()` while the BPF
     /// map entry is still fresh. Returns `None` if:
     /// - the SYN was not captured (program just started, IPv6 client, map entry evicted), or
-    /// - the entry is stale (more than `STALE_TICK_THRESHOLD` SYNs have arrived since capture).
+    /// - the entry is stale (more than 2× `syn_map_max_entries` SYNs have arrived since capture).
     pub fn lookup(&self, src_ip: Ipv4Addr, src_port: u16) -> Option<SynRawData> {
         let syn_map = self.syn_map()?;
         let map = HashMap::<_, u64, SynRawData>::try_from(syn_map).ok()?;
@@ -247,16 +263,19 @@ impl EbpfProbe {
         // Stale detection: compare stored tick against the current global counter.
         // If many SYNs have arrived since this entry was written, the entry may
         // belong to an earlier connection that reused the same src_ip:src_port.
+        // Threshold 2× map size: enough margin for slow HTTP sessions, but discard
+        // entries that are likely from a previous connection (port reuse).
+        let stale_threshold = u64::from(self.syn_map_max_entries) * 2;
         if let Some(current_tick) = self.read_current_tick() {
             let age = current_tick.saturating_sub(val.tick);
-            if age > STALE_TICK_THRESHOLD {
+            if age > stale_threshold {
                 warn!(
                     ?src_ip,
                     src_port,
                     stored_tick = val.tick,
                     current_tick,
                     age,
-                    threshold = STALE_TICK_THRESHOLD,
+                    threshold = stale_threshold,
                     "SYN map entry is stale - discarding"
                 );
                 return None;

@@ -5,13 +5,15 @@ use aya_ebpf::{
     maps::{Array, LruHashMap},
 };
 
+use crate::constants::TCP_SYN_MAP_V4_MAX_ENTRIES;
 use huginn_ebpf_common::SynRawData;
 
 // ── BPF maps (TCP SYN signal) ─────────────────────────────────────────────────
 
 #[map]
 #[allow(non_upper_case_globals)]
-pub static tcp_syn_map_v4: LruHashMap<u64, SynRawData> = LruHashMap::with_max_entries(8192, 0);
+pub static tcp_syn_map_v4: LruHashMap<u64, SynRawData> =
+    LruHashMap::with_max_entries(TCP_SYN_MAP_V4_MAX_ENTRIES, 0);
 
 #[map]
 #[allow(non_upper_case_globals)]

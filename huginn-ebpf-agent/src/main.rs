@@ -47,7 +47,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         .into());
     }
 
-    let mut probe = EbpfProbe::new(&cfg.interface, cfg.dst_ip, cfg.dst_port)?;
+    let mut probe =
+        EbpfProbe::new(&cfg.interface, cfg.dst_ip, cfg.dst_port, cfg.syn_map_max_entries)?;
     probe.pin_maps(&cfg.pin_path)?;
 
     let pin_path = std::sync::Arc::new(cfg.pin_path.clone());

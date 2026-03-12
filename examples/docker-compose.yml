@@ -17,6 +17,7 @@ services:
       - HUGINN_EBPF_DST_IP=0.0.0.0
       - HUGINN_EBPF_DST_PORT=7000
       - HUGINN_EBPF_PIN_PATH=/sys/fs/bpf/huginn
+      - HUGINN_EBPF_SYN_MAP_MAX_ENTRIES=8192
       - HUGINN_EBPF_METRICS_ADDR=127.0.0.1
       - HUGINN_EBPF_METRICS_PORT=9091
     healthcheck:
@@ -36,6 +37,7 @@ services:
     command: ["/usr/local/bin/huginn-proxy", "/config/compose.toml"]
     environment:
       - HUGINN_EBPF_PIN_PATH=/sys/fs/bpf/huginn
+      - HUGINN_EBPF_SYN_MAP_MAX_ENTRIES=8192
     volumes:
       - ./config/compose.toml:/config/compose.toml:ro
       - ./certs:/config/certs:ro

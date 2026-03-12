@@ -50,8 +50,7 @@ async fn main() -> Result<(), BoxError> {
 
     // TCP SYN fingerprinting via eBPF/XDP.
     // When tcp_enabled = true the proxy opens BPF maps pinned by huginn-ebpf-agent.
-    // The agent may start after the proxy (e.g. network_mode: "service:proxy" in
-    // Docker Compose), so we retry with backoff until the maps appear.
+    // The agent may start after the proxy, so we retry with backoff until the maps appear.
     #[cfg(feature = "ebpf-tcp")]
     let syn_probe: Option<huginn_proxy_lib::SynProbe> = {
         use huginn_ebpf::{parse_syn, EbpfProbe};
@@ -64,11 +63,15 @@ async fn main() -> Result<(), BoxError> {
         } else {
             let pin_path = env::var("HUGINN_EBPF_PIN_PATH")
                 .unwrap_or_else(|_| huginn_ebpf::pin::DEFAULT_PIN_BASE.to_string());
+            let syn_map_max_entries = env::var("HUGINN_EBPF_SYN_MAP_MAX_ENTRIES")
+                .ok()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(huginn_ebpf::DEFAULT_SYN_MAP_MAX_ENTRIES);
 
             const RETRY_INTERVAL: std::time::Duration = std::time::Duration::from_secs(2);
 
             let probe = loop {
-                match EbpfProbe::from_pinned(&pin_path) {
+                match EbpfProbe::from_pinned(&pin_path, syn_map_max_entries) {
                     Ok(p) => break p,
                     Err(_) => {
                         tracing::warn!(
