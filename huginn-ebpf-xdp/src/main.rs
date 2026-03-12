@@ -7,7 +7,6 @@
 //! to the C version so `huginn-ebpf/src/probe.rs` requires no changes.
 #![no_std]
 #![no_main]
-// deny(unsafe_code) by default; allow only in helpers, handlers, and tcp_syn::handler
 #![deny(unsafe_code)]
 
 use aya_ebpf::{bindings::xdp_action::XDP_PASS, macros::xdp, programs::XdpContext};

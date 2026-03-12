@@ -1,49 +1,68 @@
-/// Standalone eBPF agent that loads the XDP program, pins BPF maps, and
-/// stays alive until SIGTERM. Designed to run as a DaemonSet so that
-/// the proxy (Deployment) can open the pinned maps without needing
-/// CAP_NET_ADMIN or seccomp:unconfined.
-use std::net::Ipv4Addr;
+//! Standalone eBPF agent that loads the XDP program, pins BPF maps, and
+//! stays alive until SIGTERM. Designed to run as a DaemonSet so that
+//! the proxy (Deployment) can open the pinned maps without needing
+//! CAP_NET_ADMIN or seccomp:unconfined.
 
+#![forbid(unsafe_code)]
+
+mod config;
+mod healthchecks;
+mod telemetry;
+use crate::config::from_env;
 use huginn_ebpf::EbpfProbe;
+use std::env;
+use std::sync::Arc;
+use tokio::signal;
 
-// TODO: Implement error handling for all env vars.
-// TODO: Telemetry — collect and expose metrics from the probe (e.g. probe.syn_insert_failures_count())
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let default_level = std::env::var("RUST_LOG").unwrap_or_else(|_| "info".to_string());
+async fn wait_for_shutdown_signal() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let mut sigterm = signal::unix::signal(signal::unix::SignalKind::terminate())
+        .map_err(|e| std::io::Error::other(format!("Failed to setup SIGTERM handler: {e}")))?;
+    let mut sigint = signal::unix::signal(signal::unix::SignalKind::interrupt())
+        .map_err(|e| std::io::Error::other(format!("Failed to setup SIGINT handler: {e}")))?;
+    tokio::select! {
+        _ = sigterm.recv() => {}
+        _ = sigint.recv() => {}
+    }
+    Ok(())
+}
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let default_level = env::var("RUST_LOG").unwrap_or_else(|_| "info".to_string());
     let env_filter = tracing_subscriber::EnvFilter::try_from_default_env()
         .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new(default_level));
 
     tracing_subscriber::fmt().with_env_filter(env_filter).init();
 
-    let iface = std::env::var("HUGINN_EBPF_INTERFACE")
-        .map_err(|_| "HUGINN_EBPF_INTERFACE env var is required")?;
+    let get_var = |name: &str| env::var(name).ok();
+    let cfg = from_env(get_var)?;
 
-    let dst_ip: Ipv4Addr = std::env::var("HUGINN_EBPF_DST_IP")
-        .map_err(|_| "HUGINN_EBPF_DST_IP env var is required")?
-        .parse()
-        .map_err(|_| "HUGINN_EBPF_DST_IP must be a valid IPv4 address")?;
+    let mut probe = EbpfProbe::new(&cfg.interface, cfg.dst_ip, cfg.dst_port)?;
+    probe.pin_maps(&cfg.pin_path)?;
 
-    let dst_port: u16 = std::env::var("HUGINN_EBPF_DST_PORT")
-        .map_err(|_| "HUGINN_EBPF_DST_PORT env var is required")?
-        .parse()
-        .map_err(|_| "HUGINN_EBPF_DST_PORT must be a valid port number")?;
+    let pin_path = std::sync::Arc::new(cfg.pin_path.clone());
+    let (registry, metrics) = telemetry::init_metrics(pin_path)?;
+    metrics.set_ready();
 
-    let pin_path = std::env::var("HUGINN_EBPF_PIN_PATH")
-        .map_err(|_| "HUGINN_EBPF_PIN_PATH env var is required")?;
+    let registry = Arc::new(registry);
+    let pin_path_str = cfg.pin_path.clone();
+    let listen_addr = cfg.metrics_listen_addr.clone();
+    let port = cfg.metrics_port;
+    tokio::spawn(async move {
+        let _ =
+            telemetry::start_observability_server(&listen_addr, port, registry, pin_path_str).await;
+    });
 
-    let mut probe = EbpfProbe::new(&iface, dst_ip, dst_port)?;
-    probe.pin_maps(&pin_path)?;
+    tracing::info!(
+        interface = %cfg.interface,
+        pin_path = %cfg.pin_path,
+        "eBPF agent ready — waiting for SIGTERM"
+    );
 
-    tracing::info!("eBPF agent ready — waiting for SIGTERM");
-
-    let (tx, rx) = std::sync::mpsc::channel();
-    ctrlc::set_handler(move || {
-        let _ = tx.send(());
-    })?;
-    rx.recv().ok();
+    wait_for_shutdown_signal().await?;
 
     tracing::info!("Shutting down — unpinning maps and detaching XDP");
-    EbpfProbe::unpin_maps(&pin_path);
+    EbpfProbe::unpin_maps(&cfg.pin_path);
     drop(probe);
 
     Ok(())

@@ -36,11 +36,11 @@ docker run -d \
 ### Docker Compose
 
 See `examples/docker-compose.yml` for a complete setup with:
-- eBPF agent (TCP SYN fingerprinting)
+- eBPF agent (TCP SYN fingerprinting, `/metrics` and `/ready` on configurable port)
+- Proxy (TLS termination, `/health`, `/ready`, `/live`, `/metrics` on port 9090)
 - Multiple backends
 - TLS termination
-- Health checks
-- Metrics endpoint
+- Health checks for both agent and proxy
 
 Run with:
 
@@ -62,7 +62,9 @@ Two workloads: the eBPF agent as **DaemonSet** (1 per node) and the proxy as **D
 
 ### eBPF Agent (DaemonSet)
 
-Loads XDP and pins BPF maps to `/sys/fs/bpf/huginn/`. Key security settings:
+Loads XDP and pins BPF maps to `/sys/fs/bpf/huginn/`. Exposes `/metrics` and `/ready` on a configurable address and port (env vars `HUGINN_EBPF_METRICS_ADDR`, `HUGINN_EBPF_METRICS_PORT`; e.g. `127.0.0.1:9091`). Use an HTTP readiness probe to the same address and port, path `/ready`.
+
+Key security settings:
 
 ```yaml
 spec:
@@ -74,9 +76,28 @@ spec:
           add: [BPF, NET_ADMIN, PERFMON]
         seccompProfile:
           type: Unconfined              # bpf() syscall required
+      env:
+        - name: HUGINN_EBPF_INTERFACE
+          value: "eth0"                 # or node's primary interface
+        - name: HUGINN_EBPF_DST_IP
+          value: "0.0.0.0"
+        - name: HUGINN_EBPF_DST_PORT
+          value: "7000"
+        - name: HUGINN_EBPF_PIN_PATH
+          value: "/sys/fs/bpf/huginn"
+        - name: HUGINN_EBPF_METRICS_ADDR
+          value: "127.0.0.1"
+        - name: HUGINN_EBPF_METRICS_PORT
+          value: "9091"
       volumeMounts:
         - name: bpffs
           mountPath: /sys/fs/bpf
+      readinessProbe:
+        httpGet:
+          path: /ready
+          port: 9091
+        initialDelaySeconds: 5
+        periodSeconds: 5
   volumes:
     - name: bpffs
       hostPath:
@@ -130,14 +151,19 @@ spec:
 
 ## Health Check Endpoints
 
-Available endpoints on metrics port (default: 9090):
+### Proxy (observability server)
 
 - `/health` - General health check
-- `/ready` - Kubernetes readiness probe (checks if proxy can accept traffic)
-- `/live` - Kubernetes liveness probe (checks if proxy is alive)
+- `/ready` - readiness probe (checks if proxy can accept traffic)
+- `/live` - liveness probe (checks if proxy is alive)
 - `/metrics` - Prometheus metrics
 
-All endpoints return 200 OK when healthy.
+### eBPF agent (observability server)
+
+- `/health` - General health check
+- `/ready` - readiness probe: 200 if BPF map pins exist under `HUGINN_EBPF_PIN_PATH`
+- `/live` - liveness probe
+- `/metrics` - Prometheus metrics
 
 ## TLS Certificate Management
 

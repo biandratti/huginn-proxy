@@ -1,4 +1,3 @@
-// Globals with #[no_mangle] are required for the eBPF loader to patch dst_ip/dst_port.
 #![allow(unsafe_code)]
 
 use aya_ebpf::{

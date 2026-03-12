@@ -1,21 +1,34 @@
 # Telemetry Documentation
 
-> **Status**: This document covers currently implemented telemetry features.
+> **Status**: This document covers currently implemented telemetry features for both **Huginn Proxy** and the **eBPF
+agent**.
 
 ## Overview
+
+### Proxy
 
 Huginn Proxy provides comprehensive telemetry through:
 
 - **Prometheus Metrics** - 35 metrics covering connections, requests, TLS, fingerprinting, backends, throughput, rate
   limiting, IP filtering, header manipulation, and mTLS
-- **Health Check Endpoints** - Kubernetes-ready health and readiness probes
-- **OpenTelemetry** - Built on modern OpenTelemetry standards for future extensibility
+- **Health Check Endpoints** - Kubernetes-ready: `/health`, `/ready`, `/live`, `/metrics`
 
-All telemetry is exposed on a separate observability server (configurable via `telemetry.metrics_port`).
+All proxy telemetry is exposed on a separate observability server (configurable via `telemetry.metrics_port`).
+
+### eBPF Agent
+
+The eBPF agent (DaemonSet) exposes the **same four HTTP endpoints** as the proxy for K8s compatibility, plus its own
+Prometheus metrics:
+
+- **Endpoints** - `/health`, `/ready`, `/live`, `/metrics` (same JSON format as proxy; `/ready` returns 503 when BPF map
+  pins are missing)
+- **Metrics** - `tcp_syn_insert_failures_total`, `agent_up`, `huginn_ebpf_agent_build_info`
 
 ---
 
 ## Configuration
+
+### Proxy
 
 ```toml
 [telemetry]
@@ -24,18 +37,25 @@ metrics_port = 9090  # Port for metrics and health endpoints (default: disabled)
 
 When `metrics_port` is configured, the following endpoints become available:
 
-- `/metrics` - Prometheus metrics
-- `/health` - General health check
-- `/ready` - Readiness probe (Kubernetes)
-- `/live` - Liveness probe (Kubernetes)
+### eBPF Agent
+
+The agent’s observability server is configured via environment variables:
+
+| Variable                   | Required | Description                     |
+|----------------------------|----------|---------------------------------|
+| `HUGINN_EBPF_METRICS_ADDR` | Yes      | Bind address (e.g. `127.0.0.1`) |
+| `HUGINN_EBPF_METRICS_PORT` | Yes      | Port (e.g. `9091`)              |
 
 ---
 
 ## Metrics Endpoint
 
-**URL**: `http://localhost:9090/metrics`  
-**Format**: Prometheus text format  
+**Format**: Prometheus text format (both proxy and agent)  
 **Scraping**: Compatible with Prometheus, Grafana Agent, etc.
+
+- **Proxy**: `http://<host>:<telemetry.metrics_port>/metrics` (e.g. `http://localhost:9090/metrics`)
+- **eBPF agent**: `http://<HUGINN_EBPF_METRICS_ADDR>:<HUGINN_EBPF_METRICS_PORT>/metrics` (e.g.
+  `http://127.0.0.1:9091/metrics`)
 
 ### Example Prometheus Configuration
 
@@ -44,6 +64,11 @@ scrape_configs:
   - job_name: 'huginn-proxy'
     static_configs:
       - targets: [ 'localhost:9090' ]
+    scrape_interval: 15s
+
+  - job_name: 'huginn-ebpf-agent'
+    static_configs:
+      - targets: [ '127.0.0.1:9091' ]
     scrape_interval: 15s
 ```
 
@@ -458,151 +483,18 @@ group by (version) (huginn_build_info)
 
 ---
 
-## Health Check Endpoints
+## eBPF Agent Metrics
 
-All health endpoints return JSON responses (except `/metrics`).
+The eBPF agent (huginn-ebpf-agent) exposes a small set of metrics on its own observability server, in addition to the
+same health endpoints as the proxy.
 
-### `/health` - General Health
+### Agent metrics
 
-**Purpose**: General health check  
-**Status Codes**:
-
-- `200 OK` - Process is running
-
-**Response**:
-
-```json
-{
-  "status": "healthy"
-}
-```
-
-**Use case**: General monitoring, uptime checks
-
----
-
-### `/ready` - Readiness Probe
-
-**Purpose**: Kubernetes readiness probe  
-**Status Codes**:
-
-- `200 OK` - Ready to receive traffic (backends configured)
-- `503 Service Unavailable` - Not ready (no backends configured)
-
-**Response** (ready):
-
-```json
-{
-  "status": "ready"
-}
-```
-
-**Response** (not ready):
-
-```json
-{
-  "status": "not ready",
-  "reason": "no backends configured"
-}
-```
-
-**Use case**: Kubernetes readiness probe, load balancer health checks
-
-**Kubernetes configuration**:
-
-```yaml
-readinessProbe:
-  httpGet:
-    path: /ready
-    port: 9090
-  initialDelaySeconds: 5
-  periodSeconds: 10
-```
-
----
-
-### `/live` - Liveness Probe
-
-**Purpose**: Kubernetes liveness probe  
-**Status Codes**:
-
-- `200 OK` - Process is alive
-
-**Response**:
-
-```json
-{
-  "status": "alive"
-}
-```
-
-**Use case**: Kubernetes liveness probe (detect deadlocks, crashes)
-
-**Kubernetes configuration**:
-
-```yaml
-livenessProbe:
-  httpGet:
-    path: /live
-    port: 9090
-  initialDelaySeconds: 10
-  periodSeconds: 30
-```
-
----
-
-## Example Kubernetes Deployment
-
-```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: huginn-proxy
-spec:
-  replicas: 3
-  selector:
-    matchLabels:
-      app: huginn-proxy
-  template:
-    metadata:
-      labels:
-        app: huginn-proxy
-      annotations:
-        prometheus.io/scrape: "true"
-        prometheus.io/port: "9090"
-        prometheus.io/path: "/metrics"
-    spec:
-      containers:
-        - name: huginn-proxy
-          image: huginn-proxy:latest
-          ports:
-            - name: proxy
-              containerPort: 7000
-            - name: metrics
-              containerPort: 9090
-          livenessProbe:
-            httpGet:
-              path: /live
-              port: 9090
-            initialDelaySeconds: 10
-            periodSeconds: 30
-          readinessProbe:
-            httpGet:
-              path: /ready
-              port: 9090
-            initialDelaySeconds: 5
-            periodSeconds: 10
-          volumeMounts:
-            - name: config
-              mountPath: /config.toml
-              subPath: config.toml
-      volumes:
-        - name: config
-          configMap:
-            name: huginn-proxy-config
-```
-
----
+| Metric                          | Type               | Description                                           | Labels                    |
+|---------------------------------|--------------------|-------------------------------------------------------|---------------------------|
+| `tcp_syn_insert_failures_total` | Observable counter | Number of TCP SYN map insert failures (e.g. LRU full) | -                         |
+| `agent_up`                      | Gauge              | 1 if the agent has pinned maps and is running         | -                         |
+| `huginn_ebpf_agent_build_info`  | Gauge              | Build information (always 1)                          | `version`, `rust_version` |
 
 ## Grafana Dashboard Suggestions
 
@@ -644,6 +536,12 @@ spec:
 - Backend latency P95: `histogram_quantile(0.95, rate(huginn_backend_duration_seconds_bucket[5m]))`
 - Backend throughput:
   `sum by (backend_address) (rate(huginn_backend_bytes_received_total[5m]) + rate(huginn_backend_bytes_sent_total[5m]))`
+
+**eBPF Agent Panel** (DaemonSet, one agent per node):
+
+- Agent up: `agent_up`
+- TCP SYN insert failures (total): `tcp_syn_insert_failures_total`
+- Agent version: `huginn_ebpf_agent_build_info`
 
 ---
 
