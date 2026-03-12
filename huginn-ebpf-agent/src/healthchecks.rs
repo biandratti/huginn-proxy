@@ -1,8 +1,9 @@
-use std::path::Path;
+//! Readiness checks: verify BPF map pins exist (used by /ready).
+//! Defensive: if something external removes pins at runtime, we report not ready.
 
 use huginn_ebpf::pin;
+use std::path::Path;
 
-/// True if all BPF map pins exist under `base` (used by ready_check_response).
 pub fn pins_exist(base: &str) -> bool {
     let base = Path::new(base);
     base.join(pin::SYN_MAP_V4_NAME).exists()

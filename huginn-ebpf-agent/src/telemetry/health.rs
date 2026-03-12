@@ -1,16 +1,16 @@
+use crate::healthchecks;
 use http_body_util::{combinators::BoxBody, BodyExt, Full};
 use hyper::body::Bytes;
 use hyper::Response;
 use hyper::StatusCode;
 use serde_json::json;
-use crate::routes;
 
 type RespBody = BoxBody<Bytes, hyper::Error>;
 
 pub fn ready_check_response(
     pin_path: &str,
 ) -> Result<Response<RespBody>, Box<dyn std::error::Error + Send + Sync>> {
-    let (status, body) = if routes::pins_exist(pin_path) {
+    let (status, body) = if healthchecks::pins_exist(pin_path) {
         (StatusCode::OK, json!({"status": "ready"}))
     } else {
         (

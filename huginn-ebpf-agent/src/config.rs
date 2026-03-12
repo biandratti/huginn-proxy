@@ -1,5 +1,5 @@
-use std::net::Ipv4Addr;
 use huginn_ebpf::pin;
+use std::net::Ipv4Addr;
 
 pub const DEFAULT_PIN_PATH: &str = pin::DEFAULT_PIN_BASE;
 

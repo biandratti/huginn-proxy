@@ -6,13 +6,13 @@
 #![forbid(unsafe_code)]
 
 mod config;
-mod routes;
+mod healthchecks;
 mod telemetry;
+use crate::config::from_env;
+use huginn_ebpf::EbpfProbe;
 use std::env;
 use std::sync::Arc;
-use huginn_ebpf::EbpfProbe;
 use tokio::signal;
-use crate::config::from_env;
 
 async fn wait_for_shutdown_signal() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let mut sigterm = signal::unix::signal(signal::unix::SignalKind::terminate())
