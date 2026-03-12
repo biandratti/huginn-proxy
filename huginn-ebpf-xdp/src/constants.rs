@@ -24,3 +24,13 @@ pub const IPPROTO_TCP: u8 = 6;
 // ── TCP option limits ─────────────────────────────────────────────────────────
 
 pub const TCPOPT_MAXLEN: usize = 40;
+
+// ── TCP SYN map capacity ─────────────────────────────────────────────────────
+//
+// Max entries for the LRU map that stores one SynRawData per (src_ip, src_port).
+// Value taken from the ebpf-web-fingerprint reference (data/ebpf-web-fingerprint);
+// no rationale documented there. We keep it as a power-of-two (2^13) and a
+// reasonable default for concurrent SYN flows. huginn-ebpf uses 2× this for
+// STALE_TICK_THRESHOLD when deciding if a map entry is stale (see probe.rs).
+
+pub const TCP_SYN_MAP_V4_MAX_ENTRIES: u32 = 8192;

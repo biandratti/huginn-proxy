@@ -104,25 +104,27 @@ Alternatively, pull a pre-built image from the registry:
 ### 3. Test the Proxy
 
 ```bash
-# Health check
-curl http://localhost:9090/health
-
-# Basic request
 curl -sk https://localhost:7000/api/test | jq .
-
-# View metrics
 curl http://localhost:9090/metrics | grep huginn_proxy
 ```
 
 ---
 
-## Available Endpoints
+## Endpoints
 
-| Service       | Endpoint                        | Description           |
-|---------------|---------------------------------|-----------------------|
-| Proxy (HTTPS) | `https://localhost:7000/`       | Main proxy endpoint   |
-| Health Check  | `http://localhost:9090/health`  | Service health status |
-| Metrics       | `http://localhost:9090/metrics` | Prometheus metrics    |
+| Service | URL | Description |
+|---------|-----|-------------|
+| Proxy | `https://localhost:7000/` | HTTPS proxy |
+| Proxy | `http://localhost:9090/health` | Health |
+| Proxy | `http://localhost:9090/ready` | Readiness |
+| Proxy | `http://localhost:9090/live` | Liveness |
+| Proxy | `http://localhost:9090/metrics` | Prometheus metrics |
+| eBPF Agent | `http://localhost:9091/health` | Health |
+| eBPF Agent | `http://localhost:9091/ready` | Readiness (BPF pins) |
+| eBPF Agent | `http://localhost:9091/live` | Liveness |
+| eBPF Agent | `http://localhost:9091/metrics` | Prometheus metrics |
+
+In the example compose, agent endpoints are exposed via the proxy service (`9091:9091`). From the host use e.g. `curl http://localhost:9091/metrics`. If your compose does not publish 9091, use `docker exec` into the proxy container (the image has no curl; run `curl` from the host instead).
 
 ---
 

@@ -9,6 +9,8 @@ pub struct Config {
     pub dst_ip: Ipv4Addr,
     pub dst_port: u16,
     pub pin_path: String,
+    /// Max entries for the TCP SYN LRU map (overridden at load via set_max_entries). Default 8192.
+    pub syn_map_max_entries: u32,
     pub metrics_listen_addr: String,
     pub metrics_port: u16,
 }
@@ -48,6 +50,17 @@ pub fn from_env(get_var: impl Fn(&str) -> Option<String>) -> Result<Config, Conf
 
     let pin_path = get_var("HUGINN_EBPF_PIN_PATH").unwrap_or_else(|| DEFAULT_PIN_PATH.to_string());
 
+    let syn_map_max_entries = get_var("HUGINN_EBPF_SYN_MAP_MAX_ENTRIES")
+        .map(|s| {
+            s.parse().map_err(|_| ConfigError::Invalid {
+                name: "HUGINN_EBPF_SYN_MAP_MAX_ENTRIES".to_string(),
+                value: s.clone(),
+                reason: "must be a positive integer".to_string(),
+            })
+        })
+        .transpose()
+        .map(|opt| opt.unwrap_or(huginn_ebpf::DEFAULT_SYN_MAP_MAX_ENTRIES))?;
+
     let metrics_listen_addr = get_var("HUGINN_EBPF_METRICS_ADDR")
         .ok_or(ConfigError::Missing { name: "HUGINN_EBPF_METRICS_ADDR".to_string() })?;
 
@@ -59,5 +72,13 @@ pub fn from_env(get_var: impl Fn(&str) -> Option<String>) -> Result<Config, Conf
         reason: "must be a valid port number (1-65535)".to_string(),
     })?;
 
-    Ok(Config { interface, dst_ip, dst_port, pin_path, metrics_listen_addr, metrics_port })
+    Ok(Config {
+        interface,
+        dst_ip,
+        dst_port,
+        pin_path,
+        syn_map_max_entries,
+        metrics_listen_addr,
+        metrics_port,
+    })
 }
