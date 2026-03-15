@@ -3,7 +3,7 @@ use huginn_net_db::tcp::Quirk;
 
 type TestResult = Result<(), Box<dyn std::error::Error + Send + Sync>>;
 
-fn make_test_options() -> ([u8; 40], u16) {
+fn make_test_options() -> ([u8; 40], u8) {
     // Common Linux SYN options: MSS(1460), NOP, WS(6), NOP, NOP, TS, SOK
     // Meaningful bytes: 4+1+3+2+10+2 = 22 bytes; remaining 18 bytes are padding zeros.
     #[rustfmt::skip]
@@ -18,17 +18,17 @@ fn make_test_options() -> ([u8; 40], u16) {
         0, 0, 0, 0, 0, 0, 0, 0,
         0, 0,
     ];
-    (opts, 22u16)
+    (opts, 22u8)
 }
 
-fn make_syn_raw(window: u16, ip_ttl: u8, optlen: u16, options: [u8; 40]) -> SynRawData {
+fn make_syn_raw(window: u16, ip_ttl: u8, optlen: u8, options: [u8; 40]) -> SynRawData {
     make_syn_raw_with_quirks(window, ip_ttl, optlen, options, 0)
 }
 
 fn make_syn_raw_with_quirks(
     window: u16,
     ip_ttl: u8,
-    optlen: u16,
+    optlen: u8,
     options: [u8; 40],
     quirks: u32,
 ) -> SynRawData {
@@ -37,6 +37,7 @@ fn make_syn_raw_with_quirks(
         src_port: 0,
         window,
         optlen,
+        ip_tos: 0,
         ip_ttl,
         ip_olen: 0,
         options,

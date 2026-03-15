@@ -13,7 +13,6 @@ huginn-net-db.workspace = true
 huginn-net-tcp.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
-tracing-subscriber.workspace = true
 
 [dev-dependencies]
 huginn-ebpf-common = { workspace = true }

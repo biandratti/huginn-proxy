@@ -31,7 +31,6 @@ pub fn handle_tcp_syn_v4(
     ip_hdr_len: usize,
 ) -> Result<(), TcpSynError> {
     let tick = read_and_increment_syn_counter();
-
     let quirks = quirk_bits::compute_quirks(ip, tcp);
 
     // Must stay inline so the BPF verifier tracks packet bounds in this frame.
@@ -45,25 +44,23 @@ pub fn handle_tcp_syn_v4(
     let data_end = ctx.data_end();
     let mut options = [0u8; 40];
     let mut actual_copied: usize = 0;
-    for i in 0..TCPOPT_MAXLEN {
-        if i >= declared_optlen {
-            break;
-        }
+    for (i, slot) in options.iter_mut().enumerate().take(declared_optlen) {
         let byte_ptr = unsafe { opts_ptr.add(i) };
         let next_ptr = unsafe { byte_ptr.add(1) };
         if next_ptr as usize > data_end {
             break;
         }
         // SAFETY: we checked next_ptr <= data_end before reading.
-        options[i] = unsafe { *byte_ptr };
-        actual_copied += 1;
+        *slot = unsafe { *byte_ptr };
+        actual_copied = actual_copied.saturating_add(1);
     }
 
     let syn_raw_data = SynRawData {
         src_addr: ip.saddr,
         src_port: tcp.source,
         window: tcp.window,
-        optlen: actual_copied as u16,
+        optlen: actual_copied as u8,
+        ip_tos: ip.tos,
         ip_ttl: ip.ttl,
         ip_olen: ip_hdr_len.saturating_sub(mem::size_of::<IpHdr>()) as u8,
         options,

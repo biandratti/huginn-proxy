@@ -7,8 +7,6 @@ use tracing::warn;
 
 pub use huginn_ebpf_common::{quirk_bits, SynRawData};
 
-// ── Internal parsing helpers ─────────────────────────────────────────────────
-
 struct OptionQuirks {
     ts_val: Option<u32>,
     ts_ecr: Option<u32>,
@@ -96,8 +94,6 @@ fn decode_quirks(bits: u32) -> Vec<Quirk> {
     v
 }
 
-// ── Public API ───────────────────────────────────────────────────────────────
-
 /// Parse a TCP SYN fingerprint from raw XDP-captured data.
 ///
 /// Returns `Some(TcpObservation)` on success, or `None` when TCP options are
@@ -108,7 +104,7 @@ fn decode_quirks(bits: u32) -> Vec<Quirk> {
 /// - `pclass = Zero`: TCP SYN packets never carry a payload by protocol definition.
 pub fn parse_syn(raw: &SynRawData) -> Option<TcpObservation> {
     let window_host = u16::from_be(raw.window);
-    let valid_opts = &raw.options[..raw.optlen.min(40) as usize];
+    let valid_opts = &raw.options[..usize::from(raw.optlen.min(40))];
 
     let parsed: ParsedTcpOptions = parse_options_raw(valid_opts);
     if parsed.malformed {
@@ -121,10 +117,13 @@ pub fn parse_syn(raw: &SynRawData) -> Option<TcpObservation> {
     }
 
     let ittl: Ttl = ttl::calculate_ttl(raw.ip_ttl);
+    let ip_plus_tcp = 20_u16
+        .saturating_add(u16::from(raw.ip_olen))
+        .saturating_add(20);
     let wsize: WindowSize = window_size::detect_win_multiplicator(
         window_host,
         parsed.mss.unwrap_or(0),
-        20 + u16::from(raw.ip_olen),
+        ip_plus_tcp,
         parsed.olayout.contains(&TcpOption::TS),
         &IpVersion::V4,
     );

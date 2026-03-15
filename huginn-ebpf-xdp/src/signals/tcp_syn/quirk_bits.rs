@@ -2,7 +2,7 @@
 //!
 //! Must match the identical module in `huginn-ebpf/src/types.rs`.
 
-use crate::constants::{IP_DF, IP_RF};
+use crate::constants::{IP_DF, IP_RF, IP_TOS_CE, IP_TOS_ECT};
 use crate::headers::{IpHdr, TcpHdr};
 
 /// Quirk bitmask constants extracted from IP and TCP headers (TCP SYN signal).
@@ -39,7 +39,7 @@ pub fn compute_quirks(ip: &IpHdr, tcp: &TcpHdr) -> u32 {
     if frag_off & IP_RF != 0 {
         quirks |= MUST_BE_ZERO;
     }
-    if tcp.ece() || tcp.cwr() {
+    if tcp.ece() || tcp.cwr() || (ip.tos & (IP_TOS_CE | IP_TOS_ECT) != 0) {
         quirks |= ECN;
     }
     if tcp.seq == 0 {
