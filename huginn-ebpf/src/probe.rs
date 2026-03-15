@@ -10,6 +10,7 @@ use tracing::{debug, info, warn};
 use crate::pin;
 use crate::types::SynRawData;
 use crate::EbpfError;
+use crate::XdpMode;
 
 /// Raw bytes of the compiled XDP BPF object, embedded at compile time.
 /// `include_bytes_aligned!` ensures 8-byte alignment required by aya's ELF parser.
@@ -56,17 +57,17 @@ impl EbpfProbe {
     /// - `interface`: network interface name (e.g., `"eth0"`)
     /// - `dst_ip`: proxy listen IP. `0.0.0.0` disables the IP filter (listen on all interfaces).
     /// - `dst_port`: proxy listen port. Always active as a filter.
+    /// - `syn_map_max_entries`: capacity of the LRU map (default 8192).
+    /// - `xdp_mode`: [`XdpMode::Native`] (driver-level, default) or [`XdpMode::Skb`] (generic/software).
     ///
-    /// Both values are patched into the XDP program's `.rodata` via `EbpfLoader::set_global`
+    /// Both dst values are patched into the XDP program's `.rodata` via `EbpfLoader::set_global`
     /// before the kernel loads the program, matching `cilium/ebpf`'s `spec.Variables` pattern.
-    ///
-    /// `syn_map_max_entries`: capacity of the LRU map (default 8192). Overridden at load
-    /// time via `set_max_entries`; also used for stale detection (threshold = 2× this value).
     pub fn new(
         interface: &str,
         dst_ip: Ipv4Addr,
         dst_port: u16,
         syn_map_max_entries: u32,
+        xdp_mode: XdpMode,
     ) -> Result<Self, EbpfError> {
         // XDP compares ip->daddr and tcp->dest (both network-byte-order fields) against these
         // globals. On a little-endian CPU, network-order bytes [a,b,c,d] in the packet are read
@@ -97,8 +98,14 @@ impl EbpfProbe {
             .map_err(EbpfError::ProgramType)?;
 
         program.load().map_err(EbpfError::ProgramLoad)?;
+
+        let (xdp_flags, mode_str) = match xdp_mode {
+            XdpMode::Skb => (XdpFlags::SKB_MODE, "skb"),
+            XdpMode::Native => (XdpFlags::default(), "native"),
+        };
+        info!(interface, mode = mode_str, "eBPF XDP attaching");
         program
-            .attach(interface, XdpFlags::default())
+            .attach(interface, xdp_flags)
             .map_err(EbpfError::Attach)?;
 
         let filter_ip = if dst_ip.is_unspecified() {
@@ -106,7 +113,13 @@ impl EbpfProbe {
         } else {
             dst_ip.to_string()
         };
-        info!(interface, filter_ip, dst_port, "eBPF XDP TCP SYN fingerprinting attached");
+        info!(
+            interface,
+            filter_ip,
+            dst_port,
+            mode = mode_str,
+            "eBPF XDP TCP SYN fingerprinting attached"
+        );
 
         Ok(Self {
             inner: ProbeInner::Embedded { ebpf },
@@ -161,8 +174,6 @@ impl EbpfProbe {
         let base = Path::new(base_path);
         std::fs::create_dir_all(base)
             .map_err(|e| EbpfError::PinDir { path: base_path.to_string(), source: e })?;
-        // bpffs root (e.g. /sys/fs/bpf) may be 0700 root:root. The non-root
-        // proxy process needs +x to traverse it, plus +x on the pin directory.
         if let Some(parent) = base.parent() {
             let _ = std::fs::set_permissions(parent, std::fs::Permissions::from_mode(0o755));
         }
@@ -178,11 +189,15 @@ impl EbpfProbe {
         let counter_path = pin::counter_path(base_path);
 
         let insert_failures_path = pin::insert_failures_path(base_path);
+        let syn_captured_path = pin::syn_captured_path(base_path);
+        let syn_malformed_path = pin::syn_malformed_path(base_path);
 
         // Remove stale pins from a previous agent instance.
         let _ = std::fs::remove_file(&syn_path);
         let _ = std::fs::remove_file(&counter_path);
         let _ = std::fs::remove_file(&insert_failures_path);
+        let _ = std::fs::remove_file(&syn_captured_path);
+        let _ = std::fs::remove_file(&syn_malformed_path);
 
         let syn_map = ebpf
             .map_mut(pin::SYN_MAP_V4_NAME)
@@ -208,13 +223,29 @@ impl EbpfProbe {
                 source: e,
             })?;
 
+        let syn_captured = ebpf
+            .map_mut(pin::SYN_CAPTURED_NAME)
+            .ok_or(EbpfError::ProgramNotFound)?;
+        syn_captured
+            .pin(&syn_captured_path)
+            .map_err(|e| EbpfError::Pin { name: pin::SYN_CAPTURED_NAME.to_string(), source: e })?;
+
+        let syn_malformed = ebpf
+            .map_mut(pin::SYN_MALFORMED_NAME)
+            .ok_or(EbpfError::ProgramNotFound)?;
+        syn_malformed
+            .pin(&syn_malformed_path)
+            .map_err(|e| EbpfError::Pin { name: pin::SYN_MALFORMED_NAME.to_string(), source: e })?;
+
         // BPF_OBJ_GET checks inode permissions (MAY_READ | MAY_WRITE).
         // Pin files are created as 0600 root:root — make them accessible
         // to the non-root proxy process.
         let open_mode = std::fs::Permissions::from_mode(0o666);
         let _ = std::fs::set_permissions(&syn_path, open_mode.clone());
         let _ = std::fs::set_permissions(&counter_path, open_mode.clone());
-        let _ = std::fs::set_permissions(&insert_failures_path, open_mode);
+        let _ = std::fs::set_permissions(&insert_failures_path, open_mode.clone());
+        let _ = std::fs::set_permissions(&syn_captured_path, open_mode.clone());
+        let _ = std::fs::set_permissions(&syn_malformed_path, open_mode);
 
         info!(base_path, "BPF maps pinned");
         Ok(())
@@ -225,9 +256,13 @@ impl EbpfProbe {
         let syn_path = pin::syn_map_v4_path(base_path);
         let counter_path = pin::counter_path(base_path);
         let insert_failures_path = pin::insert_failures_path(base_path);
+        let syn_captured_path = pin::syn_captured_path(base_path);
+        let syn_malformed_path = pin::syn_malformed_path(base_path);
         let _ = std::fs::remove_file(&syn_path);
         let _ = std::fs::remove_file(&counter_path);
         let _ = std::fs::remove_file(&insert_failures_path);
+        let _ = std::fs::remove_file(&syn_captured_path);
+        let _ = std::fs::remove_file(&syn_malformed_path);
         info!(base_path, "BPF map pins removed");
     }
 
@@ -333,8 +368,21 @@ impl EbpfProbe {
 /// Used by the agent's metrics server without sharing the probe (avoids `Send` on `EbpfProbe`).
 /// Returns `None` if the map cannot be opened or read.
 pub fn syn_insert_failures_count_from_path(base_path: &str) -> Option<u64> {
-    let path = pin::insert_failures_path(base_path);
-    let data = MapData::from_pin(&path).ok()?;
+    read_array_counter_from_path(pin::insert_failures_path(base_path))
+}
+
+/// Read the `syn_captured` counter from a pinned map at `base_path`.
+pub fn syn_captured_count_from_path(base_path: &str) -> Option<u64> {
+    read_array_counter_from_path(pin::syn_captured_path(base_path))
+}
+
+/// Read the `syn_malformed` counter from a pinned map at `base_path`.
+pub fn syn_malformed_count_from_path(base_path: &str) -> Option<u64> {
+    read_array_counter_from_path(pin::syn_malformed_path(base_path))
+}
+
+fn read_array_counter_from_path(path: impl AsRef<std::path::Path>) -> Option<u64> {
+    let data = MapData::from_pin(path.as_ref()).ok()?;
     let map = Map::Array(data);
     let array = Array::<_, u64>::try_from(map).ok()?;
     array.get(&0, 0).ok()

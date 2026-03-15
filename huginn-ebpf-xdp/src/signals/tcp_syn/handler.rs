@@ -2,11 +2,12 @@
 
 use aya_ebpf::programs::XdpContext;
 use core::mem;
-
 use crate::constants::TCPOPT_MAXLEN;
 use crate::headers::{IpHdr, TcpHdr};
-
-use super::maps::{increment_syn_insert_failures, read_and_increment_syn_counter, tcp_syn_map_v4};
+use super::maps::{
+    increment_syn_captured, increment_syn_insert_failures, read_and_increment_syn_counter,
+    tcp_syn_map_v4,
+};
 use super::quirk_bits;
 use huginn_ebpf_common::{make_key, SynRawData};
 
@@ -33,48 +34,48 @@ pub fn handle_tcp_syn_v4(
     ip_hdr_len: usize,
 ) -> Result<(), TcpSynError> {
     let tick = read_and_increment_syn_counter();
-
     let quirks = quirk_bits::compute_quirks(ip, tcp);
 
-    // ── Build map value ───────────────────────────────────────────────────────
+    // Must stay inline so the BPF verifier tracks packet bounds in this frame.
+    // SAFETY: tcp is a valid ref to packet memory; options start immediately after the header.
     let tcp_hdr_len = usize::from(tcp.doff()).saturating_mul(4);
-    let optlen = tcp_hdr_len
+    let declared_optlen = tcp_hdr_len
         .saturating_sub(mem::size_of::<TcpHdr>())
         .min(TCPOPT_MAXLEN);
 
-    let mut val = SynRawData {
-        src_addr: ip.saddr,
-        src_port: tcp.source,
-        window: tcp.window,
-        optlen: optlen as u16,
-        ip_ttl: ip.ttl,
-        ip_olen: ip_hdr_len.saturating_sub(mem::size_of::<IpHdr>()) as u8,
-        options: [0u8; 40],
-        quirks,
-        tick,
-    };
-
-    // Copy TCP options; must stay inline so the BPF verifier tracks packet bounds in this frame.
-    // SAFETY: tcp is a valid ref to packet memory; options start immediately after the header.
     let opts_ptr = unsafe { (tcp as *const TcpHdr as *const u8).add(mem::size_of::<TcpHdr>()) };
     let data_end = ctx.data_end();
-    for i in 0..TCPOPT_MAXLEN {
-        if i >= optlen {
-            break;
-        }
+    let mut options = [0u8; 40];
+    let mut actual_copied: usize = 0;
+    for (i, slot) in options.iter_mut().enumerate().take(declared_optlen) {
         let byte_ptr = unsafe { opts_ptr.add(i) };
         let next_ptr = unsafe { byte_ptr.add(1) };
         if next_ptr as usize > data_end {
             break;
         }
         // SAFETY: we checked next_ptr <= data_end before reading.
-        val.options[i] = unsafe { *byte_ptr };
+        *slot = unsafe { *byte_ptr };
+        actual_copied = actual_copied.saturating_add(1);
     }
 
+    let syn_raw_data = SynRawData {
+        src_addr: ip.saddr,
+        src_port: tcp.source,
+        window: tcp.window,
+        optlen: actual_copied as u8,
+        ip_tos: ip.tos,
+        ip_ttl: ip.ttl,
+        ip_olen: ip_hdr_len.saturating_sub(mem::size_of::<IpHdr>()) as u8,
+        options,
+        quirks,
+        tick,
+    };
+
     let key = make_key(ip.saddr, tcp.source);
-    if tcp_syn_map_v4.insert(&key, &val, 0).is_err() {
+    if tcp_syn_map_v4.insert(&key, &syn_raw_data, 0).is_err() {
         increment_syn_insert_failures();
         return Err(TcpSynError::MapInsertFailed);
     }
+    increment_syn_captured();
     Ok(())
 }

@@ -22,7 +22,7 @@ Prometheus metrics:
 
 - **Endpoints** - `/health`, `/ready`, `/live`, `/metrics` (same JSON format as proxy; `/ready` returns 503 when BPF map
   pins are missing)
-- **Metrics** - `tcp_syn_insert_failures_total`, `agent_up`, `huginn_ebpf_agent_build_info`
+- **Metrics** - `tcp_syn_captured_total`, `tcp_syn_insert_failures_total`, `tcp_syn_malformed_total`, `agent_up`, `huginn_ebpf_agent_build_info`
 
 ---
 
@@ -490,11 +490,13 @@ same health endpoints as the proxy.
 
 ### Agent metrics
 
-| Metric                          | Type               | Description                                           | Labels                    |
-|---------------------------------|--------------------|-------------------------------------------------------|---------------------------|
-| `tcp_syn_insert_failures_total` | Observable counter | Number of TCP SYN map insert failures (e.g. LRU full) | -                         |
-| `agent_up`                      | Gauge              | 1 if the agent has pinned maps and is running         | -                         |
-| `huginn_ebpf_agent_build_info`  | Gauge              | Build information (always 1)                          | `version`, `rust_version` |
+| Metric                          | Type               | Description                                                              | Labels                    |
+|---------------------------------|--------------------|--------------------------------------------------------------------------|---------------------------|
+| `tcp_syn_captured_total`        | Observable counter | Number of TCP SYN signatures successfully captured                       | -                         |
+| `tcp_syn_insert_failures_total` | Observable counter | Number of TCP SYN map insert failures (e.g. LRU full)                    | -                         |
+| `tcp_syn_malformed_total`       | Observable counter | Number of malformed TCP packets (e.g. doff too short) that matched dst   | -                         |
+| `agent_up`                      | Gauge              | 1 if the agent has pinned maps and is running                            | -                         |
+| `huginn_ebpf_agent_build_info`  | Gauge              | Build information (always 1)                                             | `version`, `rust_version` |
 
 ## Grafana Dashboard Suggestions
 
@@ -540,7 +542,9 @@ same health endpoints as the proxy.
 **eBPF Agent Panel** (DaemonSet, one agent per node):
 
 - Agent up: `agent_up`
-- TCP SYN insert failures (total): `tcp_syn_insert_failures_total`
+- TCP SYN signatures captured: `tcp_syn_captured_total`
+- TCP SYN insert failures: `tcp_syn_insert_failures_total`
+- TCP SYN malformed: `tcp_syn_malformed_total`
 - Agent version: `huginn_ebpf_agent_build_info`
 
 ---

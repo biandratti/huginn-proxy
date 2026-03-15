@@ -17,6 +17,11 @@ pub const IP_DF: u16 = 0x4000_u16.swap_bytes(); // don't fragment
 pub const IP_MF: u16 = 0x2000_u16.swap_bytes(); // more fragments
 pub const IP_OFFSET: u16 = 0x1FFF_u16.swap_bytes(); // fragment offset mask
 
+// ── IP ToS ECN bits (RFC 3168) ─────────────────────────────────────────────────
+
+pub const IP_TOS_CE: u8 = 0x01;  // Congestion Experienced
+pub const IP_TOS_ECT: u8 = 0x02; // ECN-Capable Transport
+
 // ── IP protocol numbers ───────────────────────────────────────────────────────
 
 pub const IPPROTO_TCP: u8 = 6;

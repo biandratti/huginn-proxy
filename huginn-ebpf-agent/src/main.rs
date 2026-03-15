@@ -47,11 +47,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         .into());
     }
 
-    let mut probe =
-        EbpfProbe::new(&cfg.interface, cfg.dst_ip, cfg.dst_port, cfg.syn_map_max_entries)?;
+    let mut probe = EbpfProbe::new(
+        &cfg.interface,
+        cfg.dst_ip,
+        cfg.dst_port,
+        cfg.syn_map_max_entries,
+        cfg.xdp_mode,
+    )?;
     probe.pin_maps(&cfg.pin_path)?;
 
-    let pin_path = std::sync::Arc::new(cfg.pin_path.clone());
+    let pin_path = Arc::new(cfg.pin_path.clone());
     let (registry, metrics) = telemetry::init_metrics(pin_path)?;
     metrics.set_ready();
 
@@ -64,11 +69,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             telemetry::start_observability_server(&listen_addr, port, registry, pin_path_str).await;
     });
 
+    let xdp_mode_str = match cfg.xdp_mode {
+        config::XdpMode::Native => "native",
+        config::XdpMode::Skb => "skb",
+    };
     tracing::info!(
         interface = %cfg.interface,
         pin_path = %cfg.pin_path,
         dst_ip = %cfg.dst_ip,
         dst_port = %cfg.dst_port,
+        xdp_mode = xdp_mode_str,
         "eBPF agent ready — waiting for SIGTERM"
     );
 

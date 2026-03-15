@@ -25,6 +25,17 @@ pub static syn_counter: Array<u64> = Array::with_max_entries(1, 0);
 #[allow(non_upper_case_globals)]
 pub static syn_insert_failures: Array<u64> = Array::with_max_entries(1, 0);
 
+/// Counter of successfully captured TCP SYN signatures.
+/// Incremented when insert into tcp_syn_map_v4 succeeds.
+#[map]
+#[allow(non_upper_case_globals)]
+pub static syn_captured: Array<u64> = Array::with_max_entries(1, 0);
+
+/// Counter of malformed TCP packets (e.g. doff too short) that matched dst filter.
+#[map]
+#[allow(non_upper_case_globals)]
+pub static syn_malformed: Array<u64> = Array::with_max_entries(1, 0);
+
 // ── Safe wrappers around map counter access ──────────────────────────────────
 //
 // All unsafe for these arrays is confined here. If get_ptr_mut fails we return a default
@@ -49,6 +60,28 @@ pub fn read_and_increment_syn_counter() -> u64 {
 #[inline(always)]
 pub fn increment_syn_insert_failures() {
     if let Some(ptr) = syn_insert_failures.get_ptr_mut(0) {
+        unsafe {
+            let v = *ptr;
+            *ptr = v.wrapping_add(1);
+        }
+    }
+}
+
+/// Increment the syn_captured counter (successful insert into LRU map).
+#[inline(always)]
+pub fn increment_syn_captured() {
+    if let Some(ptr) = syn_captured.get_ptr_mut(0) {
+        unsafe {
+            let v = *ptr;
+            *ptr = v.wrapping_add(1);
+        }
+    }
+}
+
+/// Increment the syn_malformed counter (TCP packet matched dst but header invalid).
+#[inline(always)]
+pub fn increment_syn_malformed() {
+    if let Some(ptr) = syn_malformed.get_ptr_mut(0) {
         unsafe {
             let v = *ptr;
             *ptr = v.wrapping_add(1);

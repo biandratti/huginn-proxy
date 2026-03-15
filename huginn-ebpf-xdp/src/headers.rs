@@ -45,7 +45,7 @@ impl IpHdr {
 /// Bytes 12-13 encode `doff` and the flag bits using `__LITTLE_ENDIAN_BITFIELD`.
 ///
 /// As a LE u16 (low byte first in memory):
-///   bits [0-3]  = reserved (res1)
+///   bits [0-3]  = reserved (res1); bit 3 is NS/ECN Nonce Sum per RFC 3540
 ///   bits [4-7]  = doff (data offset)
 ///   bits [8]    = FIN
 ///   bits [9]    = SYN
@@ -95,5 +95,9 @@ impl TcpHdr {
     #[inline(always)]
     pub fn cwr(&self) -> bool {
         (self.offset_flags >> 15) & 1 != 0
+    }
+    #[inline(always)]
+    pub fn ns(&self) -> bool {
+        (self.offset_flags >> 3) & 1 != 0
     }
 }
