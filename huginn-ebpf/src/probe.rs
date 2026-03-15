@@ -10,6 +10,7 @@ use tracing::{debug, info, warn};
 use crate::pin;
 use crate::types::SynRawData;
 use crate::EbpfError;
+use crate::XdpMode;
 
 /// Raw bytes of the compiled XDP BPF object, embedded at compile time.
 /// `include_bytes_aligned!` ensures 8-byte alignment required by aya's ELF parser.
@@ -56,17 +57,17 @@ impl EbpfProbe {
     /// - `interface`: network interface name (e.g., `"eth0"`)
     /// - `dst_ip`: proxy listen IP. `0.0.0.0` disables the IP filter (listen on all interfaces).
     /// - `dst_port`: proxy listen port. Always active as a filter.
+    /// - `syn_map_max_entries`: capacity of the LRU map (default 8192).
+    /// - `xdp_mode`: [`XdpMode::Native`] (driver-level, default) or [`XdpMode::Skb`] (generic/software).
     ///
-    /// Both values are patched into the XDP program's `.rodata` via `EbpfLoader::set_global`
+    /// Both dst values are patched into the XDP program's `.rodata` via `EbpfLoader::set_global`
     /// before the kernel loads the program, matching `cilium/ebpf`'s `spec.Variables` pattern.
-    ///
-    /// `syn_map_max_entries`: capacity of the LRU map (default 8192). Overridden at load
-    /// time via `set_max_entries`; also used for stale detection (threshold = 2× this value).
     pub fn new(
         interface: &str,
         dst_ip: Ipv4Addr,
         dst_port: u16,
         syn_map_max_entries: u32,
+        xdp_mode: XdpMode,
     ) -> Result<Self, EbpfError> {
         // XDP compares ip->daddr and tcp->dest (both network-byte-order fields) against these
         // globals. On a little-endian CPU, network-order bytes [a,b,c,d] in the packet are read
@@ -97,8 +98,14 @@ impl EbpfProbe {
             .map_err(EbpfError::ProgramType)?;
 
         program.load().map_err(EbpfError::ProgramLoad)?;
+
+        let (xdp_flags, mode_str) = match xdp_mode {
+            XdpMode::Skb => (XdpFlags::SKB_MODE, "skb"),
+            XdpMode::Native => (XdpFlags::default(), "native"),
+        };
+        info!(interface, mode = mode_str, "eBPF XDP attaching");
         program
-            .attach(interface, XdpFlags::default())
+            .attach(interface, xdp_flags)
             .map_err(EbpfError::Attach)?;
 
         let filter_ip = if dst_ip.is_unspecified() {
@@ -106,7 +113,13 @@ impl EbpfProbe {
         } else {
             dst_ip.to_string()
         };
-        info!(interface, filter_ip, dst_port, "eBPF XDP TCP SYN fingerprinting attached");
+        info!(
+            interface,
+            filter_ip,
+            dst_port,
+            mode = mode_str,
+            "eBPF XDP TCP SYN fingerprinting attached"
+        );
 
         Ok(Self {
             inner: ProbeInner::Embedded { ebpf },

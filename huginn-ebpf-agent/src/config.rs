@@ -2,6 +2,7 @@ use huginn_ebpf::pin;
 use std::net::Ipv4Addr;
 
 pub const DEFAULT_PIN_PATH: &str = pin::DEFAULT_PIN_BASE;
+pub use huginn_ebpf::XdpMode;
 
 #[derive(Debug, Clone)]
 pub struct Config {
@@ -10,6 +11,7 @@ pub struct Config {
     pub dst_port: u16,
     pub pin_path: String,
     pub syn_map_max_entries: u32,
+    pub xdp_mode: XdpMode,
     pub metrics_listen_addr: String,
     pub metrics_port: u16,
 }
@@ -71,12 +73,25 @@ pub fn from_env(get_var: impl Fn(&str) -> Option<String>) -> Result<Config, Conf
         reason: "must be a valid port number (1-65535)".to_string(),
     })?;
 
+    let xdp_mode = match get_var("HUGINN_EBPF_XDP_MODE").as_deref() {
+        Some("skb") => XdpMode::Skb,
+        Some("native") | None => XdpMode::Native,
+        Some(v) => {
+            return Err(ConfigError::Invalid {
+                name: "HUGINN_EBPF_XDP_MODE".to_string(),
+                value: v.to_string(),
+                reason: "must be 'native' or 'skb'".to_string(),
+            });
+        }
+    };
+
     Ok(Config {
         interface,
         dst_ip,
         dst_port,
         pin_path,
         syn_map_max_entries,
+        xdp_mode,
         metrics_listen_addr,
         metrics_port,
     })

@@ -109,6 +109,8 @@ No `seccomp:unconfined` or `apparmor:unconfined` needed.
 | `HUGINN_EBPF_DST_IP` | `0.0.0.0` | Destination IP filter (`0.0.0.0` = no filter) |
 | `HUGINN_EBPF_DST_PORT` | `7000` | Destination port filter (proxy listen port) |
 | `HUGINN_EBPF_PIN_PATH` | `/sys/fs/bpf/huginn` | Pin directory (default shown) |
+| `HUGINN_EBPF_SYN_MAP_MAX_ENTRIES` | `8192` | LRU map capacity (default shown) |
+| `HUGINN_EBPF_XDP_MODE` | `native` | XDP attach mode: `native` (default, driver-level) or `skb` (generic, for veth/loopback) |
 
 ### Proxy configuration (`config.toml`)
 

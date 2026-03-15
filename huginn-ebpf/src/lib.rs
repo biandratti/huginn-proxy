@@ -12,6 +12,14 @@ pub mod pin;
 pub use probe::{syn_insert_failures_count_from_path, EbpfProbe, DEFAULT_SYN_MAP_MAX_ENTRIES};
 pub use types::{parse_syn, quirk_bits, SynRawData};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum XdpMode {
+    /// Driver-level (default). Requires NIC driver support; falls back silently to skb on older kernels.
+    Native,
+    /// Generic/SKB mode. Runs in the kernel stack. Works on any interface (veth, loopback, VMs).
+    Skb,
+}
+
 /// For dev/diagnostics only (e.g. workspace example that loads the ELF and checks maps).
 /// Returns the compiled XDP BPF object bytes.
 #[doc(hidden)]
