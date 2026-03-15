@@ -32,10 +32,24 @@ fn test_insert_failures_path_ends_with_map_name() {
 }
 
 #[test]
+fn test_syn_captured_path_ends_with_map_name() {
+    let path = pin::syn_captured_path("/sys/fs/bpf/huginn");
+    assert_eq!(path.file_name().and_then(|p| p.to_str()), Some(pin::SYN_CAPTURED_NAME));
+}
+
+#[test]
+fn test_syn_malformed_path_ends_with_map_name() {
+    let path = pin::syn_malformed_path("/sys/fs/bpf/huginn");
+    assert_eq!(path.file_name().and_then(|p| p.to_str()), Some(pin::SYN_MALFORMED_NAME));
+}
+
+#[test]
 fn test_constant_names_match_expected() {
     assert_eq!(pin::SYN_MAP_V4_NAME, "tcp_syn_map_v4");
     assert_eq!(pin::COUNTER_NAME, "syn_counter");
     assert_eq!(pin::SYN_INSERT_FAILURES_NAME, "syn_insert_failures");
+    assert_eq!(pin::SYN_CAPTURED_NAME, "syn_captured");
+    assert_eq!(pin::SYN_MALFORMED_NAME, "syn_malformed");
 }
 
 #[test]

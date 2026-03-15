@@ -1,4 +1,7 @@
-use huginn_ebpf::syn_insert_failures_count_from_path;
+use huginn_ebpf::{
+    syn_captured_count_from_path, syn_insert_failures_count_from_path,
+    syn_malformed_count_from_path,
+};
 use opentelemetry::global;
 use opentelemetry::metrics::{Gauge, Meter};
 use opentelemetry::KeyValue;
@@ -62,11 +65,35 @@ pub fn init_metrics(
 
     let meter = global::meter("huginn-ebpf-agent");
 
+    let pin_path_captured = pin_path.clone();
+    let pin_path_failures = pin_path.clone();
+
+    let _ = meter
+        .u64_observable_counter("tcp_syn_captured_total")
+        .with_description("Number of TCP SYN signatures successfully captured")
+        .with_callback(move |observer| {
+            let value = syn_captured_count_from_path(pin_path_captured.as_str()).unwrap_or(0);
+            observer.observe(value, &[]);
+        })
+        .build();
+
     let _ = meter
         .u64_observable_counter("tcp_syn_insert_failures_total")
         .with_description("Number of TCP SYN map insert failures (e.g. LRU full)")
         .with_callback(move |observer| {
-            let value = syn_insert_failures_count_from_path(pin_path.as_str()).unwrap_or(0);
+            let value =
+                syn_insert_failures_count_from_path(pin_path_failures.as_str()).unwrap_or(0);
+            observer.observe(value, &[]);
+        })
+        .build();
+
+    let _ = meter
+        .u64_observable_counter("tcp_syn_malformed_total")
+        .with_description(
+            "Number of malformed TCP packets (e.g. doff too short) that matched dst filter",
+        )
+        .with_callback(move |observer| {
+            let value = syn_malformed_count_from_path(pin_path.as_str()).unwrap_or(0);
             observer.observe(value, &[]);
         })
         .build();

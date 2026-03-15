@@ -4,7 +4,10 @@ use aya_ebpf::programs::XdpContext;
 use core::mem;
 use crate::constants::TCPOPT_MAXLEN;
 use crate::headers::{IpHdr, TcpHdr};
-use super::maps::{increment_syn_insert_failures, read_and_increment_syn_counter, tcp_syn_map_v4};
+use super::maps::{
+    increment_syn_captured, increment_syn_insert_failures, read_and_increment_syn_counter,
+    tcp_syn_map_v4,
+};
 use super::quirk_bits;
 use huginn_ebpf_common::{make_key, SynRawData};
 
@@ -73,5 +76,6 @@ pub fn handle_tcp_syn_v4(
         increment_syn_insert_failures();
         return Err(TcpSynError::MapInsertFailed);
     }
+    increment_syn_captured();
     Ok(())
 }

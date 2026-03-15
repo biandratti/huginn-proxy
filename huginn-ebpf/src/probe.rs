@@ -189,11 +189,15 @@ impl EbpfProbe {
         let counter_path = pin::counter_path(base_path);
 
         let insert_failures_path = pin::insert_failures_path(base_path);
+        let syn_captured_path = pin::syn_captured_path(base_path);
+        let syn_malformed_path = pin::syn_malformed_path(base_path);
 
         // Remove stale pins from a previous agent instance.
         let _ = std::fs::remove_file(&syn_path);
         let _ = std::fs::remove_file(&counter_path);
         let _ = std::fs::remove_file(&insert_failures_path);
+        let _ = std::fs::remove_file(&syn_captured_path);
+        let _ = std::fs::remove_file(&syn_malformed_path);
 
         let syn_map = ebpf
             .map_mut(pin::SYN_MAP_V4_NAME)
@@ -219,13 +223,29 @@ impl EbpfProbe {
                 source: e,
             })?;
 
+        let syn_captured = ebpf
+            .map_mut(pin::SYN_CAPTURED_NAME)
+            .ok_or(EbpfError::ProgramNotFound)?;
+        syn_captured
+            .pin(&syn_captured_path)
+            .map_err(|e| EbpfError::Pin { name: pin::SYN_CAPTURED_NAME.to_string(), source: e })?;
+
+        let syn_malformed = ebpf
+            .map_mut(pin::SYN_MALFORMED_NAME)
+            .ok_or(EbpfError::ProgramNotFound)?;
+        syn_malformed
+            .pin(&syn_malformed_path)
+            .map_err(|e| EbpfError::Pin { name: pin::SYN_MALFORMED_NAME.to_string(), source: e })?;
+
         // BPF_OBJ_GET checks inode permissions (MAY_READ | MAY_WRITE).
         // Pin files are created as 0600 root:root — make them accessible
         // to the non-root proxy process.
         let open_mode = std::fs::Permissions::from_mode(0o666);
         let _ = std::fs::set_permissions(&syn_path, open_mode.clone());
         let _ = std::fs::set_permissions(&counter_path, open_mode.clone());
-        let _ = std::fs::set_permissions(&insert_failures_path, open_mode);
+        let _ = std::fs::set_permissions(&insert_failures_path, open_mode.clone());
+        let _ = std::fs::set_permissions(&syn_captured_path, open_mode.clone());
+        let _ = std::fs::set_permissions(&syn_malformed_path, open_mode);
 
         info!(base_path, "BPF maps pinned");
         Ok(())
@@ -236,9 +256,13 @@ impl EbpfProbe {
         let syn_path = pin::syn_map_v4_path(base_path);
         let counter_path = pin::counter_path(base_path);
         let insert_failures_path = pin::insert_failures_path(base_path);
+        let syn_captured_path = pin::syn_captured_path(base_path);
+        let syn_malformed_path = pin::syn_malformed_path(base_path);
         let _ = std::fs::remove_file(&syn_path);
         let _ = std::fs::remove_file(&counter_path);
         let _ = std::fs::remove_file(&insert_failures_path);
+        let _ = std::fs::remove_file(&syn_captured_path);
+        let _ = std::fs::remove_file(&syn_malformed_path);
         info!(base_path, "BPF map pins removed");
     }
 
@@ -344,8 +368,21 @@ impl EbpfProbe {
 /// Used by the agent's metrics server without sharing the probe (avoids `Send` on `EbpfProbe`).
 /// Returns `None` if the map cannot be opened or read.
 pub fn syn_insert_failures_count_from_path(base_path: &str) -> Option<u64> {
-    let path = pin::insert_failures_path(base_path);
-    let data = MapData::from_pin(&path).ok()?;
+    read_array_counter_from_path(pin::insert_failures_path(base_path))
+}
+
+/// Read the `syn_captured` counter from a pinned map at `base_path`.
+pub fn syn_captured_count_from_path(base_path: &str) -> Option<u64> {
+    read_array_counter_from_path(pin::syn_captured_path(base_path))
+}
+
+/// Read the `syn_malformed` counter from a pinned map at `base_path`.
+pub fn syn_malformed_count_from_path(base_path: &str) -> Option<u64> {
+    read_array_counter_from_path(pin::syn_malformed_path(base_path))
+}
+
+fn read_array_counter_from_path(path: impl AsRef<std::path::Path>) -> Option<u64> {
+    let data = MapData::from_pin(path.as_ref()).ok()?;
     let map = Map::Array(data);
     let array = Array::<_, u64>::try_from(map).ok()?;
     array.get(&0, 0).ok()

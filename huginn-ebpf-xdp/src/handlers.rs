@@ -70,6 +70,7 @@ pub fn try_xdp_syn(ctx: &XdpContext) -> Result<(), ()> {
 
     let tcp_hdr_len = unsafe { usize::from((*tcp).doff()).saturating_mul(4) };
     if tcp_hdr_len < mem::size_of::<TcpHdr>() {
+        tcp_syn::increment_syn_malformed();
         return Ok(());
     }
 
