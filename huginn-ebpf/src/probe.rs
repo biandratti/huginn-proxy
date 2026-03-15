@@ -161,8 +161,6 @@ impl EbpfProbe {
         let base = Path::new(base_path);
         std::fs::create_dir_all(base)
             .map_err(|e| EbpfError::PinDir { path: base_path.to_string(), source: e })?;
-        // bpffs root (e.g. /sys/fs/bpf) may be 0700 root:root. The non-root
-        // proxy process needs +x to traverse it, plus +x on the pin directory.
         if let Some(parent) = base.parent() {
             let _ = std::fs::set_permissions(parent, std::fs::Permissions::from_mode(0o755));
         }

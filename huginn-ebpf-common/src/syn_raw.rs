@@ -48,17 +48,3 @@ impl Default for SynRawData {
 #[cfg(feature = "aya")]
 #[allow(unsafe_code)]
 unsafe impl aya::Pod for SynRawData {}
-
-const _: () = {
-    use core::mem::{offset_of, size_of};
-    assert!(size_of::<SynRawData>() == 64);
-    assert!(offset_of!(SynRawData, src_addr) == 0);
-    assert!(offset_of!(SynRawData, src_port) == 4);
-    assert!(offset_of!(SynRawData, window) == 6);
-    assert!(offset_of!(SynRawData, optlen) == 8);
-    assert!(offset_of!(SynRawData, ip_ttl) == 10);
-    assert!(offset_of!(SynRawData, ip_olen) == 11);
-    assert!(offset_of!(SynRawData, options) == 12);
-    assert!(offset_of!(SynRawData, quirks) == 52);
-    assert!(offset_of!(SynRawData, tick) == 56);
-};

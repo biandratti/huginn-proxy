@@ -9,7 +9,6 @@ pub struct Config {
     pub dst_ip: Ipv4Addr,
     pub dst_port: u16,
     pub pin_path: String,
-    /// Max entries for the TCP SYN LRU map (overridden at load via set_max_entries). Default 8192.
     pub syn_map_max_entries: u32,
     pub metrics_listen_addr: String,
     pub metrics_port: u16,

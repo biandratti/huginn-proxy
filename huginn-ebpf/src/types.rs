@@ -1,6 +1,6 @@
 use huginn_net_db::observable_signals::TcpObservation;
-use huginn_net_db::tcp::Quirk;
-use huginn_net_tcp::syn_options::parse_options_raw;
+use huginn_net_db::tcp::{Quirk, Ttl, WindowSize};
+use huginn_net_tcp::syn_options::{parse_options_raw, ParsedTcpOptions};
 use huginn_net_tcp::tcp::{IpVersion, PayloadSize, TcpOption};
 use huginn_net_tcp::{ttl, window_size};
 use tracing::warn;
@@ -110,7 +110,7 @@ pub fn parse_syn(raw: &SynRawData) -> Option<TcpObservation> {
     let window_host = u16::from_be(raw.window);
     let valid_opts = &raw.options[..raw.optlen.min(40) as usize];
 
-    let parsed = parse_options_raw(valid_opts);
+    let parsed: ParsedTcpOptions = parse_options_raw(valid_opts);
     if parsed.malformed {
         warn!(
             optlen = raw.optlen,
@@ -120,8 +120,8 @@ pub fn parse_syn(raw: &SynRawData) -> Option<TcpObservation> {
         return None;
     }
 
-    let ittl = ttl::calculate_ttl(raw.ip_ttl);
-    let wsize = window_size::detect_win_multiplicator(
+    let ittl: Ttl = ttl::calculate_ttl(raw.ip_ttl);
+    let wsize: WindowSize = window_size::detect_win_multiplicator(
         window_host,
         parsed.mss.unwrap_or(0),
         20 + u16::from(raw.ip_olen),
@@ -129,13 +129,13 @@ pub fn parse_syn(raw: &SynRawData) -> Option<TcpObservation> {
         &IpVersion::V4,
     );
 
-    let mut quirks = decode_quirks(raw.quirks);
+    let mut quirks: Vec<Quirk> = decode_quirks(raw.quirks);
 
     if parsed.wscale.map(|ws| ws > 14).unwrap_or(false) {
         quirks.push(Quirk::ExcessiveWindowScaling);
     }
 
-    let oq = scan_option_quirks(valid_opts);
+    let oq: OptionQuirks = scan_option_quirks(valid_opts);
     if oq.ts_val == Some(0) {
         quirks.push(Quirk::OwnTimestampZero);
     }
