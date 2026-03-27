@@ -2,10 +2,7 @@ name: Security audit
 
 on:
   push:
-    branches: [ "test" ]
-    paths:
-      - '**/Cargo.toml'
-      - '**/Cargo.lock'
+    branches: [ "master" ]
   schedule:
     - cron: '0 2 * * *'
 
