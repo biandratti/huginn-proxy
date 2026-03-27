@@ -135,15 +135,15 @@ See [ROADMAP.md](ROADMAP.md) for a detailed list of planned features and upcomin
 <details>
 <summary><strong>Docker images</strong></summary>
 
-Images published to `ghcr.io/biandratti/huginn-proxy` (`linux/amd64`, `linux/arm64`).
+Local: [`examples/`](examples/) (Docker Compose). Published (`linux/amd64`, `linux/arm64`):
 
-| Image tag | Base image | User | eBPF | Capabilities |
-|---|---|---|---|---|
-| `:latest` / `:v0.0.1-beta.1` | `debian:bookworm-slim` | `10001` | ✅ reads pinned maps | `CAP_BPF` |
-| `:latest-plain` / `:v0.0.1-beta.1-plain` | `debian:bookworm-slim` | `10001` | ❌ | none |
-| `:latest-ebpf-agent` / `:v0.0.1-beta.1-ebpf-agent` | `debian:bookworm-slim` | `root` | ✅ loads XDP, pins maps | `CAP_BPF` + `CAP_NET_ADMIN` + `CAP_PERFMON` |
+| Image | Base | User | Capabilities |
+|-------|------|------|--------------|
+| `ghcr.io/biandratti/huginn-proxy:v0.0.1-beta.2` | `debian:bookworm-slim` | `10001` | Proxy reads pinned maps — `CAP_BPF` |
+| `ghcr.io/biandratti/huginn-proxy:v0.0.1-beta.2-plain` | `debian:bookworm-slim` | `10001` | No eBPF |
+| `ghcr.io/biandratti/huginn-proxy:v0.0.1-beta.2-ebpf-agent` | `debian:bookworm-slim` | `root` | Agent loads XDP — `CAP_BPF` `CAP_NET_ADMIN` `CAP_PERFMON` |
 
-See [DEPLOYMENT.md](DEPLOYMENT.md) for Docker and Kubernetes setup, and [EBPF-SETUP.md](EBPF-SETUP.md) for eBPF runtime requirements.
+Replace `v0.0.1-beta.2` with your release tag. See [DEPLOYMENT.md](DEPLOYMENT.md), [EBPF-SETUP.md](EBPF-SETUP.md).
 
 </details>
 
