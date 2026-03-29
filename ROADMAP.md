@@ -23,7 +23,6 @@
 - [ ] Advanced load balancing algorithms (least connections, weighted)
 - [ ] Request/response transformation
 - [ ] Circuit breakers
-- [ ] TCP fingerprinting
 - [ ] Production hardening and security audit
 
 ### Measure

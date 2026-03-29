@@ -91,6 +91,7 @@ impl EbpfProbe {
             .set_global("dst_ip", &bpf_dst_ip, false)
             .set_global("dst_port", &bpf_dst_port, false)
             .set_max_entries(pin::SYN_MAP_V4_NAME, syn_map_max_entries)
+            .set_max_entries(pin::SYN_MAP_V6_NAME, syn_map_max_entries)
             .load(XDP_BPF_BYTES)
             .map_err(EbpfError::Load)?;
 

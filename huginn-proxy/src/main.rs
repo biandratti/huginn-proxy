@@ -79,7 +79,7 @@ async fn main() -> Result<(), BoxError> {
                             "eBPF agent maps not available yet, retrying in {}s...",
                             RETRY_INTERVAL.as_secs()
                         );
-                        std::thread::sleep(RETRY_INTERVAL);
+                        tokio::time::sleep(RETRY_INTERVAL).await;
                     }
                 }
             };

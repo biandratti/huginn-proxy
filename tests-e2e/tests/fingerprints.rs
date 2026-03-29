@@ -122,7 +122,10 @@ async fn test_tls_fingerprint_injection() -> Result<(), Box<dyn std::error::Erro
         .and_then(|v| v.as_str())
         .ok_or("TCP SYN fingerprint header should be a string")?;
     assert!(!tcp_fp.is_empty(), "TCP SYN fingerprint should not be empty");
-    assert!(tcp_fp.starts_with("4:"), "TCP SYN fingerprint should start with '4:' (IPv4)");
+    assert!(
+        tcp_fp.starts_with("4:") || tcp_fp.starts_with("6:"),
+        "TCP SYN fingerprint should start with '4:' (IPv4) or '6:' (IPv6)"
+    );
     assert_eq!(
         tcp_fp.split(':').count(),
         8,
@@ -203,7 +206,10 @@ async fn test_http2_fingerprint_injection() -> Result<(), Box<dyn std::error::Er
         .and_then(|v| v.as_str())
         .ok_or("TCP SYN fingerprint header should be a string")?;
     assert!(!tcp_fp.is_empty(), "TCP SYN fingerprint should not be empty");
-    assert!(tcp_fp.starts_with("4:"), "TCP SYN fingerprint should start with '4:' (IPv4)");
+    assert!(
+        tcp_fp.starts_with("4:") || tcp_fp.starts_with("6:"),
+        "TCP SYN fingerprint should start with '4:' (IPv4) or '6:' (IPv6)"
+    );
     println!("TCP SYN fingerprint ({}): {tcp_fp}", names::TCP_SYN);
 
     // Also verify TLS fingerprint headers are present (all TLS connections should have them)
