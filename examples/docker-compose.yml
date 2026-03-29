@@ -71,6 +71,15 @@ services:
       context: ..
       dockerfile: examples/backend/Dockerfile
 
+networks:
+  default:
+    enable_ipv6: true
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
+        # Distinct /64 from Docker's fixed-cidr-v6 (fd00:dead:beef::/64)
+        - subnet: fd00:dead:beef:1::/64
+
 volumes:
   bpffs:
     driver: local

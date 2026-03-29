@@ -13,7 +13,7 @@ pub use probe::{
     syn_captured_count_from_path, syn_insert_failures_count_from_path,
     syn_malformed_count_from_path, EbpfProbe, DEFAULT_SYN_MAP_MAX_ENTRIES,
 };
-pub use types::{parse_syn, quirk_bits, SynRawData};
+pub use types::{parse_syn_v4, parse_syn_v6, quirk_bits, SynRawData, SynRawDataV6};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum XdpMode {

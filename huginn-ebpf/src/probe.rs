@@ -1,4 +1,4 @@
-use std::net::Ipv4Addr;
+use std::net::{Ipv4Addr, Ipv6Addr};
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 
@@ -8,7 +8,7 @@ use aya::{Ebpf, EbpfLoader};
 use tracing::{debug, info, warn};
 
 use crate::pin;
-use crate::types::SynRawData;
+use crate::types::{SynRawData, SynRawDataV6};
 use crate::EbpfError;
 use crate::XdpMode;
 
@@ -30,11 +30,14 @@ enum ProbeInner {
     /// Dropping detaches XDP from the interface.
     Embedded { ebpf: Ebpf },
     /// Used by `huginn-proxy`: reads maps pinned by the agent.
-    Pinned {
-        syn_map: Map,
-        counter: Map,
-        insert_failures: Map,
-    },
+    Pinned(Box<PinnedMaps>),
+}
+
+struct PinnedMaps {
+    syn_map_v4: Map,
+    syn_map_v6: Map,
+    counter: Map,
+    insert_failures_v4: Map,
 }
 
 /// Manages eBPF XDP SYN data lookups.
@@ -130,19 +133,24 @@ impl EbpfProbe {
 
     /// Open previously pinned BPF maps created by the eBPF agent.
     ///
-    /// The agent must have already pinned `tcp_syn_map_v4`, `syn_counter`, and
-    /// `syn_insert_failures` under `base_path` (default: `/sys/fs/bpf/huginn/`).
+    /// The agent must have already pinned `tcp_syn_map_v4`, `tcp_syn_map_v6`, `syn_counter`,
+    /// and `syn_insert_failures` under `base_path` (default: `/sys/fs/bpf/huginn/`).
     ///
     /// `syn_map_max_entries` must match the value the agent used when loading the program
     /// (e.g. `HUGINN_EBPF_SYN_MAP_MAX_ENTRIES`); it is used for stale entry detection.
     /// This constructor does not load or attach any XDP program — the agent owns that lifecycle.
     pub fn from_pinned(base_path: &str, syn_map_max_entries: u32) -> Result<Self, EbpfError> {
         let syn_map_path = pin::syn_map_v4_path(base_path);
+        let syn_map_v6_path = pin::syn_map_v6_path(base_path);
         let counter_path = pin::counter_path(base_path);
-        let insert_failures_path = pin::insert_failures_path(base_path);
+        let insert_failures_path = pin::insert_failures_v4_path(base_path);
 
         let syn_data = MapData::from_pin(&syn_map_path).map_err(|e| EbpfError::FromPin {
             path: syn_map_path.display().to_string(),
+            source: e,
+        })?;
+        let syn_data_v6 = MapData::from_pin(&syn_map_v6_path).map_err(|e| EbpfError::FromPin {
+            path: syn_map_v6_path.display().to_string(),
             source: e,
         })?;
         let counter_data = MapData::from_pin(&counter_path).map_err(|e| EbpfError::FromPin {
@@ -156,11 +164,12 @@ impl EbpfProbe {
         info!(base_path, "eBPF TCP SYN fingerprinting connected to pinned maps");
 
         Ok(Self {
-            inner: ProbeInner::Pinned {
-                syn_map: Map::LruHashMap(syn_data),
+            inner: ProbeInner::Pinned(Box::new(PinnedMaps {
+                syn_map_v4: Map::LruHashMap(syn_data),
+                syn_map_v6: Map::LruHashMap(syn_data_v6),
                 counter: Map::Array(counter_data),
-                insert_failures: Map::Array(insert_failures_data),
-            },
+                insert_failures_v4: Map::Array(insert_failures_data),
+            })),
             interface: String::new(),
             syn_map_max_entries,
         })
@@ -182,29 +191,43 @@ impl EbpfProbe {
 
         let ebpf = match &mut self.inner {
             ProbeInner::Embedded { ebpf } => ebpf,
-            ProbeInner::Pinned { .. } => return Ok(()),
+            ProbeInner::Pinned(_) => return Ok(()),
         };
 
         let syn_path = pin::syn_map_v4_path(base_path);
+        let syn_path_v6 = pin::syn_map_v6_path(base_path);
         let counter_path = pin::counter_path(base_path);
-
-        let insert_failures_path = pin::insert_failures_path(base_path);
-        let syn_captured_path = pin::syn_captured_path(base_path);
-        let syn_malformed_path = pin::syn_malformed_path(base_path);
+        let insert_failures_v4_path = pin::insert_failures_v4_path(base_path);
+        let syn_captured_v4_path = pin::syn_captured_v4_path(base_path);
+        let syn_malformed_v4_path = pin::syn_malformed_v4_path(base_path);
+        let insert_failures_v6_path = pin::insert_failures_v6_path(base_path);
+        let syn_captured_v6_path = pin::syn_captured_v6_path(base_path);
+        let syn_malformed_v6_path = pin::syn_malformed_v6_path(base_path);
 
         // Remove stale pins from a previous agent instance.
         let _ = std::fs::remove_file(&syn_path);
+        let _ = std::fs::remove_file(&syn_path_v6);
         let _ = std::fs::remove_file(&counter_path);
-        let _ = std::fs::remove_file(&insert_failures_path);
-        let _ = std::fs::remove_file(&syn_captured_path);
-        let _ = std::fs::remove_file(&syn_malformed_path);
+        let _ = std::fs::remove_file(&insert_failures_v4_path);
+        let _ = std::fs::remove_file(&syn_captured_v4_path);
+        let _ = std::fs::remove_file(&syn_malformed_v4_path);
+        let _ = std::fs::remove_file(&insert_failures_v6_path);
+        let _ = std::fs::remove_file(&syn_captured_v6_path);
+        let _ = std::fs::remove_file(&syn_malformed_v6_path);
 
-        let syn_map = ebpf
+        let syn_map_v4 = ebpf
             .map_mut(pin::SYN_MAP_V4_NAME)
             .ok_or(EbpfError::ProgramNotFound)?;
-        syn_map
+        syn_map_v4
             .pin(&syn_path)
             .map_err(|e| EbpfError::Pin { name: pin::SYN_MAP_V4_NAME.to_string(), source: e })?;
+
+        let syn_map_v6 = ebpf
+            .map_mut(pin::SYN_MAP_V6_NAME)
+            .ok_or(EbpfError::ProgramNotFound)?;
+        syn_map_v6
+            .pin(&syn_path_v6)
+            .map_err(|e| EbpfError::Pin { name: pin::SYN_MAP_V6_NAME.to_string(), source: e })?;
 
         let counter = ebpf
             .map_mut(pin::COUNTER_NAME)
@@ -213,39 +236,79 @@ impl EbpfProbe {
             .pin(&counter_path)
             .map_err(|e| EbpfError::Pin { name: pin::COUNTER_NAME.to_string(), source: e })?;
 
-        let insert_failures = ebpf
-            .map_mut(pin::SYN_INSERT_FAILURES_NAME)
+        let insert_failures_v4 = ebpf
+            .map_mut(pin::SYN_INSERT_FAILURES_V4_NAME)
             .ok_or(EbpfError::ProgramNotFound)?;
-        insert_failures
-            .pin(&insert_failures_path)
+        insert_failures_v4
+            .pin(&insert_failures_v4_path)
             .map_err(|e| EbpfError::Pin {
-                name: pin::SYN_INSERT_FAILURES_NAME.to_string(),
+                name: pin::SYN_INSERT_FAILURES_V4_NAME.to_string(),
                 source: e,
             })?;
 
-        let syn_captured = ebpf
-            .map_mut(pin::SYN_CAPTURED_NAME)
+        let syn_captured_v4 = ebpf
+            .map_mut(pin::SYN_CAPTURED_V4_NAME)
             .ok_or(EbpfError::ProgramNotFound)?;
-        syn_captured
-            .pin(&syn_captured_path)
-            .map_err(|e| EbpfError::Pin { name: pin::SYN_CAPTURED_NAME.to_string(), source: e })?;
+        syn_captured_v4
+            .pin(&syn_captured_v4_path)
+            .map_err(|e| EbpfError::Pin {
+                name: pin::SYN_CAPTURED_V4_NAME.to_string(),
+                source: e,
+            })?;
 
-        let syn_malformed = ebpf
-            .map_mut(pin::SYN_MALFORMED_NAME)
+        let syn_malformed_v4 = ebpf
+            .map_mut(pin::SYN_MALFORMED_V4_NAME)
             .ok_or(EbpfError::ProgramNotFound)?;
-        syn_malformed
-            .pin(&syn_malformed_path)
-            .map_err(|e| EbpfError::Pin { name: pin::SYN_MALFORMED_NAME.to_string(), source: e })?;
+        syn_malformed_v4
+            .pin(&syn_malformed_v4_path)
+            .map_err(|e| EbpfError::Pin {
+                name: pin::SYN_MALFORMED_V4_NAME.to_string(),
+                source: e,
+            })?;
+
+        let insert_failures_v6 = ebpf
+            .map_mut(pin::SYN_INSERT_FAILURES_V6_NAME)
+            .ok_or(EbpfError::ProgramNotFound)?;
+        insert_failures_v6
+            .pin(&insert_failures_v6_path)
+            .map_err(|e| EbpfError::Pin {
+                name: pin::SYN_INSERT_FAILURES_V6_NAME.to_string(),
+                source: e,
+            })?;
+
+        let syn_captured_v6 = ebpf
+            .map_mut(pin::SYN_CAPTURED_V6_NAME)
+            .ok_or(EbpfError::ProgramNotFound)?;
+        syn_captured_v6
+            .pin(&syn_captured_v6_path)
+            .map_err(|e| EbpfError::Pin {
+                name: pin::SYN_CAPTURED_V6_NAME.to_string(),
+                source: e,
+            })?;
+
+        let syn_malformed_v6 = ebpf
+            .map_mut(pin::SYN_MALFORMED_V6_NAME)
+            .ok_or(EbpfError::ProgramNotFound)?;
+        syn_malformed_v6
+            .pin(&syn_malformed_v6_path)
+            .map_err(|e| EbpfError::Pin {
+                name: pin::SYN_MALFORMED_V6_NAME.to_string(),
+                source: e,
+            })?;
 
         // BPF_OBJ_GET checks inode permissions (MAY_READ | MAY_WRITE).
         // Pin files are created as 0600 root:root — make them accessible
         // to the non-root proxy process.
         let open_mode = std::fs::Permissions::from_mode(0o666);
         let _ = std::fs::set_permissions(&syn_path, open_mode.clone());
+        let _ = std::fs::set_permissions(&syn_path_v6, open_mode.clone());
         let _ = std::fs::set_permissions(&counter_path, open_mode.clone());
-        let _ = std::fs::set_permissions(&insert_failures_path, open_mode.clone());
-        let _ = std::fs::set_permissions(&syn_captured_path, open_mode.clone());
-        let _ = std::fs::set_permissions(&syn_malformed_path, open_mode);
+        let _ = std::fs::set_permissions(&insert_failures_v4_path, open_mode.clone());
+        let _ = std::fs::set_permissions(&syn_captured_v4_path, open_mode.clone());
+        let _ = std::fs::set_permissions(&syn_malformed_v4_path, open_mode.clone());
+        let _ = std::fs::set_permissions(&insert_failures_v6_path, open_mode.clone());
+        let _ = std::fs::set_permissions(&syn_captured_v6_path, open_mode.clone());
+        let _ = std::fs::set_permissions(&syn_malformed_v6_path, open_mode);
 
         info!(base_path, "BPF maps pinned");
         Ok(())
@@ -254,29 +317,87 @@ impl EbpfProbe {
     /// Remove pinned map files. Called during agent shutdown for clean teardown.
     pub fn unpin_maps(base_path: &str) {
         let syn_path = pin::syn_map_v4_path(base_path);
+        let syn_path_v6 = pin::syn_map_v6_path(base_path);
         let counter_path = pin::counter_path(base_path);
-        let insert_failures_path = pin::insert_failures_path(base_path);
-        let syn_captured_path = pin::syn_captured_path(base_path);
-        let syn_malformed_path = pin::syn_malformed_path(base_path);
+        let insert_failures_v4_path = pin::insert_failures_v4_path(base_path);
+        let syn_captured_v4_path = pin::syn_captured_v4_path(base_path);
+        let syn_malformed_v4_path = pin::syn_malformed_v4_path(base_path);
+        let insert_failures_v6_path = pin::insert_failures_v6_path(base_path);
+        let syn_captured_v6_path = pin::syn_captured_v6_path(base_path);
+        let syn_malformed_v6_path = pin::syn_malformed_v6_path(base_path);
         let _ = std::fs::remove_file(&syn_path);
+        let _ = std::fs::remove_file(&syn_path_v6);
         let _ = std::fs::remove_file(&counter_path);
-        let _ = std::fs::remove_file(&insert_failures_path);
-        let _ = std::fs::remove_file(&syn_captured_path);
-        let _ = std::fs::remove_file(&syn_malformed_path);
+        let _ = std::fs::remove_file(&insert_failures_v4_path);
+        let _ = std::fs::remove_file(&syn_captured_v4_path);
+        let _ = std::fs::remove_file(&syn_malformed_v4_path);
+        let _ = std::fs::remove_file(&insert_failures_v6_path);
+        let _ = std::fs::remove_file(&syn_captured_v6_path);
+        let _ = std::fs::remove_file(&syn_malformed_v6_path);
         info!(base_path, "BPF map pins removed");
+    }
+
+    /// Look up the TCP SYN data for an IPv6 client connection.
+    ///
+    /// Should be called immediately after `TcpStream::accept()` while the BPF
+    /// map entry is still fresh. Returns `None` if:
+    /// - the SYN was not captured (program just started, map entry evicted), or
+    /// - the entry is stale (more than 2× `syn_map_max_entries` SYNs have arrived since capture).
+    pub fn lookup_v6(&self, src_ip: Ipv6Addr, src_port: u16) -> Option<SynRawDataV6> {
+        let syn_map = self.syn_map_v6()?;
+        let map = HashMap::<_, [u8; 18], SynRawDataV6>::try_from(syn_map).ok()?;
+
+        let key = make_bpf_key_v6(src_ip, src_port);
+        let val = match map.get(&key, 0) {
+            Ok(v) => v,
+            Err(_) => {
+                debug!(?src_ip, src_port, "SYN v6 map miss - no entry");
+                return None;
+            }
+        };
+
+        let stored_port = u16::from_be(val.src_port);
+        if stored_port != src_port {
+            warn!(
+                ?src_ip,
+                src_port,
+                stored_port,
+                "BPF v6 map port mismatch - possible hash collision, ignoring"
+            );
+            return None;
+        }
+
+        let stale_threshold = u64::from(self.syn_map_max_entries) * 2;
+        if let Some(current_tick) = self.read_current_tick() {
+            let age = current_tick.saturating_sub(val.tick);
+            if age > stale_threshold {
+                warn!(
+                    ?src_ip,
+                    src_port,
+                    stored_tick = val.tick,
+                    current_tick,
+                    age,
+                    threshold = stale_threshold,
+                    "SYN v6 map entry is stale - discarding"
+                );
+                return None;
+            }
+        }
+
+        Some(val)
     }
 
     /// Look up the TCP SYN data for a client connection.
     ///
     /// Should be called immediately after `TcpStream::accept()` while the BPF
     /// map entry is still fresh. Returns `None` if:
-    /// - the SYN was not captured (program just started, IPv6 client, map entry evicted), or
+    /// - the SYN was not captured (program just started, map entry evicted), or
     /// - the entry is stale (more than 2× `syn_map_max_entries` SYNs have arrived since capture).
     pub fn lookup(&self, src_ip: Ipv4Addr, src_port: u16) -> Option<SynRawData> {
-        let syn_map = self.syn_map()?;
+        let syn_map = self.syn_map_v4()?;
         let map = HashMap::<_, u64, SynRawData>::try_from(syn_map).ok()?;
 
-        let key = make_bpf_key(src_ip, src_port);
+        let key = make_bpf_key_v4(src_ip, src_port);
         let val = match map.get(&key, 0) {
             Ok(v) => v,
             Err(_) => {
@@ -320,24 +441,31 @@ impl EbpfProbe {
         Some(val)
     }
 
-    fn syn_map(&self) -> Option<&Map> {
+    fn syn_map_v4(&self) -> Option<&Map> {
         match &self.inner {
             ProbeInner::Embedded { ebpf } => ebpf.map(pin::SYN_MAP_V4_NAME),
-            ProbeInner::Pinned { syn_map, .. } => Some(syn_map),
+            ProbeInner::Pinned(p) => Some(&p.syn_map_v4),
+        }
+    }
+
+    fn syn_map_v6(&self) -> Option<&Map> {
+        match &self.inner {
+            ProbeInner::Embedded { ebpf } => ebpf.map(pin::SYN_MAP_V6_NAME),
+            ProbeInner::Pinned(p) => Some(&p.syn_map_v6),
         }
     }
 
     fn counter_map(&self) -> Option<&Map> {
         match &self.inner {
             ProbeInner::Embedded { ebpf } => ebpf.map(pin::COUNTER_NAME),
-            ProbeInner::Pinned { counter, .. } => Some(counter),
+            ProbeInner::Pinned(p) => Some(&p.counter),
         }
     }
 
     fn insert_failures_map(&self) -> Option<&Map> {
         match &self.inner {
-            ProbeInner::Embedded { ebpf } => ebpf.map(pin::SYN_INSERT_FAILURES_NAME),
-            ProbeInner::Pinned { insert_failures, .. } => Some(insert_failures),
+            ProbeInner::Embedded { ebpf } => ebpf.map(pin::SYN_INSERT_FAILURES_V4_NAME),
+            ProbeInner::Pinned(p) => Some(&p.insert_failures_v4),
         }
     }
 
@@ -363,22 +491,22 @@ impl EbpfProbe {
     }
 }
 
-/// Read the `syn_insert_failures` counter from a pinned map at `base_path`.
+/// Read the `syn_insert_failures_v4` counter from a pinned map at `base_path`.
 ///
 /// Used by the agent's metrics server without sharing the probe (avoids `Send` on `EbpfProbe`).
 /// Returns `None` if the map cannot be opened or read.
 pub fn syn_insert_failures_count_from_path(base_path: &str) -> Option<u64> {
-    read_array_counter_from_path(pin::insert_failures_path(base_path))
+    read_array_counter_from_path(pin::insert_failures_v4_path(base_path))
 }
 
-/// Read the `syn_captured` counter from a pinned map at `base_path`.
+/// Read the `syn_captured_v4` counter from a pinned map at `base_path`.
 pub fn syn_captured_count_from_path(base_path: &str) -> Option<u64> {
-    read_array_counter_from_path(pin::syn_captured_path(base_path))
+    read_array_counter_from_path(pin::syn_captured_v4_path(base_path))
 }
 
-/// Read the `syn_malformed` counter from a pinned map at `base_path`.
+/// Read the `syn_malformed_v4` counter from a pinned map at `base_path`.
 pub fn syn_malformed_count_from_path(base_path: &str) -> Option<u64> {
-    read_array_counter_from_path(pin::syn_malformed_path(base_path))
+    read_array_counter_from_path(pin::syn_malformed_v4_path(base_path))
 }
 
 fn read_array_counter_from_path(path: impl AsRef<std::path::Path>) -> Option<u64> {
@@ -388,20 +516,31 @@ fn read_array_counter_from_path(path: impl AsRef<std::path::Path>) -> Option<u64
     array.get(&0, 0).ok()
 }
 
-/// Build the BPF map lookup key matching the XDP program's `make_key()`.
+/// Build the BPF map lookup key matching the XDP program's `make_key_v4()` (IPv4).
 ///
 /// The XDP program: `((__u64)ip->saddr << 16) | tcp->source`
 /// Both `ip->saddr` and `tcp->source` are in network byte order as seen by
 /// the LE CPU (i.e., the raw BE bytes interpreted as a LE integer value).
 ///
 /// From Rust's `Ipv4Addr` and host-byte-order port, we reconstruct the same key.
-///
-/// **IPv4 only** - the XDP program filters `ETH_P_IP` and ignores IPv6 packets.
-/// IPv6 listen addresses are rejected at startup in `main.rs`.
-pub fn make_bpf_key(src_ip: Ipv4Addr, src_port: u16) -> u64 {
+pub fn make_bpf_key_v4(src_ip: Ipv4Addr, src_port: u16) -> u64 {
     // ip->saddr: network-order bytes [a,b,c,d] read by LE CPU = u32::from_ne_bytes([a,b,c,d])
     let ip_ne = u32::from_ne_bytes(src_ip.octets());
     // tcp->source: network-order port bytes [hi,lo] read by LE CPU
     let port_ne = u16::from_ne_bytes(src_port.to_be_bytes());
     (u64::from(ip_ne) << 16) | u64::from(port_ne)
+}
+
+/// Build the BPF map lookup key matching the XDP program's `make_key_v6()` (IPv6).
+///
+/// Layout: 16 bytes of IPv6 address (network byte order) followed by 2 bytes of
+/// TCP source port (network byte order). Matches the kernel-side `make_key_v6` in
+/// `huginn-ebpf-common`.
+pub fn make_bpf_key_v6(src_ip: Ipv6Addr, src_port: u16) -> [u8; 18] {
+    let mut key = [0u8; 18];
+    key[..16].copy_from_slice(&src_ip.octets());
+    let port_be = src_port.to_be_bytes();
+    key[16] = port_be[0];
+    key[17] = port_be[1];
+    key
 }

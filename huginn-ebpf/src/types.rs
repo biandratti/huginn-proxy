@@ -5,7 +5,7 @@ use huginn_net_tcp::tcp::{IpVersion, PayloadSize, TcpOption};
 use huginn_net_tcp::{ttl, window_size};
 use tracing::warn;
 
-pub use huginn_ebpf_common::{quirk_bits, SynRawData};
+pub use huginn_ebpf_common::{quirk_bits, SynRawData, SynRawDataV6};
 
 struct OptionQuirks {
     ts_val: Option<u32>,
@@ -94,6 +94,71 @@ fn decode_quirks(bits: u32) -> Vec<Quirk> {
     v
 }
 
+/// Parse a TCP SYN fingerprint from raw XDP-captured IPv6 data.
+///
+/// Returns `Some(TcpObservation)` on success, or `None` when TCP options are
+/// malformed. A `WARN` log is emitted for the latter.
+///
+/// Constants hardcoded from XDP IPv6 invariants:
+/// - `ip_version = V6`: only IPv6 SYN packets are stored in `tcp_syn_map_v6`.
+/// - `pclass = Zero`: TCP SYN packets never carry a payload.
+/// - `ip_olen = 0`: IPv6 has no IP options (extension headers not tracked yet).
+/// - `ip_plus_tcp = 60`: IPv6 fixed header (40 bytes) + TCP fixed header (20 bytes).
+pub fn parse_syn_v6(raw: &SynRawDataV6) -> Option<TcpObservation> {
+    let window_host = u16::from_be(raw.window);
+    let valid_opts = &raw.options[..usize::from(raw.optlen.min(40))];
+
+    let parsed: ParsedTcpOptions = parse_options_raw(valid_opts);
+    if parsed.malformed {
+        warn!(
+            optlen = raw.optlen,
+            partial_opts = ?parsed.olayout,
+            "IPv6 TCP SYN options malformed: truncated or invalid option byte; dropping fingerprint"
+        );
+        return None;
+    }
+
+    let ittl: Ttl = ttl::calculate_ttl(raw.ip_ttl);
+    // IPv6 fixed header is 40 bytes; no IP options.
+    let ip_plus_tcp: u16 = 60;
+    let wsize: WindowSize = window_size::detect_win_multiplicator(
+        window_host,
+        parsed.mss.unwrap_or(0),
+        ip_plus_tcp,
+        parsed.olayout.contains(&TcpOption::TS),
+        &IpVersion::V6,
+    );
+
+    let mut quirks: Vec<Quirk> = decode_quirks(raw.quirks);
+
+    if parsed.wscale.map(|ws| ws > 14).unwrap_or(false) {
+        quirks.push(Quirk::ExcessiveWindowScaling);
+    }
+
+    let oq: OptionQuirks = scan_option_quirks(valid_opts);
+    if oq.ts_val == Some(0) {
+        quirks.push(Quirk::OwnTimestampZero);
+    }
+    if oq.ts_ecr.map(|v| v != 0).unwrap_or(false) {
+        quirks.push(Quirk::PeerTimestampNonZero);
+    }
+    if oq.trailing_nonzero {
+        quirks.push(Quirk::TrailinigNonZero);
+    }
+
+    Some(TcpObservation {
+        version: IpVersion::V6,
+        ittl,
+        olen: 0,
+        mss: parsed.mss,
+        wsize,
+        wscale: parsed.wscale,
+        olayout: parsed.olayout,
+        quirks,
+        pclass: PayloadSize::Zero,
+    })
+}
+
 /// Parse a TCP SYN fingerprint from raw XDP-captured data.
 ///
 /// Returns `Some(TcpObservation)` on success, or `None` when TCP options are
@@ -102,7 +167,7 @@ fn decode_quirks(bits: u32) -> Vec<Quirk> {
 /// Constants hardcoded from XDP invariants:
 /// - `ip_version = V4`: the XDP program filters out non-IPv4 at entry.
 /// - `pclass = Zero`: TCP SYN packets never carry a payload by protocol definition.
-pub fn parse_syn(raw: &SynRawData) -> Option<TcpObservation> {
+pub fn parse_syn_v4(raw: &SynRawData) -> Option<TcpObservation> {
     let window_host = u16::from_be(raw.window);
     let valid_opts = &raw.options[..usize::from(raw.optlen.min(40))];
 
