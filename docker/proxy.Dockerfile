@@ -32,7 +32,7 @@ RUN cargo build --release -p huginn-proxy --features ebpf-tcp
 # debian:bookworm-slim (bookworm-20260202-slim, amd64)
 FROM debian:bookworm-slim@sha256:74a21da88cf4b2e8fde34558376153c5cd80b00ca81da2e659387e76524edc73 AS runtime-base
 RUN apt-get update -q && apt-get install -y --no-install-recommends \
-    ca-certificates \
+    ca-certificates curl \
     && rm -rf /var/lib/apt/lists/*
 RUN adduser --disabled-password --gecos '' --uid 10001 app
 
