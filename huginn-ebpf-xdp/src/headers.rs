@@ -20,7 +20,7 @@ pub struct VlanHdr {
 /// The first byte encodes `ihl` (low nibble) and `version` (high nibble)
 /// following `__LITTLE_ENDIAN_BITFIELD` ordering.
 #[repr(C)]
-pub struct IpHdr {
+pub struct Ip4Hdr {
     pub version_ihl: u8,
     pub tos: u8,
     pub tot_len: u16,
@@ -33,7 +33,7 @@ pub struct IpHdr {
     pub daddr: u32, // network byte order
 }
 
-impl IpHdr {
+impl Ip4Hdr {
     #[inline(always)]
     pub fn ihl(&self) -> u8 {
         // On LE: ihl is the lower 4 bits of the first byte
@@ -55,7 +55,7 @@ impl IpHdr {
 ///   bits [13]   = URG
 ///   bits [14]   = ECE
 ///   bits [15]   = CWR
-#[repr(C)] //TODO: rename to TcpHdrV4
+#[repr(C)]
 pub struct TcpHdr {
     pub source: u16,       // network byte order
     pub dest: u16,         // network byte order

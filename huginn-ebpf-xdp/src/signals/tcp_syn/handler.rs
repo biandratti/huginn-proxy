@@ -3,7 +3,7 @@
 use aya_ebpf::programs::XdpContext;
 use core::mem;
 use crate::constants::TCPOPT_MAXLEN;
-use crate::headers::{Ip6Hdr, IpHdr, TcpHdr};
+use crate::headers::{Ip4Hdr, Ip6Hdr, TcpHdr};
 use super::maps::{
     increment_syn_captured_v4, increment_syn_captured_v6, increment_syn_insert_failures_v4,
     increment_syn_insert_failures_v6, read_and_increment_syn_counter, tcp_syn_map_v4,
@@ -30,7 +30,7 @@ pub enum TcpSynError {
 /// `ip` and `tcp` are references to packet memory validated by the pipeline.
 pub fn handle_tcp_syn_v4(
     ctx: &XdpContext,
-    ip: &IpHdr,
+    ip: &Ip4Hdr,
     tcp: &TcpHdr,
     ip_hdr_len: usize,
 ) -> Result<(), TcpSynError> {
@@ -66,7 +66,7 @@ pub fn handle_tcp_syn_v4(
         optlen: actual_copied as u8,
         ip_tos: ip.tos,
         ip_ttl: ip.ttl,
-        ip_olen: ip_hdr_len.saturating_sub(mem::size_of::<IpHdr>()) as u8,
+        ip_olen: ip_hdr_len.saturating_sub(mem::size_of::<Ip4Hdr>()) as u8,
         options,
         quirks,
         tick,

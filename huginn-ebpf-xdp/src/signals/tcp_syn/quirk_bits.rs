@@ -1,12 +1,12 @@
 use huginn_ebpf_common::quirk_bits;
 use crate::constants::{IP_DF, IP_RF, IP_TOS_CE, IP_TOS_ECT};
-use crate::headers::{Ip6Hdr, IpHdr, TcpHdr};
+use crate::headers::{Ip4Hdr, Ip6Hdr, TcpHdr};
 
 /// Builds the quirk bitmask from IPv4 and TCP headers (SYN only).
 ///
 /// Pure function: no packet or map access. Safe to test on host with mock headers.
 #[inline(always)]
-pub fn compute_quirks_v4(ip: &IpHdr, tcp: &TcpHdr) -> u32 {
+pub fn compute_quirks_v4(ip: &Ip4Hdr, tcp: &TcpHdr) -> u32 {
     let mut quirks: u32 = 0;
     let frag_off = ip.frag_off;
     let ip_id = ip.id;

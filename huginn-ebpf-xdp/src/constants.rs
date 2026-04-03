@@ -6,7 +6,7 @@
 
 // ── EtherType ────────────────────────────────────────────────────────────────
 
-pub const ETH_P_IP: u16 = 0x0800_u16.swap_bytes();
+pub const ETH_P_IPV4: u16 = 0x0800_u16.swap_bytes();
 pub const ETH_P_IPV6: u16 = 0x86DD_u16.swap_bytes();
 pub const ETH_P_8021Q: u16 = 0x8100_u16.swap_bytes();
 pub const ETH_P_8021AD: u16 = 0x88A8_u16.swap_bytes();
