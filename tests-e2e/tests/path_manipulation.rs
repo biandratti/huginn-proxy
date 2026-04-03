@@ -1,9 +1,9 @@
-use tests_e2e::common::{wait_for_service, DEFAULT_SERVICE_TIMEOUT_SECS, PROXY_HTTPS_URL};
+use tests_e2e::common::{wait_for_service, DEFAULT_SERVICE_TIMEOUT_SECS, PROXY_HTTPS_URL_IPV4};
 
 #[tokio::test]
 async fn test_path_stripping() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     assert!(
-        wait_for_service(PROXY_HTTPS_URL, DEFAULT_SERVICE_TIMEOUT_SECS).await?,
+        wait_for_service(PROXY_HTTPS_URL_IPV4, DEFAULT_SERVICE_TIMEOUT_SECS).await?,
         "Proxy should be ready"
     );
 
@@ -14,7 +14,7 @@ async fn test_path_stripping() -> Result<(), Box<dyn std::error::Error + Send + 
 
     // Test path stripping: /strip/users/123 → /users/123
     let response = client
-        .get(format!("{PROXY_HTTPS_URL}/strip/users/123"))
+        .get(format!("{PROXY_HTTPS_URL_IPV4}/strip/users/123"))
         .send()
         .await
         .map_err(|e| format!("Failed to send request: {e}"))?;
@@ -42,7 +42,7 @@ async fn test_path_stripping() -> Result<(), Box<dyn std::error::Error + Send + 
 async fn test_path_stripping_with_query_params(
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     assert!(
-        wait_for_service(PROXY_HTTPS_URL, DEFAULT_SERVICE_TIMEOUT_SECS).await?,
+        wait_for_service(PROXY_HTTPS_URL_IPV4, DEFAULT_SERVICE_TIMEOUT_SECS).await?,
         "Proxy should be ready"
     );
 
@@ -54,7 +54,7 @@ async fn test_path_stripping_with_query_params(
     // Test path stripping with query parameters
     // /strip/api/data?id=123&name=test → /api/data?id=123&name=test
     let response = client
-        .get(format!("{PROXY_HTTPS_URL}/strip/api/data?id=123&name=test"))
+        .get(format!("{PROXY_HTTPS_URL_IPV4}/strip/api/data?id=123&name=test"))
         .send()
         .await
         .map_err(|e| format!("Failed to send request: {e}"))?;
@@ -80,7 +80,7 @@ async fn test_path_stripping_with_query_params(
 #[tokio::test]
 async fn test_path_rewriting() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     assert!(
-        wait_for_service(PROXY_HTTPS_URL, DEFAULT_SERVICE_TIMEOUT_SECS).await?,
+        wait_for_service(PROXY_HTTPS_URL_IPV4, DEFAULT_SERVICE_TIMEOUT_SECS).await?,
         "Proxy should be ready"
     );
 
@@ -91,7 +91,7 @@ async fn test_path_rewriting() -> Result<(), Box<dyn std::error::Error + Send + 
 
     // Test path rewriting: /old/data/file.txt → /new/data/file.txt
     let response = client
-        .get(format!("{PROXY_HTTPS_URL}/old/data/file.txt"))
+        .get(format!("{PROXY_HTTPS_URL_IPV4}/old/data/file.txt"))
         .send()
         .await
         .map_err(|e| format!("Failed to send request: {e}"))?;
@@ -118,7 +118,7 @@ async fn test_path_rewriting() -> Result<(), Box<dyn std::error::Error + Send + 
 async fn test_path_rewriting_with_query_params(
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     assert!(
-        wait_for_service(PROXY_HTTPS_URL, DEFAULT_SERVICE_TIMEOUT_SECS).await?,
+        wait_for_service(PROXY_HTTPS_URL_IPV4, DEFAULT_SERVICE_TIMEOUT_SECS).await?,
         "Proxy should be ready"
     );
 
@@ -130,7 +130,7 @@ async fn test_path_rewriting_with_query_params(
     // Test path rewriting with query parameters
     // /old/endpoint?param=value → /new/endpoint?param=value
     let response = client
-        .get(format!("{PROXY_HTTPS_URL}/old/endpoint?param=value&foo=bar"))
+        .get(format!("{PROXY_HTTPS_URL_IPV4}/old/endpoint?param=value&foo=bar"))
         .send()
         .await
         .map_err(|e| format!("Failed to send request: {e}"))?;
@@ -157,7 +157,7 @@ async fn test_path_rewriting_with_query_params(
 async fn test_path_rewriting_to_versioned_api(
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     assert!(
-        wait_for_service(PROXY_HTTPS_URL, DEFAULT_SERVICE_TIMEOUT_SECS).await?,
+        wait_for_service(PROXY_HTTPS_URL_IPV4, DEFAULT_SERVICE_TIMEOUT_SECS).await?,
         "Proxy should be ready"
     );
 
@@ -169,7 +169,7 @@ async fn test_path_rewriting_to_versioned_api(
     // Test path rewriting to versioned API
     // /v1/users → /api/v1/users
     let response = client
-        .get(format!("{PROXY_HTTPS_URL}/v1/users"))
+        .get(format!("{PROXY_HTTPS_URL_IPV4}/v1/users"))
         .send()
         .await
         .map_err(|e| format!("Failed to send request: {e}"))?;
@@ -196,7 +196,7 @@ async fn test_path_rewriting_to_versioned_api(
 async fn test_path_manipulation_preserves_headers(
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     assert!(
-        wait_for_service(PROXY_HTTPS_URL, DEFAULT_SERVICE_TIMEOUT_SECS).await?,
+        wait_for_service(PROXY_HTTPS_URL_IPV4, DEFAULT_SERVICE_TIMEOUT_SECS).await?,
         "Proxy should be ready"
     );
 
@@ -207,7 +207,7 @@ async fn test_path_manipulation_preserves_headers(
 
     // Test that path manipulation preserves custom headers
     let response = client
-        .get(format!("{PROXY_HTTPS_URL}/strip/test"))
+        .get(format!("{PROXY_HTTPS_URL_IPV4}/strip/test"))
         .header("X-Custom-Header", "test-value")
         .send()
         .await
@@ -244,7 +244,7 @@ async fn test_path_manipulation_preserves_headers(
 #[tokio::test]
 async fn test_no_path_manipulation_route() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     assert!(
-        wait_for_service(PROXY_HTTPS_URL, DEFAULT_SERVICE_TIMEOUT_SECS).await?,
+        wait_for_service(PROXY_HTTPS_URL_IPV4, DEFAULT_SERVICE_TIMEOUT_SECS).await?,
         "Proxy should be ready"
     );
 
@@ -255,7 +255,7 @@ async fn test_no_path_manipulation_route() -> Result<(), Box<dyn std::error::Err
 
     // Test route without path manipulation (should preserve original path)
     let response = client
-        .get(format!("{PROXY_HTTPS_URL}/api/test"))
+        .get(format!("{PROXY_HTTPS_URL_IPV4}/api/test"))
         .send()
         .await
         .map_err(|e| format!("Failed to send request: {e}"))?;
@@ -285,7 +285,7 @@ async fn test_no_path_manipulation_route() -> Result<(), Box<dyn std::error::Err
 async fn test_path_stripping_exact_prefix() -> Result<(), Box<dyn std::error::Error + Send + Sync>>
 {
     assert!(
-        wait_for_service(PROXY_HTTPS_URL, DEFAULT_SERVICE_TIMEOUT_SECS).await?,
+        wait_for_service(PROXY_HTTPS_URL_IPV4, DEFAULT_SERVICE_TIMEOUT_SECS).await?,
         "Proxy should be ready"
     );
 
@@ -297,7 +297,7 @@ async fn test_path_stripping_exact_prefix() -> Result<(), Box<dyn std::error::Er
     // Test path stripping when request path exactly matches prefix
     // /strip → / (empty path becomes root)
     let response = client
-        .get(format!("{PROXY_HTTPS_URL}/strip"))
+        .get(format!("{PROXY_HTTPS_URL_IPV4}/strip"))
         .send()
         .await
         .map_err(|e| format!("Failed to send request: {e}"))?;

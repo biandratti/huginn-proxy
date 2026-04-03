@@ -1,11 +1,11 @@
 //! E2E tests for load balancing
 
-use tests_e2e::common::{wait_for_service, DEFAULT_SERVICE_TIMEOUT_SECS, PROXY_HTTPS_URL};
+use tests_e2e::common::{wait_for_service, DEFAULT_SERVICE_TIMEOUT_SECS, PROXY_HTTPS_URL_IPV4};
 
 #[tokio::test]
 async fn test_round_robin_load_balancing() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     assert!(
-        wait_for_service(PROXY_HTTPS_URL, DEFAULT_SERVICE_TIMEOUT_SECS).await?,
+        wait_for_service(PROXY_HTTPS_URL_IPV4, DEFAULT_SERVICE_TIMEOUT_SECS).await?,
         "Proxy should be ready"
     );
 
@@ -19,7 +19,7 @@ async fn test_round_robin_load_balancing() -> Result<(), Box<dyn std::error::Err
     // received each request (requires backend identification)
     for _ in 0..10 {
         let response = client
-            .get(PROXY_HTTPS_URL)
+            .get(PROXY_HTTPS_URL_IPV4)
             .send()
             .await
             .map_err(|e| format!("Failed to send request: {e}"))?;

@@ -48,7 +48,10 @@ pub fn add_forwarded_headers(
         }
     }
 
-    // X-Forwarded-Host: set only when the TLS SNI is present in the ClientHello.
+    // X-Forwarded-Host: never trust a client-supplied value; strip first, then set from SNI.
+    // If SNI is absent (some clients omit it for IP literals), leave the header unset rather
+    // than forwarding a spoofed `X-Forwarded-Host` from the client.
+    req.headers_mut().remove(forwarded::HOST);
     if let Some(host) = sni {
         if let Ok(header_value) = HeaderValue::from_str(host) {
             req.headers_mut().insert(forwarded::HOST, header_value);

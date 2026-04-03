@@ -2,8 +2,9 @@
 
 use reqwest::Client;
 
-/// Default proxy HTTPS URL
-pub const PROXY_HTTPS_URL: &str = "https://localhost:7000";
+pub const PROXY_HTTPS_URL_IPV4: &str = "https://127.0.0.1:7000";
+
+pub const PROXY_HTTPS_URL_IPV6: &str = "https://[::1]:7000";
 
 /// Default metrics/health check server URL
 pub const METRICS_URL: &str = "http://localhost:9090";

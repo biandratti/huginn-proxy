@@ -1,5 +1,5 @@
 use huginn_proxy_lib::fingerprinting::{forwarded, names};
-use tests_e2e::common::{wait_for_service, DEFAULT_SERVICE_TIMEOUT_SECS, PROXY_HTTPS_URL};
+use tests_e2e::common::{wait_for_service, DEFAULT_SERVICE_TIMEOUT_SECS, PROXY_HTTPS_URL_IPV4};
 
 /// Test that injected headers always override client-provided headers with the same names
 /// This prevents clients from manipulating fingerprints or X-Forwarded-* headers
@@ -20,7 +20,7 @@ async fn test_injected_headers_override_client_headers(
         .map_err(|e| format!("Failed to create HTTP/2 client: {e}"))?;
 
     assert!(
-        wait_for_service(PROXY_HTTPS_URL, DEFAULT_SERVICE_TIMEOUT_SECS).await?,
+        wait_for_service(PROXY_HTTPS_URL_IPV4, DEFAULT_SERVICE_TIMEOUT_SECS).await?,
         "HTTPS proxy should be ready"
     );
 
@@ -28,7 +28,7 @@ async fn test_injected_headers_override_client_headers(
     // Host: evil.example.com and X-Forwarded-Host: spoofed-... are both ignored by the proxy.
     // X-Forwarded-Host is derived exclusively from the TLS SNI, which is not client-controllable.
     let response = client
-        .get(PROXY_HTTPS_URL)
+        .get(PROXY_HTTPS_URL_IPV4)
         .header(names::TLS_JA4, "t13d9999h2_fake_fingerprint_12345")
         .header(names::HTTP2_AKAMAI, "999:999;999:999|9999999|999|fake")
         .header("Host", "evil.example.com")
@@ -134,7 +134,7 @@ async fn test_injected_headers_override_client_headers(
     // CRITICAL: Verify X-Forwarded-Host is set from the TLS SNI, not from any client-controlled header.
     // The client sent Host: evil.example.com and X-Forwarded-Host: spoofed-x-forwarded-host.example.com,
     // but the proxy must ignore both and use the SNI from the TLS ClientHello instead.
-    // SNI ("localhost" for this test connection) cannot be overridden by HTTP headers.
+    // With `PROXY_HTTPS_URL_IPV4` the SNI is the IP literal (`127.0.0.1`), not `localhost`.
     let forwarded_host = if headers.contains_key(forwarded::HOST) {
         let host = headers
             .get(forwarded::HOST)
@@ -149,8 +149,8 @@ async fn test_injected_headers_override_client_headers(
             "X-Forwarded-Host must NOT be taken from the spoofed Host header."
         );
         assert_eq!(
-            host, "localhost",
-            "X-Forwarded-Host should be the TLS SNI value (localhost), not any client-supplied header. Current value: {host}"
+            host, "127.0.0.1",
+            "X-Forwarded-Host should be the TLS SNI value (127.0.0.1 for this URL), not any client-supplied header. Current value: {host}"
         );
         println!("✓ X-Forwarded-Host correctly uses TLS SNI (overrides spoofed Host and X-Forwarded-Host headers): {host}");
         Some(host)
@@ -224,13 +224,13 @@ async fn test_fingerprints_consistent_despite_spoofed_headers(
         .map_err(|e| format!("Failed to create HTTP/2 client: {e}"))?;
 
     assert!(
-        wait_for_service(PROXY_HTTPS_URL, DEFAULT_SERVICE_TIMEOUT_SECS).await?,
+        wait_for_service(PROXY_HTTPS_URL_IPV4, DEFAULT_SERVICE_TIMEOUT_SECS).await?,
         "HTTPS proxy should be ready"
     );
 
     // First request with spoofed headers
     let response1 = client
-        .get(PROXY_HTTPS_URL)
+        .get(PROXY_HTTPS_URL_IPV4)
         .header(names::TLS_JA4, "spoofed-ja4-1")
         .header(names::HTTP2_AKAMAI, "spoofed-akamai-1")
         .send()
@@ -253,7 +253,7 @@ async fn test_fingerprints_consistent_despite_spoofed_headers(
 
     // Second request with DIFFERENT spoofed headers
     let response2 = client
-        .get(PROXY_HTTPS_URL)
+        .get(PROXY_HTTPS_URL_IPV4)
         .header(names::TLS_JA4, "spoofed-ja4-2")
         .header(names::HTTP2_AKAMAI, "spoofed-akamai-2")
         .send()

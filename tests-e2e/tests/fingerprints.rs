@@ -1,5 +1,5 @@
 use huginn_proxy_lib::fingerprinting::names;
-use tests_e2e::common::{wait_for_service, DEFAULT_SERVICE_TIMEOUT_SECS, PROXY_HTTPS_URL};
+use tests_e2e::common::{wait_for_service, DEFAULT_SERVICE_TIMEOUT_SECS, PROXY_HTTPS_URL_IPV4};
 
 #[tokio::test]
 async fn test_tls_fingerprint_injection() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -12,12 +12,12 @@ async fn test_tls_fingerprint_injection() -> Result<(), Box<dyn std::error::Erro
         .map_err(|e| format!("Failed to create HTTP client: {e}"))?;
 
     assert!(
-        wait_for_service(PROXY_HTTPS_URL, DEFAULT_SERVICE_TIMEOUT_SECS).await?,
+        wait_for_service(PROXY_HTTPS_URL_IPV4, DEFAULT_SERVICE_TIMEOUT_SECS).await?,
         "HTTPS proxy should be ready"
     );
 
     let response = client
-        .get(PROXY_HTTPS_URL)
+        .get(PROXY_HTTPS_URL_IPV4)
         .send()
         .await
         .map_err(|e| format!("Failed to send request: {e}"))?;
@@ -72,7 +72,7 @@ async fn test_tls_fingerprint_injection() -> Result<(), Box<dyn std::error::Erro
 
     // Expected TLS fingerprint for reqwest client (HTTP/1.1)
     // Note: When HTTP/1.1 is forced, the fingerprint ends with 'h1' instead of 'h2'
-    const EXPECTED_TLS_FINGERPRINT: &str = "t13d1011h1_61a7ad8aa9b6_3a8073edd8ef";
+    const EXPECTED_TLS_FINGERPRINT: &str = "t13i1010h1_61a7ad8aa9b6_3a8073edd8ef";
     assert_eq!(
         tls_fp, EXPECTED_TLS_FINGERPRINT,
         "TLS fingerprint should match expected value for reqwest HTTP/1.1 client"
@@ -80,7 +80,7 @@ async fn test_tls_fingerprint_injection() -> Result<(), Box<dyn std::error::Erro
 
     // Verify consistency: same client should produce same fingerprint
     let response2 = client
-        .get(PROXY_HTTPS_URL)
+        .get(PROXY_HTTPS_URL_IPV4)
         .send()
         .await
         .map_err(|e| format!("Failed to send second request: {e}"))?;
@@ -153,12 +153,12 @@ async fn test_http2_fingerprint_injection() -> Result<(), Box<dyn std::error::Er
         .map_err(|e| format!("Failed to create HTTP/2 client: {e}"))?;
 
     assert!(
-        wait_for_service(PROXY_HTTPS_URL, DEFAULT_SERVICE_TIMEOUT_SECS).await?,
+        wait_for_service(PROXY_HTTPS_URL_IPV4, DEFAULT_SERVICE_TIMEOUT_SECS).await?,
         "HTTPS proxy should be ready"
     );
 
     let response = client
-        .get(PROXY_HTTPS_URL)
+        .get(PROXY_HTTPS_URL_IPV4)
         .send()
         .await
         .map_err(|e| format!("Failed to send HTTP/2 request: {e}"))?;
@@ -246,7 +246,7 @@ async fn test_http2_fingerprint_injection() -> Result<(), Box<dyn std::error::Er
     println!("TLS fingerprint ({}): {tls_fp_r}", names::TLS_JA4_R);
 
     // Expected TLS fingerprint for reqwest client (same for HTTP/1.1 and HTTP/2)
-    const EXPECTED_TLS_FINGERPRINT_HTTP2: &str = "t13d1011h2_61a7ad8aa9b6_3a8073edd8ef";
+    const EXPECTED_TLS_FINGERPRINT_HTTP2: &str = "t13i1010h2_61a7ad8aa9b6_3a8073edd8ef";
     assert_eq!(
         tls_fp, EXPECTED_TLS_FINGERPRINT_HTTP2,
         "TLS fingerprint should match expected value for reqwest HTTP/2 client"
@@ -254,7 +254,7 @@ async fn test_http2_fingerprint_injection() -> Result<(), Box<dyn std::error::Er
 
     // Verify consistency: same client should produce same fingerprints
     let response2 = client
-        .get(PROXY_HTTPS_URL)
+        .get(PROXY_HTTPS_URL_IPV4)
         .send()
         .await
         .map_err(|e| format!("Failed to send second HTTP/2 request: {e}"))?;
@@ -304,13 +304,13 @@ async fn test_fingerprinting_disabled_per_route(
         .map_err(|e| format!("Failed to create HTTP client: {e}"))?;
 
     assert!(
-        wait_for_service(PROXY_HTTPS_URL, DEFAULT_SERVICE_TIMEOUT_SECS).await?,
+        wait_for_service(PROXY_HTTPS_URL_IPV4, DEFAULT_SERVICE_TIMEOUT_SECS).await?,
         "HTTPS proxy should be ready"
     );
 
     // Request to /static route (fingerprinting disabled)
     let response = client
-        .get(format!("{PROXY_HTTPS_URL}/static/test"))
+        .get(format!("{PROXY_HTTPS_URL_IPV4}/static/test"))
         .send()
         .await
         .map_err(|e| format!("Failed to send request: {e}"))?;
@@ -353,7 +353,7 @@ async fn test_fingerprinting_disabled_per_route(
 
     // Request to /api route (fingerprinting enabled)
     let response2 = client
-        .get(format!("{PROXY_HTTPS_URL}/api/test"))
+        .get(format!("{PROXY_HTTPS_URL_IPV4}/api/test"))
         .send()
         .await
         .map_err(|e| format!("Failed to send request to /api: {e}"))?;

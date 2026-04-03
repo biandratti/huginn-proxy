@@ -1,9 +1,9 @@
-use tests_e2e::common::{wait_for_service, DEFAULT_SERVICE_TIMEOUT_SECS, PROXY_HTTPS_URL};
+use tests_e2e::common::{wait_for_service, DEFAULT_SERVICE_TIMEOUT_SECS, PROXY_HTTPS_URL_IPV4};
 
 #[tokio::test]
 async fn test_proxy_forwarding() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     assert!(
-        wait_for_service(PROXY_HTTPS_URL, DEFAULT_SERVICE_TIMEOUT_SECS).await?,
+        wait_for_service(PROXY_HTTPS_URL_IPV4, DEFAULT_SERVICE_TIMEOUT_SECS).await?,
         "Proxy should be ready"
     );
 
@@ -12,7 +12,7 @@ async fn test_proxy_forwarding() -> Result<(), Box<dyn std::error::Error + Send 
         .build()
         .map_err(|e| format!("Failed to create HTTP client: {e}"))?;
     let response = client
-        .get(PROXY_HTTPS_URL)
+        .get(PROXY_HTTPS_URL_IPV4)
         .send()
         .await
         .map_err(|e| format!("Failed to send request: {e}"))?;
@@ -30,7 +30,7 @@ async fn test_proxy_forwarding() -> Result<(), Box<dyn std::error::Error + Send 
 #[tokio::test]
 async fn test_path_routing() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     assert!(
-        wait_for_service(PROXY_HTTPS_URL, DEFAULT_SERVICE_TIMEOUT_SECS).await?,
+        wait_for_service(PROXY_HTTPS_URL_IPV4, DEFAULT_SERVICE_TIMEOUT_SECS).await?,
         "Proxy should be ready"
     );
 
@@ -41,7 +41,7 @@ async fn test_path_routing() -> Result<(), Box<dyn std::error::Error + Send + Sy
 
     // Test /api route (should go to backend-a)
     let response = client
-        .get(format!("{PROXY_HTTPS_URL}/api/test"))
+        .get(format!("{PROXY_HTTPS_URL_IPV4}/api/test"))
         .send()
         .await
         .map_err(|e| format!("Failed to send request to /api/test: {e}"))?;
@@ -49,7 +49,7 @@ async fn test_path_routing() -> Result<(), Box<dyn std::error::Error + Send + Sy
 
     // Test default route (should go to backend-b)
     let response = client
-        .get(format!("{PROXY_HTTPS_URL}/other"))
+        .get(format!("{PROXY_HTTPS_URL_IPV4}/other"))
         .send()
         .await
         .map_err(|e| format!("Failed to send request to /other: {e}"))?;
@@ -64,10 +64,10 @@ async fn test_https_proxy() -> Result<(), Box<dyn std::error::Error + Send + Syn
         .build()
         .map_err(|e| format!("Failed to create HTTP client: {e}"))?;
 
-    assert!(wait_for_service(PROXY_HTTPS_URL, 60).await?, "HTTPS proxy should be ready");
+    assert!(wait_for_service(PROXY_HTTPS_URL_IPV4, 60).await?, "HTTPS proxy should be ready");
 
     let response = client
-        .get(PROXY_HTTPS_URL)
+        .get(PROXY_HTTPS_URL_IPV4)
         .send()
         .await
         .map_err(|e| format!("Failed to send request: {e}"))?;

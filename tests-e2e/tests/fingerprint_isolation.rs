@@ -1,5 +1,5 @@
 use huginn_proxy_lib::fingerprinting::{forwarded, names};
-use tests_e2e::common::{wait_for_service, DEFAULT_SERVICE_TIMEOUT_SECS, PROXY_HTTPS_URL};
+use tests_e2e::common::{wait_for_service, DEFAULT_SERVICE_TIMEOUT_SECS, PROXY_HTTPS_URL_IPV4};
 
 /// Test that fingerprints (especially Akamai) are generated correctly
 /// and are NOT affected by headers we add (JA4 and X-Forwarded-*)
@@ -19,12 +19,12 @@ async fn test_fingerprint_isolation_from_added_headers(
         .map_err(|e| format!("Failed to create HTTP/2 client: {e}"))?;
 
     assert!(
-        wait_for_service(PROXY_HTTPS_URL, DEFAULT_SERVICE_TIMEOUT_SECS).await?,
+        wait_for_service(PROXY_HTTPS_URL_IPV4, DEFAULT_SERVICE_TIMEOUT_SECS).await?,
         "HTTPS proxy should be ready"
     );
 
     let response1 = client
-        .get(PROXY_HTTPS_URL)
+        .get(PROXY_HTTPS_URL_IPV4)
         .header("X-Custom-Header", "test-value-1")
         .header("User-Agent", "test-client/1.0")
         .header("Accept", "application/json")
@@ -104,7 +104,7 @@ async fn test_fingerprint_isolation_from_added_headers(
     // Second request: with DIFFERENT custom headers
     // The fingerprint should remain the same because it's based on HTTP/2 frames, not headers
     let response2 = client
-        .get(PROXY_HTTPS_URL)
+        .get(PROXY_HTTPS_URL_IPV4)
         .header("X-Custom-Header", "test-value-2")
         .header("User-Agent", "test-client/2.0")
         .header("Accept", "text/html")

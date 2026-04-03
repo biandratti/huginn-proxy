@@ -1,4 +1,4 @@
-use tests_e2e::common::{wait_for_service, DEFAULT_SERVICE_TIMEOUT_SECS, PROXY_HTTPS_URL};
+use tests_e2e::common::{wait_for_service, DEFAULT_SERVICE_TIMEOUT_SECS, PROXY_HTTPS_URL_IPV4};
 
 #[tokio::test]
 async fn test_tls_termination() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -8,12 +8,12 @@ async fn test_tls_termination() -> Result<(), Box<dyn std::error::Error + Send +
         .map_err(|e| format!("Failed to create HTTP client: {e}"))?;
 
     assert!(
-        wait_for_service(PROXY_HTTPS_URL, DEFAULT_SERVICE_TIMEOUT_SECS).await?,
+        wait_for_service(PROXY_HTTPS_URL_IPV4, DEFAULT_SERVICE_TIMEOUT_SECS).await?,
         "HTTPS proxy should be ready"
     );
 
     let response = client
-        .get(PROXY_HTTPS_URL)
+        .get(PROXY_HTTPS_URL_IPV4)
         .send()
         .await
         .map_err(|e| format!("Failed to send request: {e}"))?;
@@ -37,12 +37,12 @@ async fn test_tls_hot_reload() -> Result<(), Box<dyn std::error::Error + Send + 
         .map_err(|e| format!("Failed to create HTTP client: {e}"))?;
 
     assert!(
-        wait_for_service(PROXY_HTTPS_URL, DEFAULT_SERVICE_TIMEOUT_SECS).await?,
+        wait_for_service(PROXY_HTTPS_URL_IPV4, DEFAULT_SERVICE_TIMEOUT_SECS).await?,
         "HTTPS proxy should be ready"
     );
 
     let response = client
-        .get(PROXY_HTTPS_URL)
+        .get(PROXY_HTTPS_URL_IPV4)
         .send()
         .await
         .map_err(|e| format!("Failed to send request: {e}"))?;

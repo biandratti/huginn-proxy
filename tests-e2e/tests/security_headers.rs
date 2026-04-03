@@ -1,6 +1,6 @@
 use reqwest::Client;
 
-const PROXY_HTTPS_URL: &str = "https://localhost:7000";
+use tests_e2e::common::PROXY_HTTPS_URL_IPV4;
 
 #[tokio::test]
 async fn test_custom_security_headers() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -10,7 +10,7 @@ async fn test_custom_security_headers() -> Result<(), Box<dyn std::error::Error 
         .map_err(|e| format!("Failed to build client: {e}"))?;
 
     let response = client
-        .get(format!("{PROXY_HTTPS_URL}/api/users"))
+        .get(format!("{PROXY_HTTPS_URL_IPV4}/api/users"))
         .send()
         .await
         .map_err(|e| format!("Failed to send request: {e}"))?;
@@ -51,7 +51,7 @@ async fn test_hsts_header() -> Result<(), Box<dyn std::error::Error + Send + Syn
         .map_err(|e| format!("Failed to build client: {e}"))?;
 
     let response = client
-        .get(format!("{PROXY_HTTPS_URL}/api/test"))
+        .get(format!("{PROXY_HTTPS_URL_IPV4}/api/test"))
         .send()
         .await
         .map_err(|e| format!("Failed to send request: {e}"))?;
@@ -81,7 +81,7 @@ async fn test_csp_header() -> Result<(), Box<dyn std::error::Error + Send + Sync
         .map_err(|e| format!("Failed to build client: {e}"))?;
 
     let response = client
-        .get(format!("{PROXY_HTTPS_URL}/static/test.html"))
+        .get(format!("{PROXY_HTTPS_URL_IPV4}/static/test.html"))
         .send()
         .await
         .map_err(|e| format!("Failed to send request: {e}"))?;
@@ -112,7 +112,7 @@ async fn test_security_headers_with_fingerprinting(
         .map_err(|e| format!("Failed to build client: {e}"))?;
 
     let response = client
-        .get(format!("{PROXY_HTTPS_URL}/api/fingerprint"))
+        .get(format!("{PROXY_HTTPS_URL_IPV4}/api/fingerprint"))
         .send()
         .await
         .map_err(|e| format!("Failed to send request: {e}"))?;
