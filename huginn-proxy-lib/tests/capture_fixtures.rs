@@ -189,7 +189,7 @@ async fn capture_fingerprint_values() -> Result<(), Box<dyn std::error::Error + 
     let proxy_addr: std::net::SocketAddr = format!("127.0.0.1:{proxy_port}").parse()?;
 
     let config = Arc::new(Config {
-        listen: proxy_addr,
+        listen_addrs: vec![proxy_addr],
         backends: vec![Backend { address: backend_addr.to_string(), http_version: None }],
         routes: vec![Route {
             prefix: "/".to_string(),

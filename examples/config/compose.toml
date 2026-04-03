@@ -1,5 +1,4 @@
-# Dual-stack in Linux ( [::] accepts IPv4 too unless bindv6only ). Matches Docker IPv6 network in compose.yml.
-listen = "[::]:7000"
+listen_addrs = ["0.0.0.0:7000", "[::]:7000"]
 
 backends = [
     { address = "backend-a:9000", http_version = "preserve" },

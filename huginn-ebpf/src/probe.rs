@@ -58,16 +58,18 @@ impl EbpfProbe {
     ///
     /// # Parameters
     /// - `interface`: network interface name (e.g., `"eth0"`)
-    /// - `dst_ip`: proxy listen IP. `0.0.0.0` disables the IP filter (listen on all interfaces).
+    /// - `dst_ip_v4`: proxy IPv4 listen IP. `0.0.0.0` disables the IPv4 destination filter.
+    /// - `dst_ip_v6`: proxy IPv6 listen IP. `::` disables the IPv6 destination filter.
     /// - `dst_port`: proxy listen port. Always active as a filter.
     /// - `syn_map_max_entries`: capacity of the LRU map (default 8192).
     /// - `xdp_mode`: [`XdpMode::Native`] (driver-level, default) or [`XdpMode::Skb`] (generic/software).
     ///
-    /// Both dst values are patched into the XDP program's `.rodata` via `EbpfLoader::set_global`
+    /// All dst values are patched into the XDP program's `.rodata` via `EbpfLoader::set_global`
     /// before the kernel loads the program, matching `cilium/ebpf`'s `spec.Variables` pattern.
     pub fn new(
         interface: &str,
-        dst_ip: Ipv4Addr,
+        dst_ip_v4: Ipv4Addr,
+        dst_ip_v6: Ipv6Addr,
         dst_port: u16,
         syn_map_max_entries: u32,
         xdp_mode: XdpMode,
@@ -77,18 +79,22 @@ impl EbpfProbe {
         // as u32::from_ne_bytes([a,b,c,d]). We replicate the same encoding here so the
         // comparison in xdp.c works correctly.
         //
-        // 0.0.0.0 → bpf_dst_ip = 0 → XDP skips the IP check (captures all destinations).
-        let bpf_dst_ip: u32 = if dst_ip.is_unspecified() {
+        // 0.0.0.0 → bpf_dst_ip = 0 → XDP skips the IPv4 destination check.
+        let bpf_dst_ip: u32 = if dst_ip_v4.is_unspecified() {
             0
         } else {
-            u32::from_ne_bytes(dst_ip.octets())
+            u32::from_ne_bytes(dst_ip_v4.octets())
         };
+
+        // :: → all-zero bytes → XDP skips the IPv6 destination check.
+        let bpf_dst_ip_v6: [u8; 16] = dst_ip_v6.octets();
 
         // tcp->dest in network byte order as read by LE CPU = port.to_be()
         let bpf_dst_port: u16 = dst_port.to_be();
 
         let mut ebpf = EbpfLoader::new()
             .set_global("dst_ip", &bpf_dst_ip, false)
+            .set_global("dst_ip_v6", &bpf_dst_ip_v6, false)
             .set_global("dst_port", &bpf_dst_port, false)
             .set_max_entries(pin::SYN_MAP_V4_NAME, syn_map_max_entries)
             .set_max_entries(pin::SYN_MAP_V6_NAME, syn_map_max_entries)
@@ -112,14 +118,20 @@ impl EbpfProbe {
             .attach(interface, xdp_flags)
             .map_err(EbpfError::Attach)?;
 
-        let filter_ip = if dst_ip.is_unspecified() {
+        let filter_ip_v4 = if dst_ip_v4.is_unspecified() {
             "any".to_string()
         } else {
-            dst_ip.to_string()
+            dst_ip_v4.to_string()
+        };
+        let filter_ip_v6 = if dst_ip_v6.is_unspecified() {
+            "any".to_string()
+        } else {
+            dst_ip_v6.to_string()
         };
         info!(
             interface,
-            filter_ip,
+            filter_ip_v4,
+            filter_ip_v6,
             dst_port,
             mode = mode_str,
             "eBPF XDP TCP SYN fingerprinting attached"

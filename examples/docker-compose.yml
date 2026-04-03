@@ -14,7 +14,8 @@ services:
       - apparmor:unconfined
     environment:
       - HUGINN_EBPF_INTERFACE=eth0
-      - HUGINN_EBPF_DST_IP=0.0.0.0
+      - HUGINN_EBPF_DST_IP_V4=0.0.0.0
+      - "HUGINN_EBPF_DST_IP_V6=::"
       - HUGINN_EBPF_DST_PORT=7000
       - HUGINN_EBPF_PIN_PATH=/sys/fs/bpf/huginn
       - HUGINN_EBPF_SYN_MAP_MAX_ENTRIES=8192
@@ -44,7 +45,8 @@ services:
       - ./certs:/config/certs:ro
       - bpffs:/sys/fs/bpf
     ports:
-      - "7000:7000"
+      - "0.0.0.0:7000:7000"
+      - "[::]:7000:7000"
       - "9090:9090"
       - "9091:9091"
     cap_add:

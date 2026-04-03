@@ -92,7 +92,7 @@ impl BenchFixture {
         //    /bench/fp  → fingerprinting ON  (measures overhead)
         //    /bench/nofp → fingerprinting OFF (baseline)
         let config = Arc::new(Config {
-            listen: proxy_addr,
+            listen_addrs: vec![proxy_addr],
             backends: vec![Backend { address: backend_address.clone(), http_version: None }],
             routes: vec![
                 Route {

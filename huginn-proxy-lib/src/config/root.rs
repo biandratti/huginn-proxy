@@ -12,9 +12,11 @@ use super::tls::TlsConfig;
 /// Main configuration structure
 #[derive(Debug, Deserialize, Clone)]
 pub struct Config {
-    /// Address and port to listen on
-    /// Example: "0.0.0.0:7000" or "127.0.0.1:8080"
-    pub listen: SocketAddr,
+    /// Addresses and ports to listen on. One or more entries, one per IP family.
+    /// Example IPv4 only: ["0.0.0.0:7000"]
+    /// Example IPv6 only: ["[::]:7000"]
+    /// Example both:      ["0.0.0.0:7000", "[::]:7000"]
+    pub listen_addrs: Vec<SocketAddr>,
     /// List of backend servers for load balancing
     /// At least one backend is required
     pub backends: Vec<Backend>,

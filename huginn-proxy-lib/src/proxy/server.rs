@@ -27,23 +27,52 @@ use crate::tls::setup_tls_with_hot_reload;
 /// Implemented by `huginn-proxy` when the `ebpf-tcp` feature is enabled.
 pub type SynProbe = Arc<dyn Fn(SocketAddr) -> SynResult + Send + Sync>;
 
+// TODO: TCP accept backlog — today we use a fixed value. Follow-up work:
+// - Expose `tcp_listen_backlog` (or similar) in config and wire it into `bind_listener`.
+// - When the backlog is saturated, document/observability: counter or gauge (e.g. accept
+//   failures, kernel drops) so operators can tune the value under load.
+// - If we need programmatic handling beyond `listen()` errors, align with platform limits
+//   (`SOMAXCONN`, sysctl `net.core.somaxconn`).
+
+/// Default `listen(2)` backlog (pending connections queue length) until config exists.
+const DEFAULT_TCP_LISTEN_BACKLOG: i32 = 1024; // TODO: make this configurable
+
+/// Bind a TCP listener to `addr`.
+///
+/// IPv6 sockets are created with `IPV6_V6ONLY = 1` so they accept only native
+/// IPv6 connections. This prevents the dual-stack ambiguity where an IPv4 client
+/// arrives as `::ffff:x.y.z.w` (`SocketAddr::V6`), which would cause the SYN
+/// fingerprint lookup to hit the wrong eBPF map.
+fn bind_listener(addr: SocketAddr) -> std::io::Result<TcpListener> {
+    use socket2::{Domain, Protocol, Socket, Type};
+
+    let domain = if addr.is_ipv6() {
+        Domain::IPV6
+    } else {
+        Domain::IPV4
+    };
+    let socket = Socket::new(domain, Type::STREAM, Some(Protocol::TCP))?;
+    socket.set_reuse_address(true)?;
+    if addr.is_ipv6() {
+        socket.set_only_v6(true)?;
+    }
+    socket.bind(&addr.into())?;
+    socket.listen(DEFAULT_TCP_LISTEN_BACKLOG)?;
+    socket.set_nonblocking(true)?;
+    TcpListener::from_std(socket.into())
+}
+
 pub async fn run(
     config: Arc<Config>,
     metrics: Option<Arc<Metrics>>,
     syn_probe: Option<SynProbe>,
 ) -> Result<()> {
-    let addr = config.listen;
-    let listener = TcpListener::bind(addr)
-        .await
-        .map_err(crate::error::ProxyError::Io)?;
-
     let mut builder = ConnBuilder::new(TokioExecutor::new());
     builder
         .http1()
         .keep_alive(config.timeout.keep_alive.enabled);
 
     let backends = Arc::new(config.backends.clone());
-    let backends_for_loop = Arc::clone(&backends);
     let routes = config.routes.clone();
 
     let rate_limit_manager = if config.security.rate_limit.enabled {
@@ -72,17 +101,17 @@ pub async fn run(
         None => None,
     };
 
-    // Setup connection manager
+    // Setup connection manager (shared across all listeners)
     let shutdown_signal = Arc::new(AtomicUsize::new(0)); // 0 = running, 1 = shutdown requested
     let (connections_closed_tx, mut connections_closed_rx) = watch::channel(());
-    let connection_manager = ConnectionManager::new(
+    let connection_manager = Arc::new(ConnectionManager::new(
         &config.security,
         shutdown_signal.clone(),
         connections_closed_tx.clone(),
-    );
+    ));
     let active_connections = connection_manager.active_connections();
 
-    // Setup client pool for backend connections
+    // Setup client pool for backend connections (shared across all listeners)
     let pool_config = BackendPoolConfig::default();
     let client_pool = Arc::new(ClientPool::new(&config.timeout.keep_alive, pool_config.clone()));
 
@@ -98,37 +127,62 @@ pub async fn run(
         )))
     })?;
 
-    info!(?addr, "starting proxy");
+    // Bind one listener per configured address
+    let listeners: Vec<(SocketAddr, TcpListener)> = config
+        .listen_addrs
+        .iter()
+        .map(|&addr| {
+            bind_listener(addr)
+                .map(|l| (addr, l))
+                .map_err(crate::error::ProxyError::Io)
+        })
+        .collect::<Result<_>>()?;
 
-    loop {
-        tokio::select! {
-            // Handle shutdown signals
-            _ = sigterm.recv() => {
-                info!("Received SIGTERM, initiating graceful shutdown");
-                shutdown_signal.store(1, Ordering::Relaxed);
-                break;
-            }
-            _ = sigint.recv() => {
-                info!("Received SIGINT, initiating graceful shutdown");
-                shutdown_signal.store(1, Ordering::Relaxed);
-                break;
-            }
-            // Accept new connections
-            result = listener.accept() => {
-                let (stream, peer) = match result {
-                    Ok((stream, peer)) => (stream, peer),
+    for (addr, _) in &listeners {
+        info!(?addr, "starting proxy");
+    }
+
+    // Spawn one accept task per listener
+    let mut accept_tasks = tokio::task::JoinSet::new();
+    for (addr, listener) in listeners {
+        let shutdown_signal_clone = shutdown_signal.clone();
+        let connection_manager_clone = connection_manager.clone();
+        let backends_clone = Arc::clone(&backends);
+        let routes_clone = routes.clone();
+        let tls_acceptor_clone = tls_acceptor.clone();
+        let fingerprint_config = config.fingerprint.clone();
+        let keep_alive_config = config.timeout.keep_alive.clone();
+        let tls_handshake_timeout = Duration::from_secs(config.timeout.tls_handshake_secs);
+        let connection_handling_timeout =
+            Duration::from_secs(config.timeout.connection_handling_secs);
+        let security = security_context.clone();
+        let metrics_clone = metrics.clone();
+        let preserve_host = config.preserve_host;
+        let client_pool_clone = client_pool.clone();
+        let builder_clone = builder.clone();
+        let syn_probe_clone = syn_probe.clone();
+
+        accept_tasks.spawn(async move {
+            loop {
+                if shutdown_signal_clone.load(Ordering::Relaxed) != 0 {
+                    break;
+                }
+
+                let (stream, peer) = match listener.accept().await {
+                    Ok(pair) => pair,
                     Err(e) => {
-                        warn!(error = %e, "accept error");
+                        warn!(error = %e, ?addr, "accept error");
                         continue;
                     }
                 };
 
                 // Try to accept connection (checks limits and shutdown)
-                let guard = match connection_manager.try_accept(peer, metrics.as_ref()) {
+                let guard = match connection_manager_clone.try_accept(peer, metrics_clone.as_ref())
+                {
                     Ok(g) => g,
                     Err(ConnectionError::Shutdown) => {
                         drop(stream);
-                        continue;
+                        break;
                     }
                     Err(ConnectionError::LimitExceeded { .. }) => {
                         drop(stream);
@@ -137,12 +191,12 @@ pub async fn run(
                 };
 
                 let syn_start = Instant::now();
-                let syn_result = syn_probe.as_ref().map(|probe| probe(peer));
+                let syn_result = syn_probe_clone.as_ref().map(|probe| probe(peer));
                 let syn_duration = syn_start.elapsed().as_secs_f64();
 
                 let syn_fingerprint: Option<TcpObservation> = match syn_result {
                     Some(ref r) => {
-                        if let Some(ref m) = metrics {
+                        if let Some(ref m) = metrics_clone {
                             let label = match r {
                                 SynResult::Hit(_) => "hit",
                                 SynResult::Miss => "miss",
@@ -158,40 +212,36 @@ pub async fn run(
                     None => None,
                 };
 
-                let builder_clone = builder.clone();
-                let backends_clone = Arc::clone(&backends_for_loop);
-                let routes_clone = routes.clone();
-                let tls_acceptor_clone = tls_acceptor.clone();
-                let fingerprint_config = config.fingerprint.clone();
-                let keep_alive_config = config.timeout.keep_alive.clone();
-                let tls_handshake_timeout = Duration::from_secs(config.timeout.tls_handshake_secs);
-                let connection_handling_timeout = Duration::from_secs(config.timeout.connection_handling_secs);
-                let security = security_context.clone();
-                let metrics_clone = metrics.clone();
-                let preserve_host = config.preserve_host;
-                let client_pool_clone = client_pool.clone();
+                let builder_task = builder_clone.clone();
+                let backends_task = Arc::clone(&backends_clone);
+                let routes_task = routes_clone.clone();
+                let tls_acceptor_task = tls_acceptor_clone.clone();
+                let fingerprint_config_task = fingerprint_config.clone();
+                let keep_alive_task = keep_alive_config.clone();
+                let security_task = security.clone();
+                let metrics_task = metrics_clone.clone();
+                let client_pool_task = client_pool_clone.clone();
 
-                let metrics_for_connection = metrics_clone.clone();
                 tokio::spawn(async move {
                     let _guard = guard;
 
-                    if let Some(ref tls_acceptor_lock) = tls_acceptor_clone {
+                    if let Some(ref tls_acceptor_lock) = tls_acceptor_task {
                         handle_tls_connection(
                             stream,
                             peer,
                             TlsConnectionConfig {
                                 tls_acceptor: tls_acceptor_lock.clone(),
-                                fingerprint_config,
-                                routes: routes_clone,
-                                backends: backends_clone,
-                                keep_alive: keep_alive_config.clone(),
-                                security: security.clone(),
-                                metrics: metrics_for_connection.clone(),
-                                builder: builder_clone.clone(),
+                                fingerprint_config: fingerprint_config_task,
+                                routes: routes_task,
+                                backends: backends_task,
+                                keep_alive: keep_alive_task.clone(),
+                                security: security_task.clone(),
+                                metrics: metrics_task.clone(),
+                                builder: builder_task.clone(),
                                 preserve_host,
                                 tls_handshake_timeout,
                                 connection_handling_timeout,
-                                client_pool: client_pool_clone.clone(),
+                                client_pool: client_pool_task.clone(),
                                 syn_fingerprint: syn_fingerprint.clone(),
                             },
                         )
@@ -201,15 +251,15 @@ pub async fn run(
                             stream,
                             peer,
                             PlainConnectionConfig {
-                                routes: routes_clone,
-                                backends: backends_clone,
-                                keep_alive: keep_alive_config,
-                                security: security.clone(),
-                                metrics: metrics_for_connection,
-                                builder: builder_clone,
+                                routes: routes_task,
+                                backends: backends_task,
+                                keep_alive: keep_alive_task,
+                                security: security_task,
+                                metrics: metrics_task,
+                                builder: builder_task,
                                 preserve_host,
                                 connection_handling_timeout,
-                                client_pool: client_pool_clone,
+                                client_pool: client_pool_task,
                                 syn_fingerprint,
                             },
                         )
@@ -217,8 +267,23 @@ pub async fn run(
                     }
                 });
             }
+        });
+    }
+
+    // Wait for a shutdown signal, then stop all accept tasks
+    tokio::select! {
+        _ = sigterm.recv() => {
+            info!("Received SIGTERM, initiating graceful shutdown");
+            shutdown_signal.store(1, Ordering::Relaxed);
+        }
+        _ = sigint.recv() => {
+            info!("Received SIGINT, initiating graceful shutdown");
+            shutdown_signal.store(1, Ordering::Relaxed);
         }
     }
+
+    accept_tasks.abort_all();
+    drop(accept_tasks);
 
     info!(
         "Waiting for active connections to finish (timeout: {}s)",
@@ -227,7 +292,6 @@ pub async fn run(
     let shutdown_timeout = Duration::from_secs(config.timeout.shutdown_secs);
     let start = Instant::now();
 
-    // Wait for either all connections to close or timeout
     let deadline = start
         .checked_add(shutdown_timeout)
         .unwrap_or_else(|| start.checked_add(Duration::from_secs(60)).unwrap_or(start));
