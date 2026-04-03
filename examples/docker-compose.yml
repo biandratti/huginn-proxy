@@ -52,11 +52,11 @@ services:
     cap_add:
       - CAP_BPF
     healthcheck:
-      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/9090' 2>/dev/null"]
-      interval: 10s
+      test: ["CMD-SHELL", "curl -sf http://localhost:9090/health || exit 1"]
+      interval: 5s
       timeout: 3s
-      retries: 3
-      start_period: 5s
+      retries: 12
+      start_period: 10s
     depends_on:
       backend-a:
         condition: service_started
