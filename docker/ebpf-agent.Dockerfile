@@ -5,8 +5,8 @@
 #   docker build -f docker/ebpf-agent.Dockerfile .
 
 # ── builder ─────────────────────────────────────────────────────
-# rust:1.85-slim (amd64)
-FROM rust:1.85-slim@sha256:3490aa77d179a59d67e94239cca96dd84030b564470859200f535b942bdffedf AS builder
+# rust:1.86-slim — pin digest in CI when upgrading for reproducible builds
+FROM rust:1.86-slim AS builder
 # bpf-linker uses aya-rustc-llvm-proxy which needs LLVM shared libs from
 # the rustc distribution. glibc-based image required (Alpine/musl won't work).
 RUN apt-get update -q && apt-get install -y --no-install-recommends \
