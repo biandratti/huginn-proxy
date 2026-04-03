@@ -11,9 +11,10 @@ services:
     ports:
       - "0.0.0.0:7000:7000"   # Proxy server IPv4
       - "[::]:7000:7000"       # Proxy server IPv6
-      - "9090:9090"            # Observability server (Metrics + Health checks)
+      - "0.0.0.0:9090:9090"   # Observability server IPv4 (Metrics + Health checks)
+      - "[::]:9090:9090"       # Observability server IPv6
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:9090/health || exit 1"]
+      test: ["CMD-SHELL", "curl -sf http://127.0.0.1:9090/health || exit 1"]
       interval: 5s
       timeout: 3s
       retries: 12
