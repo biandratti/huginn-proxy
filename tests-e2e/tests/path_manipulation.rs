@@ -1,4 +1,6 @@
-use tests_e2e::common::{wait_for_service, DEFAULT_SERVICE_TIMEOUT_SECS, PROXY_HTTPS_URL_IPV4};
+use tests_e2e::common::{
+    wait_for_service, DEFAULT_SERVICE_TIMEOUT_SECS, PROXY_HTTPS_URL_IPV4, PROXY_HTTPS_URL_IPV6,
+};
 
 #[tokio::test]
 async fn test_path_stripping() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -318,4 +320,109 @@ async fn test_path_stripping_exact_prefix() -> Result<(), Box<dyn std::error::Er
     assert_eq!(path, "/", "Empty path after stripping should become root");
 
     Ok(())
+}
+
+// ── IPv6 variants ─────────────────────────────────────────────────────────────
+
+async fn test_path_stripping_impl(
+    url: &str,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    assert!(
+        wait_for_service(url, DEFAULT_SERVICE_TIMEOUT_SECS).await?,
+        "Proxy should be ready"
+    );
+    let client = reqwest::Client::builder()
+        .danger_accept_invalid_certs(true)
+        .build()
+        .map_err(|e| format!("Failed to create HTTP client: {e}"))?;
+    let response = client
+        .get(format!("{url}/strip/users/123"))
+        .send()
+        .await
+        .map_err(|e| format!("Failed to send request: {e}"))?;
+    assert_eq!(response.status(), reqwest::StatusCode::OK);
+    let body: serde_json::Value = response.json().await?;
+    let path = body
+        .get("path")
+        .and_then(|p| p.as_str())
+        .ok_or("Response should contain path")?;
+    assert_eq!(path, "/users/123", "Path prefix should be stripped");
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_path_stripping_ipv6() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    test_path_stripping_impl(PROXY_HTTPS_URL_IPV6).await
+}
+
+async fn test_path_rewriting_impl(
+    url: &str,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    assert!(
+        wait_for_service(url, DEFAULT_SERVICE_TIMEOUT_SECS).await?,
+        "Proxy should be ready"
+    );
+    let client = reqwest::Client::builder()
+        .danger_accept_invalid_certs(true)
+        .build()
+        .map_err(|e| format!("Failed to create HTTP client: {e}"))?;
+    let response = client
+        .get(format!("{url}/old/data/file.txt"))
+        .send()
+        .await
+        .map_err(|e| format!("Failed to send request: {e}"))?;
+    assert_eq!(response.status(), reqwest::StatusCode::OK);
+    let body: serde_json::Value = response.json().await?;
+    let path = body
+        .get("path")
+        .and_then(|p| p.as_str())
+        .ok_or("Response should contain path")?;
+    assert_eq!(path, "/new/data/file.txt", "Path should be rewritten");
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_path_rewriting_ipv6() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    test_path_rewriting_impl(PROXY_HTTPS_URL_IPV6).await
+}
+
+async fn test_path_manipulation_preserves_headers_impl(
+    url: &str,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    assert!(
+        wait_for_service(url, DEFAULT_SERVICE_TIMEOUT_SECS).await?,
+        "Proxy should be ready"
+    );
+    let client = reqwest::Client::builder()
+        .danger_accept_invalid_certs(true)
+        .build()
+        .map_err(|e| format!("Failed to create HTTP client: {e}"))?;
+    let response = client
+        .get(format!("{url}/strip/test"))
+        .header("X-Custom-Header", "test-value")
+        .send()
+        .await
+        .map_err(|e| format!("Failed to send request: {e}"))?;
+    assert_eq!(response.status(), reqwest::StatusCode::OK);
+    let body: serde_json::Value = response.json().await?;
+    let headers = body
+        .get("headers")
+        .and_then(|h| h.as_object())
+        .ok_or("Response should contain headers object")?;
+    assert!(
+        headers.contains_key("x-custom-header"),
+        "Custom headers should be preserved during path manipulation"
+    );
+    let custom_header = headers
+        .get("x-custom-header")
+        .and_then(|v| v.as_str())
+        .ok_or("Custom header should be present")?;
+    assert_eq!(custom_header, "test-value", "Custom header value should match");
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_path_manipulation_preserves_headers_ipv6(
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    test_path_manipulation_preserves_headers_impl(PROXY_HTTPS_URL_IPV6).await
 }

@@ -13,7 +13,6 @@ mod fingerprint_isolation;
 mod fingerprints;
 mod header_override;
 mod health_checks;
-mod ipv6;
 mod load_balancing;
 mod path_manipulation;
 mod security_headers;

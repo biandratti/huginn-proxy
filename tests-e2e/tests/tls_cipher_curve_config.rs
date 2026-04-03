@@ -1,5 +1,7 @@
 use huginn_proxy_lib::fingerprinting::names;
-use tests_e2e::common::{wait_for_service, DEFAULT_SERVICE_TIMEOUT_SECS, PROXY_HTTPS_URL_IPV4};
+use tests_e2e::common::{
+    wait_for_service, DEFAULT_SERVICE_TIMEOUT_SECS, PROXY_HTTPS_URL_IPV4, PROXY_HTTPS_URL_IPV6,
+};
 
 #[tokio::test]
 async fn test_tls_with_configured_cipher_suites(
@@ -100,4 +102,51 @@ async fn test_tls_with_configured_curves() -> Result<(), Box<dyn std::error::Err
     // This test documents that the configuration is accepted and TLS works correctly.
 
     Ok(())
+}
+
+// ── IPv6 variants ─────────────────────────────────────────────────────────────
+
+async fn test_tls_with_cipher_suites_impl(
+    url: &str,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let client = reqwest::Client::builder()
+        .danger_accept_invalid_certs(true)
+        .http1_only()
+        .build()
+        .map_err(|e| format!("Failed to create HTTP client: {e}"))?;
+    assert!(
+        wait_for_service(url, DEFAULT_SERVICE_TIMEOUT_SECS).await?,
+        "HTTPS proxy should be ready"
+    );
+    let response = client
+        .get(url)
+        .send()
+        .await
+        .map_err(|e| format!("Failed to send request: {e}"))?;
+    assert_eq!(response.status(), reqwest::StatusCode::OK);
+    let body: serde_json::Value = response.json().await?;
+    let headers = body
+        .get("headers")
+        .and_then(|h| h.as_object())
+        .ok_or("Response should contain headers object")?;
+    assert!(headers.contains_key(names::TLS_JA4), "TLS fingerprint header should be present");
+    let tls_fp = headers
+        .get(names::TLS_JA4)
+        .and_then(|v| v.as_str())
+        .ok_or("TLS fingerprint header should be a string")?;
+    assert!(!tls_fp.is_empty(), "TLS fingerprint should not be empty");
+    println!("TLS fingerprint ({url}): {tls_fp}");
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_tls_with_configured_cipher_suites_ipv6(
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    test_tls_with_cipher_suites_impl(PROXY_HTTPS_URL_IPV6).await
+}
+
+#[tokio::test]
+async fn test_tls_with_configured_curves_ipv6(
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    test_tls_with_cipher_suites_impl(PROXY_HTTPS_URL_IPV6).await
 }

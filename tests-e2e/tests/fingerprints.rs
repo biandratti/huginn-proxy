@@ -1,5 +1,7 @@
 use huginn_proxy_lib::fingerprinting::names;
-use tests_e2e::common::{wait_for_service, DEFAULT_SERVICE_TIMEOUT_SECS, PROXY_HTTPS_URL_IPV4};
+use tests_e2e::common::{
+    wait_for_service, DEFAULT_SERVICE_TIMEOUT_SECS, PROXY_HTTPS_URL_IPV4, PROXY_HTTPS_URL_IPV6,
+};
 
 #[tokio::test]
 async fn test_tls_fingerprint_injection() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -62,10 +64,10 @@ async fn test_tls_fingerprint_injection() -> Result<(), Box<dyn std::error::Erro
         .ok_or("TLS JA4_or header should be a string")?;
     assert!(!tls_fp_or.is_empty(), "TLS JA4_or fingerprint should not be empty");
 
-    println!("TLS fingerprint ({}): {tls_fp}", names::TLS_JA4);
-    println!("TLS fingerprint ({}): {tls_fp_r}", names::TLS_JA4_R);
-    println!("TLS fingerprint ({}): {tls_fp_o}", names::TLS_JA4_O);
-    println!("TLS fingerprint ({}): {tls_fp_or}", names::TLS_JA4_OR);
+    println!("IPv4 TLS fingerprint ({}): {tls_fp}", names::TLS_JA4);
+    println!("IPv4 TLS fingerprint ({}): {tls_fp_r}", names::TLS_JA4_R);
+    println!("IPv4 TLS fingerprint ({}): {tls_fp_o}", names::TLS_JA4_O);
+    println!("IPv4 TLS fingerprint ({}): {tls_fp_or}", names::TLS_JA4_OR);
 
     assert!(tls_fp.starts_with('t'), "TLS fingerprint should start with 't'");
     assert!(tls_fp.contains('_'), "TLS fingerprint should contain underscore separators");
@@ -131,7 +133,7 @@ async fn test_tls_fingerprint_injection() -> Result<(), Box<dyn std::error::Erro
         8,
         "TCP SYN fingerprint should have 8 colon-separated fields: ver:ittl:olen:mss:wsize,wscale:olayout:quirks:pclass"
     );
-    println!("TCP SYN fingerprint ({}): {tcp_fp}", names::TCP_SYN);
+    println!("IPv4 TCP SYN fingerprint ({}): {tcp_fp}", names::TCP_SYN);
 
     // TCP SYN fingerprint is injected on every request of the connection (same SYN, same fingerprint).
     assert!(
@@ -185,7 +187,7 @@ async fn test_http2_fingerprint_injection() -> Result<(), Box<dyn std::error::Er
         .ok_or("HTTP/2 fingerprint header should be a string")?;
     assert!(!http2_fp.is_empty(), "HTTP/2 fingerprint should not be empty");
 
-    println!("HTTP/2 fingerprint ({}): {http2_fp}", names::HTTP2_AKAMAI);
+    println!("IPv4 HTTP/2 fingerprint ({}): {http2_fp}", names::HTTP2_AKAMAI);
 
     assert!(http2_fp.contains('|'), "HTTP/2 fingerprint should contain pipe separator");
 
@@ -210,7 +212,7 @@ async fn test_http2_fingerprint_injection() -> Result<(), Box<dyn std::error::Er
         tcp_fp.starts_with("4:") || tcp_fp.starts_with("6:"),
         "TCP SYN fingerprint should start with '4:' (IPv4) or '6:' (IPv6)"
     );
-    println!("TCP SYN fingerprint ({}): {tcp_fp}", names::TCP_SYN);
+    println!("IPv4 TCP SYN fingerprint ({}): {tcp_fp}", names::TCP_SYN);
 
     // Also verify TLS fingerprint headers are present (all TLS connections should have them)
     assert!(
@@ -242,8 +244,8 @@ async fn test_http2_fingerprint_injection() -> Result<(), Box<dyn std::error::Er
         .ok_or("TLS JA4_r header should be a string")?;
     assert!(!tls_fp_r.is_empty(), "TLS JA4_r fingerprint should not be empty");
 
-    println!("TLS fingerprint ({}): {tls_fp}", names::TLS_JA4);
-    println!("TLS fingerprint ({}): {tls_fp_r}", names::TLS_JA4_R);
+    println!("IPv4 TLS fingerprint ({}): {tls_fp}", names::TLS_JA4);
+    println!("IPv4 TLS fingerprint ({}): {tls_fp_r}", names::TLS_JA4_R);
 
     // Expected TLS fingerprint for reqwest client (same for HTTP/1.1 and HTTP/2)
     const EXPECTED_TLS_FINGERPRINT_HTTP2: &str = "t13i1010h2_61a7ad8aa9b6_3a8073edd8ef";
@@ -389,6 +391,215 @@ async fn test_fingerprinting_disabled_per_route(
     assert!(
         headers2.contains_key(names::TCP_SYN),
         "TCP SYN fingerprint should be present on keep-alive request to /api (same TCP connection)"
+    );
+
+    Ok(())
+}
+
+// ── IPv6 variants ────────────────────────────────────────────────────────────
+
+/// Verify that TLS + TCP SYN fingerprinting works identically over an IPv6 connection.
+/// The TCP SYN fingerprint must carry the `6:` IP-version prefix.
+#[tokio::test]
+async fn test_tls_fingerprint_injection_ipv6(
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let client = reqwest::Client::builder()
+        .danger_accept_invalid_certs(true)
+        .http1_only()
+        .build()
+        .map_err(|e| format!("Failed to create HTTP client: {e}"))?;
+
+    assert!(
+        wait_for_service(PROXY_HTTPS_URL_IPV6, DEFAULT_SERVICE_TIMEOUT_SECS).await?,
+        "HTTPS proxy should be ready on IPv6"
+    );
+
+    let response = client
+        .get(PROXY_HTTPS_URL_IPV6)
+        .send()
+        .await
+        .map_err(|e| format!("Failed to send request over IPv6: {e}"))?;
+    assert_eq!(response.status(), reqwest::StatusCode::OK);
+
+    let body: serde_json::Value = response
+        .json()
+        .await
+        .map_err(|e| format!("Failed to parse response as JSON: {e}"))?;
+    let headers = body
+        .get("headers")
+        .and_then(|h| h.as_object())
+        .ok_or("Response should contain headers object")?;
+
+    // TLS fingerprint must be present
+    assert!(
+        headers.contains_key(names::TLS_JA4),
+        "TLS JA4 header should be present over IPv6"
+    );
+    assert!(
+        headers.contains_key(names::TLS_JA4_R),
+        "TLS JA4_r header should be present over IPv6"
+    );
+    let tls_fp = headers
+        .get(names::TLS_JA4)
+        .and_then(|v| v.as_str())
+        .ok_or("TLS JA4 header should be a string")?;
+    assert!(!tls_fp.is_empty(), "TLS JA4 fingerprint should not be empty");
+    assert!(tls_fp.starts_with('t'), "TLS fingerprint should start with 't'");
+    println!("IPv6 TLS fingerprint ({}): {tls_fp}", names::TLS_JA4);
+
+    // TCP SYN fingerprint must be present and use IPv6 prefix
+    assert!(
+        headers.contains_key(names::TCP_SYN),
+        "TCP SYN fingerprint header should be present on IPv6 connection"
+    );
+    let tcp_fp = headers
+        .get(names::TCP_SYN)
+        .and_then(|v| v.as_str())
+        .ok_or("TCP SYN fingerprint header should be a string")?;
+    assert!(!tcp_fp.is_empty(), "TCP SYN fingerprint should not be empty");
+    assert!(
+        tcp_fp.starts_with("6:"),
+        "TCP SYN fingerprint must use '6:' prefix for IPv6 connections; got: {tcp_fp}"
+    );
+    assert_eq!(
+        tcp_fp.split(':').count(),
+        8,
+        "TCP SYN fingerprint must have 8 colon-separated fields; got: {tcp_fp}"
+    );
+    println!("IPv6 TCP SYN fingerprint ({}): {tcp_fp}", names::TCP_SYN);
+
+    // HTTP/2 fingerprint must NOT be present (HTTP/1.1 client)
+    assert!(
+        !headers.contains_key(names::HTTP2_AKAMAI),
+        "HTTP/2 fingerprint should NOT be present for HTTP/1.1 connection"
+    );
+
+    Ok(())
+}
+
+/// HTTP/2 + TLS fingerprinting over IPv6: Akamai fingerprint present,
+/// TCP SYN fingerprint carries the `6:` prefix.
+#[tokio::test]
+async fn test_http2_fingerprint_injection_ipv6(
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let client = reqwest::Client::builder()
+        .danger_accept_invalid_certs(true)
+        .http2_prior_knowledge()
+        .build()
+        .map_err(|e| format!("Failed to create HTTP/2 client: {e}"))?;
+
+    assert!(
+        wait_for_service(PROXY_HTTPS_URL_IPV6, DEFAULT_SERVICE_TIMEOUT_SECS).await?,
+        "HTTPS proxy should be ready on IPv6"
+    );
+
+    let response = client
+        .get(PROXY_HTTPS_URL_IPV6)
+        .send()
+        .await
+        .map_err(|e| format!("Failed to send HTTP/2 request over IPv6: {e}"))?;
+    assert_eq!(response.status(), reqwest::StatusCode::OK);
+
+    let body: serde_json::Value = response
+        .json()
+        .await
+        .map_err(|e| format!("Failed to parse response as JSON: {e}"))?;
+    let headers = body
+        .get("headers")
+        .and_then(|h| h.as_object())
+        .ok_or("Response should contain headers object")?;
+
+    assert!(
+        headers.contains_key(names::HTTP2_AKAMAI),
+        "HTTP/2 Akamai fingerprint should be present over IPv6"
+    );
+    let http2_fp = headers
+        .get(names::HTTP2_AKAMAI)
+        .and_then(|v| v.as_str())
+        .ok_or("HTTP/2 fingerprint header should be a string")?;
+    assert!(!http2_fp.is_empty(), "HTTP/2 fingerprint should not be empty");
+    assert!(http2_fp.contains('|'), "HTTP/2 fingerprint should contain pipe separator");
+    println!("IPv6 HTTP/2 fingerprint ({}): {http2_fp}", names::HTTP2_AKAMAI);
+
+    assert!(
+        headers.contains_key(names::TCP_SYN),
+        "TCP SYN fingerprint should be present on IPv6 HTTP/2 connection"
+    );
+    let tcp_fp = headers
+        .get(names::TCP_SYN)
+        .and_then(|v| v.as_str())
+        .ok_or("TCP SYN fingerprint header should be a string")?;
+    assert!(
+        tcp_fp.starts_with("6:"),
+        "TCP SYN fingerprint must use '6:' prefix for IPv6 connections; got: {tcp_fp}"
+    );
+    println!("IPv6 TCP SYN fingerprint ({}): {tcp_fp}", names::TCP_SYN);
+
+    Ok(())
+}
+
+/// Fingerprinting disabled / enabled per route works the same over IPv6.
+#[tokio::test]
+async fn test_fingerprinting_disabled_per_route_ipv6(
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let client = reqwest::Client::builder()
+        .danger_accept_invalid_certs(true)
+        .build()
+        .map_err(|e| format!("Failed to create HTTP client: {e}"))?;
+
+    assert!(
+        wait_for_service(PROXY_HTTPS_URL_IPV6, DEFAULT_SERVICE_TIMEOUT_SECS).await?,
+        "HTTPS proxy should be ready on IPv6"
+    );
+
+    // /static route — fingerprinting disabled
+    let response = client
+        .get(format!("{PROXY_HTTPS_URL_IPV6}/static/test"))
+        .send()
+        .await
+        .map_err(|e| format!("Failed to send request to /static over IPv6: {e}"))?;
+    assert_eq!(response.status(), reqwest::StatusCode::OK);
+    let body: serde_json::Value = response.json().await?;
+    let headers = body
+        .get("headers")
+        .and_then(|h| h.as_object())
+        .ok_or("Response should contain headers")?;
+    assert!(
+        !headers.contains_key(names::TLS_JA4),
+        "TLS JA4 should NOT be present when fingerprinting is disabled"
+    );
+    assert!(
+        !headers.contains_key(names::TCP_SYN),
+        "TCP SYN should NOT be present when fingerprinting is disabled"
+    );
+
+    // /api route — fingerprinting enabled
+    let response2 = client
+        .get(format!("{PROXY_HTTPS_URL_IPV6}/api/test"))
+        .send()
+        .await
+        .map_err(|e| format!("Failed to send request to /api over IPv6: {e}"))?;
+    assert_eq!(response2.status(), reqwest::StatusCode::OK);
+    let body2: serde_json::Value = response2.json().await?;
+    let headers2 = body2
+        .get("headers")
+        .and_then(|h| h.as_object())
+        .ok_or("/api response should contain headers")?;
+    assert!(
+        headers2.contains_key(names::TLS_JA4),
+        "TLS JA4 should be present when fingerprinting is enabled"
+    );
+    assert!(
+        headers2.contains_key(names::TCP_SYN),
+        "TCP SYN should be present when fingerprinting is enabled over IPv6"
+    );
+    let tcp_fp = headers2
+        .get(names::TCP_SYN)
+        .and_then(|v| v.as_str())
+        .ok_or("TCP SYN fingerprint should be a string")?;
+    assert!(
+        tcp_fp.starts_with("6:"),
+        "TCP SYN fingerprint must use '6:' prefix for IPv6 connections; got: {tcp_fp}"
     );
 
     Ok(())
