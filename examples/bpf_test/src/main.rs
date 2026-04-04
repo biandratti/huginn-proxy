@@ -23,7 +23,7 @@ fn main() {
             let expected = [
                 huginn_ebpf::pin::SYN_MAP_V4_NAME,
                 huginn_ebpf::pin::COUNTER_NAME,
-                huginn_ebpf::pin::SYN_INSERT_FAILURES_NAME,
+                huginn_ebpf::pin::SYN_INSERT_FAILURES_V4_NAME,
             ];
             for name in expected {
                 if ebpf.map(name).is_some() {

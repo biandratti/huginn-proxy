@@ -1,5 +1,7 @@
 use huginn_proxy_lib::fingerprinting::{forwarded, names};
-use tests_e2e::common::{wait_for_service, DEFAULT_SERVICE_TIMEOUT_SECS, PROXY_HTTPS_URL};
+use tests_e2e::common::{
+    wait_for_service, DEFAULT_SERVICE_TIMEOUT_SECS, PROXY_HTTPS_URL_IPV4, PROXY_HTTPS_URL_IPV6,
+};
 
 /// Test that fingerprints (especially Akamai) are generated correctly
 /// and are NOT affected by headers we add (JA4 and X-Forwarded-*)
@@ -19,12 +21,12 @@ async fn test_fingerprint_isolation_from_added_headers(
         .map_err(|e| format!("Failed to create HTTP/2 client: {e}"))?;
 
     assert!(
-        wait_for_service(PROXY_HTTPS_URL, DEFAULT_SERVICE_TIMEOUT_SECS).await?,
+        wait_for_service(PROXY_HTTPS_URL_IPV4, DEFAULT_SERVICE_TIMEOUT_SECS).await?,
         "HTTPS proxy should be ready"
     );
 
     let response1 = client
-        .get(PROXY_HTTPS_URL)
+        .get(PROXY_HTTPS_URL_IPV4)
         .header("X-Custom-Header", "test-value-1")
         .header("User-Agent", "test-client/1.0")
         .header("Accept", "application/json")
@@ -104,7 +106,7 @@ async fn test_fingerprint_isolation_from_added_headers(
     // Second request: with DIFFERENT custom headers
     // The fingerprint should remain the same because it's based on HTTP/2 frames, not headers
     let response2 = client
-        .get(PROXY_HTTPS_URL)
+        .get(PROXY_HTTPS_URL_IPV4)
         .header("X-Custom-Header", "test-value-2")
         .header("User-Agent", "test-client/2.0")
         .header("Accept", "text/html")
@@ -205,6 +207,87 @@ async fn test_fingerprint_isolation_from_added_headers(
     println!("  - Akamai fingerprint: {akamai_fp1}");
     println!("  - TLS fingerprint: {tls_fp1}");
     println!("  - Both fingerprints remained identical despite different HTTP headers");
+
+    Ok(())
+}
+
+// ── IPv6 variant ──────────────────────────────────────────────────────────────
+
+/// Same fingerprint-isolation guarantee holds over IPv6: Akamai and TLS fingerprints
+/// must not change when different custom HTTP headers are sent.
+#[tokio::test]
+async fn test_fingerprint_isolation_from_added_headers_ipv6(
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let client = reqwest::Client::builder()
+        .danger_accept_invalid_certs(true)
+        .http2_prior_knowledge()
+        .build()
+        .map_err(|e| format!("Failed to create HTTP/2 client: {e}"))?;
+
+    assert!(
+        wait_for_service(PROXY_HTTPS_URL_IPV6, DEFAULT_SERVICE_TIMEOUT_SECS).await?,
+        "HTTPS proxy should be ready on IPv6"
+    );
+
+    let response1 = client
+        .get(PROXY_HTTPS_URL_IPV6)
+        .header("X-Custom-Header", "value-1")
+        .send()
+        .await
+        .map_err(|e| format!("Failed to send first IPv6 request: {e}"))?;
+    assert_eq!(response1.status(), reqwest::StatusCode::OK);
+    let body1: serde_json::Value = response1.json().await?;
+    let headers1 = body1
+        .get("headers")
+        .and_then(|h| h.as_object())
+        .ok_or("First response should contain headers")?;
+    let akamai1 = headers1
+        .get(names::HTTP2_AKAMAI)
+        .and_then(|v| v.as_str())
+        .ok_or("Akamai fingerprint should be present on IPv6")?;
+    let tls1 = headers1
+        .get(names::TLS_JA4)
+        .and_then(|v| v.as_str())
+        .ok_or("TLS fingerprint should be present on IPv6")?;
+    assert!(
+        headers1.contains_key(forwarded::FOR),
+        "X-Forwarded-For should be present over IPv6"
+    );
+
+    let response2 = client
+        .get(PROXY_HTTPS_URL_IPV6)
+        .header("X-Custom-Header", "value-2")
+        .header("X-Another-Header", "extra")
+        .send()
+        .await
+        .map_err(|e| format!("Failed to send second IPv6 request: {e}"))?;
+    assert_eq!(response2.status(), reqwest::StatusCode::OK);
+    let body2: serde_json::Value = response2.json().await?;
+    let headers2 = body2
+        .get("headers")
+        .and_then(|h| h.as_object())
+        .ok_or("Second response should contain headers")?;
+    let akamai2 = headers2
+        .get(names::HTTP2_AKAMAI)
+        .and_then(|v| v.as_str())
+        .ok_or("Akamai fingerprint should be present on second IPv6 request")?;
+    let tls2 = headers2
+        .get(names::TLS_JA4)
+        .and_then(|v| v.as_str())
+        .ok_or("TLS fingerprint should be present on second IPv6 request")?;
+
+    assert_eq!(
+        akamai1, akamai2,
+        "Akamai fingerprint must be identical over IPv6 despite different headers"
+    );
+    assert_eq!(
+        tls1, tls2,
+        "TLS fingerprint must be identical over IPv6 despite different headers"
+    );
+
+    println!("\n✓ IPv6 fingerprint isolation confirmed");
+    println!("  - Akamai: {akamai1}");
+    println!("  - TLS:    {tls1}");
 
     Ok(())
 }

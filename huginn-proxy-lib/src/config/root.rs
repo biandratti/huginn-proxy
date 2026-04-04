@@ -1,9 +1,9 @@
 use serde::Deserialize;
-use std::net::SocketAddr;
 
 use super::backend::{Backend, Route};
 use super::fingerprinting::FingerprintConfig;
 use super::headers::HeaderManipulation;
+use super::listen::ListenConfig;
 use super::security::SecurityConfig;
 use super::telemetry::{LoggingConfig, TelemetryConfig};
 use super::timeout::TimeoutConfig;
@@ -12,9 +12,8 @@ use super::tls::TlsConfig;
 /// Main configuration structure
 #[derive(Debug, Deserialize, Clone)]
 pub struct Config {
-    /// Address and port to listen on
-    /// Example: "0.0.0.0:7000" or "127.0.0.1:8080"
-    pub listen: SocketAddr,
+    /// Listener configuration (addresses and socket options)
+    pub listen: ListenConfig,
     /// List of backend servers for load balancing
     /// At least one backend is required
     pub backends: Vec<Backend>,

@@ -4,13 +4,13 @@ use aya_ebpf::programs::XdpContext;
 use core::mem;
 
 use crate::constants::*;
-use crate::headers::{EthHdr, IpHdr, TcpHdr, VlanHdr};
+use crate::headers::{EthHdr, Ip4Hdr, Ip6Hdr, TcpHdr, VlanHdr};
 use crate::helpers::ptr_at;
 use crate::signals::tcp_syn;
 
 /// XDP pipeline: parse L2/L3/L4 and dispatch to each signal's handler.
 ///
-/// Currently only IPv4 TCP is handled; IPv6 and other signals are added here.
+/// Handles both IPv4 (`ETH_P_IPV4`) and IPv6 (`ETH_P_IPV6`) TCP SYN packets.
 pub fn try_xdp_syn(ctx: &XdpContext) -> Result<(), ()> {
     let mut offset = 0usize;
 
@@ -33,19 +33,27 @@ pub fn try_xdp_syn(ctx: &XdpContext) -> Result<(), ()> {
         eth_type = unsafe { (*vlan).encapsulated_proto };
     }
 
-    if eth_type != ETH_P_IP {
-        return Ok(());
+    if eth_type == ETH_P_IPV4 {
+        return handle_ipv4(ctx, offset);
+    }
+    if eth_type == ETH_P_IPV6 {
+        return handle_ipv6(ctx, offset);
     }
 
+    Ok(())
+}
+
+/// Parse IPv4 header and dispatch TCP SYN to `handle_tcp_syn_v4`.
+fn handle_ipv4(ctx: &XdpContext, mut offset: usize) -> Result<(), ()> {
     // ── IPv4 ──────────────────────────────────────────────────────────────────
     // SAFETY: ptr_at checked bounds.
-    let ip = unsafe { ptr_at::<IpHdr>(ctx, offset).ok_or(())? };
+    let ip = unsafe { ptr_at::<Ip4Hdr>(ctx, offset).ok_or(())? };
 
     let ip_hdr_len = unsafe { usize::from((*ip).ihl()).saturating_mul(4) };
-    if ip_hdr_len < mem::size_of::<IpHdr>() {
+    if ip_hdr_len < mem::size_of::<Ip4Hdr>() {
         return Ok(());
     }
-    offset = offset.saturating_add(mem::size_of::<IpHdr>());
+    offset = offset.saturating_add(mem::size_of::<Ip4Hdr>());
 
     let frag_off = unsafe { (*ip).frag_off };
     if frag_off & (IP_MF | IP_OFFSET) != 0 {
@@ -62,7 +70,7 @@ pub fn try_xdp_syn(ctx: &XdpContext) -> Result<(), ()> {
         return Ok(());
     }
 
-    offset = offset.saturating_add(ip_hdr_len.saturating_sub(mem::size_of::<IpHdr>()));
+    offset = offset.saturating_add(ip_hdr_len.saturating_sub(mem::size_of::<Ip4Hdr>()));
 
     // ── TCP ───────────────────────────────────────────────────────────────────
     // SAFETY: ptr_at checked bounds.
@@ -70,7 +78,7 @@ pub fn try_xdp_syn(ctx: &XdpContext) -> Result<(), ()> {
 
     let tcp_hdr_len = unsafe { usize::from((*tcp).doff()).saturating_mul(4) };
     if tcp_hdr_len < mem::size_of::<TcpHdr>() {
-        tcp_syn::increment_syn_malformed();
+        tcp_syn::increment_syn_malformed_v4();
         return Ok(());
     }
 
@@ -92,4 +100,57 @@ pub fn try_xdp_syn(ctx: &XdpContext) -> Result<(), ()> {
     // On MapInsertFailed we still pass the packet. The handler increments syn_insert_failures;
     // the agent/proxy reads it via EbpfProbe::syn_insert_failures_count() and can expose it as a metric.
     tcp_syn::handle_tcp_syn_v4(ctx, ip_ref, tcp_ref, ip_hdr_len).map_err(|_| ())
+}
+
+/// Parse IPv6 header and dispatch TCP SYN to `handle_tcp_syn_v6`.
+///
+/// Only packets where `nexthdr` in the fixed IPv6 header is directly TCP (6)
+/// are fingerprinted. Packets with extension headers before TCP are passed
+/// without fingerprinting. Possible spoofing risk: a malicious actor could
+/// send a packet with an extension header before TCP to bypass the fingerprinting.
+fn handle_ipv6(ctx: &XdpContext, mut offset: usize) -> Result<(), ()> {
+    // ── IPv6 ──────────────────────────────────────────────────────────────────
+    // SAFETY: ptr_at checked bounds.
+    let ip6 = unsafe { ptr_at::<Ip6Hdr>(ctx, offset).ok_or(())? };
+    offset = offset.saturating_add(mem::size_of::<Ip6Hdr>());
+
+    if unsafe { (*ip6).nexthdr } != IPPROTO_TCP {
+        return Ok(());
+    }
+
+    // IPv6 destination address filter (all-zeros = accept any).
+    // SAFETY: read_volatile for loader-patched global array.
+    let dst_ip_v6_val = unsafe { core::ptr::read_volatile(&tcp_syn::dst_ip_v6) };
+    let is_zero = dst_ip_v6_val.iter().all(|&b| b == 0);
+    if !is_zero {
+        let daddr = unsafe { (*ip6).daddr };
+        if daddr != dst_ip_v6_val {
+            return Ok(());
+        }
+    }
+
+    // ── TCP ───────────────────────────────────────────────────────────────────
+    // SAFETY: ptr_at checked bounds.
+    let tcp = unsafe { ptr_at::<TcpHdr>(ctx, offset).ok_or(())? };
+
+    let tcp_hdr_len = unsafe { usize::from((*tcp).doff()).saturating_mul(4) };
+    if tcp_hdr_len < mem::size_of::<TcpHdr>() {
+        tcp_syn::increment_syn_malformed_v6();
+        return Ok(());
+    }
+
+    // SAFETY: read_volatile for loader-patched global.
+    let dst_port_val = unsafe { core::ptr::read_volatile(&tcp_syn::dst_port) };
+    if dst_port_val != 0 && unsafe { (*tcp).dest } != dst_port_val {
+        return Ok(());
+    }
+
+    if unsafe { !(*tcp).syn() || (*tcp).ack() } {
+        return Ok(());
+    }
+
+    // SAFETY: ip6 and tcp were validated by ptr_at and bounds; valid for the duration of this call.
+    let ip6_ref = unsafe { &*ip6 };
+    let tcp_ref = unsafe { &*tcp };
+    tcp_syn::handle_tcp_syn_v6(ctx, ip6_ref, tcp_ref).map_err(|_| ())
 }

@@ -1,4 +1,4 @@
-use huginn_ebpf::types::{parse_syn, quirk_bits, SynRawData};
+use huginn_ebpf::types::{parse_syn_v4, quirk_bits, SynRawDataV4};
 use huginn_net_db::tcp::Quirk;
 
 type TestResult = Result<(), Box<dyn std::error::Error + Send + Sync>>;
@@ -21,7 +21,7 @@ fn make_test_options() -> ([u8; 40], u8) {
     (opts, 22u8)
 }
 
-fn make_syn_raw(window: u16, ip_ttl: u8, optlen: u8, options: [u8; 40]) -> SynRawData {
+fn make_syn_raw(window: u16, ip_ttl: u8, optlen: u8, options: [u8; 40]) -> SynRawDataV4 {
     make_syn_raw_with_quirks(window, ip_ttl, optlen, options, 0)
 }
 
@@ -31,8 +31,8 @@ fn make_syn_raw_with_quirks(
     optlen: u8,
     options: [u8; 40],
     quirks: u32,
-) -> SynRawData {
-    SynRawData {
+) -> SynRawDataV4 {
+    SynRawDataV4 {
         src_addr: 0,
         src_port: 0,
         window,
@@ -50,8 +50,8 @@ fn make_syn_raw_with_quirks(
 fn test_parse_syn_produces_signature() -> TestResult {
     let (options, optlen) = make_test_options();
     let raw = make_syn_raw(65535u16.to_be(), 64, optlen, options);
-    let sig = parse_syn(&raw)
-        .ok_or("parse_syn returned None for valid input")?
+    let sig = parse_syn_v4(&raw)
+        .ok_or("parse_syn_v4 returned None for valid input")?
         .to_string();
     assert!(!sig.is_empty());
     assert!(sig.starts_with("4:"));
@@ -62,8 +62,8 @@ fn test_parse_syn_produces_signature() -> TestResult {
 fn test_signature_format_fields() -> TestResult {
     let (options, optlen) = make_test_options();
     let raw = make_syn_raw(65535u16.to_be(), 64, optlen, options);
-    let sig = parse_syn(&raw)
-        .ok_or("parse_syn returned None")?
+    let sig = parse_syn_v4(&raw)
+        .ok_or("parse_syn_v4 returned None")?
         .to_string();
     // Full p0f format: ver:ittl:olen:mss:wsize,wscale:olayout:quirks:pclass (8 fields)
     let parts: Vec<&str> = sig.split(':').collect();
@@ -82,15 +82,15 @@ fn test_signature_format_fields() -> TestResult {
 #[test]
 fn test_empty_options_returns_some() {
     let raw = make_syn_raw(8192u16.to_be(), 128, 0, [0u8; 40]);
-    assert!(parse_syn(&raw).is_some());
+    assert!(parse_syn_v4(&raw).is_some());
 }
 
 #[test]
 fn test_ttl_field_is_valid() -> TestResult {
     let (options, optlen) = make_test_options();
     let raw = make_syn_raw(65535u16.to_be(), 64, optlen, options);
-    let sig = parse_syn(&raw)
-        .ok_or("parse_syn returned None")?
+    let sig = parse_syn_v4(&raw)
+        .ok_or("parse_syn_v4 returned None")?
         .to_string();
     let ttl_field = sig
         .split(':')
@@ -110,8 +110,8 @@ fn test_window_byte_order_converted() -> TestResult {
     let (options, optlen) = make_test_options();
     // 8192 in network byte order; byte-swapped value would be 32 (0x0020)
     let raw = make_syn_raw(8192u16.to_be(), 64, optlen, options);
-    let sig = parse_syn(&raw)
-        .ok_or("parse_syn returned None")?
+    let sig = parse_syn_v4(&raw)
+        .ok_or("parse_syn_v4 returned None")?
         .to_string();
     // wsize,wscale is at index 4
     let wsize_part = sig
@@ -144,7 +144,7 @@ fn test_all_quirk_bits_roundtrip() -> TestResult {
     ];
     for (bit, expected_quirk) in cases {
         let raw = make_syn_raw_with_quirks(65535u16.to_be(), 64, optlen, options, *bit);
-        let obs = parse_syn(&raw).ok_or("parse_syn returned None for valid options")?;
+        let obs = parse_syn_v4(&raw).ok_or("parse_syn_v4 returned None for valid options")?;
         assert!(
             obs.quirks.contains(expected_quirk),
             "quirk bit 0x{:x} should decode to {:?}, got quirks: {:?}",

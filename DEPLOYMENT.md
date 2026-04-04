@@ -79,7 +79,7 @@ spec:
       env:
         - name: HUGINN_EBPF_INTERFACE
           value: "eth0"                 # or node's primary interface
-        - name: HUGINN_EBPF_DST_IP
+        - name: HUGINN_EBPF_DST_IP_V4
           value: "0.0.0.0"
         - name: HUGINN_EBPF_DST_PORT
           value: "7000"

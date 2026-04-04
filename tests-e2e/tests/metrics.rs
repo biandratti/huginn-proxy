@@ -1,5 +1,5 @@
 use tests_e2e::common::{
-    wait_for_service, DEFAULT_SERVICE_TIMEOUT_SECS, METRICS_URL, PROXY_HTTPS_URL,
+    wait_for_service, DEFAULT_SERVICE_TIMEOUT_SECS, METRICS_URL, PROXY_HTTPS_URL_IPV4,
 };
 
 async fn fetch_metrics() -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
@@ -75,7 +75,7 @@ async fn test_build_info_metric() -> Result<(), Box<dyn std::error::Error + Send
 #[tokio::test]
 async fn test_request_metrics_increment() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     assert!(
-        wait_for_service(PROXY_HTTPS_URL, DEFAULT_SERVICE_TIMEOUT_SECS).await?,
+        wait_for_service(PROXY_HTTPS_URL_IPV4, DEFAULT_SERVICE_TIMEOUT_SECS).await?,
         "Proxy should be ready"
     );
 
@@ -85,7 +85,7 @@ async fn test_request_metrics_increment() -> Result<(), Box<dyn std::error::Erro
         .map_err(|e| format!("Failed to create HTTP client: {e}"))?;
 
     for _ in 0..5 {
-        let _response = client.get(PROXY_HTTPS_URL).send().await?;
+        let _response = client.get(PROXY_HTTPS_URL_IPV4).send().await?;
     }
 
     let metrics = fetch_metrics().await?;
@@ -106,7 +106,7 @@ async fn test_request_metrics_increment() -> Result<(), Box<dyn std::error::Erro
 #[tokio::test]
 async fn test_backend_metrics() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     assert!(
-        wait_for_service(PROXY_HTTPS_URL, DEFAULT_SERVICE_TIMEOUT_SECS).await?,
+        wait_for_service(PROXY_HTTPS_URL_IPV4, DEFAULT_SERVICE_TIMEOUT_SECS).await?,
         "Proxy should be ready"
     );
 
@@ -116,7 +116,7 @@ async fn test_backend_metrics() -> Result<(), Box<dyn std::error::Error + Send +
         .map_err(|e| format!("Failed to create HTTP client: {e}"))?;
 
     for _ in 0..3 {
-        let _response = client.get(PROXY_HTTPS_URL).send().await?;
+        let _response = client.get(PROXY_HTTPS_URL_IPV4).send().await?;
     }
 
     let metrics = fetch_metrics().await?;
@@ -142,7 +142,7 @@ async fn test_backend_metrics() -> Result<(), Box<dyn std::error::Error + Send +
 #[tokio::test]
 async fn test_tls_metrics() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     assert!(
-        wait_for_service(PROXY_HTTPS_URL, DEFAULT_SERVICE_TIMEOUT_SECS).await?,
+        wait_for_service(PROXY_HTTPS_URL_IPV4, DEFAULT_SERVICE_TIMEOUT_SECS).await?,
         "Proxy should be ready"
     );
 
@@ -152,7 +152,7 @@ async fn test_tls_metrics() -> Result<(), Box<dyn std::error::Error + Send + Syn
         .map_err(|e| format!("Failed to create HTTP client: {e}"))?;
 
     for _ in 0..3 {
-        let _response = client.get(PROXY_HTTPS_URL).send().await?;
+        let _response = client.get(PROXY_HTTPS_URL_IPV4).send().await?;
     }
 
     let metrics = fetch_metrics().await?;
@@ -173,7 +173,7 @@ async fn test_tls_metrics() -> Result<(), Box<dyn std::error::Error + Send + Syn
 #[tokio::test]
 async fn test_throughput_metrics() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     assert!(
-        wait_for_service(PROXY_HTTPS_URL, DEFAULT_SERVICE_TIMEOUT_SECS).await?,
+        wait_for_service(PROXY_HTTPS_URL_IPV4, DEFAULT_SERVICE_TIMEOUT_SECS).await?,
         "Proxy should be ready"
     );
 
@@ -183,7 +183,7 @@ async fn test_throughput_metrics() -> Result<(), Box<dyn std::error::Error + Sen
         .map_err(|e| format!("Failed to create HTTP client: {e}"))?;
 
     for _ in 0..3 {
-        let _response = client.get(PROXY_HTTPS_URL).send().await?;
+        let _response = client.get(PROXY_HTTPS_URL_IPV4).send().await?;
     }
 
     let metrics = fetch_metrics().await?;
@@ -204,7 +204,7 @@ async fn test_throughput_metrics() -> Result<(), Box<dyn std::error::Error + Sen
 #[tokio::test]
 async fn test_per_route_metrics() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     assert!(
-        wait_for_service(PROXY_HTTPS_URL, DEFAULT_SERVICE_TIMEOUT_SECS).await?,
+        wait_for_service(PROXY_HTTPS_URL_IPV4, DEFAULT_SERVICE_TIMEOUT_SECS).await?,
         "Proxy should be ready"
     );
 
@@ -214,11 +214,11 @@ async fn test_per_route_metrics() -> Result<(), Box<dyn std::error::Error + Send
         .map_err(|e| format!("Failed to create HTTP client: {e}"))?;
 
     let _response = client
-        .get(format!("{PROXY_HTTPS_URL}/api/test"))
+        .get(format!("{PROXY_HTTPS_URL_IPV4}/api/test"))
         .send()
         .await?;
     let _response = client
-        .get(format!("{PROXY_HTTPS_URL}/other"))
+        .get(format!("{PROXY_HTTPS_URL_IPV4}/other"))
         .send()
         .await?;
 

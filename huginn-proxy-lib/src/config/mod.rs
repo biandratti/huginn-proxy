@@ -1,6 +1,7 @@
 mod backend;
 mod fingerprinting;
 mod headers;
+mod listen;
 mod loader;
 mod root;
 mod security;
@@ -11,6 +12,7 @@ mod tls;
 pub use backend::{Backend, BackendHttpVersion, BackendPoolConfig, Route};
 pub use fingerprinting::FingerprintConfig;
 pub use headers::{CustomHeader, HeaderManipulation, HeaderManipulationGroup};
+pub use listen::ListenConfig;
 pub use loader::load_from_path;
 pub use root::Config;
 pub use security::{

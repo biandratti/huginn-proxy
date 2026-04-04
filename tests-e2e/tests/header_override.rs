@@ -1,5 +1,7 @@
 use huginn_proxy_lib::fingerprinting::{forwarded, names};
-use tests_e2e::common::{wait_for_service, DEFAULT_SERVICE_TIMEOUT_SECS, PROXY_HTTPS_URL};
+use tests_e2e::common::{
+    wait_for_service, DEFAULT_SERVICE_TIMEOUT_SECS, PROXY_HTTPS_URL_IPV4, PROXY_HTTPS_URL_IPV6,
+};
 
 /// Test that injected headers always override client-provided headers with the same names
 /// This prevents clients from manipulating fingerprints or X-Forwarded-* headers
@@ -20,7 +22,7 @@ async fn test_injected_headers_override_client_headers(
         .map_err(|e| format!("Failed to create HTTP/2 client: {e}"))?;
 
     assert!(
-        wait_for_service(PROXY_HTTPS_URL, DEFAULT_SERVICE_TIMEOUT_SECS).await?,
+        wait_for_service(PROXY_HTTPS_URL_IPV4, DEFAULT_SERVICE_TIMEOUT_SECS).await?,
         "HTTPS proxy should be ready"
     );
 
@@ -28,7 +30,7 @@ async fn test_injected_headers_override_client_headers(
     // Host: evil.example.com and X-Forwarded-Host: spoofed-... are both ignored by the proxy.
     // X-Forwarded-Host is derived exclusively from the TLS SNI, which is not client-controllable.
     let response = client
-        .get(PROXY_HTTPS_URL)
+        .get(PROXY_HTTPS_URL_IPV4)
         .header(names::TLS_JA4, "t13d9999h2_fake_fingerprint_12345")
         .header(names::HTTP2_AKAMAI, "999:999;999:999|9999999|999|fake")
         .header("Host", "evil.example.com")
@@ -134,7 +136,7 @@ async fn test_injected_headers_override_client_headers(
     // CRITICAL: Verify X-Forwarded-Host is set from the TLS SNI, not from any client-controlled header.
     // The client sent Host: evil.example.com and X-Forwarded-Host: spoofed-x-forwarded-host.example.com,
     // but the proxy must ignore both and use the SNI from the TLS ClientHello instead.
-    // SNI ("localhost" for this test connection) cannot be overridden by HTTP headers.
+    // With `PROXY_HTTPS_URL_IPV4` the SNI is the IP literal (`127.0.0.1`), not `localhost`.
     let forwarded_host = if headers.contains_key(forwarded::HOST) {
         let host = headers
             .get(forwarded::HOST)
@@ -149,8 +151,8 @@ async fn test_injected_headers_override_client_headers(
             "X-Forwarded-Host must NOT be taken from the spoofed Host header."
         );
         assert_eq!(
-            host, "localhost",
-            "X-Forwarded-Host should be the TLS SNI value (localhost), not any client-supplied header. Current value: {host}"
+            host, "127.0.0.1",
+            "X-Forwarded-Host should be the TLS SNI value (127.0.0.1 for this URL), not any client-supplied header. Current value: {host}"
         );
         println!("✓ X-Forwarded-Host correctly uses TLS SNI (overrides spoofed Host and X-Forwarded-Host headers): {host}");
         Some(host)
@@ -224,13 +226,13 @@ async fn test_fingerprints_consistent_despite_spoofed_headers(
         .map_err(|e| format!("Failed to create HTTP/2 client: {e}"))?;
 
     assert!(
-        wait_for_service(PROXY_HTTPS_URL, DEFAULT_SERVICE_TIMEOUT_SECS).await?,
+        wait_for_service(PROXY_HTTPS_URL_IPV4, DEFAULT_SERVICE_TIMEOUT_SECS).await?,
         "HTTPS proxy should be ready"
     );
 
     // First request with spoofed headers
     let response1 = client
-        .get(PROXY_HTTPS_URL)
+        .get(PROXY_HTTPS_URL_IPV4)
         .header(names::TLS_JA4, "spoofed-ja4-1")
         .header(names::HTTP2_AKAMAI, "spoofed-akamai-1")
         .send()
@@ -253,7 +255,7 @@ async fn test_fingerprints_consistent_despite_spoofed_headers(
 
     // Second request with DIFFERENT spoofed headers
     let response2 = client
-        .get(PROXY_HTTPS_URL)
+        .get(PROXY_HTTPS_URL_IPV4)
         .header(names::TLS_JA4, "spoofed-ja4-2")
         .header(names::HTTP2_AKAMAI, "spoofed-akamai-2")
         .send()
@@ -291,6 +293,191 @@ async fn test_fingerprints_consistent_despite_spoofed_headers(
 
     println!("\n✓ Test passed: Fingerprints remain consistent despite different spoofed headers");
     println!("  - JA4: {ja4_1}");
+    println!("  - Akamai: {akamai_1}");
+
+    Ok(())
+}
+
+/// Same header-override guarantees apply over IPv6: the proxy must always replace
+/// spoofed fingerprint headers with the real computed values.
+#[tokio::test]
+async fn test_injected_headers_override_client_headers_ipv6(
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let client = reqwest::Client::builder()
+        .danger_accept_invalid_certs(true)
+        .http2_prior_knowledge()
+        .build()
+        .map_err(|e| format!("Failed to create HTTP/2 client: {e}"))?;
+
+    assert!(
+        wait_for_service(PROXY_HTTPS_URL_IPV6, DEFAULT_SERVICE_TIMEOUT_SECS).await?,
+        "HTTPS proxy should be ready on IPv6"
+    );
+
+    let response = client
+        .get(PROXY_HTTPS_URL_IPV6)
+        .header(names::TLS_JA4, "t13d9999h2_fake_fingerprint_12345")
+        .header(names::HTTP2_AKAMAI, "999:999;999:999|9999999|999|fake")
+        .header(forwarded::FOR, "192.168.1.100")
+        .header(forwarded::PORT, "9999")
+        .header(forwarded::PROTO, "http")
+        .send()
+        .await
+        .map_err(|e| format!("Failed to send request with spoofed headers over IPv6: {e}"))?;
+    assert_eq!(response.status(), reqwest::StatusCode::OK);
+
+    let body: serde_json::Value = response.json().await?;
+    let headers = body
+        .get("headers")
+        .and_then(|h| h.as_object())
+        .ok_or("Response should contain headers object")?;
+
+    // JA4 must be overridden
+    let ja4_fp = headers
+        .get(names::TLS_JA4)
+        .and_then(|v| v.as_str())
+        .ok_or("JA4 fingerprint header should be present")?;
+    assert_ne!(
+        ja4_fp, "t13d9999h2_fake_fingerprint_12345",
+        "JA4 fingerprint must NOT be the spoofed value over IPv6"
+    );
+    assert!(
+        ja4_fp.starts_with("t13"),
+        "JA4 fingerprint should be a real value starting with 't13'"
+    );
+    println!("✓ IPv6 JA4 overridden: {ja4_fp}");
+
+    // Akamai must be overridden
+    let akamai_fp = headers
+        .get(names::HTTP2_AKAMAI)
+        .and_then(|v| v.as_str())
+        .ok_or("Akamai fingerprint header should be present")?;
+    assert_ne!(
+        akamai_fp, "999:999;999:999|9999999|999|fake",
+        "Akamai fingerprint must NOT be the spoofed value over IPv6"
+    );
+    assert!(akamai_fp.contains('|'), "Akamai fingerprint should be a valid value");
+    println!("✓ IPv6 Akamai overridden: {akamai_fp}");
+
+    // X-Forwarded-For must contain real client IP appended after the spoofed value
+    let forwarded_for = headers
+        .get(forwarded::FOR)
+        .and_then(|v| v.as_str())
+        .ok_or("X-Forwarded-For should be present")?;
+    assert!(
+        forwarded_for.contains("192.168.1.100"),
+        "X-Forwarded-For should contain spoofed value; got: {forwarded_for}"
+    );
+    let parts: Vec<&str> = forwarded_for.split(',').map(|s| s.trim()).collect();
+    assert!(
+        parts.len() >= 2,
+        "X-Forwarded-For should have at least 2 entries; got: {forwarded_for}"
+    );
+    println!("✓ IPv6 X-Forwarded-For: {forwarded_for}");
+
+    // X-Forwarded-Proto must be "https"
+    let forwarded_proto = headers
+        .get(forwarded::PROTO)
+        .and_then(|v| v.as_str())
+        .ok_or("X-Forwarded-Proto should be present")?;
+    assert_eq!(forwarded_proto, "https", "X-Forwarded-Proto must be 'https' over IPv6");
+    println!("✓ IPv6 X-Forwarded-Proto: {forwarded_proto}");
+
+    // X-Forwarded-Port must be the real port (not 9999)
+    let forwarded_port = headers
+        .get(forwarded::PORT)
+        .and_then(|v| v.as_str())
+        .ok_or("X-Forwarded-Port should be present")?;
+    assert_ne!(
+        forwarded_port, "9999",
+        "X-Forwarded-Port must NOT be the spoofed value over IPv6"
+    );
+    println!("✓ IPv6 X-Forwarded-Port: {forwarded_port}");
+
+    // X-Forwarded-Host: for IP-literal URLs no TLS SNI is emitted, so the header
+    // may be absent or derived from the :authority pseudo-header. Either is valid.
+    if let Some(host) = headers.get(forwarded::HOST).and_then(|v| v.as_str()) {
+        assert_ne!(host, "evil.example.com", "X-Forwarded-Host must not be spoofed");
+        println!("✓ IPv6 X-Forwarded-Host: {host}");
+    } else {
+        println!("i X-Forwarded-Host not present (valid for IPv6 IP-literal with no SNI)");
+    }
+
+    println!("\n✓ IPv6 header-override test passed");
+
+    Ok(())
+}
+
+/// Fingerprints are consistent across requests with different spoofed headers, also over IPv6.
+#[tokio::test]
+async fn test_fingerprints_consistent_despite_spoofed_headers_ipv6(
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let client = reqwest::Client::builder()
+        .danger_accept_invalid_certs(true)
+        .http2_prior_knowledge()
+        .build()
+        .map_err(|e| format!("Failed to create HTTP/2 client: {e}"))?;
+
+    assert!(
+        wait_for_service(PROXY_HTTPS_URL_IPV6, DEFAULT_SERVICE_TIMEOUT_SECS).await?,
+        "HTTPS proxy should be ready on IPv6"
+    );
+
+    let response1 = client
+        .get(PROXY_HTTPS_URL_IPV6)
+        .header(names::TLS_JA4, "spoofed-ja4-1")
+        .header(names::HTTP2_AKAMAI, "spoofed-akamai-1")
+        .send()
+        .await
+        .map_err(|e| format!("Failed to send first IPv6 request: {e}"))?;
+    let body1: serde_json::Value = response1.json().await?;
+    let headers1 = body1
+        .get("headers")
+        .and_then(|h| h.as_object())
+        .ok_or("Headers missing")?;
+    let ja4_1 = headers1
+        .get(names::TLS_JA4)
+        .and_then(|v| v.as_str())
+        .ok_or("JA4 missing")?;
+    let akamai_1 = headers1
+        .get(names::HTTP2_AKAMAI)
+        .and_then(|v| v.as_str())
+        .ok_or("Akamai missing")?;
+
+    let response2 = client
+        .get(PROXY_HTTPS_URL_IPV6)
+        .header(names::TLS_JA4, "spoofed-ja4-2")
+        .header(names::HTTP2_AKAMAI, "spoofed-akamai-2")
+        .send()
+        .await
+        .map_err(|e| format!("Failed to send second IPv6 request: {e}"))?;
+    let body2: serde_json::Value = response2.json().await?;
+    let headers2 = body2
+        .get("headers")
+        .and_then(|h| h.as_object())
+        .ok_or("Headers missing")?;
+    let ja4_2 = headers2
+        .get(names::TLS_JA4)
+        .and_then(|v| v.as_str())
+        .ok_or("JA4 missing")?;
+    let akamai_2 = headers2
+        .get(names::HTTP2_AKAMAI)
+        .and_then(|v| v.as_str())
+        .ok_or("Akamai missing")?;
+
+    assert_eq!(
+        ja4_1, ja4_2,
+        "IPv6 JA4 fingerprint must be identical despite different spoofed headers"
+    );
+    assert_eq!(
+        akamai_1, akamai_2,
+        "IPv6 Akamai fingerprint must be identical despite different spoofed headers"
+    );
+    assert_ne!(ja4_1, "spoofed-ja4-1");
+    assert_ne!(akamai_1, "spoofed-akamai-1");
+
+    println!("\n✓ IPv6 fingerprint consistency test passed");
+    println!("  - JA4:    {ja4_1}");
     println!("  - Akamai: {akamai_1}");
 
     Ok(())

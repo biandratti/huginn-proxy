@@ -1,22 +1,23 @@
-use tests_e2e::common::{wait_for_service, DEFAULT_SERVICE_TIMEOUT_SECS, PROXY_HTTPS_URL};
+use tests_e2e::common::{
+    wait_for_service, DEFAULT_SERVICE_TIMEOUT_SECS, PROXY_HTTPS_URL_IPV4, PROXY_HTTPS_URL_IPV6,
+};
 
-#[tokio::test]
-async fn test_proxy_forwarding() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+async fn test_proxy_forwarding_impl(
+    url: &str,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     assert!(
-        wait_for_service(PROXY_HTTPS_URL, DEFAULT_SERVICE_TIMEOUT_SECS).await?,
+        wait_for_service(url, DEFAULT_SERVICE_TIMEOUT_SECS).await?,
         "Proxy should be ready"
     );
-
     let client = reqwest::Client::builder()
         .danger_accept_invalid_certs(true)
         .build()
         .map_err(|e| format!("Failed to create HTTP client: {e}"))?;
     let response = client
-        .get(PROXY_HTTPS_URL)
+        .get(url)
         .send()
         .await
         .map_err(|e| format!("Failed to send request: {e}"))?;
-
     assert_eq!(response.status(), reqwest::StatusCode::OK);
     let body: serde_json::Value = response
         .json()
@@ -28,28 +29,32 @@ async fn test_proxy_forwarding() -> Result<(), Box<dyn std::error::Error + Send 
 }
 
 #[tokio::test]
-async fn test_path_routing() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+async fn test_proxy_forwarding() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    test_proxy_forwarding_impl(PROXY_HTTPS_URL_IPV4).await
+}
+
+#[tokio::test]
+async fn test_proxy_forwarding_ipv6() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    test_proxy_forwarding_impl(PROXY_HTTPS_URL_IPV6).await
+}
+
+async fn test_path_routing_impl(url: &str) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     assert!(
-        wait_for_service(PROXY_HTTPS_URL, DEFAULT_SERVICE_TIMEOUT_SECS).await?,
+        wait_for_service(url, DEFAULT_SERVICE_TIMEOUT_SECS).await?,
         "Proxy should be ready"
     );
-
     let client = reqwest::Client::builder()
         .danger_accept_invalid_certs(true)
         .build()
         .map_err(|e| format!("Failed to create HTTP client: {e}"))?;
-
-    // Test /api route (should go to backend-a)
     let response = client
-        .get(format!("{PROXY_HTTPS_URL}/api/test"))
+        .get(format!("{url}/api/test"))
         .send()
         .await
         .map_err(|e| format!("Failed to send request to /api/test: {e}"))?;
     assert_eq!(response.status(), reqwest::StatusCode::OK);
-
-    // Test default route (should go to backend-b)
     let response = client
-        .get(format!("{PROXY_HTTPS_URL}/other"))
+        .get(format!("{url}/other"))
         .send()
         .await
         .map_err(|e| format!("Failed to send request to /other: {e}"))?;
@@ -58,19 +63,39 @@ async fn test_path_routing() -> Result<(), Box<dyn std::error::Error + Send + Sy
 }
 
 #[tokio::test]
-async fn test_https_proxy() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+async fn test_path_routing() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    test_path_routing_impl(PROXY_HTTPS_URL_IPV4).await
+}
+
+#[tokio::test]
+async fn test_path_routing_ipv6() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    test_path_routing_impl(PROXY_HTTPS_URL_IPV6).await
+}
+
+async fn test_https_proxy_impl(url: &str) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let client = reqwest::Client::builder()
         .danger_accept_invalid_certs(true)
         .build()
         .map_err(|e| format!("Failed to create HTTP client: {e}"))?;
-
-    assert!(wait_for_service(PROXY_HTTPS_URL, 60).await?, "HTTPS proxy should be ready");
-
+    assert!(
+        wait_for_service(url, DEFAULT_SERVICE_TIMEOUT_SECS).await?,
+        "HTTPS proxy should be ready"
+    );
     let response = client
-        .get(PROXY_HTTPS_URL)
+        .get(url)
         .send()
         .await
         .map_err(|e| format!("Failed to send request: {e}"))?;
     assert_eq!(response.status(), reqwest::StatusCode::OK);
     Ok(())
+}
+
+#[tokio::test]
+async fn test_https_proxy() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    test_https_proxy_impl(PROXY_HTTPS_URL_IPV4).await
+}
+
+#[tokio::test]
+async fn test_https_proxy_ipv6() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    test_https_proxy_impl(PROXY_HTTPS_URL_IPV6).await
 }
