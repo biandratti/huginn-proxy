@@ -1,6 +1,6 @@
 [listen]
 addrs = ["0.0.0.0:7000", "[::]:7000"]
-# tcp_backlog = 1024   # listen(2) queue depth. Raise under high connection rates; capped by net.core.somaxconn
+# tcp_backlog = 4096   # listen(2) queue depth; capped by net.core.somaxconn
 
 backends = [
     { address = "backend-a:9000", http_version = "preserve" },

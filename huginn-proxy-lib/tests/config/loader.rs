@@ -16,8 +16,7 @@ fn tmp_path(name: &str) -> PathBuf {
 fn loads_minimal_config() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let path = tmp_path("minimal");
     let toml = r#"
-[listen]
-addrs = ["127.0.0.1:0"]
+listen = { addrs = ["127.0.0.1:0"] }
 backends = [
   { address = "localhost:9000" }
 ]
@@ -43,8 +42,7 @@ fn loads_routes_and_tls() -> Result<(), Box<dyn std::error::Error + Send + Sync>
 
     let toml = format!(
         r#"
-[listen]
-addrs = ["127.0.0.1:0"]
+listen = { addrs = ["127.0.0.1:0"] }
 backends = [
   {{ address = "backend-a:9000" }},
   {{ address = "backend-b:9000" }}

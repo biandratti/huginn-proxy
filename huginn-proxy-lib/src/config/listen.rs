@@ -11,8 +11,8 @@ pub struct ListenConfig {
     pub addrs: Vec<SocketAddr>,
     /// `listen(2)` backlog — length of the pending-connection queue per listener socket.
     /// Raise this under high connection rates to avoid the kernel silently dropping SYNs before
-    /// `accept(2)` is called. Capped by `net.core.somaxconn` (typically 4096 on Linux).
-    /// Passed directly to `listen(2)`, which takes a signed integer. Default: 1024
+    /// `accept(2)` is called. The kernel clamps the value to `net.core.somaxconn`.
+    /// Passed directly to `listen(2)`. Default: 4096 (matches modern Linux SOMAXCONN)
     #[serde(default = "default_tcp_backlog")]
     pub tcp_backlog: i32,
 }
@@ -24,5 +24,5 @@ impl Default for ListenConfig {
 }
 
 fn default_tcp_backlog() -> i32 {
-    1024
+    4096
 }

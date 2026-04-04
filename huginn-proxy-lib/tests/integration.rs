@@ -44,8 +44,7 @@ async fn test_config_loads_valid_file() -> Result<(), Box<dyn std::error::Error 
     writeln!(
         file,
         r#"
-[listen]
-addrs = ["127.0.0.1:0"]
+listen = {{ addrs = ["127.0.0.1:0"] }}
 backends = [
     {{ address = "localhost:9000" }}
 ]
@@ -66,8 +65,7 @@ async fn test_config_with_routes() -> Result<(), Box<dyn std::error::Error + Sen
     writeln!(
         file,
         r#"
-[listen]
-addrs = ["127.0.0.1:0"]
+listen = {{ addrs = ["127.0.0.1:0"] }}
 backends = [
     {{ address = "backend-a:9000" }},
     {{ address = "backend-b:9000" }}
@@ -148,8 +146,7 @@ async fn test_config_loads_security_settings(
     writeln!(
         file,
         r#"
-[listen]
-addrs = ["127.0.0.1:0"]
+listen = {{ addrs = ["127.0.0.1:0"] }}
 backends = [
     {{ address = "localhost:9000" }}
 ]
@@ -183,8 +180,7 @@ async fn test_config_loads_keep_alive_settings(
     writeln!(
         file,
         r#"
-[listen]
-addrs = ["127.0.0.1:0"]
+listen = {{ addrs = ["127.0.0.1:0"] }}
 backends = [
     {{ address = "localhost:9000" }}
 ]
