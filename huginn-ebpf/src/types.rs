@@ -5,7 +5,7 @@ use huginn_net_tcp::tcp::{IpVersion, PayloadSize, TcpOption};
 use huginn_net_tcp::{ttl, window_size};
 use tracing::warn;
 
-pub use huginn_ebpf_common::{quirk_bits, SynRawData, SynRawDataV6};
+pub use huginn_ebpf_common::{quirk_bits, SynRawDataV4, SynRawDataV6};
 
 struct OptionQuirks {
     ts_val: Option<u32>,
@@ -167,7 +167,7 @@ pub fn parse_syn_v6(raw: &SynRawDataV6) -> Option<TcpObservation> {
 /// Constants hardcoded from XDP invariants:
 /// - `ip_version = V4`: the XDP program filters out non-IPv4 at entry.
 /// - `pclass = Zero`: TCP SYN packets never carry a payload by protocol definition.
-pub fn parse_syn_v4(raw: &SynRawData) -> Option<TcpObservation> {
+pub fn parse_syn_v4(raw: &SynRawDataV4) -> Option<TcpObservation> {
     let window_host = u16::from_be(raw.window);
     let valid_opts = &raw.options[..usize::from(raw.optlen.min(40))];
 

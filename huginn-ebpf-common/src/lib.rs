@@ -2,14 +2,14 @@
 
 //! Shared logic for TCP SYN fingerprinting between the XDP program and userspace.
 //!
-//! Contract: `quirk_bits`, `SynRawData`/`SynRawDataV6` layout, and key encoding must match
+//! Contract: `quirk_bits`, `SynRawDataV4`/`SynRawDataV6` layout, and key encoding must match
 //! both `huginn-ebpf-xdp` and `huginn-ebpf`.
 
 pub mod quirk_bits;
 pub mod syn_raw_v4;
 pub mod syn_raw_v6;
 
-pub use syn_raw_v4::SynRawData;
+pub use syn_raw_v4::SynRawDataV4;
 pub use syn_raw_v6::SynRawDataV6;
 
 /// Build the BPF map key from source IP and port (IPv4).

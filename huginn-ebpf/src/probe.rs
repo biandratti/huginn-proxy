@@ -8,7 +8,7 @@ use aya::{Ebpf, EbpfLoader};
 use tracing::{debug, info, warn};
 
 use crate::pin;
-use crate::types::{SynRawData, SynRawDataV6};
+use crate::types::{SynRawDataV4, SynRawDataV6};
 use crate::EbpfError;
 use crate::XdpMode;
 
@@ -406,9 +406,9 @@ impl EbpfProbe {
     /// map entry is still fresh. Returns `None` if:
     /// - the SYN was not captured (program just started, map entry evicted), or
     /// - the entry is stale (more than 2× `syn_map_max_entries` SYNs have arrived since capture).
-    pub fn lookup(&self, src_ip: Ipv4Addr, src_port: u16) -> Option<SynRawData> {
+    pub fn lookup(&self, src_ip: Ipv4Addr, src_port: u16) -> Option<SynRawDataV4> {
         let syn_map = self.syn_map_v4()?;
-        let map = HashMap::<_, u64, SynRawData>::try_from(syn_map).ok()?;
+        let map = HashMap::<_, u64, SynRawDataV4>::try_from(syn_map).ok()?;
 
         let key = make_bpf_key_v4(src_ip, src_port);
         let val = match map.get(&key, 0) {

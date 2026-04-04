@@ -10,7 +10,7 @@ use super::maps::{
     tcp_syn_map_v6,
 };
 use super::quirk_bits;
-use huginn_ebpf_common::{make_key_v4, make_key_v6, SynRawData, SynRawDataV6};
+use huginn_ebpf_common::{make_key_v4, make_key_v6, SynRawDataV4, SynRawDataV6};
 
 /// Error from the TCP SYN handler.
 ///
@@ -19,11 +19,11 @@ use huginn_ebpf_common::{make_key_v4, make_key_v6, SynRawData, SynRawDataV6};
 /// the pipeline has already validated Ethernet, IPv4, TCP, and SYN-without-ACK.
 #[derive(Clone, Copy)]
 pub enum TcpSynError {
-    /// Could not insert (src_ip, src_port) → SynRawData into the LRU map.
+    /// Could not insert (src_ip, src_port) → SynRawDataV4 into the LRU map.
     MapInsertFailed,
 }
 
-/// Handle an IPv4 TCP SYN: compute quirks, build SynRawData, insert into map.
+/// Handle an IPv4 TCP SYN: compute quirks, build SynRawDataV4, insert into map.
 ///
 /// Called from the pipeline after it has parsed Ethernet, IPv4, and TCP and
 /// confirmed SYN (no ACK) and passed the destination filter.
@@ -59,7 +59,7 @@ pub fn handle_tcp_syn_v4(
         actual_copied = actual_copied.saturating_add(1);
     }
 
-    let syn_raw_data = SynRawData {
+    let syn_raw_data = SynRawDataV4 {
         src_addr: ip.saddr,
         src_port: tcp.source,
         window: tcp.window,

@@ -1,4 +1,4 @@
-use huginn_ebpf::types::{parse_syn_v4, quirk_bits, SynRawData};
+use huginn_ebpf::types::{parse_syn_v4, quirk_bits, SynRawDataV4};
 use huginn_net_db::tcp::Quirk;
 
 type TestResult = Result<(), Box<dyn std::error::Error + Send + Sync>>;
@@ -21,7 +21,7 @@ fn make_test_options() -> ([u8; 40], u8) {
     (opts, 22u8)
 }
 
-fn make_syn_raw(window: u16, ip_ttl: u8, optlen: u8, options: [u8; 40]) -> SynRawData {
+fn make_syn_raw(window: u16, ip_ttl: u8, optlen: u8, options: [u8; 40]) -> SynRawDataV4 {
     make_syn_raw_with_quirks(window, ip_ttl, optlen, options, 0)
 }
 
@@ -31,8 +31,8 @@ fn make_syn_raw_with_quirks(
     optlen: u8,
     options: [u8; 40],
     quirks: u32,
-) -> SynRawData {
-    SynRawData {
+) -> SynRawDataV4 {
+    SynRawDataV4 {
         src_addr: 0,
         src_port: 0,
         window,

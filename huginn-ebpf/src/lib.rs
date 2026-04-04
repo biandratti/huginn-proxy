@@ -1,7 +1,7 @@
 // eBPF/XDP is Linux-only. This crate does not compile for other targets.
 #![cfg(target_os = "linux")]
 // Unsafe is required in one narrow, documented site:
-//   - types.rs: unsafe impl aya::Pod for SynRawData (kernel memory safety guarantee)
+//   - types.rs: unsafe impl aya::Pod for SynRawDataV4 (kernel memory safety guarantee)
 // All other unsafe is denied.
 #![deny(unsafe_code)]
 
@@ -13,7 +13,7 @@ pub use probe::{
     syn_captured_count_from_path, syn_insert_failures_count_from_path,
     syn_malformed_count_from_path, EbpfProbe, DEFAULT_SYN_MAP_MAX_ENTRIES,
 };
-pub use types::{parse_syn_v4, parse_syn_v6, quirk_bits, SynRawData, SynRawDataV6};
+pub use types::{parse_syn_v4, parse_syn_v6, quirk_bits, SynRawDataV4, SynRawDataV6};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum XdpMode {

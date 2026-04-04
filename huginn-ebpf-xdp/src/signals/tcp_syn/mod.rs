@@ -2,7 +2,7 @@
 //!
 //! Contract with `huginn-ebpf`: map names (`tcp_syn_map_v4`, `tcp_syn_map_v6`,
 //! `syn_counter`, `syn_insert_failures`, `syn_captured`, `syn_malformed` and their
-//! `_v6` counterparts), layout of `SynRawData`/`SynRawDataV6`, and key encoding via
+//! `_v6` counterparts), layout of `SynRawDataV4`/`SynRawDataV6`, and key encoding via
 //! `make_key` / `make_key_v6` / `make_bpf_key` / `make_bpf_key_v6` must stay in sync.
 
 mod handler;

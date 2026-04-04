@@ -74,8 +74,8 @@ Fingerprints are automatically extracted and injected as headers:
 - **TCP SYN (p0f-style)**: `x-huginn-net-tcp` - Raw TCP SYN signature extracted via eBPF/XDP
   using [huginn-net-tcp](https://crates.io/crates/huginn-net-tcp). Requires `tcp_enabled = true`
   and the `ebpf-tcp` feature. Present on all requests of a connection (the fingerprint is
-  captured once at TCP accept time and reused). **IPv4 only**, not captured for direct IPv6
-  connections (transparent when a load balancer forwards internally over IPv4).
+  captured once at TCP accept time and reused). IPv4 and IPv6 SYNs are captured when the next
+  header after the fixed IPv6 header is TCP (see [FEATURES.md](FEATURES.md)).
   See [EBPF-SETUP.md](EBPF-SETUP.md) for setup, kernel requirements, and deployment options.
 - The proxy automatically injects standard `X-Forwarded-*` headers to inform backends about the original client request:
 
@@ -135,7 +135,7 @@ See [ROADMAP.md](ROADMAP.md) for a detailed list of planned features and upcomin
 <details>
 <summary><strong>Docker images</strong></summary>
 
-Local: [`examples/`](examples/) (Docker Compose). Published (`linux/amd64`, `linux/arm64`):
+Local: [`examples/`](examples/) (Docker Compose). Published runtime images (`linux/amd64`, `linux/arm64`):
 
 | Image | Base | User | Capabilities |
 |-------|------|------|--------------|
