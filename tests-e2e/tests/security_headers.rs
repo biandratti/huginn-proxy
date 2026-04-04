@@ -1,6 +1,8 @@
 use reqwest::Client;
 
-const PROXY_HTTPS_URL: &str = "https://localhost:7000";
+use tests_e2e::common::{
+    wait_for_service, DEFAULT_SERVICE_TIMEOUT_SECS, PROXY_HTTPS_URL_IPV4, PROXY_HTTPS_URL_IPV6,
+};
 
 #[tokio::test]
 async fn test_custom_security_headers() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -10,7 +12,7 @@ async fn test_custom_security_headers() -> Result<(), Box<dyn std::error::Error 
         .map_err(|e| format!("Failed to build client: {e}"))?;
 
     let response = client
-        .get(format!("{PROXY_HTTPS_URL}/api/users"))
+        .get(format!("{PROXY_HTTPS_URL_IPV4}/api/users"))
         .send()
         .await
         .map_err(|e| format!("Failed to send request: {e}"))?;
@@ -51,7 +53,7 @@ async fn test_hsts_header() -> Result<(), Box<dyn std::error::Error + Send + Syn
         .map_err(|e| format!("Failed to build client: {e}"))?;
 
     let response = client
-        .get(format!("{PROXY_HTTPS_URL}/api/test"))
+        .get(format!("{PROXY_HTTPS_URL_IPV4}/api/test"))
         .send()
         .await
         .map_err(|e| format!("Failed to send request: {e}"))?;
@@ -81,7 +83,7 @@ async fn test_csp_header() -> Result<(), Box<dyn std::error::Error + Send + Sync
         .map_err(|e| format!("Failed to build client: {e}"))?;
 
     let response = client
-        .get(format!("{PROXY_HTTPS_URL}/static/test.html"))
+        .get(format!("{PROXY_HTTPS_URL_IPV4}/static/test.html"))
         .send()
         .await
         .map_err(|e| format!("Failed to send request: {e}"))?;
@@ -112,7 +114,7 @@ async fn test_security_headers_with_fingerprinting(
         .map_err(|e| format!("Failed to build client: {e}"))?;
 
     let response = client
-        .get(format!("{PROXY_HTTPS_URL}/api/fingerprint"))
+        .get(format!("{PROXY_HTTPS_URL_IPV4}/api/fingerprint"))
         .send()
         .await
         .map_err(|e| format!("Failed to send request: {e}"))?;
@@ -145,6 +147,71 @@ async fn test_security_headers_with_fingerprinting(
         // Check if HTTP/2 fingerprint header exists (if H2 connection)
         if let Some(akamai) = headers.get("x-huginn-net-akamai") {
             println!("Akamai fingerprint present: {}", akamai);
+        }
+    }
+
+    Ok(())
+}
+
+/// Confirm that HSTS and other security headers are injected correctly over IPv6.
+#[tokio::test]
+async fn test_hsts_header_ipv6() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let client = Client::builder()
+        .danger_accept_invalid_certs(true)
+        .build()
+        .map_err(|e| format!("Failed to build client: {e}"))?;
+
+    assert!(
+        wait_for_service(PROXY_HTTPS_URL_IPV6, DEFAULT_SERVICE_TIMEOUT_SECS).await?,
+        "HTTPS proxy should be ready on IPv6"
+    );
+
+    let response = client
+        .get(format!("{PROXY_HTTPS_URL_IPV6}/api/test"))
+        .send()
+        .await
+        .map_err(|e| format!("Failed to send request over IPv6: {e}"))?;
+    assert_eq!(response.status(), reqwest::StatusCode::OK);
+
+    if let Some(hsts) = response.headers().get("strict-transport-security") {
+        let value = hsts
+            .to_str()
+            .map_err(|e| format!("Invalid HSTS header value: {e}"))?;
+        println!("IPv6 Strict-Transport-Security: {value}");
+        assert!(value.contains("max-age="), "HSTS should include max-age directive");
+    }
+
+    Ok(())
+}
+
+/// Confirm that fingerprinting still works alongside security headers over IPv6.
+#[tokio::test]
+async fn test_security_headers_with_fingerprinting_ipv6(
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let client = Client::builder()
+        .danger_accept_invalid_certs(true)
+        .build()
+        .map_err(|e| format!("Failed to build client: {e}"))?;
+
+    assert!(
+        wait_for_service(PROXY_HTTPS_URL_IPV6, DEFAULT_SERVICE_TIMEOUT_SECS).await?,
+        "HTTPS proxy should be ready on IPv6"
+    );
+
+    let response = client
+        .get(format!("{PROXY_HTTPS_URL_IPV6}/api/fingerprint"))
+        .send()
+        .await
+        .map_err(|e| format!("Failed to send request over IPv6: {e}"))?;
+    assert_eq!(response.status(), reqwest::StatusCode::OK);
+
+    let body: serde_json::Value = response.json().await?;
+    if let Some(headers) = body.get("headers") {
+        if let Some(ja4) = headers.get("x-huginn-net-ja4") {
+            println!("IPv6 JA4 fingerprint present: {ja4}");
+        }
+        if let Some(akamai) = headers.get("x-huginn-net-akamai") {
+            println!("IPv6 Akamai fingerprint present: {akamai}");
         }
     }
 

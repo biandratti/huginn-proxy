@@ -14,7 +14,8 @@ services:
       - apparmor:unconfined
     environment:
       - HUGINN_EBPF_INTERFACE=eth0
-      - HUGINN_EBPF_DST_IP=0.0.0.0
+      - HUGINN_EBPF_DST_IP_V4=0.0.0.0
+      - "HUGINN_EBPF_DST_IP_V6=::"
       - HUGINN_EBPF_DST_PORT=7000
       - HUGINN_EBPF_PIN_PATH=/sys/fs/bpf/huginn
       - HUGINN_EBPF_SYN_MAP_MAX_ENTRIES=8192
@@ -44,17 +45,20 @@ services:
       - ./certs:/config/certs:ro
       - bpffs:/sys/fs/bpf
     ports:
-      - "7000:7000"
-      - "9090:9090"
-      - "9091:9091"
+      - "0.0.0.0:7000:7000"
+      - "[::]:7000:7000"
+      - "0.0.0.0:9090:9090"
+      - "[::]:9090:9090"
+      - "0.0.0.0:9091:9091"
+      - "[::]:9091:9091"
     cap_add:
       - CAP_BPF
     healthcheck:
-      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/9090' 2>/dev/null"]
-      interval: 10s
+      test: ["CMD-SHELL", "curl -sf http://localhost:9090/health || exit 1"]
+      interval: 5s
       timeout: 3s
-      retries: 3
-      start_period: 5s
+      retries: 12
+      start_period: 10s
     depends_on:
       backend-a:
         condition: service_started
@@ -70,6 +74,15 @@ services:
     build:
       context: ..
       dockerfile: examples/backend/Dockerfile
+
+networks:
+  default:
+    enable_ipv6: true
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
+        # Distinct /64 from Docker's fixed-cidr-v6 (fd00:dead:beef::/64)
+        - subnet: fd00:dead:beef:1::/64
 
 volumes:
   bpffs:

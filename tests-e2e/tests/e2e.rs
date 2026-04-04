@@ -9,8 +9,10 @@
 //! 2. Run tests: `cargo test --package tests-e2e --test e2e`
 
 mod basic;
+mod fingerprint_akamai;
 mod fingerprint_isolation;
-mod fingerprints;
+mod fingerprint_ja4;
+mod fingerprint_sync_tcp;
 mod header_override;
 mod health_checks;
 mod load_balancing;

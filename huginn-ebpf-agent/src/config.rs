@@ -1,5 +1,5 @@
 use huginn_ebpf::pin;
-use std::net::Ipv4Addr;
+use std::net::{Ipv4Addr, Ipv6Addr};
 
 pub const DEFAULT_PIN_PATH: &str = pin::DEFAULT_PIN_BASE;
 pub use huginn_ebpf::XdpMode;
@@ -7,7 +7,8 @@ pub use huginn_ebpf::XdpMode;
 #[derive(Debug, Clone)]
 pub struct Config {
     pub interface: String,
-    pub dst_ip: Ipv4Addr,
+    pub dst_ip_v4: Ipv4Addr,
+    pub dst_ip_v6: Ipv6Addr,
     pub dst_port: u16,
     pub pin_path: String,
     pub syn_map_max_entries: u32,
@@ -33,13 +34,22 @@ pub fn from_env(get_var: impl Fn(&str) -> Option<String>) -> Result<Config, Conf
     let interface = get_var("HUGINN_EBPF_INTERFACE")
         .ok_or(ConfigError::Missing { name: "HUGINN_EBPF_INTERFACE".to_string() })?;
 
-    let dst_ip_str = get_var("HUGINN_EBPF_DST_IP")
-        .ok_or(ConfigError::Missing { name: "HUGINN_EBPF_DST_IP".to_string() })?;
-    let dst_ip: Ipv4Addr = dst_ip_str.parse().map_err(|_| ConfigError::Invalid {
-        name: "HUGINN_EBPF_DST_IP".to_string(),
-        value: dst_ip_str.clone(),
+    let dst_ip_v4_str = get_var("HUGINN_EBPF_DST_IP_V4")
+        .ok_or(ConfigError::Missing { name: "HUGINN_EBPF_DST_IP_V4".to_string() })?;
+    let dst_ip_v4: Ipv4Addr = dst_ip_v4_str.parse().map_err(|_| ConfigError::Invalid {
+        name: "HUGINN_EBPF_DST_IP_V4".to_string(),
+        value: dst_ip_v4_str.clone(),
         reason: "must be a valid IPv4 address".to_string(),
     })?;
+
+    let dst_ip_v6: Ipv6Addr = match get_var("HUGINN_EBPF_DST_IP_V6") {
+        Some(s) => s.parse().map_err(|_| ConfigError::Invalid {
+            name: "HUGINN_EBPF_DST_IP_V6".to_string(),
+            value: s.clone(),
+            reason: "must be a valid IPv6 address".to_string(),
+        })?,
+        None => Ipv6Addr::UNSPECIFIED,
+    };
 
     let dst_port_str = get_var("HUGINN_EBPF_DST_PORT")
         .ok_or(ConfigError::Missing { name: "HUGINN_EBPF_DST_PORT".to_string() })?;
@@ -87,7 +97,8 @@ pub fn from_env(get_var: impl Fn(&str) -> Option<String>) -> Result<Config, Conf
 
     Ok(Config {
         interface,
-        dst_ip,
+        dst_ip_v4,
+        dst_ip_v6,
         dst_port,
         pin_path,
         syn_map_max_entries,

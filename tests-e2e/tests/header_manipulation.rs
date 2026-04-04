@@ -1,4 +1,4 @@
-use tests_e2e::common::{wait_for_service, DEFAULT_SERVICE_TIMEOUT_SECS, PROXY_HTTPS_URL};
+use tests_e2e::common::{wait_for_service, DEFAULT_SERVICE_TIMEOUT_SECS, PROXY_HTTPS_URL_IPV4};
 
 #[tokio::test]
 async fn test_global_header_manipulation() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -9,12 +9,12 @@ async fn test_global_header_manipulation() -> Result<(), Box<dyn std::error::Err
         .map_err(|e| format!("Failed to create HTTP/2 client: {e}"))?;
 
     assert!(
-        wait_for_service(PROXY_HTTPS_URL, DEFAULT_SERVICE_TIMEOUT_SECS).await?,
+        wait_for_service(PROXY_HTTPS_URL_IPV4, DEFAULT_SERVICE_TIMEOUT_SECS).await?,
         "HTTPS proxy should be ready"
     );
 
     let response = client
-        .get(PROXY_HTTPS_URL)
+        .get(PROXY_HTTPS_URL_IPV4)
         .send()
         .await
         .map_err(|e| format!("Failed to send request: {e}"))?;
@@ -68,12 +68,12 @@ async fn test_response_header_manipulation() -> Result<(), Box<dyn std::error::E
         .map_err(|e| format!("Failed to create HTTP/2 client: {e}"))?;
 
     assert!(
-        wait_for_service(PROXY_HTTPS_URL, DEFAULT_SERVICE_TIMEOUT_SECS).await?,
+        wait_for_service(PROXY_HTTPS_URL_IPV4, DEFAULT_SERVICE_TIMEOUT_SECS).await?,
         "HTTPS proxy should be ready"
     );
 
     let response = client
-        .get(PROXY_HTTPS_URL)
+        .get(PROXY_HTTPS_URL_IPV4)
         .send()
         .await
         .map_err(|e| format!("Failed to send request: {e}"))?;
@@ -117,12 +117,12 @@ async fn test_request_header_removal() -> Result<(), Box<dyn std::error::Error +
         .map_err(|e| format!("Failed to create HTTP/2 client: {e}"))?;
 
     assert!(
-        wait_for_service(PROXY_HTTPS_URL, DEFAULT_SERVICE_TIMEOUT_SECS).await?,
+        wait_for_service(PROXY_HTTPS_URL_IPV4, DEFAULT_SERVICE_TIMEOUT_SECS).await?,
         "HTTPS proxy should be ready"
     );
 
     let response = client
-        .get(PROXY_HTTPS_URL)
+        .get(PROXY_HTTPS_URL_IPV4)
         .header("X-Forwarded-Server", "should-be-removed.example.com")
         .send()
         .await
@@ -160,12 +160,12 @@ async fn test_header_override_behavior() -> Result<(), Box<dyn std::error::Error
         .map_err(|e| format!("Failed to create HTTP/2 client: {e}"))?;
 
     assert!(
-        wait_for_service(PROXY_HTTPS_URL, DEFAULT_SERVICE_TIMEOUT_SECS).await?,
+        wait_for_service(PROXY_HTTPS_URL_IPV4, DEFAULT_SERVICE_TIMEOUT_SECS).await?,
         "HTTPS proxy should be ready"
     );
 
     let response = client
-        .get(PROXY_HTTPS_URL)
+        .get(PROXY_HTTPS_URL_IPV4)
         .header("X-Proxy-Name", "fake-proxy")
         .header("X-Proxy-Version", "999.999.999")
         .send()
@@ -219,7 +219,7 @@ async fn test_case_insensitive_header_removal(
         .map_err(|e| format!("Failed to create HTTP/2 client: {e}"))?;
 
     assert!(
-        wait_for_service(PROXY_HTTPS_URL, DEFAULT_SERVICE_TIMEOUT_SECS).await?,
+        wait_for_service(PROXY_HTTPS_URL_IPV4, DEFAULT_SERVICE_TIMEOUT_SECS).await?,
         "HTTPS proxy should be ready"
     );
 
@@ -232,7 +232,7 @@ async fn test_case_insensitive_header_removal(
 
     for header_name in test_cases {
         let response = client
-            .get(PROXY_HTTPS_URL)
+            .get(PROXY_HTTPS_URL_IPV4)
             .header(header_name, "test-value")
             .send()
             .await

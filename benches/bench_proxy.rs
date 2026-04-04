@@ -34,8 +34,8 @@ use bytes::Bytes;
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use http_body_util::Full;
 use huginn_proxy_lib::config::{
-    Backend, FingerprintConfig, KeepAliveConfig, LoggingConfig, Route, SecurityConfig,
-    TelemetryConfig, TimeoutConfig,
+    Backend, FingerprintConfig, KeepAliveConfig, ListenConfig, LoggingConfig, Route,
+    SecurityConfig, TelemetryConfig, TimeoutConfig,
 };
 use huginn_proxy_lib::{Config, TlsConfig};
 use hyper::service::service_fn;
@@ -92,7 +92,7 @@ impl BenchFixture {
         //    /bench/fp  → fingerprinting ON  (measures overhead)
         //    /bench/nofp → fingerprinting OFF (baseline)
         let config = Arc::new(Config {
-            listen: proxy_addr,
+            listen: ListenConfig { addrs: vec![proxy_addr], ..Default::default() },
             backends: vec![Backend { address: backend_address.clone(), http_version: None }],
             routes: vec![
                 Route {

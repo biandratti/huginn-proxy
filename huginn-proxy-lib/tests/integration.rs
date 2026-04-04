@@ -1,15 +1,18 @@
 use huginn_proxy_lib::config::{
-    load_from_path, Backend, Config, FingerprintConfig, KeepAliveConfig, LoggingConfig,
-    SecurityConfig, TelemetryConfig, TimeoutConfig,
+    load_from_path, Backend, Config, FingerprintConfig, KeepAliveConfig, ListenConfig,
+    LoggingConfig, SecurityConfig, TelemetryConfig, TimeoutConfig,
 };
 use std::io::Write;
 use tempfile::NamedTempFile;
 
 fn create_test_config(listen: &str, backends: Vec<Backend>) -> Config {
     Config {
-        listen: listen
-            .parse()
-            .unwrap_or_else(|_| panic!("Invalid listen address: {listen}")),
+        listen: ListenConfig {
+            addrs: vec![listen
+                .parse()
+                .unwrap_or_else(|_| panic!("Invalid listen address: {listen}"))],
+            ..Default::default()
+        },
         backends,
         routes: vec![],
         preserve_host: false,
@@ -41,7 +44,7 @@ async fn test_config_loads_valid_file() -> Result<(), Box<dyn std::error::Error 
     writeln!(
         file,
         r#"
-listen = "127.0.0.1:0"
+listen = {{ addrs = ["127.0.0.1:0"] }}
 backends = [
     {{ address = "localhost:9000" }}
 ]
@@ -49,7 +52,7 @@ backends = [
     )?;
 
     let config = load_from_path(file.path())?;
-    assert_eq!(config.listen.to_string(), "127.0.0.1:0");
+    assert_eq!(config.listen.addrs[0].to_string(), "127.0.0.1:0");
     assert_eq!(config.backends.len(), 1);
     assert_eq!(config.backends[0].address, "localhost:9000");
 
@@ -62,7 +65,7 @@ async fn test_config_with_routes() -> Result<(), Box<dyn std::error::Error + Sen
     writeln!(
         file,
         r#"
-listen = "127.0.0.1:0"
+listen = {{ addrs = ["127.0.0.1:0"] }}
 backends = [
     {{ address = "backend-a:9000" }},
     {{ address = "backend-b:9000" }}
@@ -143,7 +146,7 @@ async fn test_config_loads_security_settings(
     writeln!(
         file,
         r#"
-listen = "127.0.0.1:0"
+listen = {{ addrs = ["127.0.0.1:0"] }}
 backends = [
     {{ address = "localhost:9000" }}
 ]
@@ -177,7 +180,7 @@ async fn test_config_loads_keep_alive_settings(
     writeln!(
         file,
         r#"
-listen = "127.0.0.1:0"
+listen = {{ addrs = ["127.0.0.1:0"] }}
 backends = [
     {{ address = "localhost:9000" }}
 ]

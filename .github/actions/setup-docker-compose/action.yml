@@ -62,8 +62,9 @@ runs:
           --load \
           ..
         docker compose up -d
-        echo "Waiting for services to be healthy..."
-        timeout ${{ inputs.health-timeout }} bash -c 'until docker compose ps | grep -q "healthy"; do sleep 2; done'
+        echo "Waiting for proxy and ebpf-agent to be healthy..."
+        timeout ${{ inputs.health-timeout }} bash -c \
+          'until docker compose ps proxy | grep -q "(healthy)" && docker compose ps ebpf-agent | grep -q "(healthy)"; do sleep 2; done'
         docker compose ps
         echo "Waiting for services to be ready..."
         sleep ${{ inputs.ready-delay }}

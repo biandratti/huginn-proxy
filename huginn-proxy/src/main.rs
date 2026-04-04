@@ -53,7 +53,7 @@ async fn main() -> Result<(), BoxError> {
     // The agent may start after the proxy, so we retry with backoff until the maps appear.
     #[cfg(feature = "ebpf-tcp")]
     let syn_probe: Option<huginn_proxy_lib::SynProbe> = {
-        use huginn_ebpf::{parse_syn, EbpfProbe};
+        use huginn_ebpf::{parse_syn_v4, parse_syn_v6, EbpfProbe};
         use huginn_proxy_lib::fingerprinting::SynResult;
         use std::net::SocketAddr;
 
@@ -79,23 +79,32 @@ async fn main() -> Result<(), BoxError> {
                             "eBPF agent maps not available yet, retrying in {}s...",
                             RETRY_INTERVAL.as_secs()
                         );
-                        std::thread::sleep(RETRY_INTERVAL);
+                        tokio::time::sleep(RETRY_INTERVAL).await;
                     }
                 }
             };
 
             let probe = Arc::new(probe);
             Some(Arc::new(move |peer: SocketAddr| -> SynResult {
-                let (peer_ip, peer_port) = match peer {
-                    SocketAddr::V4(a) => (*a.ip(), a.port()),
-                    SocketAddr::V6(_) => return SynResult::Miss,
-                };
-                let Some(raw) = probe.lookup(peer_ip, peer_port) else {
-                    return SynResult::Miss;
-                };
-                match parse_syn(&raw) {
-                    Some(obs) => SynResult::Hit(obs),
-                    None => SynResult::Malformed,
+                match peer {
+                    SocketAddr::V4(a) => {
+                        let Some(raw) = probe.lookup(*a.ip(), a.port()) else {
+                            return SynResult::Miss;
+                        };
+                        match parse_syn_v4(&raw) {
+                            Some(obs) => SynResult::Hit(obs),
+                            None => SynResult::Malformed,
+                        }
+                    }
+                    SocketAddr::V6(a) => {
+                        let Some(raw) = probe.lookup_v6(*a.ip(), a.port()) else {
+                            return SynResult::Miss;
+                        };
+                        match parse_syn_v6(&raw) {
+                            Some(obs) => SynResult::Hit(obs),
+                            None => SynResult::Malformed,
+                        }
+                    }
                 }
             }))
         }

@@ -14,6 +14,10 @@ Both protocols are fully supported. HTTP/2 multiplexing works as expected. The p
 
 Limitation: HTTP/3 is not supported yet.
 
+**IPv4 and IPv6**
+
+The proxy listens on both IPv4 and IPv6 simultaneously. Configure multiple `listen.addrs` entries (e.g., `"0.0.0.0:7000"` for IPv4 and `"[::]:7000"` for IPv6). Backend addresses, IP filtering rules, and all observability endpoints support both address families.
+
 ## Load Balancing
 
 **Round-robin algorithm**
@@ -107,7 +111,6 @@ The TCP SYN signature follows the p0f format: `ip_ver:ttl:ip_olen:mss:wsize,wsca
 **TCP SYN fingerprinting limitations:**
 
 - **Linux only** - eBPF/XDP does not run on macOS or Windows. Requires kernel ≥ 5.11.
-- **IPv4 only** - IPv6 connections are not captured. Transparent when a load balancer forwards internally over IPv4.
 - Present on all requests of a connection (including HTTP keep-alive), since the fingerprint describes the TCP connection, not individual requests.
 
 Limitation: Fingerprints are only extracted and forwarded, not validated or used for blocking. Backend services need to handle the actual fingerprint analysis and decision making.

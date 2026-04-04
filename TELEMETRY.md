@@ -467,7 +467,7 @@ sum by (protocol) (rate(huginn_mtls_connections_total[5m]))
 **Labels**:
 
 - `version`: Proxy version (e.g., `0.0.1`)
-- `rust_version`: Rust version used to compile (e.g., `1.85`)
+- `rust_version`: Rust version used to compile (e.g., `1.86`)
 
 **Example queries**:
 

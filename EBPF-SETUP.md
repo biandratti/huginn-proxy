@@ -106,7 +106,8 @@ No `seccomp:unconfined` or `apparmor:unconfined` needed.
 | Variable | Example | Description |
 |---|---|---|
 | `HUGINN_EBPF_INTERFACE` | `eth0` | Network interface to attach XDP to |
-| `HUGINN_EBPF_DST_IP` | `0.0.0.0` | Destination IP filter (`0.0.0.0` = no filter) |
+| `HUGINN_EBPF_DST_IP_V4` | `0.0.0.0` | IPv4 destination filter (`0.0.0.0` = no filter) |
+| `HUGINN_EBPF_DST_IP_V6` | `::` | IPv6 destination filter (`::` = no filter); quote in YAML if needed |
 | `HUGINN_EBPF_DST_PORT` | `7000` | Destination port filter (proxy listen port) |
 | `HUGINN_EBPF_PIN_PATH` | `/sys/fs/bpf/huginn` | Pin directory (default shown) |
 | `HUGINN_EBPF_SYN_MAP_MAX_ENTRIES` | `8192` | LRU map capacity (default shown) |

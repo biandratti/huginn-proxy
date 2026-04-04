@@ -5,10 +5,8 @@
 #   docker build -f docker/ebpf-agent.Dockerfile .
 
 # ── builder ─────────────────────────────────────────────────────
-# rust:1.85-slim (amd64)
-FROM rust:1.85-slim@sha256:3490aa77d179a59d67e94239cca96dd84030b564470859200f535b942bdffedf AS builder
+FROM rust:1.94.1-slim@sha256:1d0000a49fb62f4fde24455f49d59c6c088af46202d65d8f455b722f7263e8f8 AS builder
 # bpf-linker uses aya-rustc-llvm-proxy which needs LLVM shared libs from
-# the rustc distribution. glibc-based image required (Alpine/musl won't work).
 RUN apt-get update -q && apt-get install -y --no-install-recommends \
     pkg-config libssl-dev \
     && rm -rf /var/lib/apt/lists/*
@@ -19,8 +17,8 @@ COPY . .
 RUN cargo build --release -p huginn-ebpf-agent
 
 # ── runtime ─────────────────────────────────────────────────────
-# debian:bookworm-slim (bookworm-20260202-slim, amd64)
-FROM debian:bookworm-slim@sha256:74a21da88cf4b2e8fde34558376153c5cd80b00ca81da2e659387e76524edc73
+# debian:trixie-slim — matches rust:1.94.1-slim base (Debian 13, glibc 2.38+).
+FROM debian:trixie-slim@sha256:26f98ccd92fd0a44d6928ce8ff8f4921b4d2f535bfa07555ee5d18f61429cf0c
 LABEL org.opencontainers.image.description="eBPF XDP agent for huginn-proxy — loads XDP program and pins BPF maps"
 COPY --from=builder /app/target/release/huginn-ebpf-agent /usr/local/bin/huginn-ebpf-agent
 RUN apt-get update -q && apt-get install -y --no-install-recommends curl \

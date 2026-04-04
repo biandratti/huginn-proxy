@@ -49,7 +49,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
     let mut probe = EbpfProbe::new(
         &cfg.interface,
-        cfg.dst_ip,
+        cfg.dst_ip_v4,
+        cfg.dst_ip_v6,
         cfg.dst_port,
         cfg.syn_map_max_entries,
         cfg.xdp_mode,
@@ -76,7 +77,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     tracing::info!(
         interface = %cfg.interface,
         pin_path = %cfg.pin_path,
-        dst_ip = %cfg.dst_ip,
+        dst_ip_v4 = %cfg.dst_ip_v4,
+        dst_ip_v6 = %cfg.dst_ip_v6,
         dst_port = %cfg.dst_port,
         xdp_mode = xdp_mode_str,
         "eBPF agent ready — waiting for SIGTERM"

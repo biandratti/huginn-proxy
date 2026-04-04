@@ -18,7 +18,7 @@
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
-pub struct SynRawData {
+pub struct SynRawDataV4 {
     pub src_addr: u32,
     pub src_port: u16,
     pub window: u16,
@@ -31,7 +31,7 @@ pub struct SynRawData {
     pub tick: u64,
 }
 
-impl Default for SynRawData {
+impl Default for SynRawDataV4 {
     fn default() -> Self {
         Self {
             src_addr: 0,
@@ -48,7 +48,7 @@ impl Default for SynRawData {
     }
 }
 
-/// SAFETY: `SynRawData` is `#[repr(C)]`, `Copy`, fully initialized with no implicit padding.
+/// SAFETY: `SynRawDataV4` is `#[repr(C)]`, `Copy`, fully initialized with no implicit padding.
 #[cfg(feature = "aya")]
 #[allow(unsafe_code)]
-unsafe impl aya::Pod for SynRawData {}
+unsafe impl aya::Pod for SynRawDataV4 {}

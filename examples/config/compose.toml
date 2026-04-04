@@ -1,5 +1,3 @@
-listen = "0.0.0.0:7000"
-
 backends = [
     { address = "backend-a:9000", http_version = "preserve" },
     { address = "backend-b:9000", http_version = "preserve" }
@@ -25,6 +23,12 @@ routes = [
     # Default route (no path manipulation)
     { prefix = "/", backend = "backend-b:9000" }
 ]
+
+preserve_host = false
+
+[listen]
+addrs = ["0.0.0.0:7000", "[::]:7000"]
+# tcp_backlog = 4096
 
 [headers.request]
 remove = ["X-Forwarded-Server"]
@@ -64,8 +68,6 @@ curve_preferences = [
     "secp384r1",
     "secp521r1",
 ]
-
-preserve_host = false
 
 [fingerprint]
 tls_enabled = true

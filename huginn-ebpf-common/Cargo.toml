@@ -14,7 +14,7 @@ description = "Shared quirk bits and key encoding for huginn eBPF SYN fingerprin
 path = "src/lib.rs"
 
 [features]
-# Implement aya::Pod for SynRawData (userspace only). Not enabled for BPF target.
+# Implement aya::Pod for SynRawDataV4 (userspace only). Not enabled for BPF target.
 aya = ["dep:aya"]
 
 [dependencies]

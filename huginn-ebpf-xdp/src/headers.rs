@@ -20,7 +20,7 @@ pub struct VlanHdr {
 /// The first byte encodes `ihl` (low nibble) and `version` (high nibble)
 /// following `__LITTLE_ENDIAN_BITFIELD` ordering.
 #[repr(C)]
-pub struct IpHdr {
+pub struct Ip4Hdr {
     pub version_ihl: u8,
     pub tos: u8,
     pub tot_len: u16,
@@ -33,7 +33,7 @@ pub struct IpHdr {
     pub daddr: u32, // network byte order
 }
 
-impl IpHdr {
+impl Ip4Hdr {
     #[inline(always)]
     pub fn ihl(&self) -> u8 {
         // On LE: ihl is the lower 4 bits of the first byte
@@ -65,6 +65,37 @@ pub struct TcpHdr {
     pub window: u16,       // network byte order
     pub check: u16,
     pub urg_ptr: u16,
+}
+
+/// Minimal IPv6 fixed header (40 bytes).
+///
+/// Layout (big-endian on wire):
+///   bits [31:28] = version (always 6)
+///   bits [27:20] = traffic class (DSCP + ECN)
+///   bits [19:0]  = flow label
+///   payload_len  = length of payload + extension headers
+///   nexthdr      = protocol of next header (e.g. 6 for TCP)
+///   hop_limit    = analogous to IPv4 TTL
+#[repr(C)]
+pub struct Ip6Hdr {
+    /// Version (4 bits) + traffic class high (4 bits).
+    pub priority_version: u8,
+    /// Traffic class low (4 bits) + flow label high (4 bits) + flow label low (16 bits).
+    pub flow_lbl: [u8; 3],
+    pub payload_len: u16,
+    pub nexthdr: u8,
+    pub hop_limit: u8,
+    pub saddr: [u8; 16],
+    pub daddr: [u8; 16],
+}
+
+impl Ip6Hdr {
+    /// Extract the full traffic class byte (bits 4..11 of the first 32-bit word).
+    /// Layout: `priority_version` = [ver(4) | tc_high(4)], `flow_lbl[0]` = [tc_low(4) | fl_high(4)].
+    #[inline(always)]
+    pub fn traffic_class(&self) -> u8 {
+        ((self.priority_version & 0x0F) << 4) | ((self.flow_lbl[0] & 0xF0) >> 4)
+    }
 }
 
 impl TcpHdr {

@@ -1,5 +1,5 @@
 use std::time::Instant;
-use tests_e2e::common::{wait_for_service, DEFAULT_SERVICE_TIMEOUT_SECS, PROXY_HTTPS_URL};
+use tests_e2e::common::{wait_for_service, DEFAULT_SERVICE_TIMEOUT_SECS, PROXY_HTTPS_URL_IPV4};
 
 /// Test the /fingerprint route with force_new_connection enabled
 /// This route forces new backend connections per request (bypassing connection pool)
@@ -9,7 +9,7 @@ use tests_e2e::common::{wait_for_service, DEFAULT_SERVICE_TIMEOUT_SECS, PROXY_HT
 async fn test_fingerprint_route_with_force_new_connection(
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     assert!(
-        wait_for_service(PROXY_HTTPS_URL, DEFAULT_SERVICE_TIMEOUT_SECS).await?,
+        wait_for_service(PROXY_HTTPS_URL_IPV4, DEFAULT_SERVICE_TIMEOUT_SECS).await?,
         "Proxy should be ready"
     );
 
@@ -19,7 +19,7 @@ async fn test_fingerprint_route_with_force_new_connection(
 
     for _ in 0..3 {
         let resp = client
-            .get(format!("{}/fingerprint/get", PROXY_HTTPS_URL))
+            .get(format!("{}/fingerprint/get", PROXY_HTTPS_URL_IPV4))
             .send()
             .await?;
 
@@ -32,7 +32,7 @@ async fn test_fingerprint_route_with_force_new_connection(
 
     for _ in 0..3 {
         let resp = client
-            .get(format!("{}/api/get", PROXY_HTTPS_URL))
+            .get(format!("{}/api/get", PROXY_HTTPS_URL_IPV4))
             .send()
             .await?;
 
@@ -48,7 +48,7 @@ async fn test_fingerprint_route_with_force_new_connection(
 async fn test_pooling_vs_force_new_performance(
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     assert!(
-        wait_for_service(PROXY_HTTPS_URL, DEFAULT_SERVICE_TIMEOUT_SECS).await?,
+        wait_for_service(PROXY_HTTPS_URL_IPV4, DEFAULT_SERVICE_TIMEOUT_SECS).await?,
         "Proxy should be ready"
     );
 
@@ -57,12 +57,12 @@ async fn test_pooling_vs_force_new_performance(
         .build()?;
 
     let _ = client
-        .get(format!("{}/api/get", PROXY_HTTPS_URL))
+        .get(format!("{}/api/get", PROXY_HTTPS_URL_IPV4))
         .send()
         .await?; // Warm up
     let start = Instant::now();
     let resp = client
-        .get(format!("{}/api/get", PROXY_HTTPS_URL))
+        .get(format!("{}/api/get", PROXY_HTTPS_URL_IPV4))
         .send()
         .await?;
     let pooled_duration = start.elapsed();
@@ -70,7 +70,7 @@ async fn test_pooling_vs_force_new_performance(
 
     let start = Instant::now();
     let resp = client
-        .get(format!("{}/fingerprint/get", PROXY_HTTPS_URL))
+        .get(format!("{}/fingerprint/get", PROXY_HTTPS_URL_IPV4))
         .send()
         .await?;
     let force_new_duration = start.elapsed();
@@ -97,7 +97,7 @@ async fn test_pooling_vs_force_new_performance(
 async fn test_connection_pooling_multiple_requests(
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     assert!(
-        wait_for_service(PROXY_HTTPS_URL, DEFAULT_SERVICE_TIMEOUT_SECS).await?,
+        wait_for_service(PROXY_HTTPS_URL_IPV4, DEFAULT_SERVICE_TIMEOUT_SECS).await?,
         "Proxy should be ready"
     );
 
@@ -108,7 +108,7 @@ async fn test_connection_pooling_multiple_requests(
     // First request: Establishes connection (slower due to TCP + TLS handshake)
     let start = Instant::now();
     let resp = client
-        .get(format!("{}/get", PROXY_HTTPS_URL))
+        .get(format!("{}/get", PROXY_HTTPS_URL_IPV4))
         .send()
         .await?;
     let first_duration = start.elapsed();
@@ -119,7 +119,7 @@ async fn test_connection_pooling_multiple_requests(
     for _ in 0..5 {
         let start = Instant::now();
         let resp = client
-            .get(format!("{}/get", PROXY_HTTPS_URL))
+            .get(format!("{}/get", PROXY_HTTPS_URL_IPV4))
             .send()
             .await?;
         subsequent_durations.push(start.elapsed());
@@ -147,7 +147,7 @@ async fn test_connection_pooling_multiple_requests(
 async fn test_connection_pooling_concurrent_requests(
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     assert!(
-        wait_for_service(PROXY_HTTPS_URL, DEFAULT_SERVICE_TIMEOUT_SECS).await?,
+        wait_for_service(PROXY_HTTPS_URL_IPV4, DEFAULT_SERVICE_TIMEOUT_SECS).await?,
         "Proxy should be ready"
     );
 
@@ -161,7 +161,7 @@ async fn test_connection_pooling_concurrent_requests(
         let client_clone = client.clone();
         let handle = tokio::spawn(async move {
             let resp = client_clone
-                .get(format!("{}/get", PROXY_HTTPS_URL))
+                .get(format!("{}/get", PROXY_HTTPS_URL_IPV4))
                 .send()
                 .await?;
             assert_eq!(resp.status(), 200);
