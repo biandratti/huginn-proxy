@@ -79,7 +79,10 @@ async fn test_chrome_fingerprint() -> Result<(), Box<dyn std::error::Error>> {
             .and_then(|v| v.as_str())
             .ok_or(format!("Missing {} header on first Chrome navigation", HEADER_TCP_SYN))?;
         assert!(!tcp_syn_fp.is_empty(), "TCP SYN fingerprint should not be empty");
-        assert!(tcp_syn_fp.starts_with("4:"), "TCP SYN fingerprint should start with '4:' (IPv4)");
+        assert!(
+            tcp_syn_fp.starts_with("4:") || tcp_syn_fp.starts_with("6:"),
+            "TCP SYN fingerprint should start with '4:' (IPv4) or '6:' (IPv6), got: {tcp_syn_fp}"
+        );
 
         println!("Chrome fingerprints:");
         println!("  TLS JA4: {}", ja4_fp);
