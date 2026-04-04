@@ -1,39 +1,12 @@
 # Rate Limiting Configuration Example
 # This file demonstrates how to configure rate limiting in huginn-proxy
 
-# Basic server configuration
-[listen]
-addrs = ["0.0.0.0:7000"]
-
 # Backend servers
 [[backends]]
 address = "backend-a:9000"
 
 [[backends]]
 address = "backend-b:9000"
-
-# Security configuration with rate limiting
-[security]
-max_connections = 512
-
-# Global rate limiting configuration
-# Applies to all routes unless overridden
-[security.rate_limit]
-enabled = true
-requests_per_second = 1000  # Maximum requests per second
-burst = 2000                # Maximum burst size (allows temporary spikes)
-window_seconds = 1          # Time window in seconds
-limit_by = "ip"             # Rate limit by client IP address
-
-# Alternative limit_by options:
-# limit_by = "ip"            - Rate limit by client IP (default)
-# limit_by = "header"        - Rate limit by custom header value (requires limit_by_header)
-# limit_by = "route"         - Rate limit by route path (all clients share the same limit)
-# limit_by = "combined"      - Rate limit by IP + route combination
-
-# Example with header-based rate limiting:
-# limit_by = "header"
-# limit_by_header = "X-API-Key"  # Header name to use for rate limiting
 
 # Routes with per-route rate limiting overrides
 [[routes]]
@@ -76,6 +49,33 @@ backend = "backend-a:9000"
 # No rate limiting for health check endpoint
 [routes.rate_limit]
 enabled = false
+
+# Listener configuration
+[listen]
+addrs = ["0.0.0.0:7000"]
+
+# Security configuration with rate limiting
+[security]
+max_connections = 512
+
+# Global rate limiting configuration
+# Applies to all routes unless overridden
+[security.rate_limit]
+enabled = true
+requests_per_second = 1000  # Maximum requests per second
+burst = 2000                # Maximum burst size (allows temporary spikes)
+window_seconds = 1          # Time window in seconds
+limit_by = "ip"             # Rate limit by client IP address
+
+# Alternative limit_by options:
+# limit_by = "ip"            - Rate limit by client IP (default)
+# limit_by = "header"        - Rate limit by custom header value (requires limit_by_header)
+# limit_by = "route"         - Rate limit by route path (all clients share the same limit)
+# limit_by = "combined"      - Rate limit by IP + route combination
+
+# Example with header-based rate limiting:
+# limit_by = "header"
+# limit_by_header = "X-API-Key"  # Header name to use for rate limiting
 
 # TLS configuration (optional)
 [tls]
