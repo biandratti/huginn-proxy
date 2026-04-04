@@ -16,7 +16,7 @@ Limitation: HTTP/3 is not supported yet.
 
 **IPv4 and IPv6**
 
-The proxy listens on both IPv4 and IPv6 simultaneously. Configure multiple `listen_addrs` entries (e.g., `"0.0.0.0:7000"` for IPv4 and `"[::]:7000"` for IPv6). Backend addresses, IP filtering rules, and all observability endpoints support both address families.
+The proxy listens on both IPv4 and IPv6 simultaneously. Configure multiple `listen.addrs` entries (e.g., `"0.0.0.0:7000"` for IPv4 and `"[::]:7000"` for IPv6). Backend addresses, IP filtering rules, and all observability endpoints support both address families.
 
 ## Load Balancing
 

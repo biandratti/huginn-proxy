@@ -16,7 +16,8 @@ fn tmp_path(name: &str) -> PathBuf {
 fn loads_minimal_config() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let path = tmp_path("minimal");
     let toml = r#"
-listen_addrs = ["127.0.0.1:0"]
+[listen]
+addrs = ["127.0.0.1:0"]
 backends = [
   { address = "localhost:9000" }
 ]
@@ -24,7 +25,7 @@ backends = [
     fs::write(&path, toml)?;
 
     let cfg = load_from_path(&path)?;
-    assert_eq!(cfg.listen_addrs[0].to_string(), "127.0.0.1:0");
+    assert_eq!(cfg.listen.addrs[0].to_string(), "127.0.0.1:0");
     assert_eq!(cfg.backends.len(), 1);
     assert!(cfg.routes.is_empty());
     assert!(cfg.tls.is_none());
@@ -42,7 +43,8 @@ fn loads_routes_and_tls() -> Result<(), Box<dyn std::error::Error + Send + Sync>
 
     let toml = format!(
         r#"
-listen_addrs = ["127.0.0.1:0"]
+[listen]
+addrs = ["127.0.0.1:0"]
 backends = [
   {{ address = "backend-a:9000" }},
   {{ address = "backend-b:9000" }}

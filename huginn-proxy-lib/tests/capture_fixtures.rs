@@ -19,8 +19,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use huginn_proxy_lib::config::{
-    Backend, FingerprintConfig, KeepAliveConfig, LoggingConfig, Route, SecurityConfig,
-    TelemetryConfig, TimeoutConfig,
+    Backend, FingerprintConfig, KeepAliveConfig, ListenConfig, LoggingConfig, Route,
+    SecurityConfig, TelemetryConfig, TimeoutConfig,
 };
 use huginn_proxy_lib::{Config, TlsConfig};
 use tokio::io::AsyncReadExt;
@@ -189,7 +189,7 @@ async fn capture_fingerprint_values() -> Result<(), Box<dyn std::error::Error + 
     let proxy_addr: std::net::SocketAddr = format!("127.0.0.1:{proxy_port}").parse()?;
 
     let config = Arc::new(Config {
-        listen_addrs: vec![proxy_addr],
+        listen: ListenConfig { addrs: vec![proxy_addr], ..Default::default() },
         backends: vec![Backend { address: backend_addr.to_string(), http_version: None }],
         routes: vec![Route {
             prefix: "/".to_string(),

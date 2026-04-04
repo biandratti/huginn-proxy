@@ -27,7 +27,8 @@ http_version = "preserve""#;
 #[test]
 fn test_config_with_http_version() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let toml = r#"
-listen_addrs = ["127.0.0.1:0"]
+[listen]
+addrs = ["127.0.0.1:0"]
 backends = [
   { address = "backend-a:9000", http_version = "http2" },
   { address = "backend-b:9000", http_version = "http11" },
@@ -91,7 +92,8 @@ watch_delay_secs = 60
 #[test]
 fn test_mtls_full_config() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let toml = r#"
-listen_addrs = ["0.0.0.0:7000"]
+[listen]
+addrs = ["0.0.0.0:7000"]
 
 backends = [
   { address = "backend-a:9000" }
@@ -129,7 +131,8 @@ required = { ca_cert_path = "/config/certs/client-ca.crt" }
 #[test]
 fn test_preserve_host_default_is_false() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let toml = r#"
-listen_addrs = ["0.0.0.0:7000"]
+[listen]
+addrs = ["0.0.0.0:7000"]
 backends = [{ address = "backend:9000" }]
 "#;
 
@@ -141,7 +144,8 @@ backends = [{ address = "backend:9000" }]
 #[test]
 fn test_preserve_host_enabled() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let toml = r#"
-listen_addrs = ["0.0.0.0:7000"]
+[listen]
+addrs = ["0.0.0.0:7000"]
 backends = [{ address = "backend:9000" }]
 preserve_host = true
 "#;
@@ -155,7 +159,8 @@ preserve_host = true
 fn test_preserve_host_disabled_explicitly() -> Result<(), Box<dyn std::error::Error + Send + Sync>>
 {
     let toml = r#"
-listen_addrs = ["0.0.0.0:7000"]
+[listen]
+addrs = ["0.0.0.0:7000"]
 backends = [{ address = "backend:9000" }]
 preserve_host = false
 "#;
@@ -168,7 +173,8 @@ preserve_host = false
 #[test]
 fn test_timeout_defaults() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let toml = r#"
-listen_addrs = ["0.0.0.0:7000"]
+[listen]
+addrs = ["0.0.0.0:7000"]
 backends = [{ address = "backend:9000" }]
 "#;
 
@@ -184,7 +190,8 @@ backends = [{ address = "backend:9000" }]
 #[test]
 fn test_timeout_granular_config() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let toml = r#"
-listen_addrs = ["0.0.0.0:7000"]
+[listen]
+addrs = ["0.0.0.0:7000"]
 backends = [{ address = "backend:9000" }]
 
 [timeout]
@@ -202,7 +209,8 @@ connection_handling_secs = 120
 fn test_timeout_connection_handling_default() -> Result<(), Box<dyn std::error::Error + Send + Sync>>
 {
     let toml = r#"
-listen_addrs = ["0.0.0.0:7000"]
+[listen]
+addrs = ["0.0.0.0:7000"]
 backends = [{ address = "backend:9000" }]
 
 [timeout]

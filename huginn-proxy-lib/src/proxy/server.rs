@@ -27,23 +27,13 @@ use crate::tls::setup_tls_with_hot_reload;
 /// Implemented by `huginn-proxy` when the `ebpf-tcp` feature is enabled.
 pub type SynProbe = Arc<dyn Fn(SocketAddr) -> SynResult + Send + Sync>;
 
-// TODO: TCP accept backlog — today we use a fixed value. Follow-up work:
-// - Expose `tcp_listen_backlog` (or similar) in config and wire it into `bind_listener`.
-// - When the backlog is saturated, document/observability: counter or gauge (e.g. accept
-//   failures, kernel drops) so operators can tune the value under load.
-// - If we need programmatic handling beyond `listen()` errors, align with platform limits
-//   (`SOMAXCONN`, sysctl `net.core.somaxconn`).
-
-/// Default `listen(2)` backlog (pending connections queue length) until config exists.
-const DEFAULT_TCP_LISTEN_BACKLOG: i32 = 1024; // TODO: make this configurable
-
-/// Bind a TCP listener to `addr`.
+/// Bind a TCP listener to `addr` with the given `listen(2)` backlog.
 ///
 /// IPv6 sockets are created with `IPV6_V6ONLY = 1` so they accept only native
 /// IPv6 connections. This prevents the dual-stack ambiguity where an IPv4 client
 /// arrives as `::ffff:x.y.z.w` (`SocketAddr::V6`), which would cause the SYN
 /// fingerprint lookup to hit the wrong eBPF map.
-fn bind_listener(addr: SocketAddr) -> std::io::Result<TcpListener> {
+fn bind_listener(addr: SocketAddr, backlog: i32) -> std::io::Result<TcpListener> {
     use socket2::{Domain, Protocol, Socket, Type};
 
     let domain = if addr.is_ipv6() {
@@ -57,7 +47,7 @@ fn bind_listener(addr: SocketAddr) -> std::io::Result<TcpListener> {
         socket.set_only_v6(true)?;
     }
     socket.bind(&addr.into())?;
-    socket.listen(DEFAULT_TCP_LISTEN_BACKLOG)?;
+    socket.listen(backlog)?;
     socket.set_nonblocking(true)?;
     TcpListener::from_std(socket.into())
 }
@@ -128,11 +118,13 @@ pub async fn run(
     })?;
 
     // Bind one listener per configured address
+    let backlog = config.listen.tcp_backlog;
     let listeners: Vec<(SocketAddr, TcpListener)> = config
-        .listen_addrs
+        .listen
+        .addrs
         .iter()
         .map(|&addr| {
-            bind_listener(addr)
+            bind_listener(addr, backlog)
                 .map(|l| (addr, l))
                 .map_err(crate::error::ProxyError::Io)
         })

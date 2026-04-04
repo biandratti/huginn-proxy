@@ -22,7 +22,8 @@ async fn test_header_manipulation_only_request_add(
     writeln!(
         file,
         r#"
-listen_addrs = ["127.0.0.1:0"]
+[listen]
+addrs = ["127.0.0.1:0"]
 backends = [{{ address = "localhost:9000" }}]
 
 [headers.request]
@@ -59,7 +60,8 @@ async fn test_header_manipulation_only_request_remove(
     writeln!(
         file,
         r#"
-listen_addrs = ["127.0.0.1:0"]
+[listen]
+addrs = ["127.0.0.1:0"]
 backends = [{{ address = "localhost:9000" }}]
 
 [headers.request]
@@ -93,7 +95,8 @@ async fn test_header_manipulation_only_response_add(
     writeln!(
         file,
         r#"
-listen_addrs = ["127.0.0.1:0"]
+[listen]
+addrs = ["127.0.0.1:0"]
 backends = [{{ address = "localhost:9000" }}]
 
 [headers.response]
@@ -130,7 +133,8 @@ async fn test_header_manipulation_only_response_remove(
     writeln!(
         file,
         r#"
-listen_addrs = ["127.0.0.1:0"]
+[listen]
+addrs = ["127.0.0.1:0"]
 backends = [{{ address = "localhost:9000" }}]
 
 [headers.response]
@@ -164,7 +168,8 @@ async fn test_header_manipulation_mixed_request_response(
     writeln!(
         file,
         r#"
-listen_addrs = ["127.0.0.1:0"]
+[listen]
+addrs = ["127.0.0.1:0"]
 backends = [{{ address = "localhost:9000" }}]
 
 [headers.request]
@@ -197,7 +202,8 @@ async fn test_header_manipulation_per_route_defaults(
     writeln!(
         file,
         r#"
-listen_addrs = ["127.0.0.1:0"]
+[listen]
+addrs = ["127.0.0.1:0"]
 backends = [{{ address = "localhost:9000" }}]
 
 [[routes]]
