@@ -322,8 +322,6 @@ async fn test_path_stripping_exact_prefix() -> Result<(), Box<dyn std::error::Er
     Ok(())
 }
 
-// ── IPv6 variants ─────────────────────────────────────────────────────────────
-
 async fn test_path_stripping_impl(
     url: &str,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {

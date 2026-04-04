@@ -28,7 +28,7 @@ preserve_host = false
 
 [listen]
 addrs = ["0.0.0.0:7000", "[::]:7000"]
-# tcp_backlog = 4096   # listen(2) queue depth; capped by net.core.somaxconn
+# tcp_backlog = 4096
 
 [headers.request]
 remove = ["X-Forwarded-Server"]

@@ -298,8 +298,6 @@ async fn test_fingerprints_consistent_despite_spoofed_headers(
     Ok(())
 }
 
-// ── IPv6 variants ─────────────────────────────────────────────────────────────
-
 /// Same header-override guarantees apply over IPv6: the proxy must always replace
 /// spoofed fingerprint headers with the real computed values.
 #[tokio::test]

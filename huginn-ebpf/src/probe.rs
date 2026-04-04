@@ -207,7 +207,7 @@ impl EbpfProbe {
             ProbeInner::Pinned(_) => return Ok(()),
         };
 
-        let syn_path = pin::syn_map_v4_path(base_path);
+        let syn_path_v4 = pin::syn_map_v4_path(base_path);
         let syn_path_v6 = pin::syn_map_v6_path(base_path);
         let counter_path = pin::counter_path(base_path);
         let insert_failures_v4_path = pin::insert_failures_v4_path(base_path);
@@ -218,7 +218,7 @@ impl EbpfProbe {
         let syn_malformed_v6_path = pin::syn_malformed_v6_path(base_path);
 
         // Remove stale pins from a previous agent instance.
-        let _ = std::fs::remove_file(&syn_path);
+        let _ = std::fs::remove_file(&syn_path_v4);
         let _ = std::fs::remove_file(&syn_path_v6);
         let _ = std::fs::remove_file(&counter_path);
         let _ = std::fs::remove_file(&insert_failures_v4_path);
@@ -232,7 +232,7 @@ impl EbpfProbe {
             .map_mut(pin::SYN_MAP_V4_NAME)
             .ok_or(EbpfError::ProgramNotFound)?;
         syn_map_v4
-            .pin(&syn_path)
+            .pin(&syn_path_v4)
             .map_err(|e| EbpfError::Pin { name: pin::SYN_MAP_V4_NAME.to_string(), source: e })?;
 
         let syn_map_v6 = ebpf
@@ -313,7 +313,7 @@ impl EbpfProbe {
         // Pin files are created as 0600 root:root — make them accessible
         // to the non-root proxy process.
         let open_mode = std::fs::Permissions::from_mode(0o666);
-        let _ = std::fs::set_permissions(&syn_path, open_mode.clone());
+        let _ = std::fs::set_permissions(&syn_path_v4, open_mode.clone());
         let _ = std::fs::set_permissions(&syn_path_v6, open_mode.clone());
         let _ = std::fs::set_permissions(&counter_path, open_mode.clone());
         let _ = std::fs::set_permissions(&insert_failures_v4_path, open_mode.clone());
@@ -329,7 +329,7 @@ impl EbpfProbe {
 
     /// Remove pinned map files. Called during agent shutdown for clean teardown.
     pub fn unpin_maps(base_path: &str) {
-        let syn_path = pin::syn_map_v4_path(base_path);
+        let syn_path_v4 = pin::syn_map_v4_path(base_path);
         let syn_path_v6 = pin::syn_map_v6_path(base_path);
         let counter_path = pin::counter_path(base_path);
         let insert_failures_v4_path = pin::insert_failures_v4_path(base_path);
@@ -338,7 +338,7 @@ impl EbpfProbe {
         let insert_failures_v6_path = pin::insert_failures_v6_path(base_path);
         let syn_captured_v6_path = pin::syn_captured_v6_path(base_path);
         let syn_malformed_v6_path = pin::syn_malformed_v6_path(base_path);
-        let _ = std::fs::remove_file(&syn_path);
+        let _ = std::fs::remove_file(&syn_path_v4);
         let _ = std::fs::remove_file(&syn_path_v6);
         let _ = std::fs::remove_file(&counter_path);
         let _ = std::fs::remove_file(&insert_failures_v4_path);

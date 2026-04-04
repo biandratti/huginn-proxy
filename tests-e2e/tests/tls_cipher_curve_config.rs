@@ -104,8 +104,6 @@ async fn test_tls_with_configured_curves() -> Result<(), Box<dyn std::error::Err
     Ok(())
 }
 
-// ── IPv6 variants ─────────────────────────────────────────────────────────────
-
 async fn test_tls_with_cipher_suites_impl(
     url: &str,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {

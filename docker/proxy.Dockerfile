@@ -8,9 +8,6 @@
 #   docker build --target ebpf  -f docker/proxy.Dockerfile .    (or just: docker build -f ...)
 
 # ── builder base ────────────────────────────────────────────────
-# Do not pin `--platform` here: multi-arch builds (`linux/amd64` + `linux/arm64`) need the
-# Rust image to match the target so `cargo` emits the correct architecture. (`aya-obj` only
-# fails on hosts whose `target_arch` has no pre-generated bindings, e.g. some niche triples.)
 FROM rust:1.94.1-slim@sha256:1d0000a49fb62f4fde24455f49d59c6c088af46202d65d8f455b722f7263e8f8 AS builder-base
 RUN apt-get update -q && apt-get install -y --no-install-recommends \
     pkg-config libssl-dev \

@@ -153,8 +153,6 @@ async fn test_security_headers_with_fingerprinting(
     Ok(())
 }
 
-// ── IPv6 variants ─────────────────────────────────────────────────────────────
-
 /// Confirm that HSTS and other security headers are injected correctly over IPv6.
 #[tokio::test]
 async fn test_hsts_header_ipv6() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {

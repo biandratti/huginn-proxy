@@ -35,6 +35,7 @@ See [`examples/`](examples/) for the full setup guide, including:
 
 ## Features
 
+- **IPv4 & IPv6 Dual-Stack** - Listen on both address families simultaneously with per-family eBPF maps
 - **HTTP/1.x & HTTP/2** - Full support for both protocol versions
 - **Load Balancing** - Round-robin load balancing across multiple backends
 - **Connection Pooling** - Automatic connection reuse to backends for reduced latency (bypasses pooling per-route for
