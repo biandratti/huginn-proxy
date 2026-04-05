@@ -66,13 +66,15 @@ const EXPECTED_AKAMAI: &str = "2:0;4:2097152;5:16384;6:16384|5177345|0|m,s,a,p";
 fn bench_akamai_parse(c: &mut Criterion) {
     let result = extract_akamai_fingerprint_from_bytes(HTTP2_CLIENT_FRAMES);
     match &result {
-        Some(fp) => {
+        Ok(fp) => {
             assert_eq!(
                 fp.fingerprint, EXPECTED_AKAMAI,
                 "Akamai fixture mismatch - re-run capture_fixtures and update EXPECTED_AKAMAI"
             );
         }
-        None => panic!("HTTP2_CLIENT_FRAMES produced no Akamai fingerprint - fixture is invalid"),
+        Err(e) => {
+            panic!("HTTP2_CLIENT_FRAMES produced no Akamai fingerprint - fixture is invalid: {e}")
+        }
     }
 
     c.bench_function("akamai_parse_http2_settings_window_update", |b| {
@@ -82,7 +84,7 @@ fn bench_akamai_parse(c: &mut Criterion) {
 
 fn bench_ja4_parse(c: &mut Criterion) {
     match parse_tls_client_hello(CLIENT_HELLO_BYTES) {
-        Ok(Some(ref sig)) => {
+        Ok(ref sig) => {
             let ja4 = sig.generate_ja4();
             assert_eq!(
                 ja4.full.to_string(),
@@ -90,7 +92,6 @@ fn bench_ja4_parse(c: &mut Criterion) {
                 "JA4 fixture mismatch - re-run capture_fixtures and update EXPECTED_JA4"
             );
         }
-        Ok(None) => panic!("CLIENT_HELLO_BYTES produced no JA4 - fixture is invalid"),
         Err(e) => panic!("CLIENT_HELLO_BYTES parse error: {e}"),
     }
 

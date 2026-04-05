@@ -5,11 +5,11 @@ use std::task::{Context, Poll};
 
 use huginn_net_http::akamai_extractor::extract_akamai_fingerprint;
 use huginn_net_http::http2_parser::Http2Parser;
-use huginn_net_http::{AkamaiFingerprint, Http2FrameType};
+use huginn_net_http::{AkamaiFingerprint, Http2FrameType, HuginnNetHttpError};
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 use tokio::sync::watch;
 use tokio::time::Instant;
-use tracing::debug;
+use tracing::{debug, warn};
 
 /// CapturingStream captures all data read from the inner stream
 /// while passing it through. Processes fingerprint inline for optimal performance
@@ -117,23 +117,42 @@ impl<S: AsyncRead + Unpin> AsyncRead for CapturingStream<S> {
                                     })
                                     .flatten();
 
-                                if let Some(fingerprint) = all_frames_opt
-                                    .as_deref()
-                                    .and_then(extract_akamai_fingerprint)
-                                {
-                                    debug!(
-                                        "CapturingStream: extracted fingerprint inline: {}",
-                                        fingerprint.fingerprint
-                                    );
-                                    let _ = self.fingerprint_tx.send(Some(fingerprint));
-                                    self.fingerprint_extracted.store(true, Ordering::Relaxed);
+                                if let Some(frames) = all_frames_opt.as_deref() {
+                                    match extract_akamai_fingerprint(frames) {
+                                        Ok(fingerprint) => {
+                                            debug!(
+                                                "CapturingStream: extracted fingerprint inline: {}",
+                                                fingerprint.fingerprint
+                                            );
+                                            let _ = self.fingerprint_tx.send(Some(fingerprint));
+                                            self.fingerprint_extracted
+                                                .store(true, Ordering::Relaxed);
 
-                                    let start = self.extraction_start.take();
-                                    if let (Some(m), Some(start)) = (self.metrics.as_ref(), start) {
-                                        let duration = start.elapsed().as_secs_f64();
-                                        m.http2_fingerprints_extracted_total.add(1, &[]);
-                                        m.http2_fingerprint_extraction_duration_seconds
-                                            .record(duration, &[]);
+                                            let start = self.extraction_start.take();
+                                            if let (Some(m), Some(start)) =
+                                                (self.metrics.as_ref(), start)
+                                            {
+                                                let duration = start.elapsed().as_secs_f64();
+                                                m.http2_fingerprints_extracted_total.add(1, &[]);
+                                                m.http2_fingerprint_extraction_duration_seconds
+                                                    .record(duration, &[]);
+                                            }
+                                        }
+                                        Err(HuginnNetHttpError::MalformedPseudoHeaders(reason)) => {
+                                            warn!(
+                                                "CapturingStream: malformed HEADERS frame, possible spoofed traffic: {}",
+                                                reason
+                                            );
+                                            if let Some(m) = &self.metrics {
+                                                m.http2_fingerprint_failures_total.add(1, &[]);
+                                            }
+                                        }
+                                        Err(HuginnNetHttpError::NoSettingsFrame) => {
+                                            debug!("CapturingStream: SETTINGS frame not yet received, will retry on next read");
+                                        }
+                                        Err(e) => {
+                                            debug!("CapturingStream: fingerprint extraction error: {e}");
+                                        }
                                     }
                                 }
                             }
