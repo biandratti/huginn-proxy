@@ -20,13 +20,13 @@ pub struct BrowserFingerprints {
 
 pub const CHROME_FINGERPRINTS: BrowserFingerprints = BrowserFingerprints {
     version: "latest",
-    http2_akamai: "1:65536;2:0;4:6291456;6:262144|15663105|0|",
+    http2_akamai: "1:65536;2:0;4:6291456;6:262144|15663105|0|m,a,s,p",
     tls_ja4: "t13d1516h2_8daaf6152771_d8a2da3f94cd",
 };
 
 pub const FIREFOX_FINGERPRINTS: BrowserFingerprints = BrowserFingerprints {
     version: "147.0",
-    http2_akamai: "1:65536;2:0;4:131072;5:16384|12517377|0|",
+    http2_akamai: "1:65536;2:0;4:131072;5:16384|12517377|0|m,p,a,s",
     tls_ja4: "t13d1717h2_5b57614c22b0_3cbfd9057e0d",
 };
 
