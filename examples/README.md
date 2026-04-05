@@ -43,12 +43,15 @@ mkdir -p examples/certs
 
 **Option A: Self-signed certificate (default, works with `curl -k` but browsers will show warnings)**
 
+Include **SAN** (`subjectAltName`) so `https://localhost`, `https://127.0.0.1`, and IPv6 loopback match the certificate — CN-only certs are rejected by many TLS stacks. Requires OpenSSL 1.1.1 or newer (`openssl version`).
+
 ```bash
 openssl req -x509 -newkey rsa:2048 -nodes \
   -keyout examples/certs/server.key \
   -out examples/certs/server.crt \
   -days 365 \
-  -subj "/CN=localhost"
+  -subj "/CN=localhost" \
+  -addext "subjectAltName=DNS:localhost,IP:127.0.0.1,IP:0:0:0:0:0:0:0:1"
 
 chmod 644 examples/certs/server.key examples/certs/server.crt
 ```
@@ -66,7 +69,8 @@ For browser testing without security warnings, use `mkcert` to generate locally-
 # Install local CA (one-time setup)
 mkcert -install
 
-# Generate trusted certificate for localhost
+# Names/IPs listed become Subject Alternative Names (SAN). The browser checks the URL against
+# them — include every form you will type: hostname, IPv4 loopback, IPv6 loopback.
 mkcert -key-file examples/certs/server.key -cert-file examples/certs/server.crt localhost 127.0.0.1 ::1
 
 chmod 644 examples/certs/server.key examples/certs/server.crt
@@ -103,10 +107,24 @@ Alternatively, pull a pre-built image from the registry:
 
 ### 3. Test the Proxy
 
+Use `127.0.0.1` here so the host matches published ports reliably (some systems resolve `localhost` to IPv6 first; the compose example publishes both IPv4 and IPv6, but explicit IPv4 avoids surprises in CI and scripts).
+
 ```bash
-curl -sk https://localhost:7000/api/test | jq .
-curl http://localhost:9090/metrics | grep huginn_proxy
+curl -sk https://127.0.0.1:7000/api/test | jq .
+curl http://127.0.0.1:9090/metrics | grep huginn_proxy
 ```
+
+To pick a stack explicitly when using a hostname (e.g. `localhost`), curl supports `-4` / `--ipv4` and `-6` / `--ipv6`:
+
+```bash
+curl -4 -sk https://localhost:7000/api/test | jq .    # IPv4 only
+curl -6 -sk https://localhost:7000/api/test | jq .    # IPv6 only (or https://[::1]:7000/...)
+
+curl -4 http://localhost:9090/metrics | grep huginn_proxy
+curl -6 http://localhost:9090/metrics | grep huginn_proxy
+```
+
+**Browser:** Open `https://localhost:7000/` (or `https://127.0.0.1:7000/` if your cert includes that name in SAN — `mkcert` Option B lists both). The self-signed **Option A** cert uses `CN=localhost`, so the hostname `localhost` matches; you may still need to accept the browser warning unless you use `mkcert`.
 
 ---
 
@@ -164,16 +182,16 @@ This configuration demonstrates:
 ```bash
 # Send 150 parallel requests to trigger rate limits
 # /api endpoint: 50 req/s limit, burst of 100
-seq 1 150 | xargs -P 50 -I {} curl -sk https://localhost:7000/api/test 2>&1 \
+seq 1 150 | xargs -P 50 -I {} curl -sk https://127.0.0.1:7000/api/test 2>&1 \
   | grep -c "Too Many Requests"
 
 # View a 429 response
-seq 1 150 | xargs -P 50 -I {} curl -sk https://localhost:7000/api/test 2>&1 \
+seq 1 150 | xargs -P 50 -I {} curl -sk https://127.0.0.1:7000/api/test 2>&1 \
   | grep "Too Many Requests" | head -1
 
 # Test different endpoints with different limits
-curl -sk https://localhost:7000/public/test | jq .     # 200 req/s
-curl -sk https://localhost:7000/premium/test | jq .    # Header-based
+curl -sk https://127.0.0.1:7000/public/test | jq .     # 200 req/s
+curl -sk https://127.0.0.1:7000/premium/test | jq .    # Header-based
 ```
 
 ### TLS Fingerprinting
@@ -181,7 +199,7 @@ curl -sk https://localhost:7000/premium/test | jq .    # Header-based
 Verify that TLS and HTTP/2 fingerprints are injected:
 
 ```bash
-curl -sk https://localhost:7000/api/test | jq '.headers | with_entries(select(.key | startswith("x-")))'
+curl -sk https://127.0.0.1:7000/api/test | jq '.headers | with_entries(select(.key | startswith("x-")))'
 ```
 
 Expected headers:

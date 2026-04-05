@@ -31,26 +31,27 @@ pub async fn read_client_hello(
         }
     }
 
-    let fingerprints = parse_tls_client_hello(&buf).ok().and_then(|opt_signature| {
-        opt_signature.map(|signature| {
+    let duration = start.elapsed().as_secs_f64();
+
+    let fingerprints = match parse_tls_client_hello(&buf) {
+        Ok(signature) => {
+            if let Some(ref m) = metrics {
+                m.tls_fingerprints_extracted_total.add(1, &[]);
+                m.tls_fingerprint_extraction_duration_seconds
+                    .record(duration, &[]);
+            }
             let ja4 = signature.generate_ja4();
             let ja4_raw = signature.generate_ja4_original();
             let sni = signature.sni;
-            Ja4Fingerprints::new(ja4, ja4_raw, sni)
-        })
-    });
-
-    let duration = start.elapsed().as_secs_f64();
-
-    if let Some(ref m) = metrics {
-        if fingerprints.is_some() {
-            m.tls_fingerprints_extracted_total.add(1, &[]);
-            m.tls_fingerprint_extraction_duration_seconds
-                .record(duration, &[]);
-        } else {
-            m.tls_fingerprint_failures_total.add(1, &[]);
+            Some(Ja4Fingerprints::new(ja4, ja4_raw, sni))
         }
-    }
+        Err(_) => {
+            if let Some(ref m) = metrics {
+                m.tls_fingerprint_failures_total.add(1, &[]);
+            }
+            None
+        }
+    };
 
     Ok((buf, fingerprints))
 }
