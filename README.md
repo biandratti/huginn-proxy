@@ -138,13 +138,13 @@ See [ROADMAP.md](ROADMAP.md) for a detailed list of planned features and upcomin
 
 Local: [`examples/`](examples/) (Docker Compose). Published runtime images (`linux/amd64`, `linux/arm64`):
 
-| Image | Base | User | Capabilities |
-|-------|------|------|--------------|
-| `ghcr.io/biandratti/huginn-proxy:v0.0.1-beta.2` | `debian:bookworm-slim` | `10001` | Proxy reads pinned maps — `CAP_BPF` |
-| `ghcr.io/biandratti/huginn-proxy:v0.0.1-beta.2-plain` | `debian:bookworm-slim` | `10001` | No eBPF |
-| `ghcr.io/biandratti/huginn-proxy:v0.0.1-beta.2-ebpf-agent` | `debian:bookworm-slim` | `root` | Agent loads XDP — `CAP_BPF` `CAP_NET_ADMIN` `CAP_PERFMON` |
+| Image                                                      | Base | User | Capabilities |
+|------------------------------------------------------------|------|------|--------------|
+| `ghcr.io/biandratti/huginn-proxy:v0.0.1-beta.3`            | `debian:bookworm-slim` | `10001` | Proxy reads pinned maps — `CAP_BPF` |
+| `ghcr.io/biandratti/huginn-proxy:v0.0.1-beta.3-plain`      | `debian:bookworm-slim` | `10001` | No eBPF |
+| `ghcr.io/biandratti/huginn-proxy:v0.0.1-beta.3-ebpf-agent` | `debian:bookworm-slim` | `root` | Agent loads XDP — `CAP_BPF` `CAP_NET_ADMIN` `CAP_PERFMON` |
 
-Replace `v0.0.1-beta.2` with your release tag. See [DEPLOYMENT.md](DEPLOYMENT.md), [EBPF-SETUP.md](EBPF-SETUP.md).
+Replace `v0.0.1-beta.3` with your release tag. See [DEPLOYMENT.md](DEPLOYMENT.md), [EBPF-SETUP.md](EBPF-SETUP.md).
 
 </details>
 
