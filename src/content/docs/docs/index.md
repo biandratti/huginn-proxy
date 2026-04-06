@@ -3,7 +3,6 @@ title: Documentation
 description: Huginn Proxy documentation index. Beta software.
 sidebar:
   order: 0
-  hidden: true
 ---
 
 Welcome to the Huginn Proxy documentation. This site tracks the **beta** line; verify the [GitHub releases](https://github.com/biandratti/huginn-proxy/releases) for the version you run.

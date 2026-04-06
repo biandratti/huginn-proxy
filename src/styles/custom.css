@@ -20,3 +20,45 @@
 	--sl-font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
 		'Liberation Mono', 'Courier New', monospace;
 }
+
+/*
+ * Docs (Starlight): prev/next pagination was at the foot of the page behind mobile browser
+ * chrome and hard to tap. Show pagination first in the footer on narrow viewports, enlarge
+ * targets, and respect safe-area for notched devices.
+ */
+@media (max-width: 50rem) {
+	main footer.sl-flex {
+		display: flex;
+		flex-direction: column;
+		gap: 1.25rem;
+		padding-bottom: max(1rem, env(safe-area-inset-bottom, 0px));
+	}
+
+	main footer.sl-flex > .pagination-links {
+		order: -1;
+		margin-top: 0 !important;
+		width: 100%;
+	}
+
+	main footer.sl-flex > .meta {
+		margin-top: 0 !important;
+	}
+
+	.pagination-links {
+		display: flex !important;
+		flex-direction: column;
+		gap: 0.75rem;
+		grid-template-columns: unset !important;
+	}
+
+	.pagination-links a {
+		min-height: 2.875rem;
+		padding: 0.875rem 1rem;
+		align-items: center;
+		-webkit-tap-highlight-color: rgba(245, 158, 11, 0.12);
+	}
+
+	.pagination-links a .link-title {
+		font-size: var(--sl-text-lg, 1.125rem);
+	}
+}
