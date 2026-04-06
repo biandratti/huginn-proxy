@@ -1,0 +1,95 @@
+---
+import '../styles/landing.css';
+
+const base = import.meta.env.BASE_URL;
+const docs = `${base}docs/getting-started/`;
+const github = 'https://github.com/biandratti/huginn-proxy';
+---
+
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta
+			name="description"
+			content="Huginn Proxy: high-performance passive fingerprinting (TLS, HTTP/2, TCP SYN) via Huginn Net parsers. MIT/Apache for proxy and signature path. Beta."
+		/>
+		<title>Huginn Proxy</title>
+		<link rel="icon" type="image/svg+xml" href={`${base}favicon.svg`} />
+		<link rel="preconnect" href="https://fonts.googleapis.com" />
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+		<link
+			href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap"
+			rel="stylesheet"
+		/>
+	</head>
+	<body>
+		<div class="hp-wrap">
+			<header class="hp-hero">
+				<span class="hp-badge">v0.0.3-beta</span>
+				<h1 class="hp-title">Huginn Proxy</h1>
+				<p class="hp-tagline">
+					High-performance reverse proxy: passive TLS, HTTP/2, and TCP SYN fingerprints, injected as trusted headers for your backends.
+				</p>
+				<p class="hp-lede">
+					Fingerprints are parsed by{' '}
+					<a href="https://github.com/biandratti/huginn-net">Huginn Net</a>. The entire signature path carries
+					the same MIT/Apache terms as the proxy itself. Use it in any commercial product without a separate
+					licensing deal for the fingerprint logic.
+				</p>
+				<div class="hp-actions">
+					<a class="hp-btn hp-btn--primary" href={docs}>Get started</a>
+					<a class="hp-btn hp-btn--ghost" href={github}>View on GitHub</a>
+					<a class="hp-btn hp-btn--ghost" href={`${base}docs/`}>Documentation</a>
+				</div>
+			</header>
+
+			<section class="hp-section" aria-labelledby="headers-heading">
+				<h2 id="headers-heading">Injected fingerprint headers</h2>
+				<p style="color: var(--hp-muted); margin: 0 0 1rem; max-width: 40rem;">
+					Values are produced by the proxy and override any client-supplied spoofed headers.
+				</p>
+				<div class="hp-table-wrap">
+					<table class="hp-table">
+						<thead>
+							<tr>
+								<th scope="col">Header</th>
+								<th scope="col">Layer / note</th>
+							</tr>
+						</thead>
+						<tbody>
+							<tr>
+								<td><code>x-huginn-net-ja4</code> (and JA4_r / JA4_o / JA4_or)</td>
+								<td>TLS ClientHello (FoxIO JA4 family)</td>
+							</tr>
+							<tr>
+								<td><code>x-huginn-net-akamai</code></td>
+								<td>HTTP/2 only</td>
+							</tr>
+							<tr>
+								<td><code>x-huginn-net-tcp</code></td>
+								<td>TCP SYN via eBPF/XDP when enabled</td>
+							</tr>
+						</tbody>
+					</table>
+				</div>
+			</section>
+
+			<footer class="hp-footer">
+				<p>
+					<a href={github}>github.com/biandratti/huginn-proxy</a>
+					·
+					<a href="https://crates.io/crates/huginn-proxy">crates.io</a>
+					·
+					<a href="https://docs.rs/huginn-proxy">docs.rs</a>
+				</p>
+				<p>
+					Licensed under <a href={`${github}/blob/master/LICENSE-MIT`}>MIT</a> or
+					<a href={`${github}/blob/master/LICENSE-APACHE`}>Apache-2.0</a>, at your option.
+				</p>
+				<p>This software is beta quality: behavior and configuration may change between releases.</p>
+			</footer>
+		</div>
+	</body>
+</html>

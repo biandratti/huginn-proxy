@@ -1,0 +1,22 @@
+/* GitHub-dark adjacent surface + amber accent (see plan) */
+:root[data-theme='dark'] {
+	--sl-color-accent-low: #78350f;
+	--sl-color-accent: #f59e0b;
+	--sl-color-accent-high: #fde68a;
+	--sl-color-bg: #0d1117;
+	--sl-color-bg-nav: #0d1117;
+	--sl-color-bg-sidebar: #0d1117;
+	--sl-color-hairline: #30363d;
+}
+
+:root[data-theme='light'] {
+	--sl-color-accent-low: #fef3c7;
+	--sl-color-accent: #d97706;
+	--sl-color-accent-high: #92400e;
+}
+
+/* Prefer JetBrains Mono in code samples */
+:root {
+	--sl-font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+		'Liberation Mono', 'Courier New', monospace;
+}

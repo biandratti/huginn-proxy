@@ -1,0 +1,242 @@
+---
+---
+
+<div class="arch not-content" aria-label="Architecture: Huginn Proxy and eBPF">
+	<div class="arch-main">
+		<div class="arch-card arch-card--dim">
+			<span class="arch-t">Client</span>
+		</div>
+		<div class="arch-join" aria-hidden="true">
+			<span class="arch-a">→</span>
+			<span class="arch-w">TLS / HTTP</span>
+		</div>
+		<div class="arch-card arch-card--accent">
+			<span class="arch-t">Huginn Proxy</span>
+			<span class="arch-s">Routing · TLS · fingerprints · limits</span>
+		</div>
+		<div class="arch-join" aria-hidden="true">
+			<span class="arch-a">→</span>
+			<span class="arch-w">Proxy</span>
+		</div>
+		<div class="arch-card arch-card--dim">
+			<span class="arch-t">Backends</span>
+		</div>
+	</div>
+
+	<p class="arch-cap">TCP SYN fingerprint (Linux, optional)</p>
+
+	<div class="arch-ebpf">
+		<div class="arch-ebpf-row">
+			<div class="arch-card arch-card--purple">
+				<span class="arch-t">huginn-ebpf-agent</span>
+				<span class="arch-s">Loads XDP · pins maps</span>
+			</div>
+			<div class="arch-join arch-join--sm" aria-hidden="true">
+				<span class="arch-a">→</span>
+			</div>
+			<div class="arch-card arch-card--blue">
+				<span class="arch-t">Kernel (XDP)</span>
+				<span class="arch-s">SYN capture</span>
+			</div>
+			<div class="arch-join arch-join--sm" aria-hidden="true">
+				<span class="arch-a">→</span>
+			</div>
+			<div class="arch-card arch-card--accent arch-card--maps">
+				<span class="arch-t">Pinned BPF maps</span>
+				<span class="arch-s">bpffs</span>
+			</div>
+		</div>
+
+		<div class="arch-up" aria-hidden="true">
+			<div class="arch-up-line"></div>
+			<span class="arch-up-label">lookup per connection</span>
+			<div class="arch-up-line"></div>
+		</div>
+
+		<p class="arch-foot">
+			The proxy opens these maps read-only and adds <code>x-huginn-net-tcp</code> when <code>tcp_enabled</code> is on.
+		</p>
+	</div>
+</div>
+
+<style>
+	.arch {
+		--bd: var(--sl-color-accent, #f59e0b);
+		--fg: var(--sl-color-white, #e6edf3);
+		--muted: var(--sl-color-gray-3, #8b949e);
+		--card-bg: var(--sl-color-bg-inset, #161b22);
+		--hair: var(--sl-color-hairline, #30363d);
+		margin: 1.5rem 0 2rem;
+		padding: 1.35rem 1.1rem 1.5rem;
+		border-radius: 12px;
+		border: 1px solid var(--hair);
+		background: linear-gradient(180deg, rgba(245, 158, 11, 0.07) 0%, transparent 38%);
+		font-family: var(--sl-font-system, system-ui, sans-serif);
+	}
+
+	.arch-main {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		justify-content: center;
+		gap: 0.35rem 0.25rem;
+	}
+
+	.arch-ebpf-row {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: stretch;
+		justify-content: center;
+		gap: 0.35rem 0.25rem;
+	}
+
+	.arch-card {
+		border-radius: 10px;
+		padding: 0.85rem 1.05rem;
+		min-width: 8.5rem;
+		max-width: 13rem;
+		border: 1.5px solid var(--hair);
+		background: var(--card-bg);
+		box-shadow: 0 2px 10px rgba(0, 0, 0, 0.18);
+		display: flex;
+		flex-direction: column;
+		gap: 0.3rem;
+	}
+
+	.arch-card--accent {
+		border-color: var(--bd);
+		border-width: 2px;
+		box-shadow:
+			0 0 0 1px rgba(245, 158, 11, 0.2),
+			0 4px 16px rgba(0, 0, 0, 0.22);
+	}
+
+	.arch-card--maps {
+		background: rgba(245, 158, 11, 0.1);
+	}
+
+	.arch-card--dim {
+		opacity: 0.92;
+	}
+
+	.arch-card--purple {
+		border-color: #a371f7;
+	}
+
+	.arch-card--blue {
+		border-color: #58a6ff;
+		border-style: dashed;
+	}
+
+	.arch-t {
+		font-weight: 650;
+		font-size: 0.95rem;
+		color: var(--fg);
+		line-height: 1.2;
+	}
+
+	.arch-s {
+		font-size: 0.78rem;
+		color: var(--muted);
+		line-height: 1.35;
+	}
+
+	.arch-join {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		padding: 0 0.2rem;
+		min-width: 2.75rem;
+	}
+
+	.arch-join--sm {
+		min-width: 1.5rem;
+	}
+
+	.arch-a {
+		font-size: 1.2rem;
+		color: var(--bd);
+		line-height: 1;
+	}
+
+	.arch-w {
+		font-size: 0.62rem;
+		text-transform: uppercase;
+		letter-spacing: 0.06em;
+		color: var(--muted);
+		margin-top: 0.2rem;
+		text-align: center;
+	}
+
+	.arch-cap {
+		text-align: center;
+		font-size: 0.72rem;
+		font-weight: 600;
+		text-transform: uppercase;
+		letter-spacing: 0.1em;
+		color: var(--muted);
+		margin: 1.35rem 0 1rem;
+	}
+
+	.arch-ebpf {
+		margin-top: 0.25rem;
+	}
+
+	.arch-up {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 0.65rem;
+		margin: 1rem 0 0.85rem;
+		max-width: 22rem;
+		margin-left: auto;
+		margin-right: auto;
+	}
+
+	.arch-up-line {
+		flex: 1;
+		height: 1px;
+		background: linear-gradient(90deg, transparent, var(--bd), transparent);
+		opacity: 0.55;
+	}
+
+	.arch-up-label {
+		font-size: 0.68rem;
+		color: var(--muted);
+		white-space: nowrap;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+	}
+
+	.arch-foot {
+		text-align: center;
+		font-size: 0.85rem;
+		color: var(--muted);
+		margin: 0;
+		max-width: 36rem;
+		margin-left: auto;
+		margin-right: auto;
+		line-height: 1.45;
+	}
+
+	.arch-foot code {
+		font-size: 0.8em;
+	}
+
+	@media (max-width: 40rem) {
+		.arch-main .arch-join {
+			flex-direction: row;
+			width: 100%;
+			min-height: 1.5rem;
+		}
+
+		.arch-main .arch-a {
+			transform: rotate(90deg);
+		}
+
+		.arch-main {
+			flex-direction: column;
+		}
+	}
+</style>
