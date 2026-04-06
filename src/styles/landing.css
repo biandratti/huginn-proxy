@@ -49,6 +49,40 @@ a:hover {
 	border-bottom: 1px solid var(--hp-border);
 }
 
+.hp-hero-layout {
+	display: flex;
+	align-items: center;
+	gap: 2.5rem;
+}
+
+.hp-hero-text {
+	flex: 1;
+	min-width: 0;
+}
+
+.hp-hero-img {
+	flex: 0 0 auto;
+}
+
+.hp-hero-img img {
+	display: block;
+	width: clamp(140px, 20vw, 260px);
+	height: auto;
+	border-radius: 16px;
+	opacity: 0.92;
+}
+
+@media (max-width: 48rem) {
+	.hp-hero-layout {
+		flex-direction: column-reverse;
+		align-items: flex-start;
+	}
+
+	.hp-hero-img img {
+		width: clamp(100px, 30vw, 160px);
+	}
+}
+
 .hp-badge {
 	display: inline-block;
 	font-family: var(--hp-mono);

@@ -17,7 +17,7 @@ export default defineConfig({
 			titleDelimiter: '·',
 			tagline: 'v0.0.3-beta',
 			logo: {
-				src: './src/assets/logo.svg',
+				src: './src/assets/huginn-proxy.png',
 				alt: 'Huginn Proxy',
 				replacesTitle: false,
 			},
@@ -53,7 +53,7 @@ export default defineConfig({
 					},
 				},
 			],
-			favicon: '/favicon.svg',
+			favicon: '/favicon.ico',
 			editLink: {
 				baseUrl: 'https://github.com/biandratti/huginn-proxy/edit/gh-pages/',
 			},

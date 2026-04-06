@@ -16,7 +16,7 @@ const github = 'https://github.com/biandratti/huginn-proxy';
 			content="Huginn Proxy: high-performance passive fingerprinting (TLS, HTTP/2, TCP SYN) via Huginn Net parsers. MIT/Apache for proxy and signature path. Beta."
 		/>
 		<title>Huginn Proxy</title>
-		<link rel="icon" type="image/svg+xml" href={`${base}favicon.svg`} />
+		<link rel="icon" type="image/x-icon" href={`${base}favicon.ico`} />
 		<link rel="preconnect" href="https://fonts.googleapis.com" />
 		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 		<link
@@ -27,21 +27,28 @@ const github = 'https://github.com/biandratti/huginn-proxy';
 	<body>
 		<div class="hp-wrap">
 			<header class="hp-hero">
-				<span class="hp-badge">v0.0.3-beta</span>
-				<h1 class="hp-title">Huginn Proxy</h1>
-				<p class="hp-tagline">
-					High-performance reverse proxy: passive TLS, HTTP/2, and TCP SYN fingerprints, injected as trusted headers for your backends.
-				</p>
-				<p class="hp-lede">
-					Fingerprints are parsed by{' '}
-					<a href="https://github.com/biandratti/huginn-net">Huginn Net</a>. The entire signature path carries
-					the same MIT/Apache terms as the proxy itself. Use it in any commercial product without a separate
-					licensing deal for the fingerprint logic.
-				</p>
-				<div class="hp-actions">
-					<a class="hp-btn hp-btn--primary" href={docs}>Get started</a>
-					<a class="hp-btn hp-btn--ghost" href={github}>View on GitHub</a>
-					<a class="hp-btn hp-btn--ghost" href={`${base}docs/`}>Documentation</a>
+				<div class="hp-hero-layout">
+					<div class="hp-hero-text">
+						<span class="hp-badge">v0.0.3-beta</span>
+						<h1 class="hp-title">Huginn Proxy</h1>
+						<p class="hp-tagline">
+							High-performance reverse proxy: passive TLS, HTTP/2, and TCP SYN fingerprints, injected as trusted headers for your backends.
+						</p>
+						<p class="hp-lede">
+							Fingerprints are parsed by{' '}
+							<a href="https://github.com/biandratti/huginn-net">Huginn Net</a>. The entire signature path carries
+							the same MIT/Apache terms as the proxy itself. Use it in any commercial product without a separate
+							licensing deal for the fingerprint logic.
+						</p>
+						<div class="hp-actions">
+							<a class="hp-btn hp-btn--primary" href={docs}>Get started</a>
+							<a class="hp-btn hp-btn--ghost" href={github}>View on GitHub</a>
+							<a class="hp-btn hp-btn--ghost" href={`${base}docs/`}>Documentation</a>
+						</div>
+					</div>
+					<div class="hp-hero-img">
+						<img src={`${base}huginn-proxy.png`} alt="Huginn Proxy" width="280" height="280" />
+					</div>
 				</div>
 			</header>
 
