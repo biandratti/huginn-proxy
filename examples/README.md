@@ -83,27 +83,35 @@ chmod 644 examples/certs/server.key examples/certs/server.crt
 
 ### 2. Start Services
 
-Two compose files are provided depending on your environment:
+Four compose files are provided depending on your environment:
 
-| Compose file | Dockerfile | Requirements |
+| Compose file | Images | Requirements |
 |---|---|---|
-| `docker-compose.yml` | `docker/proxy.Dockerfile` (target: ebpf) + `docker/ebpf-agent.Dockerfile` | Linux kernel ≥ 5.11, `cap_add` granted by Docker |
-| `docker-compose.plain.yml` | `docker/proxy.Dockerfile` (target: plain) | Any Linux kernel, no extra capabilities |
+| `docker-compose.yml` | Built from source (target: ebpf) | Linux kernel ≥ 5.11, `cap_add` granted by Docker |
+| `docker-compose.plain.yml` | Built from source (target: plain) | Any Linux kernel, no extra capabilities |
+| `docker-compose.release.yml` | `ghcr.io/biandratti/huginn-proxy:v0.0.1-beta.3` | Any Linux kernel, no extra capabilities |
+| `docker-compose.release-ebpf.yml` | `ghcr.io/biandratti/huginn-proxy:v0.0.1-beta.3` + `...:v0.0.1-beta.3-ebpf-agent` | Linux kernel ≥ 5.11, `cap_add` granted by Docker |
 
 ```bash
-# With eBPF/XDP TCP SYN fingerprinting (Linux kernel ≥ 5.11)
+# Build from source — with eBPF/XDP TCP SYN fingerprinting (Linux kernel ≥ 5.11)
 docker compose -f examples/docker-compose.yml up --build
 
-# Without eBPF (any kernel, simpler setup)
+# Build from source — without eBPF (any kernel, simpler setup)
 docker compose -f examples/docker-compose.plain.yml up --build
+
+# Release images — without eBPF (any kernel, no build step)
+docker compose -f examples/docker-compose.release.yml up
+
+# Release images — with eBPF/XDP TCP SYN fingerprinting (Linux kernel ≥ 5.11)
+docker compose -f examples/docker-compose.release-ebpf.yml up
 ```
 
-Alternatively, pull a pre-built image from the registry:
+Available images on the GitHub Container Registry:
 
 | Image tag | Description |
 |---|---|
-| `ghcr.io/<owner>/huginn-proxy:latest` | With eBPF/XDP - requires Linux kernel ≥ 5.11 and `cap_add` |
-| `ghcr.io/<owner>/huginn-proxy:latest-plain` | Without eBPF - runs on any Linux kernel, no extra capabilities needed |
+| `ghcr.io/biandratti/huginn-proxy:v0.0.1-beta.3` | Proxy with eBPF TCP SYN support — requires Linux kernel ≥ 5.11 and `cap_add` |
+| `ghcr.io/biandratti/huginn-proxy:v0.0.1-beta.3-ebpf-agent` | eBPF agent (XDP program loader) — used alongside the proxy image |
 
 ### 3. Test the Proxy
 
