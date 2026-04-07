@@ -19,7 +19,6 @@ Two processes cooperate:
 - **Kernel ≥ 5.11** recommended for modern BPF UAPI.
 - **bpffs** mounted at `/sys/fs/bpf`.
 - **One agent per interface:** two loaders race to attach XDP.
-- For the documented XDP capture path, **IPv4** listen addresses align with how packets are selected; enabling IPv6-only listen with `tcp_enabled` may fail fast. See upstream `EBPF-SETUP.md` on `master`.
 
 ## Capabilities
 
