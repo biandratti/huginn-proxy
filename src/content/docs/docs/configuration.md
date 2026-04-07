@@ -40,7 +40,7 @@ Each `[[routes]]` entry includes:
 - `backend`: must match a configured backend address
 - `fingerprinting`: enable or disable TLS + HTTP/2 fingerprint headers for this route
 - `force_new_connection`: bypass backend connection pooling when `true`
-- `replace_path`: strip / rewrite options (see [Routing](routing/))
+- `replace_path`: strip / rewrite options (see [Routing](/huginn-proxy/docs/routing/))
 - Optional nested `[routes.rate_limit]` and `[routes.headers]`
 
 ## TLS (`[tls]`)
@@ -54,7 +54,7 @@ Server certificate and key paths, ALPN list, optional file watch interval, TLS v
 - `tls_enabled`, `http_enabled`, `tcp_enabled`: toggles
 - `max_capture`: cap for HTTP/2 capture buffer (default in the tens of KiB range)
 
-TCP SYN requires `ebpf-tcp` at build time and the agent. See [eBPF TCP setup](ebpf-setup/).
+TCP SYN requires `ebpf-tcp` at build time and the agent. See [eBPF TCP setup](/huginn-proxy/docs/ebpf-setup/).
 
 ## Timeouts (`[timeout]`)
 
@@ -62,7 +62,7 @@ Separate knobs for connect, idle, graceful shutdown, TLS handshake, overall conn
 
 ## Telemetry (`[telemetry]`)
 
-`metrics_port` enables a **separate** HTTP server for `/health`, `/ready`, `/live`, and `/metrics`. See [Telemetry](telemetry/).
+`metrics_port` enables a **separate** HTTP server for `/health`, `/ready`, `/live`, and `/metrics`. See [Telemetry](/huginn-proxy/docs/telemetry/).
 
 ## Headers (`[headers]`)
 

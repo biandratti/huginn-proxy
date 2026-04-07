@@ -26,7 +26,7 @@ On HTTP/2 connections only, a compact signature is emitted as `x-huginn-net-akam
 
 ## TCP SYN (p0f-style, optional)
 
-When built with `ebpf-tcp`, `tcp_enabled = true`, and the [eBPF agent](ebpf-setup/) is running, a p0f-style string is sent as `x-huginn-net-tcp` ([huginn-net-tcp](https://crates.io/crates/huginn-net-tcp)).
+When built with `ebpf-tcp`, `tcp_enabled = true`, and the [eBPF agent](/huginn-proxy/docs/ebpf-setup/) is running, a p0f-style string is sent as `x-huginn-net-tcp` ([huginn-net-tcp](https://crates.io/crates/huginn-net-tcp)).
 
 **Constraints**
 

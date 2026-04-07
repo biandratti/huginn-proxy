@@ -30,7 +30,7 @@ HSTS, CSP, X-Frame-Options, and custom headers can be attached to **responses** 
 
 ## TLS and mTLS
 
-Server-side TLS terminates at the proxy with configurable protocols and cipher policies. **mTLS** can require client certificates signed by a configured CA; this is a **global** policy (not per-route). See [Configuration reference](configuration/) for `client_auth` fields.
+Server-side TLS terminates at the proxy with configurable protocols and cipher policies. **mTLS** can require client certificates signed by a configured CA; this is a **global** policy (not per-route). See [Configuration reference](/huginn-proxy/docs/configuration/) for `client_auth` fields.
 
 ## Forwarding headers
 

@@ -29,4 +29,4 @@ Define one or more `[[backends]]` entries, then reference a backend address on e
 
 HTTP/1.1 and HTTP/2 reuse connections to backends where possible. Use `force_new_connection = true` on a route when you need a fresh connection (for example, fingerprinting scenarios that require new TLS handshakes).
 
-See [Configuration reference](configuration/) for the exact TOML fields.
+See [Configuration reference](/huginn-proxy/docs/configuration/) for the exact TOML fields.

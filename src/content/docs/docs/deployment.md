@@ -43,7 +43,7 @@ docker compose up -d
 
 Pin paths and interface names must match between agent configuration and node networking. Readiness should probe the agent’s `/ready` endpoint when maps must be present before traffic.
 
-See [eBPF TCP setup](ebpf-setup/) for environment variables and security context details.
+See [eBPF TCP setup](/huginn-proxy/docs/ebpf-setup/) for environment variables and security context details.
 
 ## Production checklist (short)
 

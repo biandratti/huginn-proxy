@@ -45,5 +45,3 @@ Adjust hostnames (`backend-a`, `backend-b`) and paths to match your Compose serv
 With `telemetry.metrics_port` set, health and metrics are on **that** port, not the main listener:
 
 - `GET /health`, `GET /ready`, `GET /live`, `GET /metrics`
-
-Details: [Telemetry](telemetry/).
