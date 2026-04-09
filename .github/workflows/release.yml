@@ -69,22 +69,22 @@ jobs:
             target: x86_64-unknown-linux-gnu
             suffix: "-ebpf"
             binary: huginn-proxy
-            image_suffix: ""
+            image_tag_prefix: ""
           - platform: linux/arm64
             target: aarch64-unknown-linux-gnu
             suffix: "-ebpf"
             binary: huginn-proxy
-            image_suffix: ""
+            image_tag_prefix: ""
           - platform: linux/amd64
             target: x86_64-unknown-linux-gnu
             suffix: "-ebpf-agent"
             binary: huginn-ebpf-agent
-            image_suffix: "-ebpf-agent"
+            image_tag_prefix: "ebpf-agent-"
           - platform: linux/arm64
             target: aarch64-unknown-linux-gnu
             suffix: "-ebpf-agent"
             binary: huginn-ebpf-agent
-            image_suffix: "-ebpf-agent"
+            image_tag_prefix: "ebpf-agent-"
 
     steps:
       - name: Set up Docker Buildx
@@ -99,7 +99,7 @@ jobs:
 
       - name: Extract binary from Docker image
         run: |
-          IMAGE_TAG="${{ needs.docker.outputs.image_tag }}${{ matrix.image_suffix }}"
+          IMAGE_TAG="${{ env.GHCR }}/${{ env.GHCR_IMAGE_NAME }}:${{ matrix.image_tag_prefix }}${{ needs.docker.outputs.tag }}"
           ARTIFACT_NAME="${{ matrix.binary }}-${{ needs.docker.outputs.tag }}-${{ matrix.target }}${{ matrix.suffix }}"
           
           echo "Waiting for image to be available: ${IMAGE_TAG}"

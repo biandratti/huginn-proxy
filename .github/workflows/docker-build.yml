@@ -74,17 +74,17 @@ jobs:
           - name: ebpf
             dockerfile: ./docker/proxy.Dockerfile
             target: ebpf
-            suffix: ''
+            tag_prefix: ''
             platforms: linux/amd64,linux/arm64
           - name: plain
             dockerfile: ./docker/proxy.Dockerfile
             target: plain
-            suffix: '-plain'
+            tag_prefix: 'plain-'
             platforms: linux/amd64,linux/arm64
           - name: ebpf-agent
             dockerfile: ./docker/ebpf-agent.Dockerfile
             target: ''
-            suffix: '-ebpf-agent'
+            tag_prefix: 'ebpf-agent-'
             platforms: linux/amd64,linux/arm64
 
     steps:
@@ -98,10 +98,11 @@ jobs:
           images: |
             ${{ inputs.registry || 'ghcr.io' }}/${{ inputs.image_name || github.repository }}
           flavor: |
-            suffix=${{ matrix.suffix }}
+            prefix=${{ matrix.tag_prefix }}
+            suffix=
           tags: |
             type=ref,event=tag
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=latest,enable=${{ github.event_name == 'workflow_call' && inputs.push }}
 
       - name: Set up QEMU
         if: ${{ inputs.push == true }}

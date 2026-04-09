@@ -140,11 +140,11 @@ Local: [`examples/`](examples/) (Docker Compose). Published runtime images (`lin
 
 | Image                                                      | Base | User | Capabilities |
 |------------------------------------------------------------|------|------|--------------|
-| `ghcr.io/biandratti/huginn-proxy:v0.0.1-beta.3`            | `debian:bookworm-slim` | `10001` | Proxy reads pinned maps — `CAP_BPF` |
-| `ghcr.io/biandratti/huginn-proxy:v0.0.1-beta.3-plain`      | `debian:bookworm-slim` | `10001` | No eBPF |
-| `ghcr.io/biandratti/huginn-proxy:v0.0.1-beta.3-ebpf-agent` | `debian:bookworm-slim` | `root` | Agent loads XDP — `CAP_BPF` `CAP_NET_ADMIN` `CAP_PERFMON` |
+| `ghcr.io/biandratti/huginn-proxy:latest`              | `debian:bookworm-slim` | `10001` | Proxy reads pinned maps — `CAP_BPF` |
+| `ghcr.io/biandratti/huginn-proxy:plain-latest`         | `debian:bookworm-slim` | `10001` | No eBPF |
+| `ghcr.io/biandratti/huginn-proxy:ebpf-agent-latest`    | `debian:bookworm-slim` | `root` | Agent loads XDP — `CAP_BPF` `CAP_NET_ADMIN` `CAP_PERFMON` |
 
-Replace `v0.0.1-beta.3` with your release tag. See [DEPLOYMENT.md](DEPLOYMENT.md), [EBPF-SETUP.md](EBPF-SETUP.md).
+Pinned releases: `vX.Y.Z`, `plain-vX.Y.Z`, `ebpf-agent-vX.Y.Z`. See [DEPLOYMENT.md](DEPLOYMENT.md), [EBPF-SETUP.md](EBPF-SETUP.md).
 
 </details>
 
