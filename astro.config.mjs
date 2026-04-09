@@ -11,6 +11,9 @@ export default defineConfig({
 	trailingSlash: 'always',
 	integrations: [
 		starlight({
+			components: {
+				Footer: './src/components/Footer.astro',
+			},
 			title: 'Huginn Proxy',
 			description:
 				'High-performance reverse proxy with passive fingerprints via Huginn Net (MIT/Apache). Beta.',
@@ -54,9 +57,6 @@ export default defineConfig({
 				},
 			],
 			favicon: '/favicon.ico',
-			editLink: {
-				baseUrl: 'https://github.com/biandratti/huginn-proxy/edit/gh-pages/',
-			},
 			lastUpdated: true,
 			tableOfContents: { minHeadingLevel: 2, maxHeadingLevel: 4 },
 			sidebar: [
