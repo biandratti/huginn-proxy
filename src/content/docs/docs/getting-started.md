@@ -8,7 +8,7 @@ sidebar:
     variant: caution
 ---
 
-Huginn Proxy is a reverse proxy built on [Tokio](https://tokio.rs), [Hyper](https://hyper.rs), and [Rustls](https://github.com/rustls/rustls). It passively fingerprints clients (TLS JA4, HTTP/2 Akamai-style, optional TCP SYN via eBPF) and injects trusted `x-huginn-net-*` headers for backends. Fingerprinting primitives come from [Huginn Net](https://github.com/biandratti/huginn-net). TCP SYN fingerprinting is implemented via an XDP eBPF program using [Aya](https://aya-rs.dev). 
+Huginn Proxy is a reverse proxy built on [Tokio](https://tokio.rs), [Hyper](https://hyper.rs), and [Rustls](https://github.com/rustls/rustls). It passively fingerprints clients (TLS JA4, HTTP/2 Akamai, optional TCP SYN via eBPF) and injects trusted `x-huginn-net-*` headers for backends. Fingerprinting primitives come from [Huginn Net](https://github.com/biandratti/huginn-net). TCP SYN fingerprinting is implemented via an XDP eBPF program using [Aya](https://aya-rs.dev). 
 
 Inspired by production-grade proxies like [Pingora](https://github.com/cloudflare/pingora), [Sozu](https://github.com/sozu-proxy/sozu), and [rust-rpxy](https://github.com/junkurihara/rust-rpxy).
 
