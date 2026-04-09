@@ -82,6 +82,6 @@ You do not need to configure these in TOML for standard behavior. Global **[Head
 
 ## Related
 
-- [Rate limiting](/huginn-proxy/docs/rate-limiting/) — `[security.rate_limit]` and per-route overrides
-- [TLS](/huginn-proxy/docs/tls/) — certificates and mTLS
+- [Rate limiting](/huginn-proxy/docs/rate-limiting/): `[security.rate_limit]` and per-route overrides
+- [TLS](/huginn-proxy/docs/tls/): certificates and mTLS
 - [Configuration overview](/huginn-proxy/docs/configuration/)
