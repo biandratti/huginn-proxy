@@ -5,34 +5,37 @@ sidebar:
   order: 30
 ---
 
-## Container image
+## Container images
 
-Publish workflow and tags are defined on `master` in the GitHub repository. Run the binary as:
+Images are published to **`ghcr.io/biandratti/huginn-proxy`**: the **proxy**, **`-plain`** builds (no eBPF in the binary), and the **`-ebpf-agent`** sidecar. Pin an explicit **version tag** from [GitHub Releases](https://github.com/biandratti/huginn-proxy/releases) for both proxy and agent so they stay in sync.
 
-```bash
-docker run -d \
-  --name huginn-proxy \
-  -p 7000:7000 -p 9090:9090 \
-  -v $(pwd)/config.toml:/config/config.toml:ro \
-  ghcr.io/biandratti/huginn-proxy:latest \
-  /usr/local/bin/huginn-proxy /config/config.toml
-```
-
-Mount TLS material read-only when `[tls]` is enabled. Container images run the workload user with a fixed UID; ensure cert files are readable by that user.
+A one-off **`docker run` only for `huginn-proxy`** is a poor fit: it omits TLS mounts, the **eBPF agent**, **bpffs**, and the **shared network namespace** the agent needs to attach XDP next to the proxy listener. Use the Compose files in the repository as the single source of truth (same idea as Traefik pointing at their tracked `docker-compose` rather than pasting a full copy in the docs site).
 
 ## Docker Compose
 
-The repository ships Compose manifests under `examples/` on `master`:
+Canonical files live under [**examples**](https://github.com/biandratti/huginn-proxy/tree/master/examples):
 
-- Full stack with eBPF agent, proxy, backends, and health checks
-- **Plain** variant without TCP SYN fingerprinting for simpler hosts
+| File | Use |
+| --- | --- |
+| [`docker-compose.yml`](https://github.com/biandratti/huginn-proxy/blob/master/examples/docker-compose.yml) | Proxy + **eBPF agent** + sample backends (TCP SYN fingerprinting; Linux, extra caps) |
+| [`docker-compose.plain.yml`](https://github.com/biandratti/huginn-proxy/blob/master/examples/docker-compose.plain.yml) | **Plain** proxy only (no agent; simpler kernels / hosts) |
 
-Typical flow:
+The **README** in that directory has TLS generation, image tags, `curl` checks, and the exact `docker compose` commands. Run from a **clone** so paths like `examples/backend` resolve.
 
 ```bash
-cd examples
-docker compose up -d
+git clone https://github.com/biandratti/huginn-proxy.git
+cd huginn-proxy/examples
+# see README: certs, then e.g.
+docker compose -f docker-compose.yml up --build
 ```
+
+**Wiring you must not get wrong** (details in [eBPF TCP setup](/huginn-proxy/docs/ebpf-setup/)):
+
+- **Agent** uses `network_mode: "service:proxy"` so XDP sees the same `eth0` as the proxy listener.
+- **`bpffs`** volume mounted at `/sys/fs/bpf` in **both** agent and proxy; **`HUGINN_EBPF_PIN_PATH`** must match (e.g. `/sys/fs/bpf/huginn`).
+- **Capabilities:** agent needs `BPF`, `NET_ADMIN`, `PERFMON` (and often relaxed seccomp); proxy typically needs `CAP_BPF` to open pinned maps.
+
+Mount TLS material **read-only** when `[tls]` is enabled. Images run as a fixed workload UID; certs on the host must be readable inside the container.
 
 ## Kubernetes
 

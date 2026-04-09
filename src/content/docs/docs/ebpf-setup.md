@@ -5,34 +5,52 @@ sidebar:
   order: 31
 ---
 
-TCP SYN fingerprinting uses an **XDP** program loaded by **`huginn-ebpf-agent`**. The agent pins BPF maps under bpffs (for example `/sys/fs/bpf/huginn/`). **Huginn Proxy** opens those maps read-only and emits `x-huginn-net-tcp`.
+TCP SYN fingerprinting uses an **XDP** program loaded by **`huginn-ebpf-agent`**. The agent pins BPF maps under **bpffs** (for example under `HUGINN_EBPF_PIN_PATH`). **Huginn Proxy** opens those maps read-only and emits `x-huginn-net-tcp`.
 
 ## Architecture
 
 Two processes cooperate:
 
-1. **Agent:** loads XDP, attaches to the interface, pins maps, stays running.
+1. **Agent:** loads XDP, attaches to the interface, pins maps, exposes metrics, stays running.
 2. **Proxy:** accepts connections, looks up `(src_ip, src_port)` in the map, formats the p0f-style signature.
 
 ## Preconditions
 
-- **Kernel ≥ 5.11** recommended for modern BPF UAPI.
-- **bpffs** mounted at `/sys/fs/bpf`.
-- **One agent per interface:** two loaders race to attach XDP.
+- **Kernel ≥ 5.11** (recommended for current BPF UAPI).
+- **bpffs** mounted at `/sys/fs/bpf` (Compose uses a `bpf` volume; on bare metal ensure the mount exists).
+- **One agent per interface** that loads XDP on that NIC; two loaders on the same interface race.
 
 ## Capabilities
 
-The agent needs appropriate Linux capabilities (e.g. `BPF`, `NET_ADMIN`, often `PERFMON`) and, in many clusters, an unconfined seccomp profile for `bpf()` syscalls. The proxy **does not** need the same caps when it only opens pinned maps.
+| Component | Typical needs |
+| --- | --- |
+| **Agent** | `CAP_BPF`, `CAP_NET_ADMIN`, `CAP_PERFMON` (or root); often **seccomp/apparmor unconfined** so `bpf()` and XDP attach succeed in containers. |
+| **Proxy** | **`CAP_BPF`** is enough when it only **opens** pinned maps (no XDP load in the proxy process). |
 
-## Environment variables (typical)
+## Environment variables
 
-Examples (exact names in source / docs on `master`):
+These must be **consistent** between agent and proxy where shared (pin path, map size). Names match what the binaries read at runtime.
 
-- `HUGINN_EBPF_PIN_PATH`: where maps are pinned
-- `HUGINN_EBPF_INTERFACE`: NIC to attach XDP
-- `HUGINN_EBPF_DST_PORT` / `HUGINN_EBPF_DST_IP_V4`: filter traffic toward the proxy listener
-- `HUGINN_EBPF_SYN_MAP_MAX_ENTRIES`: map sizing
-- `HUGINN_EBPF_METRICS_ADDR` / `HUGINN_EBPF_METRICS_PORT`: agent metrics bind
+| Variable | Role |
+| --- | --- |
+| `HUGINN_EBPF_PIN_PATH` | Directory under bpffs where maps are pinned (e.g. `/sys/fs/bpf/huginn`). **Same** on agent and proxy. |
+| `HUGINN_EBPF_INTERFACE` | NIC the agent attaches XDP to (in Docker Compose with `network_mode: service:proxy`, this is the **proxy** container’s `eth0`). |
+| `HUGINN_EBPF_DST_PORT` | Listener port the agent filters toward (the proxy’s TLS/HTTP port, e.g. `7000`). |
+| `HUGINN_EBPF_DST_IP_V4` | IPv4 address considered “to the proxy” (`0.0.0.0` often means any local IPv4 listener on that port; align with your bind addresses). |
+| `HUGINN_EBPF_DST_IP_V6` | IPv6 counterpart (e.g. `::` for any). |
+| `HUGINN_EBPF_SYN_MAP_MAX_ENTRIES` | BPF map capacity for SYN entries; **same** on agent and proxy. |
+| `HUGINN_EBPF_XDP_MODE` | XDP attach mode (e.g. `skb` vs `native` / driver-dependent; see agent docs in repo). |
+| `HUGINN_EBPF_METRICS_ADDR` / `HUGINN_EBPF_METRICS_PORT` | Where the **agent** binds its HTTP health/metrics (often `127.0.0.1` inside the proxy netns; publish `9091` on the proxy service if you scrape from the host). |
+
+Full stack layout (Compose, caps, volumes) is maintained in [`examples/docker-compose.yml`](https://github.com/biandratti/huginn-proxy/blob/master/examples/docker-compose.yml); **do not treat this table as a second source of truth** if the repo changes defaults.
+
+## Docker Compose specifics
+
+- **`network_mode: "service:proxy"`** on the agent puts the agent in the **proxy’s network namespace**, so the interface name (`eth0`) and destination filter match the traffic the proxy actually receives.
+- **`bpffs`** must be mounted into **both** containers at `/sys/fs/bpf` (or adjust paths consistently).
+- **Health:** agent `/ready` should succeed when maps are pinned; proxy `/health` on `telemetry.metrics_port` is separate.
+
+See [Deployment](/huginn-proxy/docs/deployment/) for the Compose file index and clone/run flow.
 
 ## Kubernetes networking
 

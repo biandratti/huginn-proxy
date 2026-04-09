@@ -2,10 +2,15 @@
 title: Telemetry
 description: Metrics, health endpoints, and scraping. Beta.
 sidebar:
-  order: 20
+  order: 9
 ---
 
-When `telemetry.metrics_port` is set, Huginn Proxy serves observability on **that port only**, separate from the main proxy listener.
+The **`[telemetry]`** section sets the **metrics and health** HTTP server. When `metrics_port` is set, Huginn Proxy serves observability on **that port only**, separate from the main proxy listener.
+
+```toml
+[telemetry]
+metrics_port = 9090
+```
 
 ## Endpoints
 

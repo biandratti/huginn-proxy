@@ -11,6 +11,9 @@ export default defineConfig({
 	trailingSlash: 'always',
 	integrations: [
 		starlight({
+			components: {
+				Footer: './src/components/Footer.astro',
+			},
 			title: 'Huginn Proxy',
 			description:
 				'High-performance reverse proxy with passive fingerprints via Huginn Net (MIT/Apache). Beta.',
@@ -54,9 +57,6 @@ export default defineConfig({
 				},
 			],
 			favicon: '/favicon.ico',
-			editLink: {
-				baseUrl: 'https://github.com/biandratti/huginn-proxy/edit/gh-pages/',
-			},
 			lastUpdated: true,
 			tableOfContents: { minHeadingLevel: 2, maxHeadingLevel: 4 },
 			sidebar: [
@@ -65,27 +65,27 @@ export default defineConfig({
 					items: [
 						{ label: 'Documentation', slug: 'docs' },
 						{ label: 'Getting started', slug: 'docs/getting-started' },
-						{ label: 'Quick example', slug: 'docs/quick-example' },
+						{ label: 'Quick start', slug: 'docs/quick-example' },
 					],
 				},
 				{
-					label: 'Core concepts',
-					items: [
-						{ label: 'How it works', slug: 'docs/how-it-works' },
-						{ label: 'Fingerprinting', slug: 'docs/fingerprinting' },
-						{ label: 'Routing', slug: 'docs/routing' },
-					],
+					label: 'Concepts',
+					items: [{ label: 'How it works', slug: 'docs/how-it-works' }],
 				},
 				{
 					label: 'Configuration',
 					items: [
-						{ label: 'Configuration reference', slug: 'docs/configuration' },
+						{ label: 'Overview', slug: 'docs/configuration' },
+						{ label: 'Listen', slug: 'docs/listen' },
+						{ label: 'Backends', slug: 'docs/backends' },
+						{ label: 'Routes', slug: 'docs/routes' },
+						{ label: 'TLS', slug: 'docs/tls' },
+						{ label: 'Fingerprinting', slug: 'docs/fingerprinting' },
 						{ label: 'Security', slug: 'docs/security' },
+						{ label: 'Rate limiting', slug: 'docs/rate-limiting' },
+						{ label: 'Telemetry', slug: 'docs/telemetry' },
+						{ label: 'Headers', slug: 'docs/headers' },
 					],
-				},
-				{
-					label: 'Observability',
-					items: [{ label: 'Telemetry', slug: 'docs/telemetry' }],
 				},
 				{
 					label: 'Deployment',
