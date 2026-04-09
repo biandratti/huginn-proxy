@@ -34,4 +34,4 @@ huginn-proxy /path/to/config.toml
 ## Related
 
 - [How it works](/huginn-proxy/docs/how-it-works/): request path through the proxy
-- [Quick example](/huginn-proxy/docs/quick-example/): minimal TOML
+- [Quick start](/huginn-proxy/docs/quick-example/): first request end-to-end

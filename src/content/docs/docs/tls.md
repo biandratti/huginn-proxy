@@ -29,7 +29,7 @@ Use **`[tls.options]`** (or equivalent nested tables in your schema) for:
 
 ## Example (cipher and curve lists)
 
-See the [`examples/config/compose.toml`](https://github.com/biandratti/huginn-proxy/blob/master/examples/config/compose.toml) file on GitHub for a full **`[tls.options]`** block with cipher suites and curves.
+See the [**examples**](https://github.com/biandratti/huginn-proxy/tree/master/examples) directory in the repository (for example `config/compose.toml`) for a full **`[tls.options]`** block with cipher suites and curves.
 
 ## Session resumption
 

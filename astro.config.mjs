@@ -65,7 +65,7 @@ export default defineConfig({
 					items: [
 						{ label: 'Documentation', slug: 'docs' },
 						{ label: 'Getting started', slug: 'docs/getting-started' },
-						{ label: 'Quick example', slug: 'docs/quick-example' },
+						{ label: 'Quick start', slug: 'docs/quick-example' },
 					],
 				},
 				{
