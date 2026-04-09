@@ -2,7 +2,7 @@
 title: Fingerprinting
 description: TLS JA4, HTTP/2 Akamai, and TCP SYN headers. Beta.
 sidebar:
-  order: 4
+  order: 6
 ---
 
 Huginn Proxy passively extracts fingerprints and forwards them as request headers. Analysis and blocking decisions belong on the backend.
@@ -52,7 +52,7 @@ If `tls_enabled` or `http_enabled` is `false`, the corresponding headers are not
 
 When built with `ebpf-tcp`, `tcp_enabled = true`, and the [eBPF agent](/huginn-proxy/docs/ebpf-setup/) is running, a p0f-style string is sent as `x-huginn-net-tcp` ([huginn-net-tcp](https://crates.io/crates/huginn-net-tcp)).
 
-**Enable or disable globally** — there is **no per-route** TCP SYN toggle:
+**Enable or disable globally.** There is **no per-route** TCP SYN toggle:
 
 ```toml
 [fingerprint]
@@ -92,4 +92,4 @@ http_enabled = false
 tcp_enabled = true   # only TCP SYN headers (if eBPF build + agent)
 ```
 
-See [Configuration reference](/huginn-proxy/docs/configuration/) for all `[fingerprint]` fields (including `max_capture` for HTTP/2 capture size).
+See [Configuration overview](/huginn-proxy/docs/configuration/) for where `[fingerprint]` sits in the file; fields include `max_capture` (HTTP/2 capture cap).

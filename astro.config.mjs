@@ -69,23 +69,23 @@ export default defineConfig({
 					],
 				},
 				{
-					label: 'Core concepts',
-					items: [
-						{ label: 'How it works', slug: 'docs/how-it-works' },
-						{ label: 'Fingerprinting', slug: 'docs/fingerprinting' },
-						{ label: 'Routing', slug: 'docs/routing' },
-					],
+					label: 'Concepts',
+					items: [{ label: 'How it works', slug: 'docs/how-it-works' }],
 				},
 				{
 					label: 'Configuration',
 					items: [
-						{ label: 'Configuration reference', slug: 'docs/configuration' },
+						{ label: 'Overview', slug: 'docs/configuration' },
+						{ label: 'Listen', slug: 'docs/listen' },
+						{ label: 'Backends', slug: 'docs/backends' },
+						{ label: 'Routes', slug: 'docs/routes' },
+						{ label: 'TLS', slug: 'docs/tls' },
+						{ label: 'Fingerprinting', slug: 'docs/fingerprinting' },
 						{ label: 'Security', slug: 'docs/security' },
+						{ label: 'Rate limiting', slug: 'docs/rate-limiting' },
+						{ label: 'Telemetry', slug: 'docs/telemetry' },
+						{ label: 'Headers', slug: 'docs/headers' },
 					],
-				},
-				{
-					label: 'Observability',
-					items: [{ label: 'Telemetry', slug: 'docs/telemetry' }],
 				},
 				{
 					label: 'Deployment',

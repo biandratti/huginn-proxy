@@ -15,7 +15,7 @@ This site tracks the **beta** line; verify the [GitHub releases](https://github.
 
 **New here?** Start with [Getting started](/huginn-proxy/docs/getting-started/), then skim
 [How it works](/huginn-proxy/docs/how-it-works/) to understand the request pipeline before
-diving into configuration.
+diving into [Configuration overview](/huginn-proxy/docs/configuration/).
 
 **Coming from another proxy?** Jump straight to [Quick example](/huginn-proxy/docs/quick-example/)
 for a minimal working setup, or [Deployment](/huginn-proxy/docs/deployment/) if you already know
