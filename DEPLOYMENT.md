@@ -2,6 +2,8 @@
 
 Production deployment examples for Docker and Kubernetes.
 
+Image tags and release binaries (GHCR, musl/glibc, eBPF): see [DEPLOYMENT-MATRIX.md](DEPLOYMENT-MATRIX.md).
+
 ## Docker
 
 ### Standalone Container
