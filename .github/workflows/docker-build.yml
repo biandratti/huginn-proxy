@@ -14,7 +14,7 @@ on:
         type: string
         default: 'ghcr.io'
       image_name:
-        description: 'Image name without registry (e.g. owner/repo)'
+        description: 'Base image name without registry (e.g. owner/repo). Plain and agent images append -plain and -ebpf-agent.'
         type: string
         default: ''
     secrets:
@@ -74,17 +74,17 @@ jobs:
           - name: ebpf
             dockerfile: ./docker/proxy.Dockerfile
             target: ebpf
-            suffix: ''
+            image_repo_suffix: ''
             platforms: linux/amd64,linux/arm64
           - name: plain
             dockerfile: ./docker/proxy.Dockerfile
             target: plain
-            suffix: '-plain'
+            image_repo_suffix: '-plain'
             platforms: linux/amd64,linux/arm64
           - name: ebpf-agent
             dockerfile: ./docker/ebpf-agent.Dockerfile
             target: ''
-            suffix: '-ebpf-agent'
+            image_repo_suffix: '-ebpf-agent'
             platforms: linux/amd64,linux/arm64
 
     steps:
@@ -96,12 +96,10 @@ jobs:
         uses: docker/metadata-action@v6
         with:
           images: |
-            ${{ inputs.registry || 'ghcr.io' }}/${{ inputs.image_name || github.repository }}
-          flavor: |
-            suffix=${{ matrix.suffix }}
+            ${{ inputs.registry || 'ghcr.io' }}/${{ inputs.image_name || github.repository }}${{ matrix.image_repo_suffix }}
           tags: |
             type=ref,event=tag
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=latest,enable=${{ github.event_name == 'workflow_call' && inputs.push }}
 
       - name: Set up QEMU
         if: ${{ inputs.push == true }}

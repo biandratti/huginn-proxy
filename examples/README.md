@@ -100,10 +100,11 @@ docker compose -f examples/docker-compose.plain.yml up --build
 
 Alternatively, pull a pre-built image from the registry:
 
-| Image tag | Description |
+| Image | Description |
 |---|---|
-| `ghcr.io/<owner>/huginn-proxy:latest` | With eBPF/XDP - requires Linux kernel ≥ 5.11 and `cap_add` |
-| `ghcr.io/<owner>/huginn-proxy:latest-plain` | Without eBPF - runs on any Linux kernel, no extra capabilities needed |
+| `ghcr.io/<owner>/huginn-proxy:latest` | Proxy with eBPF/XDP — requires Linux kernel ≥ 5.11 and `cap_add` |
+| `ghcr.io/<owner>/huginn-proxy-plain:latest` | Proxy without eBPF — runs on any Linux kernel, no extra capabilities |
+| `ghcr.io/<owner>/huginn-proxy-ebpf-agent:latest` | XDP agent — pairs with the proxy image above |
 
 ### 3. Test the Proxy
 

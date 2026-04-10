@@ -131,41 +131,9 @@ See [`benches/README.md`](benches/README.md) for detailed benchmark results from
 
 See [ROADMAP.md](ROADMAP.md) for a detailed list of planned features and upcoming phases.
 
-## Containers and Binaries Matrix
+## Deployment matrix
 
-<details>
-<summary><strong>Docker images</strong></summary>
-
-Local: [`examples/`](examples/) (Docker Compose). Published runtime images (`linux/amd64`, `linux/arm64`):
-
-| Image                                                      | Base | User | Capabilities |
-|------------------------------------------------------------|------|------|--------------|
-| `ghcr.io/biandratti/huginn-proxy:v0.0.1-beta.3`            | `debian:bookworm-slim` | `10001` | Proxy reads pinned maps — `CAP_BPF` |
-| `ghcr.io/biandratti/huginn-proxy:v0.0.1-beta.3-plain`      | `debian:bookworm-slim` | `10001` | No eBPF |
-| `ghcr.io/biandratti/huginn-proxy:v0.0.1-beta.3-ebpf-agent` | `debian:bookworm-slim` | `root` | Agent loads XDP — `CAP_BPF` `CAP_NET_ADMIN` `CAP_PERFMON` |
-
-Replace `v0.0.1-beta.3` with your release tag. See [DEPLOYMENT.md](DEPLOYMENT.md), [EBPF-SETUP.md](EBPF-SETUP.md).
-
-</details>
-
-<details>
-<summary><strong>Release binaries</strong></summary>
-
-| Artifact | Suffix | OS | Arch | libc | eBPF |
-|---|---|---|---|---|---|
-| `huginn-proxy` | `x86_64-unknown-linux-musl` | Linux | amd64 | musl (static) | ❌ |
-| `huginn-proxy` | `aarch64-unknown-linux-musl` | Linux | arm64 | musl (static) | ❌ |
-| `huginn-proxy` | `x86_64-unknown-linux-gnu-ebpf` | Linux | amd64 | glibc | ✅ (reader) |
-| `huginn-proxy` | `aarch64-unknown-linux-gnu-ebpf` | Linux | arm64 | glibc | ✅ (reader) |
-| `huginn-proxy` | `x86_64-apple-darwin` | macOS | amd64 | - | ❌ |
-| `huginn-proxy` | `aarch64-apple-darwin` | macOS | arm64 | - | ❌ |
-| `huginn-ebpf-agent` | `x86_64-unknown-linux-gnu-ebpf-agent` | Linux | amd64 | glibc | ✅ (loader) |
-| `huginn-ebpf-agent` | `aarch64-unknown-linux-gnu-ebpf-agent` | Linux | arm64 | glibc | ✅ (loader) |
-
-- musl (static): zero runtime dependencies, runs on any Linux kernel and distro.
-- glibc (eBPF): extracted from the Docker image, requires glibc and Linux kernel ≥ 5.11.
-
-</details>
+Published images (`linux/amd64`, `linux/arm64`), release binaries, and capabilities: **[DEPLOYMENT-MATRIX.md](DEPLOYMENT-MATRIX.md)**. See also [DEPLOYMENT.md](DEPLOYMENT.md) and [EBPF-SETUP.md](EBPF-SETUP.md); local Compose under [`examples/`](examples/).
 
 ## Architecture
 
