@@ -6,56 +6,43 @@ Image tags and release binaries (GHCR, musl/glibc, eBPF): see [DEPLOYMENT-MATRIX
 
 ## Docker
 
-### Standalone Container
+### Overview
 
-Basic HTTP proxy:
+Use a published image from GHCR (see [DEPLOYMENT-MATRIX.md](DEPLOYMENT-MATRIX.md)). The **`huginn-proxy-plain`** image needs no extra Linux capabilities on the host; the default **`huginn-proxy`** image includes eBPF support for TCP SYN fingerprinting and may need `CAP_BPF` when that feature is enabled.
 
-```bash
-docker run -d \
-  --name huginn-proxy \
-  -p 7000:7000 \
-  -p 9090:9090 \
-  -v $(pwd)/config.toml:/config/config.toml:ro \
-  huginn-proxy:latest \
-  /usr/local/bin/huginn-proxy /config/config.toml
-```
+From the **repository root**, mount a real config **file** on the host. If the path does not exist, Docker creates an empty **directory** with that name and the proxy fails with `Is a directory (os error 21)` — remove any mistaken `config.toml` directory (`rm -rf ./config.toml`) and point at the file under `examples/config/`.
 
-With TLS:
+The checked-in example is `examples/config/compose.toml` (same one `examples/docker-compose.yml` uses). Backends there are `backend-a` / `backend-b` (Docker Compose DNS names); for a working stack use Compose below, or change backends to addresses reachable from the container.
 
-```bash
-docker run -d \
-  --name huginn-proxy \
-  -p 7000:7000 \
-  -p 9090:9090 \
-  -v $(pwd)/config.toml:/config/config.toml:ro \
-  -v $(pwd)/certs:/config/certs:ro \
-  huginn-proxy:latest \
-  /usr/local/bin/huginn-proxy /config/config.toml
-```
-
-**Note:** Certificate files must be readable by user `app` (UID 100).
+**Note:** The process runs as user `app` (UID **10001**). Certificate and key files under `/config/certs` must be readable by that user (e.g. `chmod` / `chown` on the host copy).
 
 ### Docker Compose
 
-See `examples/docker-compose.yml` for a complete setup with:
-- eBPF agent (TCP SYN fingerprinting, `/metrics` and `/ready` on configurable port)
-- Proxy (TLS termination, `/health`, `/ready`, `/live`, `/metrics` on port 9090)
-- Multiple backends
-- TLS termination
-- Health checks for both agent and proxy
+| File | Images | Use case |
+| --- | --- | --- |
+| `examples/docker-compose.yml` | Built from this repo | Full stack with eBPF agent (dev / CI) |
+| `examples/docker-compose.plain.yml` | Built from this repo | Proxy only (no eBPF in the binary) |
+| `examples/docker-compose.release-ebpf.yml` | **GHCR** `huginn-proxy` + `huginn-proxy-ebpf-agent` | Same as above, using published images |
+| `examples/docker-compose.release.yml` | **GHCR** `huginn-proxy-plain` | Same as plain, using published images |
 
-Run with:
+Published image names and tags (`latest` / `vX.Y.Z`): [DEPLOYMENT-MATRIX.md](DEPLOYMENT-MATRIX.md). The three GHCR packages are separate repositories (`huginn-proxy`, `huginn-proxy-plain`, `huginn-proxy-ebpf-agent`); **do not** add `-ebpf-agent` as a suffix on the tag.
+
+Compose that **builds** from this repository (TLS, backends, plain vs eBPF) is documented in [`examples/README.md`](examples/README.md).
+
+Pre-built images from GHCR (pin `latest` to a release tag in the compose file if you need reproducibility):
 
 ```bash
 cd examples
-docker compose up -d
+docker compose -f docker-compose.release.yml pull
+docker compose -f docker-compose.release.yml up -d
 ```
 
-Without TCP fingerprinting, use the plain variant:
+With eBPF agent + proxy from GHCR (Linux host; requires `CAP_BPF` and the `bpffs` volume, same as `docker-compose.yml`):
 
 ```bash
 cd examples
-docker compose -f docker-compose.plain.yml up -d
+docker compose -f docker-compose.release-ebpf.yml pull
+docker compose -f docker-compose.release-ebpf.yml up -d
 ```
 
 ## Kubernetes

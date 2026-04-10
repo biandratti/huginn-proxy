@@ -1,0 +1,45 @@
+# Pre-built images from GHCR (plain proxy — no eBPF in the binary).
+# Same layout as docker-compose.plain.yml; backends still build from this repo.
+# Pin a version: replace :latest with :vX.Y.Z from GitHub Releases (same tag on all huginn-proxy* images).
+
+services:
+  proxy:
+    image: ghcr.io/biandratti/huginn-proxy-plain:latest
+    command: ["/usr/local/bin/huginn-proxy", "/config/compose.toml"]
+    volumes:
+      - ./config/compose.toml:/config/compose.toml:ro
+      - ./certs:/config/certs:ro
+    ports:
+      - "0.0.0.0:7000:7000"
+      - "[::]:7000:7000"
+      - "0.0.0.0:9090:9090"
+      - "[::]:9090:9090"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://127.0.0.1:9090/health || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+    depends_on:
+      backend-a:
+        condition: service_started
+      backend-b:
+        condition: service_started
+
+  backend-a:
+    build:
+      context: ..
+      dockerfile: examples/backend/Dockerfile
+
+  backend-b:
+    build:
+      context: ..
+      dockerfile: examples/backend/Dockerfile
+
+networks:
+  default:
+    enable_ipv6: true
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
+        - subnet: fd00:dead:beef:1::/64
