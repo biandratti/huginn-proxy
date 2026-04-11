@@ -39,6 +39,7 @@ cargo build --release -p huginn-proxy --features ebpf-tcp
 
 ```bash
 mkdir -p examples/certs
+sudo chown -R $USER:$USER examples/certs/
 ```
 
 **Option A: Self-signed certificate (default, works with `curl -k` but browsers will show warnings)**

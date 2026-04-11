@@ -124,7 +124,7 @@ external tool against a running proxy instance:
 
 ```bash
 # Start the proxy locally (TLS mode, all fingerprinting enabled)
-cargo run -p huginn-proxy -- examples/compose.toml
+docker compose -f examples/docker-compose.release-ebpf.yml up --build
 
 # 30-second load test: 50 concurrent users, HTTP/1.1
 oha --insecure -c 50 -z 30s https://127.0.0.1:7000/
@@ -222,3 +222,29 @@ cargo bench --bench bench_proxy -- --baseline main
 
 Criterion exits with code 0 even when regressions are detected; post-process
 `target/criterion/*/change/estimates.json` to enforce thresholds in CI.
+
+---
+
+## Load with k6
+
+Use the same TLS stack as the sustained-load examples: bring up the proxy (and eBPF agent) with Compose, then run k6 from the **repository root**. The URL is **`https://`**: traffic is still **TLS-encrypted**. **`--insecure-skip-tls-verify`** only disables **certificate chain / hostname verification** against the system trust store (needed for the usual self-signed dev certs). It does **not** turn off TLS — same role as `curl -k` or `oha --insecure`. Drop the flag when using a CA-trusted certificate.
+
+The script **checks** that JA4 (and Akamai on HTTP/2) appear in the **backend JSON echo** (header echo), not on the response seen by the k6 client.
+
+```bash
+docker compose -f examples/docker-compose.release-ebpf.yml up --build
+
+k6 run --insecure-skip-tls-verify benches/load/k6/fingerprints.js
+```
+
+For JA4-only (HTTP/1.1, no Akamai check): `K6_NO_HTTP2=true k6 run --insecure-skip-tls-verify benches/load/k6/fingerprints.js`. Optional SYN header when eBPF has populated maps: `EXPECT_TCP_SYN=true`.
+
+### CPU / memory (container)
+
+k6 doesn’t show cgroup usage — use `docker stats` on the `proxy` container, or:
+
+```bash
+./benches/load/k6/run-with-docker-stats.sh k6 run --insecure-skip-tls-verify benches/load/k6/fingerprints.js
+```
+
+Writes `benches/load/k6/last-docker-stats.tsv`. App counters: `http://127.0.0.1:9090/metrics`.
