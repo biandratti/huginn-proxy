@@ -1,5 +1,7 @@
 # Huginn Proxy - Benchmarks
 
+This document collects **Criterion** runs (micro + integration), optional **external** load tests (`oha`, `k6` with fingerprint checks), and notes on reading CPU/memory from Docker. All published figures are **indicative**: they track regressions and capacity **for this proxy and feature set** (TLS + fingerprinting, etc.) on a **specific machine**. They are **not** a substitute for a fair shootout against nginx, Envoy, or Caddy unless workload, TLS settings, and functionality are aligned — those tools optimize for different defaults and rarely include the same fingerprinting path.
+
 Two benchmark suites with different scopes:
 
 | Suite | File | Scope |
