@@ -7,6 +7,10 @@ Two benchmark suites with different scopes:
 | `bench_fingerprinting` | `benches/bench_fingerprinting.rs` | Micro - pure parsing, no network |
 | `bench_proxy` | `benches/bench_proxy.rs` | Integration - full proxy round-trip |
 
+## Environment
+
+All **sample** and **baseline** tables in this document share one setup: **Intel i7-1165G7** (4 cores / 8 threads), **32 GB RAM**, Linux, `cargo bench` **release** on `localhost`. Numbers are **indicative** — expect **±5–15%** variance between runs (thermals, scheduling).
+
 ---
 
 ## Quick start
@@ -41,6 +45,15 @@ No network, no IO - pure CPU work on hardcoded byte fixtures.
 |---|---|
 | `akamai_parse_http2_preface_settings_window_headers` | `extract_akamai_fingerprint_from_bytes()` on preface + SETTINGS + WINDOW_UPDATE + HEADERS (HPACK pseudo-headers, same tail as `fingerprint_values.txt`) |
 | `ja4_parse_tls_client_hello` | `parse_tls_client_hello()` on a TLS 1.3 ClientHello |
+
+### Sample numbers (`cargo bench --bench bench_fingerprinting`)
+
+Criterion **estimate** (middle value). Three consecutive runs; table uses the **last** run. See **Environment** at the top of this document.
+
+| Benchmark | Estimate |
+|---|---|
+| `akamai_parse_http2_preface_settings_window_headers` | ~1.85 µs |
+| `ja4_parse_tls_client_hello` | ~1.60 µs |
 
 ### Fixtures
 
@@ -135,29 +148,20 @@ oha --insecure -c 50 -z 30s --http-version 2 https://127.0.0.1:7000/
 
 ### Load test results (oha, c=50, 30s, localhost)
 
+Medians over **three** runs per protocol (same host, Compose TLS proxy, example backend ~800 B/response).
+
 | Protocol | req/s | p50 | p95 | p99 | p99.9 |
 |---|---|---|---|---|---|
-| HTTP/1.1 | ~15,400 | 2.9 ms | 6.3 ms | 9.9 ms | 24.3 ms |
-| HTTP/2   | ~9,200  | 1.1 ms | 42 ms  | 44 ms  | 57 ms  |
+| HTTP/1.1 | ~12,700 | 3.2 ms | 7.2 ms | 16.6 ms | 46.9 ms |
+| HTTP/2   | ~7,200  | 0.86 ms | 42 ms | 44 ms | 50 ms |
 
-Two 30-second runs, fingerprinting enabled, backend returns `"ok"` instantly (same machine).
-The ~39–50 "errors" are connections aborted by `oha` at the 30-second deadline - not proxy errors.
+Success rate 100%; “aborted due to deadline” at end of window is an `oha` artifact, not proxy failure.
 
-**HTTP/1.1** shows a clean unimodal distribution. The vast majority of requests complete under
-11 ms; the tail is occasional connection setup, not proxy jitter.
+**HTTP/1.1** — mostly unimodal; one run reached ~17.5k req/s, the other two ~12.4–12.7k (table uses medians). Typical p50 in the **low ms** range for this setup.
 
-**HTTP/2** shows a bimodal distribution: p50 ≈ 1.1 ms (multiplexing reuses open connections),
-but ~10% of requests spike to ~42–48 ms. Those spikes are new TLS handshakes - `oha` opens
-fresh H2 connections as the pool saturates, each costing ~40–50 ms. The bimodal shape is a
-load-tool artifact, not a proxy behavior. Real H2 clients (browsers, gRPC stubs) that maintain
-persistent connections would stay in the sub-ms range for the hot path.
+**HTTP/2** — bimodal: p50 **sub‑ms** on the fast path, but p90+ dominated by **~42–44 ms** spikes (new TLS/H2 connections as `oha` spins connections). Compare H1 vs H2 **req/s** on equal `-c`/`-z`: H2 completes fewer requests in the same wall clock with this client.
 
-**Production capacity note:** the 15,400 req/s figure assumes a zero-latency backend and is a
-proxy overhead ceiling, not a production target. In practice, throughput is gated by backend
-latency. With 50 keep-alive connections the rule of thumb is `50 × (1000 / backend_ms)` req/s.
-A 10 ms backend → ~4,500 req/s; a 50 ms backend → ~900 req/s. The proxy overhead (~0.08 ms)
-is negligible in both cases. What this test does confirm is that the proxy handles sustained
-load without errors and without measurable per-request degradation over time.
+**Production capacity note:** the ~12.7k req/s H1 figure is **not** a universal ceiling — it depends on backend, payload, and hardware. Rule of thumb with 50 concurrent clients: `50 × (1000 / backend_ms)` req/s when backend latency dominates. What these runs show is sustained load **without HTTP errors**; tail latencies must be read in context (tooling + TLS churn).
 
 ---
 
@@ -173,39 +177,34 @@ This models a keep-alive HTTP client hitting the proxy repeatedly.
 Each concurrent request creates a new `reqwest::Client` (new TLS handshake).
 This models N independent clients connecting simultaneously.
 
-### Environment
+### Baseline numbers (localhost, `cargo bench --bench bench_proxy`)
 
-Measured on an Intel Core i7-1165G7 (4 cores, 2.80 GHz) with 32 GB RAM, localhost,
-release build. Results may vary ±5–10% depending on CPU thermal state.
+Medians from Criterion’s **estimate** line (middle value). Refreshed after **three** consecutive runs; the table below matches the **last** run when the baseline comparison was stable. Same **Environment** as at the top of this document.
 
-### Baseline numbers (localhost, release build)
-
-| Benchmark | p50 |
+| Benchmark | Estimate |
 |---|---|
-| HTTP/1.1 single request (warm) | ~79 µs |
-| HTTP/2 single request (warm) | ~85 µs |
-| HTTP/1.1 with fingerprinting (warm) | ~77 µs |
-| HTTP/1.1 without fingerprinting (warm) | ~74 µs |
-| **Fingerprinting overhead H1 (JA4 only)** | **~2.5 µs** |
-| HTTP/2 with fingerprinting (warm) | ~79 µs |
-| HTTP/2 without fingerprinting (warm) | ~75 µs |
-| **Fingerprinting overhead H2 (JA4 + Akamai)** | **~3.6 µs** |
-| Cold throughput, c=10, H1 | ~221 req/s |
-| Cold throughput, c=10, H2 | ~217 req/s |
-| Cold throughput, c=50, H1 | ~804 req/s |
-| Cold throughput, c=50, H2 | ~818 req/s |
+| HTTP/1.1 single request (warm) | ~423 µs |
+| HTTP/2 single request (warm) | ~412 µs |
+| HTTP/1.1 with fingerprinting (warm) | ~420 µs |
+| HTTP/1.1 without fingerprinting (warm) | ~400 µs |
+| **Fingerprinting overhead H1 (JA4 only)** | **~20 µs** |
+| HTTP/2 with fingerprinting (warm) | ~413 µs |
+| HTTP/2 without fingerprinting (warm) | ~403 µs |
+| **Fingerprinting overhead H2 (JA4 + Akamai)** | **~10 µs** |
+| Cold throughput, c=10, H1 | ~212 req/s |
+| Cold throughput, c=10, H2 | ~212 req/s |
+| Cold throughput, c=50, H1 | ~743 req/s |
+| Cold throughput, c=50, H2 | ~748 req/s |
 
 Key observations:
-- Fingerprinting overhead is **~2.5 µs** (H1, JA4 only) and **~3.6 µs** (H2, JA4 + Akamai).
-  The extra ~1 µs on H2 is the cost of Akamai SETTINGS/WINDOW_UPDATE parsing.
-- HTTP/1.1 and HTTP/2 have near-identical warm latency; H2 frame processing does not add
-  measurable overhead because the Akamai capture buffer is filled incrementally in the read path.
-- Cold throughput is dominated by TLS handshake cost. H1 and H2 scale equivalently:
-  c=10 → ~219 req/s, c=50 → ~811 req/s.
+- Integration **round-trip** is **~400–430 µs** warm (TLS + localhost + Hyper), not sub‑100 µs.
+  Sub‑microsecond **parser-only** cost is what `bench_fingerprinting` measures; the delta here is **tens of µs** and mixes TLS + scheduling noise.
+- Fingerprinting overhead (with vs without) is **~20 µs** on H1 and **~10 µs** on H2 in this snapshot — use as a trend, not an absolute (runs 1–2 varied more).
+- Cold throughput is dominated by TLS handshakes; c=50 lands near **~740–750** completed requests/s per benchmark design.
 
 If fingerprinting overhead grows significantly after a dependency update, suspect
-`huginn-net-tls` or `huginn-net-http` parser changes - run `bench_fingerprinting`
-to isolate which parser regressed.
+`huginn-net-tls` or `huginn-net-http` parser changes — run `bench_fingerprinting`
+to isolate parser cost.
 
 ---
 
