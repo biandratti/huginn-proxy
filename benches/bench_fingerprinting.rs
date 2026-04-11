@@ -30,8 +30,9 @@ const CLIENT_HELLO_BYTES: &[u8] = include_bytes!("fixtures/clienthello_reqwest.b
 // ---------------------------------------------------------------------------
 // HTTP/2 client frames fixture - real values from reqwest/h2
 //
-// Derived from the Akamai fingerprint captured via capture_fixtures:
-//   2:0;4:2097152;5:16384;6:16384|5177345|0|m,s,a,p
+// Preface + SETTINGS + WINDOW_UPDATE + HEADERS(stream 1), matching capture_fixtures
+// Akamai tail `|m,s,a,p`. HPACK indices follow `hpack_patched`’s static table (not full RFC A):
+// idx 2 :method GET, 7 :scheme https, 4 :path /; literal :authority (idx 1).
 // SETTINGS: ENABLE_PUSH=0, INITIAL_WINDOW_SIZE=2097152,
 //           MAX_FRAME_SIZE=16384, MAX_HEADER_LIST_SIZE=16384
 // WINDOW_UPDATE: increment=5177345
@@ -53,6 +54,10 @@ const HTTP2_CLIENT_FRAMES: &[u8] = &[
     0x00, 0x00, 0x04, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00,
     // WINDOW_UPDATE payload: increment=0x004F0001=5177345
     0x00, 0x4f, 0x00, 0x01,
+    // HEADERS frame: len=14, type=0x01, END_STREAM|END_HEADERS, stream_id=1
+    0x00, 0x00, 0x0e, 0x01, 0x05, 0x00, 0x00, 0x00, 0x01,
+    // HPACK: indexed 2 GET, 7 https, literal :authority localhost, indexed 4 path /
+    0x82, 0x87, 0x41, 0x09, b'l', b'o', b'c', b'a', b'l', b'h', b'o', b's', b't', 0x84,
 ];
 
 /// JA4 fingerprint produced by these CLIENT_HELLO_BYTES.
@@ -60,7 +65,7 @@ const HTTP2_CLIENT_FRAMES: &[u8] = &[
 /// and update this constant + the fixture file.
 const EXPECTED_JA4: &str = "t13i1010h2_61a7ad8aa9b6_3a8073edd8ef";
 
-/// Akamai fingerprint produced by these HTTP2_CLIENT_FRAMES.
+/// Akamai fingerprint produced by these HTTP2_CLIENT_FRAMES (aligned with `fingerprint_values.txt`).
 const EXPECTED_AKAMAI: &str = "2:0;4:2097152;5:16384;6:16384|5177345|0|m,s,a,p";
 
 fn bench_akamai_parse(c: &mut Criterion) {
@@ -77,7 +82,7 @@ fn bench_akamai_parse(c: &mut Criterion) {
         }
     }
 
-    c.bench_function("akamai_parse_http2_settings_window_update", |b| {
+    c.bench_function("akamai_parse_http2_preface_settings_window_headers", |b| {
         b.iter(|| extract_akamai_fingerprint_from_bytes(std::hint::black_box(HTTP2_CLIENT_FRAMES)));
     });
 }

@@ -39,7 +39,7 @@ No network, no IO - pure CPU work on hardcoded byte fixtures.
 
 | Name | What it measures |
 |---|---|
-| `akamai_parse_http2_settings_window_update` | `extract_akamai_fingerprint()` on HTTP/2 SETTINGS + WINDOW_UPDATE |
+| `akamai_parse_http2_preface_settings_window_headers` | `extract_akamai_fingerprint_from_bytes()` on preface + SETTINGS + WINDOW_UPDATE + HEADERS (HPACK pseudo-headers, same tail as `fingerprint_values.txt`) |
 | `ja4_parse_tls_client_hello` | `parse_tls_client_hello()` on a TLS 1.3 ClientHello |
 
 ### Fixtures
@@ -48,10 +48,9 @@ No network, no IO - pure CPU work on hardcoded byte fixtures.
 a `reqwest`/`rustls` connection before the TLS handshake. Committed to the repo so benchmarks
 are deterministic without an active network connection.
 
-**HTTP/2 frames** (`HTTP2_CLIENT_FRAMES` in `bench_fingerprinting.rs`): hardcoded bytes
-encoding the connection preface, SETTINGS frame, and WINDOW_UPDATE frame that `reqwest`/`h2`
-sends at connection start. Values are derived from the Akamai fingerprint captured by
-`capture_fixtures`.
+**HTTP/2 frames** (`HTTP2_CLIENT_FRAMES` in `bench_fingerprinting.rs`): hardcoded bytes for
+preface, SETTINGS, WINDOW_UPDATE, plus a minimal HEADERS(stream 1) block so the Akamai string
+matches `fingerprint_values.txt` (HPACK indices match `hpack_patched`’s static table, not the full RFC appendix).
 
 #### Refreshing fixtures after a dependency update
 
