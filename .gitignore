@@ -1,5 +1,6 @@
 dist/
 .astro/
+src/data/release-version.json
 .idea/
 target/
 examples/

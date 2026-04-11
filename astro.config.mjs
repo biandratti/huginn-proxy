@@ -1,6 +1,14 @@
 // @ts-check
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const { tag: releaseTag } = JSON.parse(
+	readFileSync(join(__dirname, 'src/data/release-version.json'), 'utf8'),
+);
 
 const site = 'https://biandratti.github.io';
 const base = '/huginn-proxy';
@@ -18,7 +26,7 @@ export default defineConfig({
 			description:
 				'High-performance reverse proxy with passive fingerprints via Huginn Net (MIT/Apache). Beta.',
 			titleDelimiter: '·',
-			tagline: 'v0.0.3-beta',
+			tagline: releaseTag,
 			logo: {
 				src: './src/assets/huginn-proxy.png',
 				alt: 'Huginn Proxy',

@@ -1,5 +1,10 @@
 ---
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import '../styles/landing.css';
+
+const releasePath = join(process.cwd(), 'src/data/release-version.json');
+const { tag: releaseTag } = JSON.parse(readFileSync(releasePath, 'utf8'));
 
 const base = import.meta.env.BASE_URL;
 const docs = `${base}docs/getting-started/`;
@@ -29,7 +34,7 @@ const github = 'https://github.com/biandratti/huginn-proxy';
 			<header class="hp-hero">
 				<div class="hp-hero-layout">
 					<div class="hp-hero-text">
-						<span class="hp-badge">v0.0.3-beta</span>
+						<span class="hp-badge">{releaseTag}</span>
 						<h1 class="hp-title">Huginn Proxy</h1>
 						<p class="hp-tagline">
 							High-performance reverse proxy: passive TLS, HTTP/2, and TCP SYN fingerprints, injected as trusted headers for your backends.

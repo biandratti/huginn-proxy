@@ -3,6 +3,9 @@
   "type": "module",
   "version": "0.0.1",
   "scripts": {
+    "predev": "node scripts/fetch-release.mjs",
+    "prebuild": "node scripts/fetch-release.mjs",
+    "prestart": "node scripts/fetch-release.mjs",
     "dev": "astro dev",
     "start": "astro dev",
     "build": "astro build",
