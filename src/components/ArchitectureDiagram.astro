@@ -60,12 +60,16 @@
 </div>
 
 <style>
+	/*
+	 * Starlight gray numbers invert by theme: in light, gray-7 is the lightest surface
+	 * and gray-1/2 are dark text — never use gray-7 for foreground text.
+	 * Use --sl-color-text for titles; gray-3 for secondary (works in both themes).
+	 */
 	.arch {
 		--bd: var(--sl-color-accent, #f59e0b);
-		--fg: var(--sl-color-white, #e6edf3);
-		--muted: var(--sl-color-gray-3, #8b949e);
-		--card-bg: var(--sl-color-bg-inset, #161b22);
-		--hair: var(--sl-color-hairline, #30363d);
+		--muted: var(--sl-color-gray-3);
+		--card-bg: var(--sl-color-gray-6);
+		--hair: var(--sl-color-hairline);
 		margin: 1.5rem 0 2rem;
 		padding: 1.35rem 1.1rem 1.5rem;
 		border-radius: 12px;
@@ -97,7 +101,7 @@
 		max-width: 13rem;
 		border: 1.5px solid var(--hair);
 		background: var(--card-bg);
-		box-shadow: 0 2px 10px rgba(0, 0, 0, 0.18);
+		box-shadow: 0 2px 10px color-mix(in srgb, var(--sl-color-text) 10%, transparent);
 		display: flex;
 		flex-direction: column;
 		gap: 0.3rem;
@@ -107,8 +111,8 @@
 		border-color: var(--bd);
 		border-width: 2px;
 		box-shadow:
-			0 0 0 1px rgba(245, 158, 11, 0.2),
-			0 4px 16px rgba(0, 0, 0, 0.22);
+			0 0 0 1px color-mix(in srgb, var(--bd) 28%, transparent),
+			0 4px 16px color-mix(in srgb, var(--sl-color-text) 12%, transparent);
 	}
 
 	.arch-card--maps {
@@ -131,7 +135,7 @@
 	.arch-t {
 		font-weight: 650;
 		font-size: 0.95rem;
-		color: var(--fg);
+		color: var(--sl-color-text);
 		line-height: 1.2;
 	}
 

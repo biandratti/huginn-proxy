@@ -4,8 +4,6 @@ This branch holds the **Astro** + [**Starlight**](https://starlight.astro.build/
 
 **https://biandratti.github.io/huginn-proxy/**
 
-The reverse proxy source code and crates live on the **`master`** branch.
-
 ## Local development
 
 ```bash

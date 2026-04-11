@@ -90,7 +90,9 @@ export default defineConfig({
 				{
 					label: 'Deployment',
 					items: [
-						{ label: 'Deployment', slug: 'docs/deployment' },
+						{ label: 'Artifacts', slug: 'docs/artifacts' },
+						{ label: 'Docker Compose', slug: 'docs/deployment' },
+						{ label: 'Kubernetes', slug: 'docs/kubernetes' },
 						{ label: 'eBPF TCP setup', slug: 'docs/ebpf-setup' },
 					],
 				},

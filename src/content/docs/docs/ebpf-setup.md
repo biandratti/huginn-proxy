@@ -2,7 +2,7 @@
 title: eBPF TCP setup
 description: XDP agent, pinned maps, and kernel requirements for TCP SYN fingerprints. Beta.
 sidebar:
-  order: 31
+  order: 32
 ---
 
 TCP SYN fingerprinting uses an **XDP** program loaded by **`huginn-ebpf-agent`**. The agent pins BPF maps under **bpffs** (for example under `HUGINN_EBPF_PIN_PATH`). **Huginn Proxy** opens those maps read-only and emits `x-huginn-net-tcp`.
@@ -11,8 +11,8 @@ TCP SYN fingerprinting uses an **XDP** program loaded by **`huginn-ebpf-agent`**
 
 Two processes cooperate:
 
-1. **Agent:** loads XDP, attaches to the interface, pins maps, exposes metrics, stays running.
-2. **Proxy:** accepts connections, looks up `(src_ip, src_port)` in the map, formats the p0f-style signature.
+1. **eBPF agent** (`huginn-ebpf-agent`): loads XDP, attaches to the interface, pins maps, exposes metrics, stays running.
+2. **Proxy** (`huginn-proxy`): accepts connections, looks up `(src_ip, src_port)` in the map, formats the p0f-style signature.
 
 ## Preconditions
 
@@ -24,7 +24,7 @@ Two processes cooperate:
 
 | Component | Typical needs |
 | --- | --- |
-| **Agent** | `CAP_BPF`, `CAP_NET_ADMIN`, `CAP_PERFMON` (or root); often **seccomp/apparmor unconfined** so `bpf()` and XDP attach succeed in containers. |
+| **eBPF agent** | `CAP_BPF`, `CAP_NET_ADMIN`, `CAP_PERFMON` (or root); often **seccomp/apparmor unconfined** so `bpf()` and XDP attach succeed in containers. |
 | **Proxy** | **`CAP_BPF`** is enough when it only **opens** pinned maps (no XDP load in the proxy process). |
 
 ## Environment variables
@@ -50,7 +50,7 @@ Full stack layout (Compose, caps, volumes) is maintained in [`examples/docker-co
 - **`bpffs`** must be mounted into **both** containers at `/sys/fs/bpf` (or adjust paths consistently).
 - **Health:** agent `/ready` should succeed when maps are pinned; proxy `/health` on `telemetry.metrics_port` is separate.
 
-See [Deployment](/huginn-proxy/docs/deployment/) for the Compose file index and clone/run flow.
+See [Docker Compose](/huginn-proxy/docs/deployment/) for the Compose file index and clone/run flow, and [Artifacts](/huginn-proxy/docs/artifacts/) for GHCR image names.
 
 ## Kubernetes networking
 
