@@ -11,7 +11,7 @@ Two benchmark suites with different scopes:
 
 ## Environment
 
-All **sample** and **baseline** tables in this document share one setup: **Intel i7-1165G7** (4 cores / 8 threads), **32 GB RAM**, Linux, `cargo bench` **release** on `localhost`. Numbers are **indicative** — expect **±5–15%** variance between runs (thermals, scheduling).
+**Load tests** (oha, k6) target a **minimal Docker Compose** stack: **one** proxy, **one** eBPF agent, and **one** backend — a simplified layout on purpose; **more replicas and stronger hardware** usually improve throughput and latency. **Criterion** runs (`cargo bench`, release) execute on the host without Compose. All figures are **indicative** (~**±5–15%** between runs).
 
 ---
 
@@ -242,10 +242,4 @@ For JA4-only (HTTP/1.1, no Akamai check): `K6_NO_HTTP2=true k6 run --insecure-sk
 
 ### CPU / memory (container)
 
-k6 doesn’t show cgroup usage — use `docker stats` on the `proxy` container, or:
-
-```bash
-./benches/load/k6/run-with-docker-stats.sh k6 run --insecure-skip-tls-verify benches/load/k6/fingerprints.js
-```
-
-Writes `benches/load/k6/last-docker-stats.tsv`. App counters: `http://127.0.0.1:9090/metrics`.
+k6 doesn’t show cgroup usage — use `docker stats` on the `proxy` container while the test runs. App counters: `http://127.0.0.1:9090/metrics`.

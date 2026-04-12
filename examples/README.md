@@ -144,7 +144,7 @@ curl -6 http://localhost:9090/metrics | grep huginn_proxy
 | eBPF Agent | `http://127.0.0.1:9091/live` | Liveness |
 | eBPF Agent | `http://127.0.0.1:9091/metrics` | Prometheus metrics |
 
-In the example compose, agent endpoints are exposed via the proxy service (`9091:9091`). From the host use e.g. `curl http://127.0.0.1:9091/metrics`. If your compose does not publish 9091, use `docker exec` into the proxy container (the image has no curl; run `curl` from the host instead).
+eBPF compose examples map agent HTTP on the proxy service (`9091:9091`).
 
 ---
 
