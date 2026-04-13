@@ -1,0 +1,14 @@
+# reqwest::Client::builder().danger_accept_invalid_certs(true) is required for e2e/benches
+# against local HTTPS with self-signed certs. CodeQL flags that as rust/disabled-certificate-check
+# (Rule ID) on every call site.
+#
+# Finer than paths-ignore: all other security/quality queries still run on tests-e2e, benches,
+# and huginn-proxy-lib/tests, only this rule is disabled repo-wide.
+query-filters:
+  - exclude:
+      # Scope (documentation only): intentional danger_accept_invalid_certs lives under these paths.
+      # CodeQL does not support limiting this exclude to source paths; the rule is off repo-wide.
+      # - tests-e2e/
+      # - benches/
+      # - huginn-proxy-lib/tests/
+      id: rust/disabled-certificate-check
