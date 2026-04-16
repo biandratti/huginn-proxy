@@ -4,7 +4,6 @@ use thiserror::Error;
 use tokio::sync::watch;
 use tracing::warn;
 
-use crate::config::SecurityConfig;
 use crate::telemetry::Metrics;
 
 use super::guards::ConnectionGuard;
@@ -28,13 +27,13 @@ pub struct ConnectionManager {
 
 impl ConnectionManager {
     pub fn new(
-        security: &SecurityConfig,
+        max_connections: usize,
         shutdown_signal: Arc<AtomicUsize>,
         connections_closed_tx: watch::Sender<()>,
     ) -> Self {
         Self {
             active_connections: Arc::new(AtomicUsize::new(0)),
-            max_connections: security.max_connections,
+            max_connections,
             shutdown_signal,
             connections_closed_tx,
         }

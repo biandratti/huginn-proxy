@@ -26,6 +26,7 @@ homepage = "https://github.com/biandratti/huginn-proxy"
 
 [workspace.dependencies]
 ahash = "0.8.12"
+arc-swap = "1.9.1"
 aya = "0.13.1"
 bytes = "1.11.1"
 criterion = { version = "0.8.2", features = ["html_reports"] }

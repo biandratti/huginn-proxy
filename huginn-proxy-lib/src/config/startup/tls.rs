@@ -36,7 +36,6 @@ pub struct TlsOptions {
     ///
     /// Default: uses rustls safe defaults (all supported cipher suites)
     /// See `supported_cipher_suites()` for the complete list.
-
     #[serde(default = "default_cipher_suites")]
     pub cipher_suites: Vec<String>,
     /// Elliptic curve preferences (key exchange groups)
@@ -133,7 +132,11 @@ fn default_session_cache_size() -> usize {
     256
 }
 
-/// TLS termination configuration
+/// TLS termination configuration (static — requires restart to change)
+///
+/// Note: `watch_delay_secs` has been removed. Certificate watch debounce is now
+/// controlled globally via `--watch-delay-secs` CLI flag / `HUGINN_WATCH_DELAY_SECS`
+/// env var (see PR 3).
 #[derive(Debug, Deserialize, Clone)]
 pub struct TlsConfig {
     /// Path to TLS certificate file (PEM format)
@@ -147,9 +150,6 @@ pub struct TlsConfig {
     /// Default: empty (no ALPN)
     #[serde(default)]
     pub alpn: Vec<String>,
-    /// Certificate watch delay in seconds for hot reload
-    #[serde(default = "default_cert_watch_delay_secs")]
-    pub watch_delay_secs: u32,
     /// Controls TLS versions and cipher suites
     #[serde(default)]
     pub options: TlsOptions,
@@ -160,8 +160,4 @@ pub struct TlsConfig {
     /// Session resumption configuration
     #[serde(default)]
     pub session_resumption: SessionResumptionConfig,
-}
-
-fn default_cert_watch_delay_secs() -> u32 {
-    60
 }

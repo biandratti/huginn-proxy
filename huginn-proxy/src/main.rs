@@ -3,6 +3,7 @@
 use std::env;
 use std::sync::Arc;
 
+use arc_swap::ArcSwap;
 use huginn_proxy_lib::config::load_from_path;
 use huginn_proxy_lib::run;
 use huginn_proxy_lib::telemetry::{
@@ -18,7 +19,7 @@ async fn main() -> Result<(), BoxError> {
     let _bin = args.next();
     let config_path = args.next().ok_or("usage: huginn-proxy <config-path>")?;
 
-    let config = Arc::new(load_from_path(&config_path)?);
+    let config = load_from_path(&config_path)?;
 
     // RUST_LOG environment variable can override at runtime (e.g., docker run -e RUST_LOG=debug)
     let log_level = env::var("RUST_LOG").unwrap_or_else(|_| config.logging.level.clone());
@@ -29,12 +30,16 @@ async fn main() -> Result<(), BoxError> {
         config.telemetry.otel_log_level.clone(),
     )?;
 
-    let (metrics, metrics_handle) = if let Some(metrics_port) = config.telemetry.metrics_port {
+    let (static_cfg, dynamic_cfg) = config.into_parts();
+    let static_cfg = Arc::new(static_cfg);
+    let dynamic_cfg = Arc::new(ArcSwap::from_pointee(dynamic_cfg));
+
+    let (metrics, metrics_handle) = if let Some(metrics_port) = static_cfg.telemetry.metrics_port {
         let (metrics, registry) =
             init_metrics().map_err(|e| format!("Failed to initialize metrics: {e}"))?;
 
         info!(port = metrics_port, "Metrics initialized, starting observability server");
-        let backends_for_observability = Arc::new(config.backends.clone());
+        let backends_for_observability = Arc::new(dynamic_cfg.load().backends.clone());
         let handle = tokio::spawn(async move {
             if let Err(e) =
                 start_observability_server(metrics_port, registry, backends_for_observability).await
@@ -57,7 +62,7 @@ async fn main() -> Result<(), BoxError> {
         use huginn_proxy_lib::fingerprinting::SynResult;
         use std::net::SocketAddr;
 
-        if !config.fingerprint.tcp_enabled {
+        if !static_cfg.fingerprint.tcp_enabled {
             tracing::info!("TCP SYN fingerprinting disabled (`fingerprint.tcp_enabled = false`)");
             None
         } else {
@@ -115,7 +120,7 @@ async fn main() -> Result<(), BoxError> {
 
     info!("huginn-proxy starting");
 
-    let result = run(config, metrics, syn_probe).await;
+    let result = run(Arc::clone(&static_cfg), Arc::clone(&dynamic_cfg), metrics, syn_probe).await;
 
     if let Some(handle) = metrics_handle {
         info!("Shutting down observability server");

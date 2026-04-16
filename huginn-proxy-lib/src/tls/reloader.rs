@@ -111,7 +111,8 @@ pub async fn build_cert_reloader(
 ) -> Result<watch::Receiver<Option<ServerCertsKeys>>, ProxyError> {
     let cert_path = PathBuf::from(&tls_config.cert_path);
     let key_path = PathBuf::from(&tls_config.key_path);
-    let watch_delay_secs = tls_config.watch_delay_secs;
+    // Default debounce for certificate reloads. Will be configurable via CLI in a future PR. // TODO: WIP
+    let watch_delay_secs: u32 = 60;
 
     // Load initial certificates
     let initial_certs_keys = read_certs_and_keys(&cert_path, &key_path).await?;

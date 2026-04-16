@@ -2,6 +2,7 @@ use std::net::SocketAddr;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
+use arc_swap::ArcSwap;
 use hyper_util::rt::TokioExecutor;
 use hyper_util::server::conn::auto::Builder as ConnBuilder;
 use tokio::net::TcpListener;
@@ -10,7 +11,7 @@ use tokio::sync::watch;
 use tokio::time::{Duration, Instant};
 use tracing::{info, warn};
 
-use crate::config::{BackendPoolConfig, Config};
+use crate::config::{BackendPoolConfig, DynamicConfig, StaticConfig};
 use crate::error::Result;
 use crate::fingerprinting::{SynResult, TcpObservation};
 use crate::proxy::connection::{ConnectionError, ConnectionManager};
@@ -53,21 +54,27 @@ fn bind_listener(addr: SocketAddr, backlog: i32) -> std::io::Result<TcpListener>
 }
 
 pub async fn run(
-    config: Arc<Config>,
+    static_cfg: Arc<StaticConfig>,
+    dynamic_cfg: Arc<ArcSwap<DynamicConfig>>,
     metrics: Option<Arc<Metrics>>,
     syn_probe: Option<SynProbe>,
 ) -> Result<()> {
+    // Load a snapshot of the current dynamic configuration.
+    // In this PR, this snapshot is used for the full lifetime of the server.
+    // Actual hot-swapping of the ArcSwap pointer comes in a later PR.
+    let dynamic = dynamic_cfg.load();
+
     let mut builder = ConnBuilder::new(TokioExecutor::new());
     builder
         .http1()
-        .keep_alive(config.timeout.keep_alive.enabled);
+        .keep_alive(static_cfg.timeout.keep_alive.enabled);
 
-    let backends = Arc::new(config.backends.clone());
-    let routes = config.routes.clone();
+    let backends = Arc::new(dynamic.backends.clone());
+    let routes = dynamic.routes.clone();
 
-    let rate_limit_manager = if config.security.rate_limit.enabled {
+    let rate_limit_manager = if dynamic.security.rate_limit.enabled {
         Some(Arc::new(crate::security::RateLimitManager::new(
-            &config.security.rate_limit,
+            &dynamic.security.rate_limit,
             &routes,
         )))
     } else {
@@ -75,15 +82,15 @@ pub async fn run(
     };
 
     let security_context = crate::proxy::SecurityContext::new(
-        config.security.headers.clone(),
-        config.security.ip_filter.clone(),
-        config.security.rate_limit.clone(),
+        dynamic.security.headers.clone(),
+        dynamic.security.ip_filter.clone(),
+        dynamic.security.rate_limit.clone(),
         rate_limit_manager,
-        config.headers.clone(),
+        dynamic.headers.clone(),
     );
 
     // Setup TLS with hot reload support
-    let tls_acceptor = match &config.tls {
+    let tls_acceptor = match &static_cfg.tls {
         Some(tls_config) => {
             let tls_setup = setup_tls_with_hot_reload(tls_config).await?;
             Some(tls_setup.acceptor)
@@ -95,7 +102,7 @@ pub async fn run(
     let shutdown_signal = Arc::new(AtomicUsize::new(0)); // 0 = running, 1 = shutdown requested
     let (connections_closed_tx, mut connections_closed_rx) = watch::channel(());
     let connection_manager = Arc::new(ConnectionManager::new(
-        &config.security,
+        static_cfg.max_connections,
         shutdown_signal.clone(),
         connections_closed_tx.clone(),
     ));
@@ -103,7 +110,7 @@ pub async fn run(
 
     // Setup client pool for backend connections (shared across all listeners)
     let pool_config = BackendPoolConfig::default();
-    let client_pool = Arc::new(ClientPool::new(&config.timeout.keep_alive, pool_config.clone()));
+    let client_pool = Arc::new(ClientPool::new(&static_cfg.timeout.keep_alive, pool_config.clone()));
 
     // Setup signal handlers
     let mut sigterm = signal::unix::signal(signal::unix::SignalKind::terminate()).map_err(|e| {
@@ -118,8 +125,8 @@ pub async fn run(
     })?;
 
     // Bind one listener per configured address
-    let backlog = config.listen.tcp_backlog;
-    let listeners: Vec<(SocketAddr, TcpListener)> = config
+    let backlog = static_cfg.listen.tcp_backlog;
+    let listeners: Vec<(SocketAddr, TcpListener)> = static_cfg
         .listen
         .addrs
         .iter()
@@ -134,6 +141,12 @@ pub async fn run(
         info!(?addr, "starting proxy");
     }
 
+    let preserve_host = dynamic.preserve_host;
+    let fingerprint_config = static_cfg.fingerprint.clone();
+    let keep_alive_config = static_cfg.timeout.keep_alive.clone();
+    let tls_handshake_timeout = Duration::from_secs(static_cfg.timeout.tls_handshake_secs);
+    let connection_handling_timeout = Duration::from_secs(static_cfg.timeout.connection_handling_secs);
+
     // Spawn one accept task per listener
     let mut accept_tasks = tokio::task::JoinSet::new();
     for (addr, listener) in listeners {
@@ -142,14 +155,10 @@ pub async fn run(
         let backends_clone = Arc::clone(&backends);
         let routes_clone = routes.clone();
         let tls_acceptor_clone = tls_acceptor.clone();
-        let fingerprint_config = config.fingerprint.clone();
-        let keep_alive_config = config.timeout.keep_alive.clone();
-        let tls_handshake_timeout = Duration::from_secs(config.timeout.tls_handshake_secs);
-        let connection_handling_timeout =
-            Duration::from_secs(config.timeout.connection_handling_secs);
+        let fingerprint_config = fingerprint_config.clone();
+        let keep_alive_config = keep_alive_config.clone();
         let security = security_context.clone();
         let metrics_clone = metrics.clone();
-        let preserve_host = config.preserve_host;
         let client_pool_clone = client_pool.clone();
         let builder_clone = builder.clone();
         let syn_probe_clone = syn_probe.clone();
@@ -279,9 +288,9 @@ pub async fn run(
 
     info!(
         "Waiting for active connections to finish (timeout: {}s)",
-        config.timeout.shutdown_secs
+        static_cfg.timeout.shutdown_secs
     );
-    let shutdown_timeout = Duration::from_secs(config.timeout.shutdown_secs);
+    let shutdown_timeout = Duration::from_secs(static_cfg.timeout.shutdown_secs);
     let start = Instant::now();
 
     let deadline = start

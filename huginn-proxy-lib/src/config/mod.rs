@@ -1,24 +1,21 @@
-mod backend;
-mod fingerprinting;
-mod headers;
-mod listen;
+pub mod dynamic;
+pub mod startup;
+
 mod loader;
 mod root;
-mod security;
-mod telemetry;
-mod timeout;
-mod tls;
 
-pub use backend::{Backend, BackendHttpVersion, BackendPoolConfig, Route};
-pub use fingerprinting::FingerprintConfig;
-pub use headers::{CustomHeader, HeaderManipulation, HeaderManipulationGroup};
-pub use listen::ListenConfig;
+pub use dynamic::security::{
+    CspConfig, HstsConfig, IpFilterConfig, IpFilterMode, LimitBy, RateLimitConfig,
+    RouteRateLimitConfig, SecurityConfig, SecurityDynamicConfig, SecurityHeaders,
+};
+pub use dynamic::{
+    Backend, BackendHttpVersion, BackendPoolConfig, CustomHeader, DynamicConfig,
+    HeaderManipulation, HeaderManipulationGroup, Route,
+};
 pub use loader::load_from_path;
 pub use root::Config;
-pub use security::{
-    CspConfig, HstsConfig, IpFilterConfig, IpFilterMode, LimitBy, RateLimitConfig,
-    RouteRateLimitConfig, SecurityConfig, SecurityHeaders,
+pub use startup::{
+    ClientAuth, FingerprintConfig, KeepAliveConfig, ListenConfig, LoggingConfig,
+    SessionResumptionConfig, StaticConfig, TelemetryConfig, TimeoutConfig, TlsConfig, TlsOptions,
+    TlsVersion,
 };
-pub use telemetry::{LoggingConfig, TelemetryConfig};
-pub use timeout::{KeepAliveConfig, TimeoutConfig};
-pub use tls::{ClientAuth, SessionResumptionConfig, TlsConfig, TlsOptions, TlsVersion};

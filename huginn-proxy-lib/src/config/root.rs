@@ -1,15 +1,20 @@
 use serde::Deserialize;
 
-use super::backend::{Backend, Route};
-use super::fingerprinting::FingerprintConfig;
-use super::headers::HeaderManipulation;
-use super::listen::ListenConfig;
-use super::security::SecurityConfig;
-use super::telemetry::{LoggingConfig, TelemetryConfig};
-use super::timeout::TimeoutConfig;
-use super::tls::TlsConfig;
+use super::dynamic::backend::{Backend, Route};
+use super::dynamic::headers::HeaderManipulation;
+use super::dynamic::security::{SecurityConfig, SecurityDynamicConfig};
+use super::dynamic::DynamicConfig;
+use super::startup::fingerprinting::FingerprintConfig;
+use super::startup::listen::ListenConfig;
+use super::startup::telemetry::{LoggingConfig, TelemetryConfig};
+use super::startup::timeout::TimeoutConfig;
+use super::startup::tls::TlsConfig;
+use super::startup::StaticConfig;
 
-/// Main configuration structure
+/// Main configuration structure — the TOML deserialization target.
+///
+/// After loading, call `into_parts()` to decompose into `StaticConfig` (process-level,
+/// requires restart to change) and `DynamicConfig` (hot-reloadable via `ArcSwap`).
 #[derive(Debug, Deserialize, Clone)]
 pub struct Config {
     /// Listener configuration (addresses and socket options)
@@ -53,4 +58,39 @@ pub struct Config {
     /// Allows adding or removing headers for all routes
     #[serde(default)]
     pub headers: Option<HeaderManipulation>,
+}
+
+impl Config {
+    /// Decompose the deserialized config into its static and dynamic parts.
+    ///
+    /// - `StaticConfig` holds process-level settings (listen addrs, TLS stack,
+    ///   logging, timeouts, `max_connections`). Changing these requires a restart.
+    /// - `DynamicConfig` holds hot-reloadable settings (routes, backends, headers,
+    ///   security policy). Wrap the returned value in `ArcSwap` to support
+    ///   atomic hot-swaps at runtime.
+    pub fn into_parts(self) -> (StaticConfig, DynamicConfig) {
+        let static_cfg = StaticConfig {
+            listen: self.listen,
+            tls: self.tls,
+            fingerprint: self.fingerprint,
+            logging: self.logging,
+            timeout: self.timeout,
+            telemetry: self.telemetry,
+            max_connections: self.security.max_connections,
+        };
+
+        let dynamic_cfg = DynamicConfig {
+            backends: self.backends,
+            routes: self.routes,
+            preserve_host: self.preserve_host,
+            headers: self.headers,
+            security: SecurityDynamicConfig {
+                headers: self.security.headers,
+                ip_filter: self.security.ip_filter,
+                rate_limit: self.security.rate_limit,
+            },
+        };
+
+        (static_cfg, dynamic_cfg)
+    }
 }
