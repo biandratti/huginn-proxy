@@ -29,6 +29,7 @@ ahash = "0.8.12"
 arc-swap = "1.9.1"
 aya = "0.13.1"
 bytes = "1.11.1"
+clap = { version = "=4.6.1", features = ["derive", "env"] }
 criterion = { version = "0.8.2", features = ["html_reports"] }
 http = "1.4.0"
 http-body-util = "0.1.3"

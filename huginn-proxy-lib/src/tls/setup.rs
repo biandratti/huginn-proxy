@@ -21,12 +21,16 @@ pub struct TlsSetup {
 ///
 /// Returns a `TlsSetup` containing the TLS acceptor.
 /// The reloader service runs in background tasks and doesn't need to be returned.
-pub async fn setup_tls_with_hot_reload(tls_config: &TlsConfig) -> Result<TlsSetup> {
+pub async fn setup_tls_with_hot_reload(
+    tls_config: &TlsConfig,
+    watch: bool,
+    watch_delay_secs: u32,
+) -> Result<TlsSetup> {
     let initial_acceptor = build_tls_acceptor(tls_config)?;
     let tls_acceptor = Arc::new(RwLock::new(Some(initial_acceptor)));
 
     // Setup certificate reloader (async - initializes filesystem watcher)
-    let mut reloader_rx = build_cert_reloader(tls_config).await?;
+    let mut reloader_rx = build_cert_reloader(tls_config, watch, watch_delay_secs).await?;
     let alpn = tls_config.alpn.clone();
     let tls_options = tls_config.options.clone();
     let session_resumption = tls_config.session_resumption.clone();

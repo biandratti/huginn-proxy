@@ -10,6 +10,7 @@ ebpf-tcp = ["dep:huginn-ebpf"]
 
 [dependencies]
 arc-swap.workspace = true
+clap.workspace = true
 huginn-ebpf = { path = "../huginn-ebpf", version = "0.0.1", optional = true }
 huginn-proxy-lib = { path = "../huginn-proxy-lib", version = "0.0.1" }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "signal"] }

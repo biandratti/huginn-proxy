@@ -1,25 +1,41 @@
 #![forbid(unsafe_code)]
 
 use std::env;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use arc_swap::ArcSwap;
+use clap::Parser;
 use huginn_proxy_lib::config::load_from_path;
 use huginn_proxy_lib::run;
 use huginn_proxy_lib::telemetry::{
     init_metrics, init_tracing_with_otel, shutdown_tracing, start_observability_server,
 };
+use huginn_proxy_lib::WatchOptions;
 use tracing::info;
 
 type BoxError = Box<dyn std::error::Error + Send + Sync>;
 
+#[derive(Parser)]
+#[command(name = "huginn-proxy", about = "High-performance reverse proxy")]
+struct Cli {
+    /// Path to the TOML configuration file
+    config_path: PathBuf,
+
+    /// Enable filesystem watching for TLS certificate hot reload
+    #[arg(long, env = "HUGINN_WATCH")]
+    watch: bool,
+
+    /// Debounce delay in seconds before applying a reload after a file-change event
+    #[arg(long, default_value = "60", env = "HUGINN_WATCH_DELAY_SECS")]
+    watch_delay_secs: u32,
+}
+
 #[tokio::main]
 async fn main() -> Result<(), BoxError> {
-    let mut args = env::args();
-    let _bin = args.next();
-    let config_path = args.next().ok_or("usage: huginn-proxy <config-path>")?;
+    let cli = Cli::parse();
 
-    let config = load_from_path(&config_path)?;
+    let config = load_from_path(&cli.config_path)?;
 
     // RUST_LOG environment variable can override at runtime (e.g., docker run -e RUST_LOG=debug)
     let log_level = env::var("RUST_LOG").unwrap_or_else(|_| config.logging.level.clone());
@@ -120,7 +136,16 @@ async fn main() -> Result<(), BoxError> {
 
     info!("huginn-proxy starting");
 
-    let result = run(Arc::clone(&static_cfg), Arc::clone(&dynamic_cfg), metrics, syn_probe).await;
+    let watch_opts = WatchOptions { watch: cli.watch, watch_delay_secs: cli.watch_delay_secs };
+
+    let result = run(
+        Arc::clone(&static_cfg),
+        Arc::clone(&dynamic_cfg),
+        metrics,
+        syn_probe,
+        watch_opts,
+    )
+    .await;
 
     if let Some(handle) = metrics_handle {
         info!("Shutting down observability server");

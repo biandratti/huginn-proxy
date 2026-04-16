@@ -16,7 +16,7 @@ async fn test_build_cert_reloader() -> Result<(), Box<dyn std::error::Error + Se
     };
 
     // This should succeed in creating the reloader service with valid certificates
-    let result = build_cert_reloader(&config).await;
+    let result = build_cert_reloader(&config, true, 60).await;
 
     let _ = std::fs::remove_file(&cert_path);
     let _ = std::fs::remove_file(&key_path);
@@ -58,7 +58,7 @@ async fn test_build_cert_reloader_missing_files(
     };
 
     // Should fail because certificates must exist at startup
-    let result = build_cert_reloader(&config).await;
+    let result = build_cert_reloader(&config, true, 60).await;
     assert!(result.is_err());
     Ok(())
 }

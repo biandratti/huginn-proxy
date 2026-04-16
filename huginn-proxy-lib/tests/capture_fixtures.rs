@@ -235,7 +235,14 @@ async fn capture_fingerprint_values() -> Result<(), Box<dyn std::error::Error + 
     let dynamic_cfg = Arc::new(ArcSwap::from_pointee(dynamic_cfg));
 
     let proxy_task = tokio::spawn(async move {
-        let _ = huginn_proxy_lib::run(static_cfg, dynamic_cfg, None, None).await;
+        let _ = huginn_proxy_lib::run(
+            static_cfg,
+            dynamic_cfg,
+            None,
+            None,
+            huginn_proxy_lib::WatchOptions::default(),
+        )
+        .await;
     });
 
     // Wait for proxy ready

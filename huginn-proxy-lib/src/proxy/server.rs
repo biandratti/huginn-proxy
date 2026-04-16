@@ -28,6 +28,24 @@ use crate::tls::setup_tls_with_hot_reload;
 /// Implemented by `huginn-proxy` when the `ebpf-tcp` feature is enabled.
 pub type SynProbe = Arc<dyn Fn(SocketAddr) -> SynResult + Send + Sync>;
 
+/// Options controlling filesystem watching for hot reload.
+///
+/// Passed at startup via CLI flags (`--watch`, `--watch-delay-secs`) or env vars
+/// (`HUGINN_WATCH`, `HUGINN_WATCH_DELAY_SECS`). Not part of the TOML config.
+#[derive(Debug, Clone)]
+pub struct WatchOptions {
+    /// Enable filesystem watching for TLS certificate hot reload (and config reload in Fase 1).
+    pub watch: bool,
+    /// Debounce delay in seconds before applying a reload after a file-change event.
+    pub watch_delay_secs: u32,
+}
+
+impl Default for WatchOptions {
+    fn default() -> Self {
+        Self { watch: false, watch_delay_secs: 60 }
+    }
+}
+
 /// Bind a TCP listener to `addr` with the given `listen(2)` backlog.
 ///
 /// IPv6 sockets are created with `IPV6_V6ONLY = 1` so they accept only native
@@ -58,6 +76,7 @@ pub async fn run(
     dynamic_cfg: Arc<ArcSwap<DynamicConfig>>,
     metrics: Option<Arc<Metrics>>,
     syn_probe: Option<SynProbe>,
+    watch_opts: WatchOptions,
 ) -> Result<()> {
     // Load a snapshot of the current dynamic configuration.
     // In this PR, this snapshot is used for the full lifetime of the server.
@@ -92,7 +111,12 @@ pub async fn run(
     // Setup TLS with hot reload support
     let tls_acceptor = match &static_cfg.tls {
         Some(tls_config) => {
-            let tls_setup = setup_tls_with_hot_reload(tls_config).await?;
+            let tls_setup = setup_tls_with_hot_reload(
+                tls_config,
+                watch_opts.watch,
+                watch_opts.watch_delay_secs,
+            )
+            .await?;
             Some(tls_setup.acceptor)
         }
         None => None,
@@ -110,7 +134,8 @@ pub async fn run(
 
     // Setup client pool for backend connections (shared across all listeners)
     let pool_config = BackendPoolConfig::default();
-    let client_pool = Arc::new(ClientPool::new(&static_cfg.timeout.keep_alive, pool_config.clone()));
+    let client_pool =
+        Arc::new(ClientPool::new(&static_cfg.timeout.keep_alive, pool_config.clone()));
 
     // Setup signal handlers
     let mut sigterm = signal::unix::signal(signal::unix::SignalKind::terminate()).map_err(|e| {
@@ -145,7 +170,8 @@ pub async fn run(
     let fingerprint_config = static_cfg.fingerprint.clone();
     let keep_alive_config = static_cfg.timeout.keep_alive.clone();
     let tls_handshake_timeout = Duration::from_secs(static_cfg.timeout.tls_handshake_secs);
-    let connection_handling_timeout = Duration::from_secs(static_cfg.timeout.connection_handling_secs);
+    let connection_handling_timeout =
+        Duration::from_secs(static_cfg.timeout.connection_handling_secs);
 
     // Spawn one accept task per listener
     let mut accept_tasks = tokio::task::JoinSet::new();

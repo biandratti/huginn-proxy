@@ -159,7 +159,14 @@ impl BenchFixture {
         let dynamic_cfg = Arc::new(ArcSwap::from_pointee(dynamic_cfg));
 
         let proxy_task = tokio::spawn(async move {
-            let _ = huginn_proxy_lib::run(static_cfg, dynamic_cfg, None, None).await;
+            let _ = huginn_proxy_lib::run(
+                static_cfg,
+                dynamic_cfg,
+                None,
+                None,
+                huginn_proxy_lib::WatchOptions::default(),
+            )
+            .await;
         });
 
         // 6. Wait for proxy to be ready (retry until it accepts connections)
