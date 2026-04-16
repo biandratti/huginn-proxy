@@ -15,7 +15,7 @@ pub use tls::{ClientAuth, SessionResumptionConfig, TlsConfig, TlsOptions, TlsVer
 /// Contains all fields that require OS-level resources (socket binding, TLS
 /// stack initialization, logging setup) or are too fundamental to change
 /// at runtime.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct StaticConfig {
     /// Listener addresses and socket options
     pub listen: ListenConfig,

@@ -2,7 +2,7 @@ use serde::Deserialize;
 use std::net::SocketAddr;
 
 /// Listener configuration — addresses and kernel socket options.
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone, PartialEq)]
 pub struct ListenConfig {
     /// Addresses and ports to listen on. One or more entries, one per IP family.
     /// Example IPv4 only: ["0.0.0.0:7000"]

@@ -136,7 +136,11 @@ async fn main() -> Result<(), BoxError> {
 
     info!("huginn-proxy starting");
 
-    let watch_opts = WatchOptions { watch: cli.watch, watch_delay_secs: cli.watch_delay_secs };
+    let watch_opts = WatchOptions {
+        config_path: Some(cli.config_path.clone()),
+        watch: cli.watch,
+        watch_delay_secs: cli.watch_delay_secs,
+    };
 
     let result = run(
         Arc::clone(&static_cfg),

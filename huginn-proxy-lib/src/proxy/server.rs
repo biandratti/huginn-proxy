@@ -1,4 +1,5 @@
 use std::net::SocketAddr;
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
@@ -11,10 +12,13 @@ use tokio::sync::watch;
 use tokio::time::{Duration, Instant};
 use tracing::{info, warn};
 
+use crate::config::watcher::spawn_config_watcher;
 use crate::config::{BackendPoolConfig, DynamicConfig, StaticConfig};
 use crate::error::Result;
 use crate::fingerprinting::{SynResult, TcpObservation};
 use crate::proxy::connection::{ConnectionError, ConnectionManager};
+use crate::proxy::context::SecurityContext;
+use crate::proxy::reload::{initial_rate_limiter, try_reload};
 use crate::proxy::transport::{
     handle_plain_connection, handle_tls_connection, PlainConnectionConfig, TlsConnectionConfig,
 };
@@ -28,13 +32,13 @@ use crate::tls::setup_tls_with_hot_reload;
 /// Implemented by `huginn-proxy` when the `ebpf-tcp` feature is enabled.
 pub type SynProbe = Arc<dyn Fn(SocketAddr) -> SynResult + Send + Sync>;
 
-/// Options controlling filesystem watching for hot reload.
-///
-/// Passed at startup via CLI flags (`--watch`, `--watch-delay-secs`) or env vars
-/// (`HUGINN_WATCH`, `HUGINN_WATCH_DELAY_SECS`). Not part of the TOML config.
+/// Options controlling filesystem watching and hot reload.
 #[derive(Debug, Clone)]
 pub struct WatchOptions {
-    /// Enable filesystem watching for TLS certificate hot reload (and config reload in Fase 1).
+    /// Path to the TOML config file, required for SIGHUP reload and `--watch` TOML watching.
+    /// `None` disables config hot-reload (reload attempts are silently skipped).
+    pub config_path: Option<PathBuf>,
+    /// Enable filesystem watching for TLS certificate and config hot reload.
     pub watch: bool,
     /// Debounce delay in seconds before applying a reload after a file-change event.
     pub watch_delay_secs: u32,
@@ -42,7 +46,7 @@ pub struct WatchOptions {
 
 impl Default for WatchOptions {
     fn default() -> Self {
-        Self { watch: false, watch_delay_secs: 60 }
+        Self { config_path: None, watch: false, watch_delay_secs: 60 }
     }
 }
 
@@ -78,35 +82,14 @@ pub async fn run(
     syn_probe: Option<SynProbe>,
     watch_opts: WatchOptions,
 ) -> Result<()> {
-    // Load a snapshot of the current dynamic configuration.
-    // In this PR, this snapshot is used for the full lifetime of the server.
-    // Actual hot-swapping of the ArcSwap pointer comes in a later PR.
-    let dynamic = dynamic_cfg.load();
+    // Build the initial rate-limit manager (stateful, lives outside DynamicConfig so its
+    // counters survive reloads when the rate-limit configuration has not changed).
+    let rate_limiter = Arc::new(initial_rate_limiter(&dynamic_cfg.load()));
 
     let mut builder = ConnBuilder::new(TokioExecutor::new());
     builder
         .http1()
         .keep_alive(static_cfg.timeout.keep_alive.enabled);
-
-    let backends = Arc::new(dynamic.backends.clone());
-    let routes = dynamic.routes.clone();
-
-    let rate_limit_manager = if dynamic.security.rate_limit.enabled {
-        Some(Arc::new(crate::security::RateLimitManager::new(
-            &dynamic.security.rate_limit,
-            &routes,
-        )))
-    } else {
-        None
-    };
-
-    let security_context = crate::proxy::SecurityContext::new(
-        dynamic.security.headers.clone(),
-        dynamic.security.ip_filter.clone(),
-        dynamic.security.rate_limit.clone(),
-        rate_limit_manager,
-        dynamic.headers.clone(),
-    );
 
     // Setup TLS with hot reload support
     let tls_acceptor = match &static_cfg.tls {
@@ -148,6 +131,23 @@ pub async fn run(
             "Failed to setup SIGINT handler: {e}"
         )))
     })?;
+    // SIGHUP handler — always active, triggers config hot reload.
+    let mut sighup = signal::unix::signal(signal::unix::SignalKind::hangup()).map_err(|e| {
+        crate::error::ProxyError::Io(std::io::Error::other(format!(
+            "Failed to setup SIGHUP handler: {e}"
+        )))
+    })?;
+
+    // when --watch is enabled, spawn a watcher that sends on this channel.
+    let (reload_tx, mut reload_rx) = tokio::sync::mpsc::unbounded_channel::<()>();
+    if watch_opts.watch {
+        if let Some(ref config_path) = watch_opts.config_path {
+            spawn_config_watcher(config_path.clone(), reload_tx, watch_opts.watch_delay_secs)?;
+        }
+    }
+
+    // mutex to serialise concurrent reload requests (SIGHUP + watcher).
+    let reload_mutex = Arc::new(tokio::sync::Mutex::new(()));
 
     // Bind one listener per configured address
     let backlog = static_cfg.listen.tcp_backlog;
@@ -166,24 +166,24 @@ pub async fn run(
         info!(?addr, "starting proxy");
     }
 
-    let preserve_host = dynamic.preserve_host;
     let fingerprint_config = static_cfg.fingerprint.clone();
     let keep_alive_config = static_cfg.timeout.keep_alive.clone();
     let tls_handshake_timeout = Duration::from_secs(static_cfg.timeout.tls_handshake_secs);
     let connection_handling_timeout =
         Duration::from_secs(static_cfg.timeout.connection_handling_secs);
 
-    // Spawn one accept task per listener
+    // Spawn one accept task per listener.
+    // Each new connection loads a fresh snapshot of DynamicConfig + rate-limiter so it
+    // automatically picks up any hot-reloaded configuration.
     let mut accept_tasks = tokio::task::JoinSet::new();
     for (addr, listener) in listeners {
         let shutdown_signal_clone = shutdown_signal.clone();
         let connection_manager_clone = connection_manager.clone();
-        let backends_clone = Arc::clone(&backends);
-        let routes_clone = routes.clone();
+        let dynamic_cfg_clone = Arc::clone(&dynamic_cfg);
+        let rate_limiter_clone = Arc::clone(&rate_limiter);
         let tls_acceptor_clone = tls_acceptor.clone();
         let fingerprint_config = fingerprint_config.clone();
         let keep_alive_config = keep_alive_config.clone();
-        let security = security_context.clone();
         let metrics_clone = metrics.clone();
         let client_pool_clone = client_pool.clone();
         let builder_clone = builder.clone();
@@ -239,13 +239,27 @@ pub async fn run(
                     None => None,
                 };
 
+                // Load fresh config snapshot for this connection (lock-free ArcSwap load).
+                let dynamic = dynamic_cfg_clone.load();
+                let rate_mgr = rate_limiter_clone
+                    .read()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .clone();
+                let security = SecurityContext::new(
+                    dynamic.security.headers.clone(),
+                    dynamic.security.ip_filter.clone(),
+                    dynamic.security.rate_limit.clone(),
+                    rate_mgr,
+                    dynamic.headers.clone(),
+                );
+                let backends = Arc::new(dynamic.backends.clone());
+                let routes = dynamic.routes.clone();
+                let preserve_host = dynamic.preserve_host;
+
                 let builder_task = builder_clone.clone();
-                let backends_task = Arc::clone(&backends_clone);
-                let routes_task = routes_clone.clone();
                 let tls_acceptor_task = tls_acceptor_clone.clone();
                 let fingerprint_config_task = fingerprint_config.clone();
                 let keep_alive_task = keep_alive_config.clone();
-                let security_task = security.clone();
                 let metrics_task = metrics_clone.clone();
                 let client_pool_task = client_pool_clone.clone();
 
@@ -259,10 +273,10 @@ pub async fn run(
                             TlsConnectionConfig {
                                 tls_acceptor: tls_acceptor_lock.clone(),
                                 fingerprint_config: fingerprint_config_task,
-                                routes: routes_task,
-                                backends: backends_task,
+                                routes,
+                                backends,
                                 keep_alive: keep_alive_task.clone(),
-                                security: security_task.clone(),
+                                security: security.clone(),
                                 metrics: metrics_task.clone(),
                                 builder: builder_task.clone(),
                                 preserve_host,
@@ -278,10 +292,10 @@ pub async fn run(
                             stream,
                             peer,
                             PlainConnectionConfig {
-                                routes: routes_task,
-                                backends: backends_task,
+                                routes,
+                                backends,
                                 keep_alive: keep_alive_task,
-                                security: security_task,
+                                security,
                                 metrics: metrics_task,
                                 builder: builder_task,
                                 preserve_host,
@@ -297,15 +311,46 @@ pub async fn run(
         });
     }
 
-    // Wait for a shutdown signal, then stop all accept tasks
-    tokio::select! {
-        _ = sigterm.recv() => {
-            info!("Received SIGTERM, initiating graceful shutdown");
-            shutdown_signal.store(1, Ordering::Relaxed);
-        }
-        _ = sigint.recv() => {
-            info!("Received SIGINT, initiating graceful shutdown");
-            shutdown_signal.store(1, Ordering::Relaxed);
+    // Signal loop: handle SIGHUP (reload) in a loop; exit on SIGTERM / SIGINT.
+    loop {
+        tokio::select! {
+            // SIGHUP triggers an immediate config reload attempt.
+            _ = sighup.recv() => {
+                info!("Received SIGHUP, triggering config reload");
+                if let Some(ref config_path) = watch_opts.config_path {
+                    try_reload(
+                        config_path,
+                        &static_cfg,
+                        &dynamic_cfg,
+                        &rate_limiter,
+                        &reload_mutex,
+                    ).await;
+                } else {
+                    warn!("SIGHUP received but no config path configured — reload skipped");
+                }
+            }
+            // filesystem watcher sends here when TOML changes (--watch only).
+            Some(_) = reload_rx.recv() => {
+                if let Some(ref config_path) = watch_opts.config_path {
+                    try_reload(
+                        config_path,
+                        &static_cfg,
+                        &dynamic_cfg,
+                        &rate_limiter,
+                        &reload_mutex,
+                    ).await;
+                }
+            }
+            _ = sigterm.recv() => {
+                info!("Received SIGTERM, initiating graceful shutdown");
+                shutdown_signal.store(1, Ordering::Relaxed);
+                break;
+            }
+            _ = sigint.recv() => {
+                info!("Received SIGINT, initiating graceful shutdown");
+                shutdown_signal.store(1, Ordering::Relaxed);
+                break;
+            }
         }
     }
 

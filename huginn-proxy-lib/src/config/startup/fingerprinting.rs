@@ -1,7 +1,7 @@
 use serde::Deserialize;
 
 /// Fingerprinting configuration
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone, PartialEq)]
 pub struct FingerprintConfig {
     /// Enable TLS fingerprinting (JA4)
     /// Default: true

@@ -13,7 +13,7 @@ pub enum TlsVersion {
 }
 
 /// Advanced TLS configuration options
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone, PartialEq)]
 pub struct TlsOptions {
     /// Allowed TLS versions
     /// Options: ["1.2"], ["1.3"], or ["1.2", "1.3"]
@@ -104,7 +104,7 @@ pub enum ClientAuth {
 }
 
 /// Session resumption configuration for TLS
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone, PartialEq)]
 #[cfg_attr(test, derive(serde::Serialize))]
 pub struct SessionResumptionConfig {
     /// Enable session resumption (default: true)
@@ -137,7 +137,7 @@ fn default_session_cache_size() -> usize {
 /// Note: `watch_delay_secs` has been removed. Certificate watch debounce is now
 /// controlled globally via `--watch-delay-secs` CLI flag / `HUGINN_WATCH_DELAY_SECS`
 /// env var (see PR 3).
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone, PartialEq)]
 pub struct TlsConfig {
     /// Path to TLS certificate file (PEM format)
     /// File must exist and be readable at startup

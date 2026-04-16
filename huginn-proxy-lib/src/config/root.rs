@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use serde::Deserialize;
 
 use super::dynamic::backend::{Backend, Route};
@@ -12,9 +14,6 @@ use super::startup::tls::TlsConfig;
 use super::startup::StaticConfig;
 
 /// Main configuration structure — the TOML deserialization target.
-///
-/// After loading, call `into_parts()` to decompose into `StaticConfig` (process-level,
-/// requires restart to change) and `DynamicConfig` (hot-reloadable via `ArcSwap`).
 #[derive(Debug, Deserialize, Clone)]
 pub struct Config {
     /// Listener configuration (addresses and socket options)
@@ -61,6 +60,24 @@ pub struct Config {
 }
 
 impl Config {
+    /// Validate cross-references within the config.
+    pub fn validate_cross_refs(&self) -> crate::error::Result<()> {
+        let backend_addrs: HashSet<&str> =
+            self.backends.iter().map(|b| b.address.as_str()).collect();
+
+        for route in &self.routes {
+            if !backend_addrs.contains(route.backend.as_str()) {
+                return Err(crate::error::ProxyError::Config(format!(
+                    "Route '{}' references unknown backend '{}' (known: [{}])",
+                    route.prefix,
+                    route.backend,
+                    backend_addrs.iter().copied().collect::<Vec<_>>().join(", ")
+                )));
+            }
+        }
+        Ok(())
+    }
+
     /// Decompose the deserialized config into its static and dynamic parts.
     ///
     /// - `StaticConfig` holds process-level settings (listen addrs, TLS stack,

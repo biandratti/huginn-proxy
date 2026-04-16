@@ -1,5 +1,6 @@
 pub mod dynamic;
 pub mod startup;
+pub mod watcher;
 
 mod loader;
 mod root;
