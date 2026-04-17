@@ -170,8 +170,8 @@ backends = [{ address = "backend:9000" }]
 "#;
 
     let config: Config = toml::from_str(toml)?;
-    assert_eq!(config.timeout.connect_ms, 5000);
-    assert_eq!(config.timeout.idle_ms, 60000);
+    assert_eq!(config.timeout.upstream_connect_ms, None);
+    assert_eq!(config.timeout.proxy_idle_ms, 60000);
     assert_eq!(config.timeout.shutdown_secs, 30);
     assert_eq!(config.timeout.tls_handshake_secs, 15);
     assert_eq!(config.timeout.connection_handling_secs, 300);

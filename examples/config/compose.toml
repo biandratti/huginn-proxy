@@ -119,15 +119,15 @@ idle_timeout = 90
 pool_max_idle_per_host = 128
 
 [timeout]
-connect_ms = 5000
-idle_ms = 60000
+upstream_connect_ms = 5000
+proxy_idle_ms = 60000
 shutdown_secs = 30
 tls_handshake_secs = 15
 connection_handling_secs = 300
 
 [timeout.keep_alive]
 enabled = true
-timeout_secs = 60
+upstream_idle_timeout = 60
 
 [security]
 max_connections = 512

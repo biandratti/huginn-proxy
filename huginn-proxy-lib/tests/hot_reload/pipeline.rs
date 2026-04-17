@@ -48,8 +48,8 @@ fn minimal_config(backend_addr: std::net::SocketAddr, listen_port: u16) -> Confi
         },
         logging: LoggingConfig { level: "warn".to_string(), show_target: false },
         timeout: TimeoutConfig {
-            connect_ms: 1000,
-            idle_ms: 5000,
+            upstream_connect_ms: Some(1000),
+            proxy_idle_ms: 5000,
             shutdown_secs: 1,
             tls_handshake_secs: 5,
             connection_handling_secs: 10,

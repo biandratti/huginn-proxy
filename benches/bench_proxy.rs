@@ -140,8 +140,8 @@ impl BenchFixture {
             },
             logging: LoggingConfig { level: "warn".to_string(), show_target: false },
             timeout: TimeoutConfig {
-                connect_ms: 5000,
-                idle_ms: 600_000, // 10 min - bench groups share a connection pool
+                upstream_connect_ms: Some(5000),
+                proxy_idle_ms: 600_000, // 10 min - bench groups share a connection pool
                 shutdown_secs: 5,
                 tls_handshake_secs: 10,
                 connection_handling_secs: 600, // 10 min - each group runs ~15s warmup + 15s measure

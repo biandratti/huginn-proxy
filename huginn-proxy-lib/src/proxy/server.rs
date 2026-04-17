@@ -4,7 +4,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
 use arc_swap::ArcSwap;
-use hyper_util::rt::TokioExecutor;
+use hyper_util::rt::{TokioExecutor, TokioTimer};
 use hyper_util::server::conn::auto::Builder as ConnBuilder;
 use tokio::net::TcpListener;
 use tokio::signal;
@@ -84,10 +84,19 @@ pub async fn run(
     let rate_limiter = Arc::new(initial_rate_limiter(&dynamic_cfg.load()));
     let client_pool = initial_client_pool(&static_cfg, &dynamic_cfg.load().backend_pool);
 
+    let idle_timeout = Duration::from_millis(static_cfg.timeout.proxy_idle_ms);
+
     let mut builder = ConnBuilder::new(TokioExecutor::new());
     builder
         .http1()
-        .keep_alive(static_cfg.timeout.keep_alive.enabled);
+        .timer(TokioTimer::new())
+        .keep_alive(static_cfg.timeout.keep_alive.enabled)
+        .header_read_timeout(idle_timeout);
+    builder
+        .http2()
+        .timer(TokioTimer::new())
+        .keep_alive_interval(idle_timeout)
+        .keep_alive_timeout(idle_timeout.saturating_add(Duration::from_secs(1)));
 
     let tls_acceptor = match &static_cfg.tls {
         Some(tls_config) => {

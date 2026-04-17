@@ -98,6 +98,7 @@ pub async fn try_reload(
         &new_dynamic.backend_pool,
         client_pool,
         &static_cfg.timeout.keep_alive,
+        static_cfg.timeout.upstream_connect_ms,
     );
 
     let hash = fnv1a_hash(&new_dynamic);
@@ -176,6 +177,7 @@ fn drain_removed_backends(
     new_pool_cfg: &BackendPoolConfig,
     client_pool: &SharedClientPool,
     keep_alive: &crate::config::startup::timeout::KeepAliveConfig,
+    upstream_connect_ms: Option<u64>,
 ) {
     let old_addrs: HashSet<&str> = old_backends.iter().map(|b| b.address.as_str()).collect();
     let new_addrs: HashSet<&str> = new_backends.iter().map(|b| b.address.as_str()).collect();
@@ -197,7 +199,7 @@ fn drain_removed_backends(
         info!("Backend pool config changed, refreshing connection pool");
     }
 
-    let new_pool = ClientPool::new(keep_alive, new_pool_cfg.clone());
+    let new_pool = ClientPool::new(keep_alive, new_pool_cfg.clone(), upstream_connect_ms);
     client_pool.store(Arc::new(new_pool));
 }
 
@@ -226,6 +228,10 @@ pub fn initial_client_pool(
     static_cfg: &StaticConfig,
     pool_cfg: &BackendPoolConfig,
 ) -> SharedClientPool {
-    let pool = ClientPool::new(&static_cfg.timeout.keep_alive, pool_cfg.clone());
+    let pool = ClientPool::new(
+        &static_cfg.timeout.keep_alive,
+        pool_cfg.clone(),
+        static_cfg.timeout.upstream_connect_ms,
+    );
     Arc::new(ArcSwap::from_pointee(pool))
 }

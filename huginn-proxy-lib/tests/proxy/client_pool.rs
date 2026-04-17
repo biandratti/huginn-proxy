@@ -1,23 +1,27 @@
 use http::Version;
-use huginn_proxy_lib::config::{BackendPoolConfig, KeepAliveConfig};
+use huginn_proxy_lib::config::{BackendPoolConfig, KeepAliveConfig, TimeoutConfig};
 use huginn_proxy_lib::proxy::ClientPool;
 
 fn default_keep_alive_config() -> KeepAliveConfig {
-    KeepAliveConfig { enabled: true, timeout_secs: 90 }
+    KeepAliveConfig { enabled: true, upstream_idle_timeout: 90 }
+}
+
+fn default_upstream_connect_ms() -> Option<u64> {
+    TimeoutConfig::default().upstream_connect_ms
 }
 
 #[test]
 fn test_client_pool_creation() {
     let config = default_keep_alive_config();
     let pool_config = BackendPoolConfig::default();
-    let _pool = ClientPool::new(&config, pool_config);
+    let _pool = ClientPool::new(&config, pool_config, default_upstream_connect_ms());
 }
 
 #[test]
 fn test_get_client_http11_pooled() {
     let config = default_keep_alive_config();
     let pool_config = BackendPoolConfig::default();
-    let pool = ClientPool::new(&config, pool_config);
+    let pool = ClientPool::new(&config, pool_config, default_upstream_connect_ms());
 
     let client = pool.get_client(Version::HTTP_11, false);
     assert!(client.is_some(), "HTTP/1.1 pooled client should be returned");
@@ -27,7 +31,7 @@ fn test_get_client_http11_pooled() {
 fn test_get_client_http2_pooled() {
     let config = default_keep_alive_config();
     let pool_config = BackendPoolConfig::default();
-    let pool = ClientPool::new(&config, pool_config);
+    let pool = ClientPool::new(&config, pool_config, default_upstream_connect_ms());
 
     let client = pool.get_client(Version::HTTP_2, false);
     assert!(client.is_some(), "HTTP/2 pooled client should be returned");
@@ -37,7 +41,7 @@ fn test_get_client_http2_pooled() {
 fn test_get_client_http09_defaults_to_http11() {
     let config = default_keep_alive_config();
     let pool_config = BackendPoolConfig::default();
-    let pool = ClientPool::new(&config, pool_config);
+    let pool = ClientPool::new(&config, pool_config, default_upstream_connect_ms());
 
     let client = pool.get_client(Version::HTTP_09, false);
     assert!(client.is_some(), "HTTP/0.9 should fallback to HTTP/1.1 client");
@@ -47,7 +51,7 @@ fn test_get_client_http09_defaults_to_http11() {
 fn test_get_client_force_new_returns_none() {
     let config = default_keep_alive_config();
     let pool_config = BackendPoolConfig::default();
-    let pool = ClientPool::new(&config, pool_config);
+    let pool = ClientPool::new(&config, pool_config, default_upstream_connect_ms());
 
     let client_http11 = pool.get_client(Version::HTTP_11, true);
     let client_http2 = pool.get_client(Version::HTTP_2, true);
@@ -60,7 +64,7 @@ fn test_get_client_force_new_returns_none() {
 fn test_create_oneoff_client() {
     let config = default_keep_alive_config();
     let pool_config = BackendPoolConfig::default();
-    let pool = ClientPool::new(&config, pool_config);
+    let pool = ClientPool::new(&config, pool_config, default_upstream_connect_ms());
 
     let _oneoff_http11 = pool.create_oneoff_client(Version::HTTP_11);
     let _oneoff_http2 = pool.create_oneoff_client(Version::HTTP_2);
@@ -81,7 +85,7 @@ fn test_pool_config_default() {
 fn test_client_pool_clone() {
     let config = default_keep_alive_config();
     let pool_config = BackendPoolConfig::default();
-    let pool = ClientPool::new(&config, pool_config);
+    let pool = ClientPool::new(&config, pool_config, default_upstream_connect_ms());
 
     let pool_clone = pool.clone();
 
@@ -92,9 +96,9 @@ fn test_client_pool_clone() {
 
 #[test]
 fn test_keep_alive_disabled() {
-    let config = KeepAliveConfig { enabled: false, timeout_secs: 0 };
+    let config = KeepAliveConfig { enabled: false, upstream_idle_timeout: 0 };
     let pool_config = BackendPoolConfig::default();
-    let pool = ClientPool::new(&config, pool_config);
+    let pool = ClientPool::new(&config, pool_config, default_upstream_connect_ms());
 
     // Pool should still be created, but without keep-alive
     assert!(pool.get_client(Version::HTTP_11, false).is_some());

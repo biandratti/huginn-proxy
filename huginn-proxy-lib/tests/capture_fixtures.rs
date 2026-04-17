@@ -217,8 +217,8 @@ async fn capture_fingerprint_values() -> Result<(), Box<dyn std::error::Error + 
         },
         logging: LoggingConfig { level: "warn".to_string(), show_target: false },
         timeout: TimeoutConfig {
-            connect_ms: 5000,
-            idle_ms: 30_000,
+            upstream_connect_ms: Some(5000),
+            proxy_idle_ms: 30_000,
             shutdown_secs: 3,
             tls_handshake_secs: 10,
             connection_handling_secs: 60,

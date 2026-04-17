@@ -34,32 +34,42 @@ pub struct ClientPool {
     /// Pool configuration
     #[allow(dead_code)]
     config: BackendPoolConfig,
+
+    /// TCP connect timeout (None = no timeout).
+    upstream_connect_ms: Option<u64>,
 }
 
 impl ClientPool {
-    pub fn new(keep_alive: &KeepAliveConfig, config: BackendPoolConfig) -> Self {
-        let http11_client = Self::create_http11_client(keep_alive, &config);
-        let http2_client = Self::create_http2_client(keep_alive, &config);
+    pub fn new(
+        keep_alive: &KeepAliveConfig,
+        config: BackendPoolConfig,
+        upstream_connect_ms: Option<u64>,
+    ) -> Self {
+        let http11_client = Self::create_http11_client(keep_alive, &config, upstream_connect_ms);
+        let http2_client = Self::create_http2_client(keep_alive, &config, upstream_connect_ms);
 
         Self {
             http11: Arc::new(http11_client),
             http2: Arc::new(http2_client),
             keep_alive: keep_alive.clone(),
             config,
+            upstream_connect_ms,
         }
     }
 
     fn create_http11_client(
         keep_alive: &KeepAliveConfig,
         config: &BackendPoolConfig,
+        upstream_connect_ms: Option<u64>,
     ) -> HttpClient {
         let mut connector = HttpConnector::new();
         // TCP keep-alive: sends periodic packets to keep TCP connection alive
         if keep_alive.enabled {
-            connector.set_keepalive(Some(Duration::from_secs(keep_alive.timeout_secs)));
+            connector.set_keepalive(Some(Duration::from_secs(keep_alive.upstream_idle_timeout)));
         } else {
             connector.set_keepalive(None);
         }
+        connector.set_connect_timeout(upstream_connect_ms.map(Duration::from_millis));
 
         let mut builder = Client::builder(TokioExecutor::new());
         builder.pool_idle_timeout(Duration::from_secs(config.idle_timeout));
@@ -72,15 +82,20 @@ impl ClientPool {
         builder.build(connector)
     }
 
-    fn create_http2_client(keep_alive: &KeepAliveConfig, config: &BackendPoolConfig) -> HttpClient {
+    fn create_http2_client(
+        keep_alive: &KeepAliveConfig,
+        config: &BackendPoolConfig,
+        upstream_connect_ms: Option<u64>,
+    ) -> HttpClient {
         let mut connector = HttpConnector::new();
         // TCP keep-alive: sends periodic packets to keep TCP connection alive
         // HTTP/2 uses persistent connections by default with native multiplexing
         if keep_alive.enabled {
-            connector.set_keepalive(Some(Duration::from_secs(keep_alive.timeout_secs)));
+            connector.set_keepalive(Some(Duration::from_secs(keep_alive.upstream_idle_timeout)));
         } else {
             connector.set_keepalive(None);
         }
+        connector.set_connect_timeout(upstream_connect_ms.map(Duration::from_millis));
 
         let mut builder = Client::builder(TokioExecutor::new());
         builder.http2_only(true);
@@ -140,8 +155,16 @@ impl ClientPool {
             BackendPoolConfig { enabled: false, idle_timeout: 0, pool_max_idle_per_host: 0 };
 
         match version {
-            Version::HTTP_2 => Self::create_http2_client(&self.keep_alive, &oneoff_config),
-            _ => Self::create_http11_client(&self.keep_alive, &oneoff_config),
+            Version::HTTP_2 => Self::create_http2_client(
+                &self.keep_alive,
+                &oneoff_config,
+                self.upstream_connect_ms,
+            ),
+            _ => Self::create_http11_client(
+                &self.keep_alive,
+                &oneoff_config,
+                self.upstream_connect_ms,
+            ),
         }
     }
 }

@@ -184,7 +184,8 @@ idle_timeout = 90
 pool_max_idle_per_host = 128
 
 [timeout]
-connect_ms = 5000
+upstream_connect_ms = 5000
+proxy_idle_ms = 60000
 connection_handling_secs = 300
 ```
 
@@ -224,7 +225,7 @@ continues running with the old values.
 | `[fingerprint]` | Fingerprinting feature flags (`tcp_enabled`, `tls_enabled`, `http_enabled`, `max_capture`) — static because they control eBPF program loading and capture buffers at startup |
 | `[logging]` | Log level and format |
 | `[telemetry]` | Metrics port and OpenTelemetry log level |
-| `[timeout]` | Connect / connection-handling timeouts |
+| `[timeout]` | `upstream_connect_ms` (TCP connect to backend; absent = no timeout), `proxy_idle_ms` (inbound idle), `tls_handshake_secs`, `connection_handling_secs`, `shutdown_secs`, `keep_alive.upstream_idle_timeout` |
 | `[security].max_connections` | Maximum concurrent connections |
 
 > **TLS certificate rotation** is the exception: cert and key files are watched
