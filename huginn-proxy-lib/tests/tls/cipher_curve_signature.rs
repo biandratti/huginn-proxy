@@ -12,7 +12,6 @@ fn test_different_cipher_suites_produce_different_configs(
 
     // Configuration 1: Only TLS 1.3 cipher suites
     let config1 = TlsConfig {
-        watch_delay_secs: 60,
         cert_path: cert_path.display().to_string(),
         key_path: key_path.display().to_string(),
         alpn: vec!["h2".to_string(), "http/1.1".to_string()],
@@ -30,7 +29,6 @@ fn test_different_cipher_suites_produce_different_configs(
 
     // Configuration 2: Only TLS 1.2 cipher suites
     let config2 = TlsConfig {
-        watch_delay_secs: 60,
         cert_path: cert_path.display().to_string(),
         key_path: key_path.display().to_string(),
         alpn: vec!["h2".to_string(), "http/1.1".to_string()],
@@ -95,7 +93,6 @@ fn test_different_curve_preferences_produce_different_configs(
 
     // Configuration 1: Only X25519 (preferred for performance)
     let config1 = TlsConfig {
-        watch_delay_secs: 60,
         cert_path: cert_path.display().to_string(),
         key_path: key_path.display().to_string(),
         alpn: vec!["h2".to_string(), "http/1.1".to_string()],
@@ -106,7 +103,6 @@ fn test_different_curve_preferences_produce_different_configs(
 
     // Configuration 2: Only secp256r1 (NIST P-256)
     let config2 = TlsConfig {
-        watch_delay_secs: 60,
         cert_path: cert_path.display().to_string(),
         key_path: key_path.display().to_string(),
         alpn: vec!["h2".to_string(), "http/1.1".to_string()],
@@ -161,7 +157,6 @@ fn test_combined_cipher_and_curve_configs() -> Result<(), Box<dyn std::error::Er
 
     // Configuration with specific cipher suites and curve preferences
     let config = TlsConfig {
-        watch_delay_secs: 60,
         cert_path: cert_path.display().to_string(),
         key_path: key_path.display().to_string(),
         alpn: vec!["h2".to_string()],

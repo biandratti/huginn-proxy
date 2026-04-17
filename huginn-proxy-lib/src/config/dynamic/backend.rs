@@ -26,7 +26,7 @@ pub struct Backend {
 }
 
 /// Route configuration for path-based routing
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone, PartialEq)]
 pub struct Route {
     /// URL path prefix to match (e.g., "/api", "/static")
     /// Routes are matched in order, first match wins
@@ -68,7 +68,7 @@ pub struct Route {
 /// Controls how the proxy manages connections to backend servers.
 /// Connection pooling reuses TCP connections to reduce latency by avoiding
 /// repeated TCP and TLS handshakes.
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq)]
 pub struct BackendPoolConfig {
     /// Enable connection pooling globally
     /// Default: true

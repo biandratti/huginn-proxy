@@ -45,7 +45,7 @@ pub struct RequestContext {
     pub fingerprint_rx: Option<watch::Receiver<Option<huginn_net_http::AkamaiFingerprint>>>,
     pub keep_alive: KeepAliveConfig,
     pub security: SecurityContext,
-    pub metrics: Option<Arc<Metrics>>,
+    pub metrics: Arc<Metrics>,
     pub peer: std::net::SocketAddr,
     pub is_https: bool,
 }

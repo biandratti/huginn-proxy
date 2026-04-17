@@ -59,6 +59,7 @@ See [`examples/`](examples/) for the full setup guide, including:
 - **Easy Deployment** - Single binary, Docker-ready
 
 See [FEATURES.md](FEATURES.md) for detailed descriptions and limitations of each feature.
+See [SETTINGS.md](SETTINGS.md) for the full TOML configuration reference.
 
 For deployment instructions, see [DEPLOYMENT.md](DEPLOYMENT.md).
 

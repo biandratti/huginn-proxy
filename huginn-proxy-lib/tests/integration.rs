@@ -16,6 +16,7 @@ fn create_test_config(listen: &str, backends: Vec<Backend>) -> Config {
         backends,
         routes: vec![],
         preserve_host: false,
+        backend_pool: Default::default(),
         tls: None,
         fingerprint: FingerprintConfig {
             tls_enabled: true,
@@ -25,8 +26,8 @@ fn create_test_config(listen: &str, backends: Vec<Backend>) -> Config {
         },
         logging: LoggingConfig { level: "info".to_string(), show_target: false },
         timeout: TimeoutConfig {
-            connect_ms: 5000,
-            idle_ms: 60000,
+            upstream_connect_ms: Some(5000),
+            proxy_idle_ms: 60000,
             shutdown_secs: 30,
             tls_handshake_secs: 15,
             connection_handling_secs: 300,
@@ -95,8 +96,8 @@ fn test_config_defaults() {
     assert!(config.fingerprint.http_enabled);
     assert_eq!(config.logging.level, "info");
     assert!(!config.logging.show_target);
-    assert_eq!(config.timeout.connect_ms, 5000);
-    assert_eq!(config.timeout.idle_ms, 60000);
+    assert_eq!(config.timeout.upstream_connect_ms, Some(5000));
+    assert_eq!(config.timeout.proxy_idle_ms, 60000);
     assert_eq!(config.timeout.shutdown_secs, 30);
 }
 
@@ -113,12 +114,12 @@ fn test_config_with_fingerprinting() {
 #[test]
 fn test_config_with_custom_timeouts() {
     let mut config = create_test_config("127.0.0.1:0", vec![]);
-    config.timeout.connect_ms = 10000;
-    config.timeout.idle_ms = 120000;
+    config.timeout.upstream_connect_ms = Some(10000);
+    config.timeout.proxy_idle_ms = 120000;
     config.timeout.shutdown_secs = 60;
 
-    assert_eq!(config.timeout.connect_ms, 10000);
-    assert_eq!(config.timeout.idle_ms, 120000);
+    assert_eq!(config.timeout.upstream_connect_ms, Some(10000));
+    assert_eq!(config.timeout.proxy_idle_ms, 120000);
     assert_eq!(config.timeout.shutdown_secs, 60);
 }
 
@@ -166,11 +167,11 @@ max_connections = 256
 fn test_config_keep_alive_defaults() {
     let keep_alive = KeepAliveConfig::default();
     assert!(keep_alive.enabled);
-    assert_eq!(keep_alive.timeout_secs, 60);
+    assert_eq!(keep_alive.upstream_idle_timeout, 60);
 
     let config = create_test_config("127.0.0.1:0", vec![]);
     assert!(config.timeout.keep_alive.enabled);
-    assert_eq!(config.timeout.keep_alive.timeout_secs, 60);
+    assert_eq!(config.timeout.keep_alive.upstream_idle_timeout, 60);
 }
 
 #[tokio::test]
@@ -187,13 +188,13 @@ backends = [
 
 [timeout.keep_alive]
 enabled = false
-timeout_secs = 120
+upstream_idle_timeout = 120
 "#
     )?;
 
     let config = load_from_path(file.path())?;
     assert!(!config.timeout.keep_alive.enabled);
-    assert_eq!(config.timeout.keep_alive.timeout_secs, 120);
+    assert_eq!(config.timeout.keep_alive.upstream_idle_timeout, 120);
 
     Ok(())
 }

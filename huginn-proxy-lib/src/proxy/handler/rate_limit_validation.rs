@@ -22,7 +22,7 @@ pub fn check_rate_limit(
     route_match: &RouteMatch,
     peer: std::net::SocketAddr,
     headers: &http::HeaderMap,
-    metrics: Option<&Arc<Metrics>>,
+    metrics: &Arc<Metrics>,
 ) -> Option<Response<RespBody>> {
     let manager = rate_limit_manager?;
 
@@ -47,27 +47,18 @@ pub fn check_rate_limit(
     );
 
     let strategy = format!("{:?}", limit_by).to_lowercase();
-    if let Some(m) = metrics {
-        m.record_rate_limit_request(&strategy, route_match.matched_prefix);
-    }
+    metrics.record_rate_limit_request(&strategy, route_match.matched_prefix);
 
     let rate_limit_result = manager.check(&rate_limit_key, Some(route_match.matched_prefix));
 
     match rate_limit_result {
         RateLimitResult::Limited { limit, reset_after, .. } => {
-            if let Some(m) = metrics {
-                m.record_rate_limit_rejection(&strategy, route_match.matched_prefix);
-            }
-
+            metrics.record_rate_limit_rejection(&strategy, route_match.matched_prefix);
             Some(create_429_response(limit, reset_after.as_secs()))
         }
         RateLimitResult::Allowed { limit, remaining } => {
             debug!(limit = limit, remaining = remaining, "Rate limit check passed");
-
-            if let Some(m) = metrics {
-                m.record_rate_limit_allowed(&strategy, route_match.matched_prefix);
-            }
-
+            metrics.record_rate_limit_allowed(&strategy, route_match.matched_prefix);
             None
         }
     }

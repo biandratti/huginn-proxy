@@ -24,7 +24,7 @@ pub struct RouteMatch<'a> {
 pub struct ForwardConfig<'a> {
     pub backends: &'a [crate::config::Backend],
     pub keep_alive: &'a KeepAliveConfig,
-    pub metrics: Option<Arc<Metrics>>,
+    pub metrics: Arc<Metrics>,
     pub matched_prefix: &'a str,
     pub replace_path: Option<&'a str>,
     pub security_headers: Option<&'a crate::config::SecurityHeaders>,
@@ -118,12 +118,12 @@ pub async fn forward(
 
     let (mut parts, body) = req.into_parts();
 
-    if let Some(ref m) = config.metrics {
-        if let Some(content_length) = parts.headers.get(hyper::header::CONTENT_LENGTH) {
-            if let Ok(length_str) = content_length.to_str() {
-                if let Ok(length) = length_str.parse::<u64>() {
-                    m.record_backend_bytes_sent(length, &backend, config.route);
-                }
+    if let Some(content_length) = parts.headers.get(hyper::header::CONTENT_LENGTH) {
+        if let Ok(length_str) = content_length.to_str() {
+            if let Ok(length) = length_str.parse::<u64>() {
+                config
+                    .metrics
+                    .record_backend_bytes_sent(length, &backend, config.route);
             }
         }
     }
@@ -155,12 +155,14 @@ pub async fn forward(
         Ok(mut resp) => {
             let status_code = resp.status().as_u16();
 
-            if let Some(ref m) = config.metrics {
-                if let Some(content_length) = resp.headers().get(hyper::header::CONTENT_LENGTH) {
-                    if let Ok(length_str) = content_length.to_str() {
-                        if let Ok(length) = length_str.parse::<u64>() {
-                            m.record_backend_bytes_received(length, &backend, config.route);
-                        }
+            if let Some(content_length) = resp.headers().get(hyper::header::CONTENT_LENGTH) {
+                if let Ok(length_str) = content_length.to_str() {
+                    if let Ok(length) = length_str.parse::<u64>() {
+                        config.metrics.record_backend_bytes_received(
+                            length,
+                            &backend,
+                            config.route,
+                        );
                     }
                 }
             }
@@ -171,17 +173,23 @@ pub async fn forward(
                 config.is_https,
             );
 
-            if let Some(ref m) = config.metrics {
-                m.record_backend_request(&backend, status_code, &protocol, config.route);
-                m.record_backend_duration(duration, &backend, status_code, &protocol, config.route);
-            }
+            config
+                .metrics
+                .record_backend_request(&backend, status_code, &protocol, config.route);
+            config.metrics.record_backend_duration(
+                duration,
+                &backend,
+                status_code,
+                &protocol,
+                config.route,
+            );
             Ok(resp.map(|b| b.boxed()))
         }
         Err(e) => {
             let error = HttpError::FailedToGetResponseFromBackend(e.to_string());
-            if let Some(ref m) = config.metrics {
-                m.record_backend_error(&backend, error.error_type(), config.route);
-            }
+            config
+                .metrics
+                .record_backend_error(&backend, error.error_type(), config.route);
             Err(error)
         }
     }

@@ -13,7 +13,7 @@ pub enum TlsVersion {
 }
 
 /// Advanced TLS configuration options
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone, PartialEq)]
 pub struct TlsOptions {
     /// Allowed TLS versions
     /// Options: ["1.2"], ["1.3"], or ["1.2", "1.3"]
@@ -36,7 +36,6 @@ pub struct TlsOptions {
     ///
     /// Default: uses rustls safe defaults (all supported cipher suites)
     /// See `supported_cipher_suites()` for the complete list.
-
     #[serde(default = "default_cipher_suites")]
     pub cipher_suites: Vec<String>,
     /// Elliptic curve preferences (key exchange groups)
@@ -105,7 +104,7 @@ pub enum ClientAuth {
 }
 
 /// Session resumption configuration for TLS
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone, PartialEq)]
 #[cfg_attr(test, derive(serde::Serialize))]
 pub struct SessionResumptionConfig {
     /// Enable session resumption (default: true)
@@ -133,8 +132,7 @@ fn default_session_cache_size() -> usize {
     256
 }
 
-/// TLS termination configuration
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone, PartialEq)]
 pub struct TlsConfig {
     /// Path to TLS certificate file (PEM format)
     /// File must exist and be readable at startup
@@ -147,9 +145,6 @@ pub struct TlsConfig {
     /// Default: empty (no ALPN)
     #[serde(default)]
     pub alpn: Vec<String>,
-    /// Certificate watch delay in seconds for hot reload
-    #[serde(default = "default_cert_watch_delay_secs")]
-    pub watch_delay_secs: u32,
     /// Controls TLS versions and cipher suites
     #[serde(default)]
     pub options: TlsOptions,
@@ -160,8 +155,4 @@ pub struct TlsConfig {
     /// Session resumption configuration
     #[serde(default)]
     pub session_resumption: SessionResumptionConfig,
-}
-
-fn default_cert_watch_delay_secs() -> u32 {
-    60
 }

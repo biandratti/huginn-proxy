@@ -3,10 +3,10 @@ use serde::Deserialize;
 
 use super::headers::CustomHeader;
 
-/// Security configuration
+/// Security configuration (used for TOML deserialization via Config)
 #[derive(Debug, Deserialize, Clone)]
 pub struct SecurityConfig {
-    /// Maximum number of concurrent connections allowed
+    /// Maximum number of concurrent connections allowed (static — requires restart to change)
     #[serde(default = "default_max_connections")]
     pub max_connections: usize,
     /// Security headers configuration
@@ -31,8 +31,22 @@ impl Default for SecurityConfig {
     }
 }
 
-fn default_max_connections() -> usize {
+pub(crate) fn default_max_connections() -> usize {
     512
+}
+
+/// Dynamic security configuration (hot-reloadable at runtime via ArcSwap)
+///
+/// Contains only the fields that can change without restart. `max_connections`
+/// is excluded because it controls a process-level resource (ConnectionManager).
+#[derive(Debug, Clone, PartialEq)]
+pub struct SecurityDynamicConfig {
+    /// Security headers injected into responses
+    pub headers: SecurityHeaders,
+    /// IP allow/deny list
+    pub ip_filter: IpFilterConfig,
+    /// Rate limiting policy
+    pub rate_limit: RateLimitConfig,
 }
 
 /// Security headers configuration

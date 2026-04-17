@@ -4,6 +4,7 @@ pub mod context;
 pub mod forwarding;
 pub mod handler;
 pub mod http_result;
+pub mod reload;
 pub mod server;
 pub mod synthetic_response;
 pub mod transport;

@@ -2,19 +2,19 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use tokio::sync::watch;
 
-/// Guard to decrement active connections counter when dropped
-/// Also notifies when the last connection closes (for graceful shutdown)
+/// Guard to decrement active connections counter when dropped.
+/// Also notifies when the last connection closes (for graceful shutdown).
 pub struct ConnectionGuard {
     counter: Arc<AtomicUsize>,
     notifier: Option<watch::Sender<()>>,
-    connections_active: Option<opentelemetry::metrics::UpDownCounter<i64>>,
+    connections_active: opentelemetry::metrics::UpDownCounter<i64>,
 }
 
 impl ConnectionGuard {
     pub fn new(
         counter: Arc<AtomicUsize>,
         notifier: watch::Sender<()>,
-        connections_active: Option<opentelemetry::metrics::UpDownCounter<i64>>,
+        connections_active: opentelemetry::metrics::UpDownCounter<i64>,
     ) -> Self {
         Self { counter, notifier: Some(notifier), connections_active }
     }
@@ -23,10 +23,7 @@ impl ConnectionGuard {
 impl Drop for ConnectionGuard {
     fn drop(&mut self) {
         let remaining = self.counter.fetch_sub(1, Ordering::Relaxed);
-        // Decrement metrics counter
-        if let Some(ref counter) = self.connections_active {
-            counter.add(-1, &[]);
-        }
+        self.connections_active.add(-1, &[]);
         // Notify when the last connection closes
         if remaining == 1 {
             if let Some(ref tx) = self.notifier {
@@ -36,8 +33,8 @@ impl Drop for ConnectionGuard {
     }
 }
 
-/// Guard to decrement TLS connection metrics counter when dropped
-/// Note: Does NOT decrement the main active_connections counter, as that's handled by ConnectionGuard
+/// Guard to decrement TLS connection metrics counter when dropped.
+/// Does NOT touch the main `active_connections` counter — that is handled by `ConnectionGuard`.
 pub struct TlsConnectionGuard {
     tls_active: Option<opentelemetry::metrics::UpDownCounter<i64>>,
 }

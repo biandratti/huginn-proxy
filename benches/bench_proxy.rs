@@ -30,6 +30,7 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 
+use arc_swap::ArcSwap;
 use bytes::Bytes;
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use http_body_util::Full;
@@ -91,7 +92,7 @@ impl BenchFixture {
         // 4. Build proxy config with two routes:
         //    /bench/fp  → fingerprinting ON  (measures overhead)
         //    /bench/nofp → fingerprinting OFF (baseline)
-        let config = Arc::new(Config {
+        let config = Config {
             listen: ListenConfig { addrs: vec![proxy_addr], ..Default::default() },
             backends: vec![Backend { address: backend_address.clone(), http_version: None }],
             routes: vec![
@@ -127,7 +128,6 @@ impl BenchFixture {
                 cert_path: cert_file.path().to_string_lossy().into_owned(),
                 key_path: key_file.path().to_string_lossy().into_owned(),
                 alpn: vec!["h2".to_string(), "http/1.1".to_string()],
-                watch_delay_secs: 60,
                 options: Default::default(),
                 client_auth: Default::default(),
                 session_resumption: Default::default(),
@@ -140,8 +140,8 @@ impl BenchFixture {
             },
             logging: LoggingConfig { level: "warn".to_string(), show_target: false },
             timeout: TimeoutConfig {
-                connect_ms: 5000,
-                idle_ms: 600_000, // 10 min - bench groups share a connection pool
+                upstream_connect_ms: Some(5000),
+                proxy_idle_ms: 600_000, // 10 min - bench groups share a connection pool
                 shutdown_secs: 5,
                 tls_handshake_secs: 10,
                 connection_handling_secs: 600, // 10 min - each group runs ~15s warmup + 15s measure
@@ -151,11 +151,23 @@ impl BenchFixture {
             telemetry: TelemetryConfig { metrics_port: None, otel_log_level: "warn".to_string() },
             headers: None,
             preserve_host: false,
-        });
+            backend_pool: Default::default(),
+        };
 
         // 5. Start proxy in a background task
+        let huginn_proxy_lib::config::ConfigParts { static_cfg, dynamic_cfg } = config.into_parts();
+        let static_cfg = Arc::new(static_cfg);
+        let dynamic_cfg = Arc::new(ArcSwap::from_pointee(dynamic_cfg));
+
         let proxy_task = tokio::spawn(async move {
-            let _ = huginn_proxy_lib::run(config, None, None).await;
+            let _ = huginn_proxy_lib::run(
+                static_cfg,
+                dynamic_cfg,
+                huginn_proxy_lib::Metrics::new_noop(),
+                None,
+                huginn_proxy_lib::WatchOptions::default(),
+            )
+            .await;
         });
 
         // 6. Wait for proxy to be ready (retry until it accepts connections)

@@ -5,6 +5,9 @@ services:
       dockerfile: docker/proxy.Dockerfile
       target: plain
     command: ["/usr/local/bin/huginn-proxy", "/config/compose.toml"]
+    environment:
+      - HUGINN_WATCH=true
+      - HUGINN_WATCH_DELAY_SECS=60
     volumes:
       - ./config/compose.toml:/config/compose.toml:ro
       - ./certs:/config/certs:ro

@@ -8,7 +8,6 @@ fn test_build_tls_acceptor_success() -> Result<(), Box<dyn std::error::Error + S
     let (cert_path, key_path) = create_valid_test_cert()?;
 
     let config = TlsConfig {
-        watch_delay_secs: 60,
         cert_path: cert_path.display().to_string(),
         key_path: key_path.display().to_string(),
         alpn: vec!["h2".to_string(), "http/1.1".to_string()],
@@ -32,7 +31,6 @@ fn test_build_tls_acceptor_success() -> Result<(), Box<dyn std::error::Error + S
 #[test]
 fn test_build_tls_acceptor_missing_cert() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let config = TlsConfig {
-        watch_delay_secs: 60,
         cert_path: "/nonexistent/cert.pem".to_string(),
         key_path: "/nonexistent/key.pem".to_string(),
         alpn: vec![],
@@ -55,7 +53,6 @@ fn test_build_tls_acceptor_empty_alpn() -> Result<(), Box<dyn std::error::Error 
     let (cert_path, key_path) = create_valid_test_cert()?;
 
     let config = TlsConfig {
-        watch_delay_secs: 60,
         cert_path: cert_path.display().to_string(),
         key_path: key_path.display().to_string(),
         alpn: vec![], // Empty ALPN means no ALPN
@@ -80,7 +77,6 @@ fn test_build_tls_acceptor_custom_alpn() -> Result<(), Box<dyn std::error::Error
     let (cert_path, key_path) = create_valid_test_cert()?;
 
     let config = TlsConfig {
-        watch_delay_secs: 60,
         cert_path: cert_path.display().to_string(),
         key_path: key_path.display().to_string(),
         alpn: vec!["h2".to_string()],
@@ -110,7 +106,6 @@ fn test_build_tls_acceptor_invalid_pem() -> Result<(), Box<dyn std::error::Error
     fs::write(&key_path, b"not a valid PEM file")?;
 
     let config = TlsConfig {
-        watch_delay_secs: 60,
         cert_path: cert_path.display().to_string(),
         key_path: key_path.display().to_string(),
         alpn: vec![],
@@ -134,7 +129,6 @@ fn test_mtls_missing_client_ca() -> Result<(), Box<dyn std::error::Error + Send 
     let (cert_path, key_path) = create_dummy_test_cert()?;
 
     let config = TlsConfig {
-        watch_delay_secs: 60,
         cert_path: cert_path.display().to_string(),
         key_path: key_path.display().to_string(),
         alpn: vec![],
@@ -164,7 +158,6 @@ fn test_mtls_invalid_client_ca_pem() -> Result<(), Box<dyn std::error::Error + S
     fs::write(&ca_path, b"not a valid PEM file")?;
 
     let config = TlsConfig {
-        watch_delay_secs: 60,
         cert_path: cert_path.display().to_string(),
         key_path: key_path.display().to_string(),
         alpn: vec![],
@@ -204,7 +197,6 @@ fn test_mtls_valid_client_ca_format() -> Result<(), Box<dyn std::error::Error + 
     fs::write(&ca_path, ca_cert.cert.pem())?;
 
     let config = TlsConfig {
-        watch_delay_secs: 60,
         cert_path: cert_path.display().to_string(),
         key_path: key_path.display().to_string(),
         alpn: vec![],
@@ -242,7 +234,6 @@ fn test_mtls_multiple_ca_certificates() -> Result<(), Box<dyn std::error::Error 
     fs::write(&ca_path, ca_pem)?;
 
     let config = TlsConfig {
-        watch_delay_secs: 60,
         cert_path: cert_path.display().to_string(),
         key_path: key_path.display().to_string(),
         alpn: vec![],
@@ -272,7 +263,6 @@ fn test_mtls_disabled_by_default() -> Result<(), Box<dyn std::error::Error + Sen
 
     // Default ClientAuth should be Disabled
     let config = TlsConfig {
-        watch_delay_secs: 60,
         cert_path: cert_path.display().to_string(),
         key_path: key_path.display().to_string(),
         alpn: vec![],

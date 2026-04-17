@@ -8,7 +8,6 @@ fn test_session_resumption_enabled_default() -> Result<(), Box<dyn std::error::E
     let (cert_path, key_path) = create_dummy_test_cert()?;
 
     let config = TlsConfig {
-        watch_delay_secs: 60,
         cert_path: cert_path.display().to_string(),
         key_path: key_path.display().to_string(),
         alpn: vec![],
@@ -33,7 +32,6 @@ fn test_session_resumption_disabled() -> Result<(), Box<dyn std::error::Error + 
     let (cert_path, key_path) = create_dummy_test_cert()?;
 
     let config = TlsConfig {
-        watch_delay_secs: 60,
         cert_path: cert_path.display().to_string(),
         key_path: key_path.display().to_string(),
         alpn: vec![],
@@ -58,7 +56,6 @@ fn test_session_resumption_custom_cache_size(
     let (cert_path, key_path) = create_dummy_test_cert()?;
 
     let config = TlsConfig {
-        watch_delay_secs: 60,
         cert_path: cert_path.display().to_string(),
         key_path: key_path.display().to_string(),
         alpn: vec![],

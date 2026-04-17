@@ -76,7 +76,8 @@ async fn test_incomplete_http2_preface() -> Result<(), Box<dyn std::error::Error
     // Only partial preface (missing last bytes)
     let incomplete_preface = b"PRI * HTTP/2.0\r\n\r\nSM\r\n\r";
     let mock_stream = MockStream::new(incomplete_preface.to_vec());
-    let (mut capturing, extracted) = CapturingStream::new(mock_stream, 64 * 1024, tx, None);
+    let (mut capturing, extracted) =
+        CapturingStream::new(mock_stream, 64 * 1024, tx, huginn_proxy_lib::Metrics::new_noop());
 
     let mut buf = vec![0u8; 1024];
     let mut read_buf = tokio::io::ReadBuf::new(&mut buf);
@@ -95,7 +96,8 @@ async fn test_incomplete_http2_preface() -> Result<(), Box<dyn std::error::Error
 async fn test_empty_stream() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let (tx, rx) = watch::channel(None);
     let mock_stream = MockStream::new(vec![]);
-    let (mut capturing, extracted) = CapturingStream::new(mock_stream, 64 * 1024, tx, None);
+    let (mut capturing, extracted) =
+        CapturingStream::new(mock_stream, 64 * 1024, tx, huginn_proxy_lib::Metrics::new_noop());
 
     let mut buf = vec![0u8; 1024];
     let mut read_buf = tokio::io::ReadBuf::new(&mut buf);
@@ -116,7 +118,8 @@ async fn test_invalid_frame_data() -> Result<(), Box<dyn std::error::Error + Sen
     // Invalid frame data (too short to be a valid frame)
     let invalid_data = vec![0x00, 0x01, 0x02];
     let mock_stream = MockStream::new(invalid_data);
-    let (mut capturing, extracted) = CapturingStream::new(mock_stream, 64 * 1024, tx, None);
+    let (mut capturing, extracted) =
+        CapturingStream::new(mock_stream, 64 * 1024, tx, huginn_proxy_lib::Metrics::new_noop());
 
     let mut buf = vec![0u8; 1024];
     let mut read_buf = tokio::io::ReadBuf::new(&mut buf);
@@ -138,7 +141,8 @@ async fn test_connection_failure_during_read(
     let http2_preface = b"PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n";
     // Set failure at position 5 to ensure it happens during first read
     let mock_stream = MockStream::new(http2_preface.to_vec()).with_failure_at(5);
-    let (mut capturing, extracted) = CapturingStream::new(mock_stream, 64 * 1024, tx, None);
+    let (mut capturing, extracted) =
+        CapturingStream::new(mock_stream, 64 * 1024, tx, huginn_proxy_lib::Metrics::new_noop());
 
     let mut buf = vec![0u8; 1024];
     let mut read_buf = tokio::io::ReadBuf::new(&mut buf);

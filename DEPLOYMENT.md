@@ -75,7 +75,7 @@ spec:
         - name: HUGINN_EBPF_PIN_PATH
           value: "/sys/fs/bpf/huginn"
         - name: HUGINN_EBPF_METRICS_ADDR
-          value: "127.0.0.1"
+          value: "0.0.0.0"
         - name: HUGINN_EBPF_METRICS_PORT
           value: "9091"
       volumeMounts:
@@ -104,9 +104,16 @@ spec:
     - name: proxy
       securityContext:
         capabilities:
-          add: [BPF]                    # BPF_OBJ_GET to read pinned maps
+          add: [BPF]
         seccompProfile:
           type: RuntimeDefault
+      env:
+        - name: HUGINN_CONFIG_PATH
+          value: "/config/config.toml"
+        - name: HUGINN_WATCH
+          value: "true"
+        - name: HUGINN_WATCH_DELAY_SECS
+          value: "60"
       volumeMounts:
         - name: bpffs
           mountPath: /sys/fs/bpf
@@ -127,7 +134,16 @@ spec:
       securityContext:
         seccompProfile:
           type: RuntimeDefault
+      env:
+        - name: HUGINN_CONFIG_PATH
+          value: "/config/config.toml"
+        - name: HUGINN_WATCH
+          value: "true"
+        - name: HUGINN_WATCH_DELAY_SECS
+          value: "60"
 ```
+
+`HUGINN_CONFIG_PATH` sets the config file path without changing the container `command`. Useful when the same image is shared across environments (staging, prod) and only the ConfigMap mount point differs — override the path via env var rather than patching the Deployment spec each time.
 
 ### Key differences vs Docker Compose
 
@@ -154,29 +170,6 @@ spec:
 - `/live` - liveness probe
 - `/metrics` - Prometheus metrics
 
-## TLS Certificate Management
-
-### Certificate Rotation
-
-Huginn Proxy supports hot reload for TLS certificates:
-
-1. Update certificate files (Secret in Kubernetes, volume in Docker)
-2. Proxy detects changes after `watch_delay_secs` (default: 60s)
-3. New connections use new certificates
-4. Existing connections continue with old certificates until closed
-
-No restart required.
-
-### Certificate Permissions
-
-**Docker:** Certificates must be readable by user `app` (UID 100).
-
-```bash
-chmod 400 server.crt server.key
-```
-
-**Kubernetes:** Secret volumes are mounted with `defaultMode: 0400` (read-only for owner).
-
 ## Performance Tuning
 
 Key settings for production:
@@ -191,9 +184,74 @@ idle_timeout = 90
 pool_max_idle_per_host = 128
 
 [timeout]
-connect_ms = 5000
+upstream_connect_ms = 5000
+proxy_idle_ms = 60000
 connection_handling_secs = 300
 ```
 
 Adjust resource limits based on your workload (see Deployment manifest example above).
 
+## Static and Dynamic settings
+
+Settings are split into two groups. **Dynamic** settings take effect on the next
+reload (SIGHUP or file-watcher); no connections are dropped. **Static** settings
+are read once at startup — a process restart is required to apply changes.
+If a reload detects changes in static sections, the proxy logs an error and
+continues running with the old values.
+
+### Dynamic (hot-reloadable)
+
+| TOML key | Description |
+|---|---|
+| `[[backends]]` | Backend list (addresses, pool config, HTTP version) |
+| `[[routes]]` | Path-prefix routing rules, including per-route `fingerprinting` toggle, path rewriting, and rate limits |
+| `[backend_pool]` | Connection pool settings (`enabled`, `idle_timeout`, `pool_max_idle_per_host`) |
+| `preserve_host` | Forward original `Host` header to backends |
+| `[headers]` | Global request/response header manipulation |
+| `[security].headers` | Security response headers (HSTS, CSP, custom) |
+| `[security].ip_filter` | IP allow/deny list |
+| `[security].rate_limit` | Rate limiting policy and counters |
+
+> **Note on rate-limit counters:** existing in-memory counters are preserved
+> across reloads unless `limit_by` or `window_seconds` changes, in which case
+> they are reset.
+
+### Static (requires restart)
+
+| TOML key | Description |
+|---|---|
+| `[listen]` | Bind addresses, backlog, `reuse_port` |
+| `[tls]` | TLS termination (cert/key hot-reload is handled separately — see below) |
+| `[fingerprint]` | Fingerprinting feature flags (`tcp_enabled`, `tls_enabled`, `http_enabled`, `max_capture`) — static because they control eBPF program loading and capture buffers at startup |
+| `[logging]` | Log level and format |
+| `[telemetry]` | Metrics port and OpenTelemetry log level |
+| `[timeout]` | `upstream_connect_ms` (TCP connect to backend; absent = no timeout), `proxy_idle_ms` (inbound idle), `tls_handshake_secs`, `connection_handling_secs`, `shutdown_secs`, `keep_alive.upstream_idle_timeout` |
+| `[security].max_connections` | Maximum concurrent connections |
+
+> **TLS certificate rotation** is the exception: cert and key files are watched
+> independently of the main config. New connections pick up the new certificate
+> without a restart; existing connections are unaffected.
+
+## TLS Certificate Management
+
+### Certificate Rotation
+
+Huginn Proxy supports hot reload for TLS certificates:
+
+1. Enable the file watcher (`HUGINN_WATCH=true`)
+2. Update certificate files (Secret in Kubernetes, volume in Docker)
+3. Proxy detects changes after the debounce window (`HUGINN_WATCH_DELAY_SECS`, default: 60s)
+4. New connections use new certificates
+5. Existing connections continue with old certificates until closed
+
+No restart required.
+
+### Certificate Permissions
+
+**Docker:** Certificates must be readable by user `app` (UID 100).
+
+```bash
+chmod 400 server.crt server.key
+```
+
+**Kubernetes:** Secret volumes are mounted with `defaultMode: 0400` (read-only for owner).

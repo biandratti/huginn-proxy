@@ -1,4 +1,4 @@
-use crate::helpers::create_valid_test_cert;
+use crate::helpers::{create_valid_test_cert, generate_dummy_test_cert_der};
 use huginn_proxy_lib::config::{ClientAuth, TlsConfig, TlsOptions};
 use huginn_proxy_lib::tls::build_cert_reloader;
 
@@ -10,14 +10,13 @@ async fn test_build_cert_reloader() -> Result<(), Box<dyn std::error::Error + Se
         cert_path: cert_path.display().to_string(),
         key_path: key_path.display().to_string(),
         alpn: vec!["h2".to_string()],
-        watch_delay_secs: 60,
         options: TlsOptions::default(),
         client_auth: ClientAuth::Disabled,
         session_resumption: Default::default(),
     };
 
     // This should succeed in creating the reloader service with valid certificates
-    let result = build_cert_reloader(&config).await;
+    let result = build_cert_reloader(&config, true, 60).await;
 
     let _ = std::fs::remove_file(&cert_path);
     let _ = std::fs::remove_file(&key_path);
@@ -53,14 +52,13 @@ async fn test_build_cert_reloader_missing_files(
         cert_path: "/nonexistent/cert.pem".to_string(),
         key_path: "/nonexistent/key.pem".to_string(),
         alpn: vec![],
-        watch_delay_secs: 60,
         options: TlsOptions::default(),
         client_auth: ClientAuth::Disabled,
         session_resumption: Default::default(),
     };
 
     // Should fail because certificates must exist at startup
-    let result = build_cert_reloader(&config).await;
+    let result = build_cert_reloader(&config, true, 60).await;
     assert!(result.is_err());
     Ok(())
 }
@@ -69,11 +67,9 @@ async fn test_build_cert_reloader_missing_files(
 fn test_server_certs_keys_build_tls_acceptor(
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     use huginn_proxy_lib::tls::ServerCertsKeys;
-    use rustls_pki_types::{CertificateDer, PrivateKeyDer};
 
-    let certs = vec![CertificateDer::from(b"dummy cert".to_vec())];
-    let key =
-        PrivateKeyDer::Pkcs8(rustls_pki_types::PrivatePkcs8KeyDer::from(b"dummy key".to_vec()));
+    let (cert, key) = generate_dummy_test_cert_der();
+    let certs = vec![cert];
 
     let server_certs_keys = ServerCertsKeys { certs, key };
     let alpn = vec!["h2".to_string()];

@@ -121,7 +121,7 @@ Limitation: Fingerprints are only extracted and forwarded, not validated or used
 
 Reuses TCP connections to backend services to reduce latency and overhead from repeated TCP and TLS handshakes. Configurable idle timeout and max idle connections per host.
 
-Enabled by default with 90s idle timeout and 128 max idle connections per host. Can be disabled globally via `backend_pool.enabled = false`.
+Enabled by default with 90s idle timeout and unlimited idle connections per host. Can be disabled globally via `backend_pool.enabled = false`.
 
 Per-route override available via `force_new_connection = true` to bypass pooling for specific routes (useful for TCP/TLS fingerprinting scenarios where fresh handshakes are required).
 
@@ -147,110 +147,54 @@ Limitation: Global setting only, cannot be configured per-route.
 
 ## Granular Timeouts
 
-**TLS handshake and connection handling timeouts**
+**Per-direction timeout controls**
 
 Multiple timeout controls to prevent resource exhaustion:
-- TLS handshake timeout (default: 15s) - Maximum time for completing TLS handshake
-- Connection handling timeout (default: 300s/5min) - Maximum total time for entire connection lifecycle (read + process + write)
+- `upstream_connect_ms` — TCP connect timeout to backend. Optional; if absent, no connect timeout is applied.
+- `proxy_idle_ms` (default: 60s) — Inbound idle timeout: HTTP/1.1 `header_read_timeout` + HTTP/2 keep-alive interval.
+- `tls_handshake_secs` (default: 15s) — Maximum time for completing TLS handshake.
+- `connection_handling_secs` (default: 300s) — Maximum total time for entire connection lifecycle (read + process + write).
+- `shutdown_secs` (default: 30s) — Graceful shutdown window.
+- `keep_alive.upstream_idle_timeout` (default: 60s) — TCP keep-alive interval for proxy → backend connections.
 
 All timeouts are independently configurable.
 
 Metrics track timeout occurrences by type (tls_handshake, connection_handling) for monitoring and alerting.
 
-Limitation: Individual HTTP read/write timeouts are not supported. The connection_handling_secs timeout covers the entire connection lifecycle.
+Limitation: No per-route timeout configuration. The `connection_handling_secs` timeout covers the entire connection lifecycle.
 
 ## Configuration
 
 **TOML-based config files**
 
-Single config file for everything. Hot reload for TLS certificates, but other config changes require restart.
+Single config file for everything. Dynamic sections (backends, routes, rate limits, IP filtering, headers, security headers, connection pool) are hot-reloaded via SIGHUP or file watcher — no connections are dropped. Static sections (listen addresses, TLS options, fingerprinting flags, logging, telemetry, timeouts) require a restart.
 
-Limitation: No API for dynamic config changes. No config validation endpoint.
+Config validation available via `--validate` flag (like `nginx -t`) for use in CI/CD pipelines.
+
+Limitation: No API for dynamic config changes.
 
 ## Observability
 
 **Prometheus metrics and health checks**
 
-Metrics server runs on a separate port (configurable via `telemetry.metrics_port`). Exposes **37 comprehensive metrics** covering connections, requests, TLS, fingerprinting, backends, throughput, rate limiting, IP filtering, header manipulation, and mTLS.
+Metrics server runs on a separate port (configurable via `telemetry.metrics_port`). Covers connections, requests, TLS, fingerprinting, backends, throughput, rate limiting, IP filtering, header manipulation, hot reload, and mTLS.
 
 Health endpoints: `/health` (general), `/ready` (Kubernetes readiness), `/live` (Kubernetes liveness), `/metrics` (Prometheus).
 
-**Available Metrics:**
-
-*Connection Metrics:*
-- `huginn_connections_total` - Total connections established
-- `huginn_connections_active` - Active connections (gauge)
-- `huginn_connections_rejected_total` - Connections rejected due to limits
-
-*Request Metrics:*
-- `huginn_requests_total` - Total HTTP requests processed
-- `huginn_requests_duration_seconds` - Request duration histogram
-
-*Throughput Metrics:*
-- `huginn_bytes_received_total` - Total bytes received from clients
-- `huginn_bytes_sent_total` - Total bytes sent to clients
-- `huginn_backend_bytes_received_total` - Total bytes received from backends
-- `huginn_backend_bytes_sent_total` - Total bytes sent to backends
-
-*TLS Metrics:*
-- `huginn_tls_connections_active` - Active TLS connections (gauge)
-- `huginn_tls_handshakes_total` - Total TLS handshakes completed
-- `huginn_tls_handshake_duration_seconds` - TLS handshake duration histogram
-- `huginn_tls_handshake_errors_total` - TLS handshake errors
-
-*TLS Fingerprinting (JA4):*
-- `huginn_tls_fingerprints_extracted_total` - TLS fingerprints extracted
-- `huginn_tls_fingerprint_extraction_duration_seconds` - Extraction duration
-- `huginn_tls_fingerprint_failures_total` - Extraction failures
-
-*HTTP/2 Fingerprinting (Akamai):*
-- `huginn_http2_fingerprints_extracted_total` - HTTP/2 fingerprints extracted
-- `huginn_http2_fingerprint_extraction_duration_seconds` - Extraction duration
-- `huginn_http2_fingerprint_failures_total` - Extraction failures
-
-*TCP SYN Fingerprinting (p0f-style, eBPF):*
-- `huginn_tcp_syn_fingerprints_total` - TCP SYN fingerprint outcomes by result (`hit`, `miss`, `malformed`)
-- `huginn_tcp_syn_fingerprint_duration_seconds` - BPF map lookup and parse duration
-- `huginn_tcp_syn_fingerprint_failures_total` - Extraction failures (malformed BPF map entries)
-
-*Backend Metrics:*
-- `huginn_backend_requests_total` - Total requests forwarded to backends
-- `huginn_backend_errors_total` - Backend errors
-- `huginn_backend_duration_seconds` - Backend request duration histogram
-- `huginn_backend_selections_total` - Backend selections (load balancing)
-
-*Rate Limiting Metrics:*
-- `huginn_rate_limit_requests_total` - Total requests evaluated by rate limiter
-- `huginn_rate_limit_allowed_total` - Total requests allowed
-- `huginn_rate_limit_rejected_total` - Total requests rejected (429)
-
-*IP Filtering Metrics:*
-- `huginn_ip_filter_requests_total` - Total requests evaluated by IP filter
-- `huginn_ip_filter_allowed_total` - Total requests allowed
-- `huginn_ip_filter_denied_total` - Total requests denied (403)
-
-*Header Manipulation Metrics:*
-- `huginn_headers_added_total` - Total headers added
-- `huginn_headers_removed_total` - Total headers removed
-
-*mTLS Metrics:*
-- `huginn_mtls_connections_total` - Connections with client certificates
-
-*Other Metrics:*
-- `huginn_errors_total` - Total errors by type
-- `huginn_timeouts_total` - Timeouts by type
-- `huginn_build_info` - Build information (version, rust_version)
-
-For detailed metric documentation, labels, and example queries, see [TELEMETRY.md](TELEMETRY.md).
+For the full metric list, labels, and example queries, see [TELEMETRY.md](TELEMETRY.md).
 
 Limitation: No distributed tracing. No request logging to files. No custom metrics.
 
-## Timeouts
+## Hot Reload
 
-**Connect, idle, shutdown, and keep-alive**
+**Zero-downtime config updates via SIGHUP or file watcher**
 
-Configurable timeouts for connection establishment, idle connections, and graceful shutdown. HTTP/1.1 keep-alive is configurable.
+Dynamic config sections are swapped atomically using `ArcSwap` — in-flight requests complete with the old config, new requests use the new config immediately. No connections are dropped.
 
-HTTP/2 connections are always persistent with multiplexing, so keep-alive settings don't apply there.
+Trigger options:
+- **SIGHUP** — always available: `kill -SIGHUP <pid>` or `docker kill --signal=SIGHUP <container>`
+- **File watcher** — enabled with `--watch` flag (or `HUGINN_WATCH=true`). Configurable debounce via `--watch-delay-secs` / `HUGINN_WATCH_DELAY_SECS` (default: 60s).
 
-Limitation: No per-route timeout configuration.
+On reload, if the new config is invalid the proxy keeps the current config and logs the error. If static sections changed, the proxy logs a warning and ignores those changes (restart required).
+
+Limitation: No per-section partial reload. Dynamic config is always swapped as a whole.

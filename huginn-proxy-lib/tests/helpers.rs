@@ -1,5 +1,6 @@
 use std::fs;
 use std::path::PathBuf;
+use std::sync::OnceLock;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 /// Generate a temporary file path for testing
@@ -16,11 +17,10 @@ pub fn tmp_path(name: &str) -> PathBuf {
 /// Use for tests that expect certificate parsing/validation errors
 pub fn create_dummy_test_cert(
 ) -> Result<(PathBuf, PathBuf), Box<dyn std::error::Error + Send + Sync>> {
+    ensure_crypto_provider();
     let cert_path = tmp_path("test.crt");
     let key_path = tmp_path("test.key");
 
-    // Create minimal valid PEM files for testing
-    // Note: These are not real certificates, but valid PEM format
     fs::write(
         &cert_path,
         b"-----BEGIN CERTIFICATE-----\nMIIBkTCB+wIJAKJ\n-----END CERTIFICATE-----\n",
@@ -38,6 +38,7 @@ pub fn create_dummy_test_cert(
 /// Use for tests that need cryptographically valid certificates
 pub fn create_valid_test_cert(
 ) -> Result<(PathBuf, PathBuf), Box<dyn std::error::Error + Send + Sync>> {
+    ensure_crypto_provider();
     let cert_path = tmp_path("test.crt");
     let key_path = tmp_path("test.key");
 
@@ -54,6 +55,23 @@ pub fn create_valid_test_cert(
     Ok((cert_path, key_path))
 }
 
+/// Generate dummy (invalid) test certificates as DER (for direct use with rustls)
+///
+/// The bytes are syntactically arbitrary — rustls will reject them.
+/// Use for tests that exercise the error path of `build_tls_acceptor` or
+/// similar functions without needing cryptographically valid material.
+pub fn generate_dummy_test_cert_der() -> (
+    rustls_pki_types::CertificateDer<'static>,
+    rustls_pki_types::PrivateKeyDer<'static>,
+) {
+    ensure_crypto_provider();
+    let cert = rustls_pki_types::CertificateDer::from(b"dummy cert".to_vec());
+    let key = rustls_pki_types::PrivateKeyDer::Pkcs8(rustls_pki_types::PrivatePkcs8KeyDer::from(
+        b"dummy key".to_vec(),
+    ));
+    (cert, key)
+}
+
 /// Generate valid test certificates as DER (for direct use with rustls)
 /// Returns CertificateDer and PrivateKeyDer for direct use in ServerConfig
 pub fn generate_valid_test_cert_der() -> Result<
@@ -63,6 +81,7 @@ pub fn generate_valid_test_cert_der() -> Result<
     ),
     Box<dyn std::error::Error + Send + Sync>,
 > {
+    ensure_crypto_provider();
     let subject_alt_names = vec!["localhost".to_string()];
     let rcgen::CertifiedKey { cert, signing_key } =
         rcgen::generate_simple_self_signed(subject_alt_names)?;
@@ -73,4 +92,12 @@ pub fn generate_valid_test_cert_der() -> Result<
     );
 
     Ok((cert_der, key_der))
+}
+
+/// Ensure the rustls process-level `CryptoProvider` is installed exactly once.
+pub fn ensure_crypto_provider() {
+    static INIT: OnceLock<()> = OnceLock::new();
+    INIT.get_or_init(|| {
+        let _ = tokio_rustls::rustls::crypto::aws_lc_rs::default_provider().install_default();
+    });
 }

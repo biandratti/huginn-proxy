@@ -102,39 +102,36 @@ pub async fn read_certs_and_keys(
     Ok(ServerCertsKeys { certs, key })
 }
 
-/// Build certificate reloader with filesystem watching
-///
-/// Returns a receiver that will receive updates when certificates change.
-/// The watcher runs in a background task and monitors the certificate files.
-pub async fn build_cert_reloader(
-    tls_config: &TlsConfig,
+/// Load certificates once and return a static receiver — no filesystem watching.
+async fn load_certs_static(
+    cert_path: &Path,
+    key_path: &Path,
 ) -> Result<watch::Receiver<Option<ServerCertsKeys>>, ProxyError> {
-    let cert_path = PathBuf::from(&tls_config.cert_path);
-    let key_path = PathBuf::from(&tls_config.key_path);
-    let watch_delay_secs = tls_config.watch_delay_secs;
+    let certs_keys = read_certs_and_keys(cert_path, key_path).await?;
+    let (_, rx) = watch::channel(Some(certs_keys));
+    Ok(rx)
+}
 
-    // Load initial certificates
+/// Load certificates and spawn a background watcher that reloads them on file changes.
+async fn load_certs_with_watch(
+    cert_path: PathBuf,
+    key_path: PathBuf,
+    watch_delay_secs: u32,
+) -> Result<watch::Receiver<Option<ServerCertsKeys>>, ProxyError> {
     let initial_certs_keys = read_certs_and_keys(&cert_path, &key_path).await?;
-
-    // Create watch channel for certificate updates
     let (tx, rx) = watch::channel(Some(initial_certs_keys));
 
-    // Channel to communicate file change events from watcher to reload task
     let (event_tx, mut event_rx) = tokio::sync::mpsc::unbounded_channel::<()>();
 
-    // Setup filesystem watcher
     let cert_path_for_watcher = cert_path.clone();
     let key_path_for_watcher = key_path.clone();
     let mut watcher = RecommendedWatcher::new(
         move |result: Result<notify::Event, notify::Error>| {
             if let Ok(event) = result {
-                // Only react to file modifications and creation
                 if matches!(event.kind, EventKind::Modify(_) | EventKind::Create(_)) {
-                    // Check if the event is for our certificate or key files
                     let is_cert_file = event.paths.iter().any(|p| p == &cert_path_for_watcher);
                     let is_key_file = event.paths.iter().any(|p| p == &key_path_for_watcher);
                     if is_cert_file || is_key_file {
-                        // Send event to reload task
                         let _ = event_tx.send(());
                     }
                 }
@@ -151,7 +148,6 @@ pub async fn build_cert_reloader(
         .watch(parent_dir, RecursiveMode::NonRecursive)
         .map_err(|e| ProxyError::Tls(format!("Failed to watch certificate directory: {e}")))?;
 
-    // Spawn background task to handle reloads with debouncing
     let cert_path_for_task = cert_path.clone();
     let key_path_for_task = key_path.clone();
     let watcher_handle = Arc::new(watcher);
@@ -162,9 +158,7 @@ pub async fn build_cert_reloader(
 
         loop {
             tokio::select! {
-                // Wait for file change events
                 _ = event_rx.recv() => {
-                    // Reset debounce timer on each event
                     reload_deadline = Instant::now()
                         .checked_add(debounce_duration)
                         .or_else(|| Instant::now().checked_add(Duration::from_secs(60)));
@@ -173,10 +167,7 @@ pub async fn build_cert_reloader(
                     if let Some(deadline) = reload_deadline {
                         sleep_until(deadline).await;
                     } else {
-                        // Wait indefinitely if no reload pending
-                        loop {
-                            sleep(Duration::from_secs(3600)).await;
-                        }
+                        loop { sleep(Duration::from_secs(3600)).await; }
                     }
                 } => {
                     if reload_deadline.take().is_some() {
@@ -196,9 +187,28 @@ pub async fn build_cert_reloader(
                 }
             }
         }
-        // Keep watcher alive (drop at end of task)
         drop(watcher_handle);
     });
 
     Ok(rx)
+}
+
+/// Build a certificate receiver, with or without filesystem watching.
+///
+/// - `watch = false`: certificates are loaded once at startup, never reloaded.
+/// - `watch = true`: a background watcher monitors cert/key files and reloads on changes,
+///   debounced by `watch_delay_secs`.
+pub async fn build_cert_reloader(
+    tls_config: &TlsConfig,
+    watch: bool,
+    watch_delay_secs: u32,
+) -> Result<watch::Receiver<Option<ServerCertsKeys>>, ProxyError> {
+    let cert_path = PathBuf::from(&tls_config.cert_path);
+    let key_path = PathBuf::from(&tls_config.key_path);
+
+    if watch {
+        load_certs_with_watch(cert_path, key_path, watch_delay_secs).await
+    } else {
+        load_certs_static(&cert_path, &key_path).await
+    }
 }

@@ -1,24 +1,52 @@
 #![forbid(unsafe_code)]
 
 use std::env;
+use std::path::PathBuf;
 use std::sync::Arc;
 
+use arc_swap::ArcSwap;
+use clap::Parser;
 use huginn_proxy_lib::config::load_from_path;
 use huginn_proxy_lib::run;
 use huginn_proxy_lib::telemetry::{
     init_metrics, init_tracing_with_otel, shutdown_tracing, start_observability_server,
 };
+use huginn_proxy_lib::WatchOptions;
 use tracing::info;
 
 type BoxError = Box<dyn std::error::Error + Send + Sync>;
 
+#[derive(Parser)]
+#[command(name = "huginn-proxy", about = "High-performance reverse proxy")]
+struct Cli {
+    /// Path to the TOML configuration file
+    #[arg(value_name = "CONFIG", env = "HUGINN_CONFIG_PATH")]
+    config_path: PathBuf,
+
+    /// Parse and validate the config file without starting the proxy
+    #[arg(long)]
+    validate: bool,
+
+    /// Enable filesystem watching for config and TLS certificate hot reload
+    #[arg(long, env = "HUGINN_WATCH")]
+    watch: bool,
+
+    /// Debounce delay in seconds before applying a reload after a file-change event
+    #[arg(long, default_value = "60", env = "HUGINN_WATCH_DELAY_SECS")]
+    watch_delay_secs: u32,
+}
+
 #[tokio::main]
 async fn main() -> Result<(), BoxError> {
-    let mut args = env::args();
-    let _bin = args.next();
-    let config_path = args.next().ok_or("usage: huginn-proxy <config-path>")?;
+    let cli = Cli::parse();
 
-    let config = Arc::new(load_from_path(&config_path)?);
+    let config = load_from_path(&cli.config_path)?;
+    config.validate_cross_refs()?;
+
+    if cli.validate {
+        println!("Config OK: {}", cli.config_path.display());
+        return Ok(());
+    }
 
     // RUST_LOG environment variable can override at runtime (e.g., docker run -e RUST_LOG=debug)
     let log_level = env::var("RUST_LOG").unwrap_or_else(|_| config.logging.level.clone());
@@ -29,23 +57,32 @@ async fn main() -> Result<(), BoxError> {
         config.telemetry.otel_log_level.clone(),
     )?;
 
-    let (metrics, metrics_handle) = if let Some(metrics_port) = config.telemetry.metrics_port {
+    let huginn_proxy_lib::config::ConfigParts { static_cfg, dynamic_cfg } = config.into_parts();
+    let static_cfg = Arc::new(static_cfg);
+    let dynamic_cfg = Arc::new(ArcSwap::from_pointee(dynamic_cfg));
+
+    let (metrics, metrics_handle) = {
         let (metrics, registry) =
             init_metrics().map_err(|e| format!("Failed to initialize metrics: {e}"))?;
 
-        info!(port = metrics_port, "Metrics initialized, starting observability server");
-        let backends_for_observability = Arc::new(config.backends.clone());
-        let handle = tokio::spawn(async move {
-            if let Err(e) =
-                start_observability_server(metrics_port, registry, backends_for_observability).await
-            {
-                tracing::error!(error = %e, "Observability server error");
-            }
-        });
-        (Some(metrics), Some(handle))
-    } else {
-        info!("Metrics disabled (no metrics_port configured)");
-        (None, None)
+        let handle = if let Some(metrics_port) = static_cfg.telemetry.metrics_port {
+            info!(port = metrics_port, "Metrics initialized, starting observability server");
+            let backends_for_observability = Arc::new(dynamic_cfg.load().backends.clone());
+            Some(tokio::spawn(async move {
+                if let Err(e) =
+                    start_observability_server(metrics_port, registry, backends_for_observability)
+                        .await
+                {
+                    tracing::error!(error = %e, "Observability server error");
+                }
+            }))
+        } else {
+            info!("Metrics initialized (no metrics_port — Prometheus endpoint disabled)");
+            drop(registry);
+            None
+        };
+
+        (metrics, handle)
     };
 
     // TCP SYN fingerprinting via eBPF/XDP.
@@ -57,7 +94,7 @@ async fn main() -> Result<(), BoxError> {
         use huginn_proxy_lib::fingerprinting::SynResult;
         use std::net::SocketAddr;
 
-        if !config.fingerprint.tcp_enabled {
+        if !static_cfg.fingerprint.tcp_enabled {
             tracing::info!("TCP SYN fingerprinting disabled (`fingerprint.tcp_enabled = false`)");
             None
         } else {
@@ -115,7 +152,20 @@ async fn main() -> Result<(), BoxError> {
 
     info!("huginn-proxy starting");
 
-    let result = run(config, metrics, syn_probe).await;
+    let watch_opts = WatchOptions {
+        config_path: Some(cli.config_path.clone()),
+        watch: cli.watch,
+        watch_delay_secs: cli.watch_delay_secs,
+    };
+
+    let result = run(
+        Arc::clone(&static_cfg),
+        Arc::clone(&dynamic_cfg),
+        metrics,
+        syn_probe,
+        watch_opts,
+    )
+    .await;
 
     if let Some(handle) = metrics_handle {
         info!("Shutting down observability server");

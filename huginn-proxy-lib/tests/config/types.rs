@@ -58,7 +58,6 @@ fn test_mtls_config_required() -> Result<(), Box<dyn std::error::Error + Send + 
 cert_path = "/config/certs/server.crt"
 key_path = "/config/certs/server.key"
 alpn = ["h2", "http/1.1"]
-watch_delay_secs = 60
 
 [client_auth]
 required = { ca_cert_path = "/config/certs/client-ca.crt" }
@@ -80,7 +79,6 @@ fn test_mtls_config_default_is_disabled() -> Result<(), Box<dyn std::error::Erro
 cert_path = "/config/certs/server.crt"
 key_path = "/config/certs/server.key"
 alpn = ["h2", "http/1.1"]
-watch_delay_secs = 60
 "#;
 
     let config: TlsConfig = toml::from_str(toml)?;
@@ -105,7 +103,6 @@ routes = [
 cert_path = "/config/certs/server.crt"
 key_path = "/config/certs/server.key"
 alpn = ["h2", "http/1.1"]
-watch_delay_secs = 60
 
 [tls.client_auth]
 required = { ca_cert_path = "/config/certs/client-ca.crt" }
@@ -173,8 +170,8 @@ backends = [{ address = "backend:9000" }]
 "#;
 
     let config: Config = toml::from_str(toml)?;
-    assert_eq!(config.timeout.connect_ms, 5000);
-    assert_eq!(config.timeout.idle_ms, 60000);
+    assert_eq!(config.timeout.upstream_connect_ms, None);
+    assert_eq!(config.timeout.proxy_idle_ms, 60000);
     assert_eq!(config.timeout.shutdown_secs, 30);
     assert_eq!(config.timeout.tls_handshake_secs, 15);
     assert_eq!(config.timeout.connection_handling_secs, 300);

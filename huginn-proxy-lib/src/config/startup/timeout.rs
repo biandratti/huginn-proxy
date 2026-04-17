@@ -1,16 +1,17 @@
 use serde::Deserialize;
 
 /// Timeout configuration
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone, PartialEq)]
 pub struct TimeoutConfig {
-    /// Connection timeout in milliseconds
-    /// Default: 5000 (5 seconds)
-    #[serde(default = "default_connect_timeout")]
-    pub connect_ms: u64,
-    /// Idle connection timeout in milliseconds
+    /// TCP connect timeout to upstream backends in milliseconds.
+    /// If absent, no connect timeout is applied.
+    #[serde(default)]
+    pub upstream_connect_ms: Option<u64>,
+    /// Idle connection timeout for inbound client connections in milliseconds.
+    /// Applied as HTTP/1.1 `header_read_timeout` and HTTP/2 keep-alive interval.
     /// Default: 60000 (60 seconds)
-    #[serde(default = "default_idle_timeout")]
-    pub idle_ms: u64,
+    #[serde(default = "default_proxy_idle_ms")]
+    pub proxy_idle_ms: u64,
     /// Graceful shutdown timeout in seconds
     /// Default: 30
     #[serde(default = "default_shutdown_timeout")]
@@ -40,8 +41,8 @@ pub struct TimeoutConfig {
 impl Default for TimeoutConfig {
     fn default() -> Self {
         Self {
-            connect_ms: default_connect_timeout(),
-            idle_ms: default_idle_timeout(),
+            upstream_connect_ms: None,
+            proxy_idle_ms: default_proxy_idle_ms(),
             shutdown_secs: default_shutdown_timeout(),
             tls_handshake_secs: default_tls_handshake_timeout(),
             connection_handling_secs: default_connection_handling_timeout(),
@@ -60,7 +61,7 @@ impl Default for TimeoutConfig {
 /// **HTTP/2**: Connections are always persistent by default with native multiplexing.
 /// Multiple streams can share the same connection, so keep-alive headers are not needed
 /// (and are prohibited by the HTTP/2 specification).
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone, PartialEq)]
 pub struct KeepAliveConfig {
     /// Enable HTTP/1.1 keep-alive (persistent connections)
     /// Allows reusing the same TCP connection for multiple HTTP requests
@@ -70,27 +71,21 @@ pub struct KeepAliveConfig {
     /// so this setting only affects HTTP/1.1 connections.
     #[serde(default = "default_true")]
     pub enabled: bool,
-    /// Keep-alive timeout in seconds
-    /// How long to keep idle HTTP/1.1 connections open before closing them
+    /// TCP keep-alive interval for upstream (proxy → backend) connections, in seconds.
+    /// Maps to rpxy's `upstream_idle_timeout`: sets how often TCP keepalive packets are sent
+    /// to detect dead backend connections.
     /// Default: 60 seconds
-    ///
-    /// Note: For HTTP/2, connection management is handled automatically
-    /// by the protocol's multiplexing and flow control mechanisms.
-    #[serde(default = "default_keep_alive_timeout")]
-    pub timeout_secs: u64,
+    #[serde(default = "default_upstream_idle_timeout")]
+    pub upstream_idle_timeout: u64,
 }
 
 impl Default for KeepAliveConfig {
     fn default() -> Self {
-        Self { enabled: true, timeout_secs: default_keep_alive_timeout() }
+        Self { enabled: true, upstream_idle_timeout: default_upstream_idle_timeout() }
     }
 }
 
-fn default_connect_timeout() -> u64 {
-    5000
-}
-
-fn default_idle_timeout() -> u64 {
+fn default_proxy_idle_ms() -> u64 {
     60000
 }
 
@@ -110,6 +105,6 @@ fn default_true() -> bool {
     true
 }
 
-fn default_keep_alive_timeout() -> u64 {
+fn default_upstream_idle_timeout() -> u64 {
     60
 }

@@ -7,6 +7,7 @@ publish = false
 
 [dependencies]
 ahash.workspace = true
+arc-swap.workspace = true
 bytes.workspace = true
 http.workspace = true
 http-body-util.workspace = true
@@ -37,6 +38,7 @@ tracing-subscriber.workspace = true
 criterion = { workspace = true }
 rcgen.workspace = true
 reqwest = { workspace = true, features = ["json", "http2"] }
+serial_test.workspace = true
 tempfile.workspace = true
 
 [[bench]]

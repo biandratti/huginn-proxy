@@ -22,6 +22,7 @@ pub mod labels {
     pub const VERSION: &str = "version";
     pub const RUST_VERSION: &str = "rust_version";
     pub const BACKEND: &str = "backend";
+    pub const RESULT: &str = "result";
 }
 
 pub mod values {
@@ -31,6 +32,8 @@ pub mod values {
     pub const TIMEOUT_CONNECTION_HANDLING: &str = "connection_handling";
     pub const CONTEXT_REQUEST: &str = "request";
     pub const CONTEXT_RESPONSE: &str = "response";
+    pub const RELOAD_SUCCESS: &str = "success";
+    pub const RELOAD_ERROR: &str = "error";
 }
 
 #[derive(Clone)]
@@ -103,9 +106,23 @@ pub struct Metrics {
 
     // Build info
     pub build_info: Gauge<u64>,
+
+    // Config reload metrics
+    /// `huginn_config_reload_total{result="success|error"}` — total reload attempts.
+    pub config_reload_total: Counter<u64>,
+    /// Unix timestamp (seconds) of the last successful reload.
+    pub config_last_reload_timestamp_seconds: Gauge<f64>,
+    /// FNV-1a hash of the active `DynamicConfig` — changes on every successful reload.
+    pub config_hash: Gauge<u64>,
 }
 
 impl Metrics {
+    /// Create a no-op `Metrics` instance for testing.
+    pub fn new_noop() -> Arc<Self> {
+        let meter = opentelemetry::global::meter("huginn-proxy-noop");
+        Arc::new(Self::new(meter))
+    }
+
     fn new(meter: Meter) -> Self {
         Self {
             connections_total: meter
@@ -276,6 +293,19 @@ impl Metrics {
             build_info: meter
                 .u64_gauge("huginn_build_info")
                 .with_description("Build information (version, rust version)")
+                .build(),
+
+            config_reload_total: meter
+                .u64_counter("huginn_config_reload_total")
+                .with_description("Total config reload attempts, labelled result=success|error")
+                .build(),
+            config_last_reload_timestamp_seconds: meter
+                .f64_gauge("huginn_config_last_reload_timestamp_seconds")
+                .with_description("Unix timestamp of the last successful config reload")
+                .build(),
+            config_hash: meter
+                .u64_gauge("huginn_config_hash")
+                .with_description("FNV-1a hash of the active DynamicConfig; changes on each successful reload")
                 .build(),
         }
     }
@@ -510,6 +540,27 @@ impl Metrics {
     pub fn record_backend_selection(&self, backend: &str) {
         self.backend_selections_total
             .add(1, &[KeyValue::new(labels::BACKEND, backend.to_string())]);
+    }
+
+    /// Record a successful config reload.
+    ///
+    /// Increments the counter, updates the timestamp gauge, and records the
+    /// FNV-1a hash of the new `DynamicConfig` for dashboard verification.
+    pub fn record_reload_success(&self, config_hash: u64) {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs_f64();
+        self.config_reload_total
+            .add(1, &[KeyValue::new(labels::RESULT, values::RELOAD_SUCCESS)]);
+        self.config_last_reload_timestamp_seconds.record(now, &[]);
+        self.config_hash.record(config_hash, &[]);
+    }
+
+    /// Record a failed config reload (parse error or validation error).
+    pub fn record_reload_error(&self) {
+        self.config_reload_total
+            .add(1, &[KeyValue::new(labels::RESULT, values::RELOAD_ERROR)]);
     }
 
     /// Record a TCP SYN fingerprint lookup result and its duration.
