@@ -14,7 +14,7 @@ pub use dynamic::{
     HeaderManipulation, HeaderManipulationGroup, Route,
 };
 pub use loader::load_from_path;
-pub use root::Config;
+pub use root::{Config, ConfigParts};
 pub use startup::{
     ClientAuth, FingerprintConfig, KeepAliveConfig, ListenConfig, LoggingConfig,
     SessionResumptionConfig, StaticConfig, TelemetryConfig, TimeoutConfig, TlsConfig, TlsOptions,

@@ -70,7 +70,7 @@ fn into_shared(
     SharedRateLimiter,
     SharedClientPool,
 ) {
-    let (static_cfg, dynamic_cfg) = config.into_parts();
+    let huginn_proxy_lib::config::ConfigParts { static_cfg, dynamic_cfg } = config.into_parts();
     let static_cfg = Arc::new(static_cfg);
     let shared_dyn = Arc::new(ArcSwap::from_pointee(dynamic_cfg));
     let rate_limiter = initial_rate_limiter(&shared_dyn.load());

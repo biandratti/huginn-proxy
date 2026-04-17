@@ -230,7 +230,7 @@ async fn capture_fingerprint_values() -> Result<(), Box<dyn std::error::Error + 
         preserve_host: false,
     };
 
-    let (static_cfg, dynamic_cfg) = config.into_parts();
+    let huginn_proxy_lib::config::ConfigParts { static_cfg, dynamic_cfg } = config.into_parts();
     let static_cfg = Arc::new(static_cfg);
     let dynamic_cfg = Arc::new(ArcSwap::from_pointee(dynamic_cfg));
 

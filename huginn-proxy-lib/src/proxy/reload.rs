@@ -64,7 +64,8 @@ pub async fn try_reload(
         return;
     }
 
-    let (new_static, new_dynamic) = new_config.into_parts();
+    let crate::config::ConfigParts { static_cfg: new_static, dynamic_cfg: new_dynamic } =
+        new_config.into_parts();
 
     // Warn on static section changes (ignored — restart required)
     if new_static != *static_cfg {

@@ -130,7 +130,7 @@ pub async fn spawn_proxy(
     let config = load_from_path(config_path)?;
     let listen_addr = config.listen.addrs[0];
 
-    let (static_cfg, dynamic_cfg) = config.into_parts();
+    let huginn_proxy_lib::config::ConfigParts { static_cfg, dynamic_cfg } = config.into_parts();
     let static_cfg = Arc::new(static_cfg);
     let dynamic_cfg = Arc::new(ArcSwap::from_pointee(dynamic_cfg));
 

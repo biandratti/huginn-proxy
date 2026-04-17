@@ -132,11 +132,6 @@ fn default_session_cache_size() -> usize {
     256
 }
 
-/// TLS termination configuration (static — requires restart to change)
-///
-/// Note: `watch_delay_secs` has been removed. Certificate watch debounce is now
-/// controlled globally via `--watch-delay-secs` CLI flag / `HUGINN_WATCH_DELAY_SECS`
-/// env var (see PR 3).
 #[derive(Debug, Deserialize, Clone, PartialEq)]
 pub struct TlsConfig {
     /// Path to TLS certificate file (PEM format)

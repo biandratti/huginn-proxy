@@ -59,6 +59,15 @@ pub struct Config {
     pub headers: Option<HeaderManipulation>,
 }
 
+/// Config split into its static and dynamic halves.
+#[derive(Debug, Clone)]
+pub struct ConfigParts {
+    /// Process-level settings that require a restart to change.
+    pub static_cfg: StaticConfig,
+    /// Hot-reloadable settings; wrap in `ArcSwap` for atomic runtime swaps.
+    pub dynamic_cfg: DynamicConfig,
+}
+
 impl Config {
     /// Validate cross-references within the config.
     pub fn validate_cross_refs(&self) -> crate::error::Result<()> {
@@ -85,29 +94,28 @@ impl Config {
     /// - `DynamicConfig` holds hot-reloadable settings (routes, backends, headers,
     ///   security policy). Wrap the returned value in `ArcSwap` to support
     ///   atomic hot-swaps at runtime.
-    pub fn into_parts(self) -> (StaticConfig, DynamicConfig) {
-        let static_cfg = StaticConfig {
-            listen: self.listen,
-            tls: self.tls,
-            fingerprint: self.fingerprint,
-            logging: self.logging,
-            timeout: self.timeout,
-            telemetry: self.telemetry,
-            max_connections: self.security.max_connections,
-        };
-
-        let dynamic_cfg = DynamicConfig {
-            backends: self.backends,
-            routes: self.routes,
-            preserve_host: self.preserve_host,
-            headers: self.headers,
-            security: SecurityDynamicConfig {
-                headers: self.security.headers,
-                ip_filter: self.security.ip_filter,
-                rate_limit: self.security.rate_limit,
+    pub fn into_parts(self) -> ConfigParts {
+        ConfigParts {
+            static_cfg: StaticConfig {
+                listen: self.listen,
+                tls: self.tls,
+                fingerprint: self.fingerprint,
+                logging: self.logging,
+                timeout: self.timeout,
+                telemetry: self.telemetry,
+                max_connections: self.security.max_connections,
             },
-        };
-
-        (static_cfg, dynamic_cfg)
+            dynamic_cfg: DynamicConfig {
+                backends: self.backends,
+                routes: self.routes,
+                preserve_host: self.preserve_host,
+                headers: self.headers,
+                security: SecurityDynamicConfig {
+                    headers: self.security.headers,
+                    ip_filter: self.security.ip_filter,
+                    rate_limit: self.security.rate_limit,
+                },
+            },
+        }
     }
 }
