@@ -27,7 +27,7 @@
 
 use std::convert::Infallible;
 use std::net::SocketAddr;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 
 use arc_swap::ArcSwap;
@@ -63,6 +63,17 @@ const EXPECTED_JA4: &str = "t13i1010h2_61a7ad8aa9b6_3a8073edd8ef";
 const EXPECTED_AKAMAI: &str = "2:0;4:2097152;5:16384;6:16384|5177345|0|m,s,a,p";
 
 // ---------------------------------------------------------------------------
+// Rustls crypto provider — must be installed once per process before any
+// TLS handshake. Criterion runs multiple benchmark fns in the same process.
+// ---------------------------------------------------------------------------
+fn ensure_crypto_provider() {
+    static INIT: OnceLock<()> = OnceLock::new();
+    INIT.get_or_init(|| {
+        let _ = tokio_rustls::rustls::crypto::aws_lc_rs::default_provider().install_default();
+    });
+}
+
+// ---------------------------------------------------------------------------
 // Fixture: holds live servers for the duration of each benchmark group
 // ---------------------------------------------------------------------------
 struct BenchFixture {
@@ -76,6 +87,8 @@ struct BenchFixture {
 
 impl BenchFixture {
     async fn setup() -> Self {
+        ensure_crypto_provider();
+
         // 1. Start the plain-HTTP backend (proxy forwards to it without TLS)
         let (backend_task, backend_addr) = start_backend().await;
 

@@ -54,8 +54,8 @@ Criterion **estimate** (middle value). Three consecutive runs; table uses the **
 
 | Benchmark | Estimate |
 |---|---|
-| `akamai_parse_http2_preface_settings_window_headers` | ~1.85 µs |
-| `ja4_parse_tls_client_hello` | ~1.60 µs |
+| `akamai_parse_http2_preface_settings_window_headers` | ~970 ns |
+| `ja4_parse_tls_client_hello` | ~930 ns |
 
 ### Fixtures
 
@@ -185,24 +185,24 @@ Medians from Criterion’s **estimate** line (middle value). Refreshed after **t
 
 | Benchmark | Estimate |
 |---|---|
-| HTTP/1.1 single request (warm) | ~423 µs |
-| HTTP/2 single request (warm) | ~412 µs |
-| HTTP/1.1 with fingerprinting (warm) | ~420 µs |
-| HTTP/1.1 without fingerprinting (warm) | ~400 µs |
-| **Fingerprinting overhead H1 (JA4 only)** | **~20 µs** |
-| HTTP/2 with fingerprinting (warm) | ~413 µs |
-| HTTP/2 without fingerprinting (warm) | ~403 µs |
-| **Fingerprinting overhead H2 (JA4 + Akamai)** | **~10 µs** |
-| Cold throughput, c=10, H1 | ~212 req/s |
-| Cold throughput, c=10, H2 | ~212 req/s |
-| Cold throughput, c=50, H1 | ~743 req/s |
-| Cold throughput, c=50, H2 | ~748 req/s |
+| HTTP/1.1 single request (warm) | ~172 µs |
+| HTTP/2 single request (warm) | ~182 µs |
+| HTTP/1.1 with fingerprinting (warm) | ~174 µs |
+| HTTP/1.1 without fingerprinting (warm) | ~166 µs |
+| **Fingerprinting overhead H1 (JA4 only)** | **~10 µs** |
+| HTTP/2 with fingerprinting (warm) | ~181 µs |
+| HTTP/2 without fingerprinting (warm) | ~162 µs |
+| **Fingerprinting overhead H2 (JA4 + Akamai)** | **~17 µs** |
+| Cold throughput, c=10, H1 | ~221 req/s |
+| Cold throughput, c=10, H2 | ~221 req/s |
+| Cold throughput, c=50, H1 | ~1000 req/s |
+| Cold throughput, c=50, H2 | ~1000 req/s |
 
 Key observations:
-- Integration **round-trip** is **~400–430 µs** warm (TLS + localhost + Hyper), not sub‑100 µs.
+- Integration **round-trip** is **~170–185 µs** warm (TLS + localhost + Hyper), not sub‑100 µs.
   Sub‑microsecond **parser-only** cost is what `bench_fingerprinting` measures; the delta here is **tens of µs** and mixes TLS + scheduling noise.
-- Fingerprinting overhead (with vs without) is **~20 µs** on H1 and **~10 µs** on H2 in this snapshot — use as a trend, not an absolute (runs 1–2 varied more).
-- Cold throughput is dominated by TLS handshakes; c=50 lands near **~740–750** completed requests/s per benchmark design.
+- Fingerprinting overhead (with vs without) is **~10 µs** on H1 and **~17 µs** on H2 in this snapshot — use as a trend, not an absolute (runs vary ±5–15%).
+- Cold throughput is dominated by TLS handshakes; c=50 lands near **~1000** completed requests/s per benchmark design.
 
 If fingerprinting overhead grows significantly after a dependency update, suspect
 `huginn-net-tls` or `huginn-net-http` parser changes — run `bench_fingerprinting`
