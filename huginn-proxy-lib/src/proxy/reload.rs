@@ -88,11 +88,17 @@ pub async fn try_reload(
         info!("Rate-limit config changed — counters reset");
     }
 
-    // Drain removed backends: replace the client pool so no new requests reuse
-    // connections to backends that are no longer in the config.
+    // Refresh the connection pool when backends are removed or pool config changes.
     // In-flight handlers hold their own Arc<ClientPool> clone and finish normally;
     // once they complete the old pool is dropped and its idle connections are closed.
-    drain_removed_backends(&old_dynamic.backends, &new_dynamic.backends, client_pool, static_cfg);
+    drain_removed_backends(
+        &old_dynamic.backends,
+        &new_dynamic.backends,
+        &old_dynamic.backend_pool,
+        &new_dynamic.backend_pool,
+        client_pool,
+        &static_cfg.timeout.keep_alive,
+    );
 
     let hash = fnv1a_hash(&new_dynamic);
 
@@ -154,31 +160,44 @@ fn audit_config_changes(old: &DynamicConfig, new: &DynamicConfig) {
     if old.security.rate_limit != new.security.rate_limit {
         info!("Config diff: rate-limit config changed");
     }
+    if old.backend_pool != new.backend_pool {
+        info!("Config diff: backend pool config changed, pool will be refreshed");
+    }
 }
 
-/// Replace the shared client pool when backends have been removed.
+/// Replace the shared client pool when backends are removed or pool config changes.
 ///
-/// If the set of backend addresses is unchanged the existing pool is kept as-is
-/// (avoids needlessly resetting healthy connections).
+/// If the backend set and pool config are both unchanged the existing pool is kept
+/// as-is (avoids needlessly resetting healthy connections).
 fn drain_removed_backends(
     old_backends: &[Backend],
     new_backends: &[Backend],
+    old_pool_cfg: &BackendPoolConfig,
+    new_pool_cfg: &BackendPoolConfig,
     client_pool: &SharedClientPool,
-    static_cfg: &StaticConfig,
+    keep_alive: &crate::config::startup::timeout::KeepAliveConfig,
 ) {
     let old_addrs: HashSet<&str> = old_backends.iter().map(|b| b.address.as_str()).collect();
     let new_addrs: HashSet<&str> = new_backends.iter().map(|b| b.address.as_str()).collect();
 
     let removed: Vec<&&str> = old_addrs.difference(&new_addrs).collect();
-    if removed.is_empty() {
+    let pool_cfg_changed = old_pool_cfg != new_pool_cfg;
+
+    if removed.is_empty() && !pool_cfg_changed {
         return;
     }
 
-    info!(
-        removed = ?removed,
-        "Backends removed — refreshing connection pool to drain idle connections"
-    );
-    let new_pool = ClientPool::new(&static_cfg.timeout.keep_alive, BackendPoolConfig::default());
+    if !removed.is_empty() {
+        info!(
+            removed = ?removed,
+            "Backends removed, refreshing connection pool to drain idle connections"
+        );
+    }
+    if pool_cfg_changed {
+        info!("Backend pool config changed, refreshing connection pool");
+    }
+
+    let new_pool = ClientPool::new(keep_alive, new_pool_cfg.clone());
     client_pool.store(Arc::new(new_pool));
 }
 
@@ -203,7 +222,10 @@ pub fn initial_rate_limiter(dynamic: &DynamicConfig) -> SharedRateLimiter {
     Arc::new(RwLock::new(mgr))
 }
 
-pub fn initial_client_pool(static_cfg: &StaticConfig) -> SharedClientPool {
-    let pool = ClientPool::new(&static_cfg.timeout.keep_alive, BackendPoolConfig::default());
+pub fn initial_client_pool(
+    static_cfg: &StaticConfig,
+    pool_cfg: &BackendPoolConfig,
+) -> SharedClientPool {
+    let pool = ClientPool::new(&static_cfg.timeout.keep_alive, pool_cfg.clone());
     Arc::new(ArcSwap::from_pointee(pool))
 }

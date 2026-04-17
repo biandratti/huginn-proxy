@@ -228,6 +228,7 @@ async fn capture_fingerprint_values() -> Result<(), Box<dyn std::error::Error + 
         telemetry: TelemetryConfig { metrics_port: None, otel_log_level: "warn".to_string() },
         headers: None,
         preserve_host: false,
+        backend_pool: Default::default(),
     };
 
     let huginn_proxy_lib::config::ConfigParts { static_cfg, dynamic_cfg } = config.into_parts();

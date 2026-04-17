@@ -108,6 +108,8 @@ spec:
         seccompProfile:
           type: RuntimeDefault
       env:
+        - name: HUGINN_CONFIG_PATH
+          value: "/config/config.toml"
         - name: HUGINN_WATCH
           value: "true"
         - name: HUGINN_WATCH_DELAY_SECS
@@ -133,11 +135,15 @@ spec:
         seccompProfile:
           type: RuntimeDefault
       env:
+        - name: HUGINN_CONFIG_PATH
+          value: "/config/config.toml"
         - name: HUGINN_WATCH
           value: "true"
         - name: HUGINN_WATCH_DELAY_SECS
           value: "60"
 ```
+
+`HUGINN_CONFIG_PATH` sets the config file path without changing the container `command`. Useful when the same image is shared across environments (staging, prod) and only the ConfigMap mount point differs — override the path via env var rather than patching the Deployment spec each time.
 
 ### Key differences vs Docker Compose
 
@@ -198,6 +204,7 @@ continues running with the old values.
 |---|---|
 | `[[backends]]` | Backend list (addresses, pool config, HTTP version) |
 | `[[routes]]` | Path-prefix routing rules, including per-route `fingerprinting` toggle, path rewriting, and rate limits |
+| `[backend_pool]` | Connection pool settings (`enabled`, `idle_timeout`, `pool_max_idle_per_host`) |
 | `preserve_host` | Forward original `Host` header to backends |
 | `[headers]` | Global request/response header manipulation |
 | `[security].headers` | Security response headers (HSTS, CSP, custom) |

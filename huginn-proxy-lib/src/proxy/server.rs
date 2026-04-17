@@ -82,7 +82,7 @@ pub async fn run(
     watch_opts: WatchOptions,
 ) -> Result<()> {
     let rate_limiter = Arc::new(initial_rate_limiter(&dynamic_cfg.load()));
-    let client_pool = initial_client_pool(&static_cfg);
+    let client_pool = initial_client_pool(&static_cfg, &dynamic_cfg.load().backend_pool);
 
     let mut builder = ConnBuilder::new(TokioExecutor::new());
     builder

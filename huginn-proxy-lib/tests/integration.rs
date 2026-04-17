@@ -16,6 +16,7 @@ fn create_test_config(listen: &str, backends: Vec<Backend>) -> Config {
         backends,
         routes: vec![],
         preserve_host: false,
+        backend_pool: Default::default(),
         tls: None,
         fingerprint: FingerprintConfig {
             tls_enabled: true,

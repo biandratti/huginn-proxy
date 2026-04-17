@@ -27,4 +27,6 @@ pub struct DynamicConfig {
     pub headers: Option<HeaderManipulation>,
     /// Dynamic security policy (headers, IP filter, rate limits)
     pub security: SecurityDynamicConfig,
+    /// Backend connection pool settings (idle timeout, max idle connections per host)
+    pub backend_pool: BackendPoolConfig,
 }

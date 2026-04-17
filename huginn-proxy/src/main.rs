@@ -20,9 +20,14 @@ type BoxError = Box<dyn std::error::Error + Send + Sync>;
 #[command(name = "huginn-proxy", about = "High-performance reverse proxy")]
 struct Cli {
     /// Path to the TOML configuration file
+    #[arg(value_name = "CONFIG", env = "HUGINN_CONFIG_PATH")]
     config_path: PathBuf,
 
-    /// Enable filesystem watching for TLS certificate hot reload
+    /// Parse and validate the config file without starting the proxy
+    #[arg(long)]
+    validate: bool,
+
+    /// Enable filesystem watching for config and TLS certificate hot reload
     #[arg(long, env = "HUGINN_WATCH")]
     watch: bool,
 
@@ -36,6 +41,12 @@ async fn main() -> Result<(), BoxError> {
     let cli = Cli::parse();
 
     let config = load_from_path(&cli.config_path)?;
+    config.validate_cross_refs()?;
+
+    if cli.validate {
+        println!("Config OK: {}", cli.config_path.display());
+        return Ok(());
+    }
 
     // RUST_LOG environment variable can override at runtime (e.g., docker run -e RUST_LOG=debug)
     let log_level = env::var("RUST_LOG").unwrap_or_else(|_| config.logging.level.clone());

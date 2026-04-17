@@ -113,6 +113,11 @@ max_capture = 65536
 level = "info"
 show_target = false
 
+[backend_pool]
+enabled = true
+idle_timeout = 90
+pool_max_idle_per_host = 128
+
 [timeout]
 connect_ms = 5000
 idle_ms = 60000

@@ -151,6 +151,7 @@ impl BenchFixture {
             telemetry: TelemetryConfig { metrics_port: None, otel_log_level: "warn".to_string() },
             headers: None,
             preserve_host: false,
+            backend_pool: Default::default(),
         };
 
         // 5. Start proxy in a background task

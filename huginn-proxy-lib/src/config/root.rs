@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use serde::Deserialize;
 
-use super::dynamic::backend::{Backend, Route};
+use super::dynamic::backend::{Backend, BackendPoolConfig, Route};
 use super::dynamic::headers::HeaderManipulation;
 use super::dynamic::security::{SecurityConfig, SecurityDynamicConfig};
 use super::dynamic::DynamicConfig;
@@ -57,6 +57,10 @@ pub struct Config {
     /// Allows adding or removing headers for all routes
     #[serde(default)]
     pub headers: Option<HeaderManipulation>,
+    /// Backend connection pool settings
+    /// Controls idle timeout and max idle connections per host
+    #[serde(default)]
+    pub backend_pool: BackendPoolConfig,
 }
 
 /// Config split into its static and dynamic halves.
@@ -115,6 +119,7 @@ impl Config {
                     ip_filter: self.security.ip_filter,
                     rate_limit: self.security.rate_limit,
                 },
+                backend_pool: self.backend_pool,
             },
         }
     }

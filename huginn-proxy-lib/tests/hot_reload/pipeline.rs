@@ -59,6 +59,7 @@ fn minimal_config(backend_addr: std::net::SocketAddr, listen_port: u16) -> Confi
         telemetry: TelemetryConfig { metrics_port: None, otel_log_level: "warn".to_string() },
         headers: None,
         preserve_host: false,
+        backend_pool: Default::default(),
     }
 }
 
@@ -74,7 +75,7 @@ fn into_shared(
     let static_cfg = Arc::new(static_cfg);
     let shared_dyn = Arc::new(ArcSwap::from_pointee(dynamic_cfg));
     let rate_limiter = initial_rate_limiter(&shared_dyn.load());
-    let client_pool = initial_client_pool(&static_cfg);
+    let client_pool = initial_client_pool(&static_cfg, &shared_dyn.load().backend_pool);
     (static_cfg, shared_dyn, rate_limiter, client_pool)
 }
 
