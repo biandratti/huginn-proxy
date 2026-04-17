@@ -13,9 +13,6 @@ use crate::telemetry::Metrics;
 
 /// Shared, hot-swappable rate-limit manager.
 ///
-/// Stored separately from `DynamicConfig` because it carries live counter state
-/// that must survive reloads when the rate-limit configuration has not changed.
-///
 /// - On reload with **no rate-limit change** → old manager is reused as-is (counters preserved).
 /// - On reload **with** rate-limit change → manager is rebuilt (counters reset).
 pub type SharedRateLimiter = Arc<RwLock<Option<Arc<RateLimitManager>>>>;
@@ -47,7 +44,6 @@ pub async fn try_reload(
 
     info!(path = %config_path.display(), "Hot reload triggered");
 
-    // re-parse
     let new_config = match load_from_path(config_path) {
         Ok(c) => c,
         Err(e) => {
@@ -67,7 +63,6 @@ pub async fn try_reload(
     let crate::config::ConfigParts { static_cfg: new_static, dynamic_cfg: new_dynamic } =
         new_config.into_parts();
 
-    // Warn on static section changes (ignored — restart required)
     if new_static != *static_cfg {
         error!(
             "Config reload: static sections changed (listen, tls, fingerprint, timeout, …) \
@@ -107,14 +102,12 @@ pub async fn try_reload(
     info!(config_hash = hash, "Config reloaded successfully");
 }
 
-/// Audit and log what changed between two `DynamicConfig` snapshots.
 fn audit_config_changes(old: &DynamicConfig, new: &DynamicConfig) {
     if old == new {
         info!("Config reload: no effective changes detected");
         return;
     }
 
-    // Backends
     let old_addrs: HashSet<&str> = old.backends.iter().map(|b| b.address.as_str()).collect();
     let new_addrs: HashSet<&str> = new.backends.iter().map(|b| b.address.as_str()).collect();
     for addr in old_addrs.difference(&new_addrs) {
@@ -124,7 +117,6 @@ fn audit_config_changes(old: &DynamicConfig, new: &DynamicConfig) {
         info!(backend = addr, "Config diff: backend added");
     }
 
-    // Routes
     let old_routes: HashSet<&str> = old.routes.iter().map(|r| r.prefix.as_str()).collect();
     let new_routes: HashSet<&str> = new.routes.iter().map(|r| r.prefix.as_str()).collect();
     for prefix in old_routes.difference(&new_routes) {
@@ -141,7 +133,6 @@ fn audit_config_changes(old: &DynamicConfig, new: &DynamicConfig) {
         }
     }
 
-    // preserve_host
     if old.preserve_host != new.preserve_host {
         info!(
             old = old.preserve_host,
@@ -150,12 +141,10 @@ fn audit_config_changes(old: &DynamicConfig, new: &DynamicConfig) {
         );
     }
 
-    // Global headers
     if old.headers != new.headers {
         info!("Config diff: global header manipulation changed");
     }
 
-    // Security
     if old.security.headers != new.security.headers {
         info!("Config diff: security headers changed (HSTS / CSP / custom)");
     }
@@ -205,7 +194,6 @@ fn fnv1a_hash(dynamic: &DynamicConfig) -> u64 {
     hasher.finish()
 }
 
-/// Build the initial `SharedRateLimiter` from the starting `DynamicConfig`.
 pub fn initial_rate_limiter(dynamic: &DynamicConfig) -> SharedRateLimiter {
     let mgr = if dynamic.security.rate_limit.enabled {
         Some(Arc::new(RateLimitManager::new(&dynamic.security.rate_limit, &dynamic.routes)))
@@ -215,7 +203,6 @@ pub fn initial_rate_limiter(dynamic: &DynamicConfig) -> SharedRateLimiter {
     Arc::new(RwLock::new(mgr))
 }
 
-/// Build the initial `SharedClientPool`.
 pub fn initial_client_pool(static_cfg: &StaticConfig) -> SharedClientPool {
     let pool = ClientPool::new(&static_cfg.timeout.keep_alive, BackendPoolConfig::default());
     Arc::new(ArcSwap::from_pointee(pool))

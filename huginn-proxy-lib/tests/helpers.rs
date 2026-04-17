@@ -95,12 +95,6 @@ pub fn generate_valid_test_cert_der() -> Result<
 }
 
 /// Ensure the rustls process-level `CryptoProvider` is installed exactly once.
-///
-/// rustls 0.23+ requires `CryptoProvider::install_default()` before calling
-/// `ServerConfig::builder()` or building client certificate verifiers. Tests
-/// that run in parallel may race on this initialisation; calling this guard at
-/// the top of any test that touches rustls internals makes the suite order-
-/// independent.
 pub fn ensure_crypto_provider() {
     static INIT: OnceLock<()> = OnceLock::new();
     INIT.get_or_init(|| {

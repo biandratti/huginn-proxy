@@ -75,7 +75,7 @@ spec:
         - name: HUGINN_EBPF_PIN_PATH
           value: "/sys/fs/bpf/huginn"
         - name: HUGINN_EBPF_METRICS_ADDR
-          value: "127.0.0.1"
+          value: "0.0.0.0"
         - name: HUGINN_EBPF_METRICS_PORT
           value: "9091"
       volumeMounts:
@@ -104,9 +104,14 @@ spec:
     - name: proxy
       securityContext:
         capabilities:
-          add: [BPF]                    # BPF_OBJ_GET to read pinned maps
+          add: [BPF]
         seccompProfile:
           type: RuntimeDefault
+      env:
+        - name: HUGINN_WATCH
+          value: "true"
+        - name: HUGINN_WATCH_DELAY_SECS
+          value: "60"
       volumeMounts:
         - name: bpffs
           mountPath: /sys/fs/bpf
@@ -127,6 +132,11 @@ spec:
       securityContext:
         seccompProfile:
           type: RuntimeDefault
+      env:
+        - name: HUGINN_WATCH
+          value: "true"
+        - name: HUGINN_WATCH_DELAY_SECS
+          value: "60"
 ```
 
 ### Key differences vs Docker Compose

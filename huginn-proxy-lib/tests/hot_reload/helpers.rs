@@ -23,11 +23,6 @@ pub fn free_port() -> Result<u16, Box<dyn std::error::Error + Send + Sync>> {
     Ok(l.local_addr()?.port())
 }
 
-/// Starts a simple HTTP/1.1 backend that always returns 200 OK with an
-/// `x-backend: {identity}` header so callers can distinguish which backend
-/// answered.
-///
-/// Returns the bound address and a handle to abort the server task.
 pub async fn spawn_mock_backend(
     identity: &'static str,
 ) -> Result<(SocketAddr, tokio::task::AbortHandle), Box<dyn std::error::Error + Send + Sync>> {
@@ -61,7 +56,6 @@ pub async fn spawn_mock_backend(
     Ok((addr, handle.abort_handle()))
 }
 
-/// Minimal valid TOML with a single backend routed at `/`.
 pub fn toml_single_backend(listen_port: u16, backend: SocketAddr) -> String {
     format!(
         r#"listen = {{ addrs = ["127.0.0.1:{listen_port}"] }}
@@ -71,9 +65,6 @@ routes = [{{ prefix = "/", backend = "{backend}" }}]
     )
 }
 
-/// TOML with multiple backends and an explicit route table.
-///
-/// `routes` is a slice of `(prefix, backend_addr)` pairs.
 pub fn toml_with_routes(
     listen_port: u16,
     backends: &[SocketAddr],
@@ -95,7 +86,6 @@ pub fn toml_with_routes(
     )
 }
 
-/// TOML that enables a very tight global rate limit (1 req / 60 s, burst 1).
 pub fn toml_with_rate_limit(listen_port: u16, backend: SocketAddr) -> String {
     format!(
         r#"listen = {{ addrs = ["127.0.0.1:{listen_port}"] }}
@@ -111,7 +101,6 @@ window_seconds = 60
     )
 }
 
-/// Write `content` to `path`.
 pub fn write_toml(
     path: &Path,
     content: &str,
@@ -120,8 +109,6 @@ pub fn write_toml(
     Ok(())
 }
 
-/// Parse the TOML at `config_path`, start the proxy, and wait for it to
-/// accept TCP connections. Returns `(listen_addr, abort_handle)`.
 pub async fn spawn_proxy(
     config_path: &Path,
     watch: bool,
@@ -150,7 +137,6 @@ pub async fn spawn_proxy(
     Ok((listen_addr, handle.abort_handle()))
 }
 
-/// Poll until the proxy accepts a TCP connection or the 10-second deadline expires.
 pub async fn wait_for_ready(
     addr: SocketAddr,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -167,7 +153,6 @@ pub async fn wait_for_ready(
     .map_err(|_| format!("proxy at {addr} did not become ready within 10 s").into())
 }
 
-/// Send an HTTP GET to `http://{addr}{path}` and return `(status, x-backend header)`.
 pub async fn http_get(
     addr: SocketAddr,
     path: &str,
@@ -188,8 +173,6 @@ pub async fn http_get(
     Ok((status, backend))
 }
 
-/// Wait until `http_get` returns the expected backend identity, up to
-/// `timeout_secs` seconds. Fails the test if not met in time.
 pub async fn wait_for_backend(
     addr: SocketAddr,
     path: &str,
