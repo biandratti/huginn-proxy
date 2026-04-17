@@ -31,10 +31,6 @@ pub struct ClientPool {
     /// Configuration (stored for creating one-off clients)
     keep_alive: KeepAliveConfig,
 
-    /// Pool configuration
-    #[allow(dead_code)]
-    config: BackendPoolConfig,
-
     /// TCP connect timeout (None = no timeout).
     upstream_connect_ms: Option<u64>,
 }
@@ -52,7 +48,6 @@ impl ClientPool {
             http11: Arc::new(http11_client),
             http2: Arc::new(http2_client),
             keep_alive: keep_alive.clone(),
-            config,
             upstream_connect_ms,
         }
     }

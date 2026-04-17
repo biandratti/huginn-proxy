@@ -77,19 +77,6 @@ impl Estimator {
             })
     }
 
-    /// Decrement `key` by the value given.
-    ///
-    /// Note: This is rarely used in rate limiting but provided for completeness.
-    #[allow(dead_code)]
-    pub fn decr<T: Hash>(&self, key: T, value: isize) {
-        for (slot, hasher) in self.estimator.iter() {
-            let hash = hash(&key, hasher) as usize;
-            let index = hash.checked_rem(slot.len()).unwrap_or_default();
-            let counter = &slot[index];
-            counter.fetch_sub(value, Ordering::Relaxed);
-        }
-    }
-
     /// Get the estimated frequency of `key`.
     ///
     /// Returns the minimum count across all hash functions, which provides
