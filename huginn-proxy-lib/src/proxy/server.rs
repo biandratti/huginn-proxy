@@ -13,16 +13,15 @@ use tokio::time::{Duration, Instant};
 use tracing::{info, warn};
 
 use crate::config::watcher::spawn_config_watcher;
-use crate::config::{BackendPoolConfig, DynamicConfig, StaticConfig};
+use crate::config::{DynamicConfig, StaticConfig};
 use crate::error::Result;
 use crate::fingerprinting::{SynResult, TcpObservation};
 use crate::proxy::connection::{ConnectionError, ConnectionManager};
 use crate::proxy::context::SecurityContext;
-use crate::proxy::reload::{initial_rate_limiter, try_reload};
+use crate::proxy::reload::{initial_client_pool, initial_rate_limiter, try_reload};
 use crate::proxy::transport::{
     handle_plain_connection, handle_tls_connection, PlainConnectionConfig, TlsConnectionConfig,
 };
-use crate::proxy::ClientPool;
 use crate::telemetry::Metrics;
 use crate::tls::setup_tls_with_hot_reload;
 
@@ -86,6 +85,9 @@ pub async fn run(
     // counters survive reloads when the rate-limit configuration has not changed).
     let rate_limiter = Arc::new(initial_rate_limiter(&dynamic_cfg.load()));
 
+    // Build the initial client pool (hot-swappable for backend drain on reload).
+    let client_pool = initial_client_pool(&static_cfg);
+
     let mut builder = ConnBuilder::new(TokioExecutor::new());
     builder
         .http1()
@@ -115,10 +117,7 @@ pub async fn run(
     ));
     let active_connections = connection_manager.active_connections();
 
-    // Setup client pool for backend connections (shared across all listeners)
-    let pool_config = BackendPoolConfig::default();
-    let client_pool =
-        Arc::new(ClientPool::new(&static_cfg.timeout.keep_alive, pool_config.clone()));
+    // (client_pool already built above as SharedClientPool)
 
     // Setup signal handlers
     let mut sigterm = signal::unix::signal(signal::unix::SignalKind::terminate()).map_err(|e| {
@@ -185,7 +184,7 @@ pub async fn run(
         let fingerprint_config = fingerprint_config.clone();
         let keep_alive_config = keep_alive_config.clone();
         let metrics_clone = metrics.clone();
-        let client_pool_clone = client_pool.clone();
+        let client_pool_clone = Arc::clone(&client_pool);
         let builder_clone = builder.clone();
         let syn_probe_clone = syn_probe.clone();
 
@@ -261,7 +260,7 @@ pub async fn run(
                 let fingerprint_config_task = fingerprint_config.clone();
                 let keep_alive_task = keep_alive_config.clone();
                 let metrics_task = metrics_clone.clone();
-                let client_pool_task = client_pool_clone.clone();
+                let client_pool_task = client_pool_clone.load_full();
 
                 tokio::spawn(async move {
                     let _guard = guard;
@@ -323,6 +322,7 @@ pub async fn run(
                         &static_cfg,
                         &dynamic_cfg,
                         &rate_limiter,
+                        &client_pool,
                         &reload_mutex,
                     ).await;
                 } else {
@@ -337,6 +337,7 @@ pub async fn run(
                         &static_cfg,
                         &dynamic_cfg,
                         &rate_limiter,
+                        &client_pool,
                         &reload_mutex,
                     ).await;
                 }
