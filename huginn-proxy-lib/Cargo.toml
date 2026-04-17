@@ -38,6 +38,7 @@ tracing-subscriber.workspace = true
 criterion = { workspace = true }
 rcgen.workspace = true
 reqwest = { workspace = true, features = ["json", "http2"] }
+serial_test.workspace = true
 tempfile.workspace = true
 
 [[bench]]

@@ -17,7 +17,9 @@ pub use error::{ProxyError, Result};
 pub use fingerprinting::SynResult;
 pub use fingerprinting::{forwarded, names, read_client_hello, CapturingStream, Ja4Fingerprints};
 pub use load_balancing::RoundRobin;
-pub use proxy::reload::{SharedClientPool, SharedRateLimiter};
+pub use proxy::reload::{
+    initial_client_pool, initial_rate_limiter, try_reload, SharedClientPool, SharedRateLimiter,
+};
 pub use proxy::server::{SynProbe, WatchOptions};
 pub use proxy::{forwarding, run};
 pub use telemetry::Metrics;
