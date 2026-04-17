@@ -164,29 +164,6 @@ spec:
 - `/live` - liveness probe
 - `/metrics` - Prometheus metrics
 
-## TLS Certificate Management
-
-### Certificate Rotation
-
-Huginn Proxy supports hot reload for TLS certificates:
-
-1. Update certificate files (Secret in Kubernetes, volume in Docker)
-2. Proxy detects changes after `watch_delay_secs` (default: 60s)
-3. New connections use new certificates
-4. Existing connections continue with old certificates until closed
-
-No restart required.
-
-### Certificate Permissions
-
-**Docker:** Certificates must be readable by user `app` (UID 100).
-
-```bash
-chmod 400 server.crt server.key
-```
-
-**Kubernetes:** Secret volumes are mounted with `defaultMode: 0400` (read-only for owner).
-
 ## Performance Tuning
 
 Key settings for production:
@@ -207,3 +184,66 @@ connection_handling_secs = 300
 
 Adjust resource limits based on your workload (see Deployment manifest example above).
 
+## Static and Dynamic settings
+
+Settings are split into two groups. **Dynamic** settings take effect on the next
+reload (SIGHUP or file-watcher); no connections are dropped. **Static** settings
+are read once at startup — a process restart is required to apply changes.
+If a reload detects changes in static sections, the proxy logs an error and
+continues running with the old values.
+
+### Dynamic (hot-reloadable)
+
+| TOML key | Description |
+|---|---|
+| `[[backends]]` | Backend list (addresses, pool config, HTTP version) |
+| `[[routes]]` | Path-prefix routing rules |
+| `preserve_host` | Forward original `Host` header to backends |
+| `[headers]` | Global request/response header manipulation |
+| `[security].headers` | Security response headers (HSTS, CSP, custom) |
+| `[security].ip_filter` | IP allow/deny list |
+| `[security].rate_limit` | Rate limiting policy and counters |
+
+> **Note on rate-limit counters:** existing in-memory counters are preserved
+> across reloads unless `limit_by` or `window_seconds` changes, in which case
+> they are reset.
+
+### Static (requires restart)
+
+| TOML key | Description |
+|---|---|
+| `[listen]` | Bind addresses, backlog, `reuse_port` |
+| `[tls]` | TLS termination (cert/key hot-reload is handled separately — see below) |
+| `[fingerprint]` | TCP SYN fingerprinting feature flags |
+| `[logging]` | Log level and format |
+| `[telemetry]` | Metrics port and OpenTelemetry log level |
+| `[timeout]` | Connect / connection-handling timeouts |
+| `[security].max_connections` | Maximum concurrent connections |
+
+> **TLS certificate rotation** is the exception: cert and key files are watched
+> independently of the main config. New connections pick up the new certificate
+> without a restart; existing connections are unaffected.
+
+## TLS Certificate Management
+
+### Certificate Rotation
+
+Huginn Proxy supports hot reload for TLS certificates:
+
+1. Enable the file watcher (`HUGINN_WATCH=true`)
+2. Update certificate files (Secret in Kubernetes, volume in Docker)
+3. Proxy detects changes after the debounce window (`HUGINN_WATCH_DELAY_SECS`, default: 60s)
+4. New connections use new certificates
+5. Existing connections continue with old certificates until closed
+
+No restart required.
+
+### Certificate Permissions
+
+**Docker:** Certificates must be readable by user `app` (UID 100).
+
+```bash
+chmod 400 server.crt server.key
+```
+
+**Kubernetes:** Secret volumes are mounted with `defaultMode: 0400` (read-only for owner).

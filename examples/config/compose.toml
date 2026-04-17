@@ -47,7 +47,6 @@ add = [
 cert_path = "/config/certs/server.crt"
 key_path = "/config/certs/server.key"
 alpn = ["h2", "http/1.1"]
-watch_delay_secs = 60
 
 [tls.options]
 versions = ["1.2", "1.3"]

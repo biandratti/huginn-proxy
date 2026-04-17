@@ -81,11 +81,7 @@ pub async fn run(
     syn_probe: Option<SynProbe>,
     watch_opts: WatchOptions,
 ) -> Result<()> {
-    // Build the initial rate-limit manager (stateful, lives outside DynamicConfig so its
-    // counters survive reloads when the rate-limit configuration has not changed).
     let rate_limiter = Arc::new(initial_rate_limiter(&dynamic_cfg.load()));
-
-    // Build the initial client pool (hot-swappable for backend drain on reload).
     let client_pool = initial_client_pool(&static_cfg);
 
     let mut builder = ConnBuilder::new(TokioExecutor::new());
@@ -93,7 +89,6 @@ pub async fn run(
         .http1()
         .keep_alive(static_cfg.timeout.keep_alive.enabled);
 
-    // Setup TLS with hot reload support
     let tls_acceptor = match &static_cfg.tls {
         Some(tls_config) => {
             let tls_setup = setup_tls_with_hot_reload(
@@ -107,7 +102,6 @@ pub async fn run(
         None => None,
     };
 
-    // Setup connection manager (shared across all listeners)
     let shutdown_signal = Arc::new(AtomicUsize::new(0)); // 0 = running, 1 = shutdown requested
     let (connections_closed_tx, mut connections_closed_rx) = watch::channel(());
     let connection_manager = Arc::new(ConnectionManager::new(
@@ -117,9 +111,6 @@ pub async fn run(
     ));
     let active_connections = connection_manager.active_connections();
 
-    // (client_pool already built above as SharedClientPool)
-
-    // Setup signal handlers
     let mut sigterm = signal::unix::signal(signal::unix::SignalKind::terminate()).map_err(|e| {
         crate::error::ProxyError::Io(std::io::Error::other(format!(
             "Failed to setup SIGTERM handler: {e}"
@@ -137,7 +128,6 @@ pub async fn run(
         )))
     })?;
 
-    // when --watch is enabled, spawn a watcher that sends on this channel.
     let (reload_tx, mut reload_rx) = tokio::sync::mpsc::unbounded_channel::<()>();
     if watch_opts.watch {
         if let Some(ref config_path) = watch_opts.config_path {
@@ -145,10 +135,8 @@ pub async fn run(
         }
     }
 
-    // mutex to serialise concurrent reload requests (SIGHUP + watcher).
     let reload_mutex = Arc::new(tokio::sync::Mutex::new(()));
 
-    // Bind one listener per configured address
     let backlog = static_cfg.listen.tcp_backlog;
     let listeners: Vec<(SocketAddr, TcpListener)> = static_cfg
         .listen
