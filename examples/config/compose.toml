@@ -1,34 +1,69 @@
-backends = [
-    { address = "backend-a:9000", http_version = "preserve" },
-    { address = "backend-b:9000", http_version = "preserve" }
-]
-
-routes = [
-    # Basic route without path manipulation (with connection pooling)
-    { prefix = "/api", backend = "backend-a:9000", fingerprinting = true, force_new_connection = false },
-    # Route without fingerprinting (for fingerprint tests)
-    { prefix = "/static", backend = "backend-b:9000", fingerprinting = false, force_new_connection = false },
-    # Advanced fingerprinting: force new TCP+TLS handshake per request
-    # Performance: Adds latency per request
-    { prefix = "/fingerprint", backend = "backend-a:9000", fingerprinting = true, force_new_connection = true },
-    # Path stripping: removes matched prefix
-    # Request: /strip/users → Backend: /users
-    { prefix = "/strip", backend = "backend-a:9000", fingerprinting = true, replace_path = "" },
-    # Path rewriting: replaces prefix with new path
-    # Request: /old/data → Backend: /new/data
-    { prefix = "/old", backend = "backend-b:9000", fingerprinting = true, replace_path = "/new" },
-    # Path rewriting to versioned API
-    # Request: /v1/endpoint → Backend: /api/v1/endpoint
-    { prefix = "/v1", backend = "backend-a:9000", fingerprinting = true, replace_path = "/api/v1" },
-    # Default route (no path manipulation)
-    { prefix = "/", backend = "backend-b:9000" }
-]
+# Top-level scalar keys must appear before any [table] header in TOML.
 
 preserve_host = false
 
 [listen]
 addrs = ["0.0.0.0:7000", "[::]:7000"]
 # tcp_backlog = 4096
+
+[[backends]]
+address = "backend-a:9000"
+http_version = "preserve"
+
+[[backends]]
+address = "backend-b:9000"
+http_version = "preserve"
+
+# Basic route without path manipulation (with connection pooling)
+[[routes]]
+prefix = "/api"
+backend = "backend-a:9000"
+fingerprinting = true
+force_new_connection = false
+
+# Route without fingerprinting (for fingerprint tests)
+[[routes]]
+prefix = "/static"
+backend = "backend-b:9000"
+fingerprinting = false
+force_new_connection = false
+
+# Advanced fingerprinting: force new TCP+TLS handshake per request
+# Performance: Adds latency per request
+[[routes]]
+prefix = "/fingerprint"
+backend = "backend-a:9000"
+fingerprinting = true
+force_new_connection = true
+
+# Path stripping: removes matched prefix
+# Request: /strip/users → Backend: /users
+[[routes]]
+prefix = "/strip"
+backend = "backend-a:9000"
+fingerprinting = true
+replace_path = ""
+
+# Path rewriting: replaces prefix with new path
+# Request: /old/data → Backend: /new/data
+[[routes]]
+prefix = "/old"
+backend = "backend-b:9000"
+fingerprinting = true
+replace_path = "/new"
+
+# Path rewriting to versioned API
+# Request: /v1/endpoint → Backend: /api/v1/endpoint
+[[routes]]
+prefix = "/v1"
+backend = "backend-a:9000"
+fingerprinting = true
+replace_path = "/api/v1"
+
+# Default route (no path manipulation)
+[[routes]]
+prefix = "/"
+backend = "backend-b:9000"
 
 [headers.request]
 remove = ["X-Forwarded-Server"]

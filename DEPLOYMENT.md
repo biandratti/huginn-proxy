@@ -197,7 +197,7 @@ continues running with the old values.
 | TOML key | Description |
 |---|---|
 | `[[backends]]` | Backend list (addresses, pool config, HTTP version) |
-| `[[routes]]` | Path-prefix routing rules |
+| `[[routes]]` | Path-prefix routing rules, including per-route `fingerprinting` toggle, path rewriting, and rate limits |
 | `preserve_host` | Forward original `Host` header to backends |
 | `[headers]` | Global request/response header manipulation |
 | `[security].headers` | Security response headers (HSTS, CSP, custom) |
@@ -214,7 +214,7 @@ continues running with the old values.
 |---|---|
 | `[listen]` | Bind addresses, backlog, `reuse_port` |
 | `[tls]` | TLS termination (cert/key hot-reload is handled separately — see below) |
-| `[fingerprint]` | TCP SYN fingerprinting feature flags |
+| `[fingerprint]` | Fingerprinting feature flags (`tcp_enabled`, `tls_enabled`, `http_enabled`, `max_capture`) — static because they control eBPF program loading and capture buffers at startup |
 | `[logging]` | Log level and format |
 | `[telemetry]` | Metrics port and OpenTelemetry log level |
 | `[timeout]` | Connect / connection-handling timeouts |
