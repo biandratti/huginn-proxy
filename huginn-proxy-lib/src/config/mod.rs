@@ -1,4 +1,5 @@
 pub mod dynamic;
+pub mod parser;
 pub mod startup;
 pub mod watcher;
 
@@ -14,6 +15,7 @@ pub use dynamic::{
     HeaderManipulation, HeaderManipulationGroup, Route,
 };
 pub use loader::load_from_path;
+pub use parser::{ConfigFormat, ConfigParser};
 pub use root::{Config, ConfigParts};
 pub use startup::{
     ClientAuth, FingerprintConfig, KeepAliveConfig, ListenConfig, LoggingConfig,

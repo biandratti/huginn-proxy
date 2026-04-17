@@ -23,7 +23,7 @@ services:
       - HUGINN_EBPF_METRICS_ADDR=0.0.0.0
       - HUGINN_EBPF_METRICS_PORT=9091
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://127.0.0.1:9091/ready || exit 1"]
+      test: [ "CMD-SHELL", "curl -sf http://127.0.0.1:9091/ready || exit 1" ]
       interval: 2s
       timeout: 1s
       retries: 30
@@ -36,7 +36,8 @@ services:
       context: ..
       dockerfile: docker/proxy.Dockerfile
       target: ebpf
-    command: ["/usr/local/bin/huginn-proxy", "/config/compose.toml"]
+    #command: ["/usr/local/bin/huginn-proxy", "/config/compose.toml"]
+    command: [ "/usr/local/bin/huginn-proxy", "/config/compose.yaml" ]
     environment:
       - HUGINN_EBPF_PIN_PATH=/sys/fs/bpf/huginn
       - HUGINN_EBPF_SYN_MAP_MAX_ENTRIES=8192
@@ -56,7 +57,7 @@ services:
     cap_add:
       - CAP_BPF
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:9090/health || exit 1"]
+      test: [ "CMD-SHELL", "curl -sf http://localhost:9090/health || exit 1" ]
       interval: 5s
       timeout: 3s
       retries: 12
