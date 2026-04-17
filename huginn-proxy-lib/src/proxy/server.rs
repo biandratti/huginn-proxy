@@ -77,7 +77,7 @@ fn bind_listener(addr: SocketAddr, backlog: i32) -> std::io::Result<TcpListener>
 pub async fn run(
     static_cfg: Arc<StaticConfig>,
     dynamic_cfg: Arc<ArcSwap<DynamicConfig>>,
-    metrics: Option<Arc<Metrics>>,
+    metrics: Arc<Metrics>,
     syn_probe: Option<SynProbe>,
     watch_opts: WatchOptions,
 ) -> Result<()> {
@@ -203,8 +203,7 @@ pub async fn run(
                 };
 
                 // Try to accept connection (checks limits and shutdown)
-                let guard = match connection_manager_clone.try_accept(peer, metrics_clone.as_ref())
-                {
+                let guard = match connection_manager_clone.try_accept(peer, &metrics_clone) {
                     Ok(g) => g,
                     Err(ConnectionError::Shutdown) => {
                         drop(stream);
@@ -222,14 +221,12 @@ pub async fn run(
 
                 let syn_fingerprint: Option<TcpObservation> = match syn_result {
                     Some(ref r) => {
-                        if let Some(ref m) = metrics_clone {
-                            let label = match r {
-                                SynResult::Hit(_) => "hit",
-                                SynResult::Miss => "miss",
-                                SynResult::Malformed => "malformed",
-                            };
-                            m.record_tcp_syn_fingerprint(label, syn_duration);
-                        }
+                        let label = match r {
+                            SynResult::Hit(_) => "hit",
+                            SynResult::Miss => "miss",
+                            SynResult::Malformed => "malformed",
+                        };
+                        metrics_clone.record_tcp_syn_fingerprint(label, syn_duration);
                         match r {
                             SynResult::Hit(obs) => Some(obs.clone()),
                             _ => None,
@@ -324,6 +321,7 @@ pub async fn run(
                         &rate_limiter,
                         &client_pool,
                         &reload_mutex,
+                        &metrics,
                     ).await;
                 } else {
                     warn!("SIGHUP received but no config path configured — reload skipped");
@@ -339,6 +337,7 @@ pub async fn run(
                         &rate_limiter,
                         &client_pool,
                         &reload_mutex,
+                        &metrics,
                     ).await;
                 }
             }

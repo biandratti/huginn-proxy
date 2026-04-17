@@ -1,4 +1,5 @@
 use std::collections::HashSet;
+use std::hash::{Hash, Hasher};
 use std::path::Path;
 use std::sync::{Arc, RwLock};
 
@@ -8,6 +9,7 @@ use tracing::{error, info};
 use crate::config::{load_from_path, Backend, BackendPoolConfig, DynamicConfig, StaticConfig};
 use crate::proxy::client_pool::ClientPool;
 use crate::security::RateLimitManager;
+use crate::telemetry::Metrics;
 
 /// Shared, hot-swappable rate-limit manager.
 ///
@@ -39,6 +41,7 @@ pub async fn try_reload(
     rate_limiter: &SharedRateLimiter,
     client_pool: &SharedClientPool,
     reload_mutex: &tokio::sync::Mutex<()>,
+    metrics: &Arc<Metrics>,
 ) {
     let _guard = reload_mutex.lock().await;
 
@@ -49,6 +52,7 @@ pub async fn try_reload(
         Ok(c) => c,
         Err(e) => {
             error!(error = %e, "Config reload failed: parse error — keeping current config");
+            metrics.record_reload_error();
             return;
         }
     };
@@ -56,6 +60,7 @@ pub async fn try_reload(
     // cross-reference validation
     if let Err(e) = new_config.validate_cross_refs() {
         error!(error = %e, "Config reload failed: validation error — keeping current config");
+        metrics.record_reload_error();
         return;
     }
 
@@ -70,6 +75,8 @@ pub async fn try_reload(
     }
 
     let old_dynamic = dynamic_cfg.load();
+
+    audit_config_changes(&old_dynamic, &new_dynamic);
 
     // rebuild rate-limiter only when the config actually changed
     if old_dynamic.security.rate_limit != new_dynamic.security.rate_limit {
@@ -91,9 +98,72 @@ pub async fn try_reload(
     // once they complete the old pool is dropped and its idle connections are closed.
     drain_removed_backends(&old_dynamic.backends, &new_dynamic.backends, client_pool, static_cfg);
 
-    // atomic swap
+    let hash = fnv1a_hash(&new_dynamic);
+
     dynamic_cfg.store(Arc::new(new_dynamic));
-    info!("Config reloaded successfully");
+
+    metrics.record_reload_success(hash);
+    info!(config_hash = hash, "Config reloaded successfully");
+}
+
+/// Audit and log what changed between two `DynamicConfig` snapshots.
+fn audit_config_changes(old: &DynamicConfig, new: &DynamicConfig) {
+    if old == new {
+        info!("Config reload: no effective changes detected");
+        return;
+    }
+
+    // Backends
+    let old_addrs: HashSet<&str> = old.backends.iter().map(|b| b.address.as_str()).collect();
+    let new_addrs: HashSet<&str> = new.backends.iter().map(|b| b.address.as_str()).collect();
+    for addr in old_addrs.difference(&new_addrs) {
+        info!(backend = addr, "Config diff: backend removed");
+    }
+    for addr in new_addrs.difference(&old_addrs) {
+        info!(backend = addr, "Config diff: backend added");
+    }
+
+    // Routes
+    let old_routes: HashSet<&str> = old.routes.iter().map(|r| r.prefix.as_str()).collect();
+    let new_routes: HashSet<&str> = new.routes.iter().map(|r| r.prefix.as_str()).collect();
+    for prefix in old_routes.difference(&new_routes) {
+        info!(prefix = prefix, "Config diff: route removed");
+    }
+    for prefix in new_routes.difference(&old_routes) {
+        info!(prefix = prefix, "Config diff: route added");
+    }
+    for route in &new.routes {
+        if let Some(old_route) = old.routes.iter().find(|r| r.prefix == route.prefix) {
+            if old_route != route {
+                info!(prefix = route.prefix, "Config diff: route changed");
+            }
+        }
+    }
+
+    // preserve_host
+    if old.preserve_host != new.preserve_host {
+        info!(
+            old = old.preserve_host,
+            new = new.preserve_host,
+            "Config diff: preserve_host changed"
+        );
+    }
+
+    // Global headers
+    if old.headers != new.headers {
+        info!("Config diff: global header manipulation changed");
+    }
+
+    // Security
+    if old.security.headers != new.security.headers {
+        info!("Config diff: security headers changed (HSTS / CSP / custom)");
+    }
+    if old.security.ip_filter != new.security.ip_filter {
+        info!("Config diff: IP filter changed");
+    }
+    if old.security.rate_limit != new.security.rate_limit {
+        info!("Config diff: rate-limit config changed");
+    }
 }
 
 /// Replace the shared client pool when backends have been removed.
@@ -120,6 +190,18 @@ fn drain_removed_backends(
     );
     let new_pool = ClientPool::new(&static_cfg.timeout.keep_alive, BackendPoolConfig::default());
     client_pool.store(Arc::new(new_pool));
+}
+
+/// Compute a fast FNV-1a hash of a `DynamicConfig` via its `Debug` representation.
+///
+/// Used exclusively for the `huginn_config_hash` Prometheus gauge — must be
+/// deterministic within a process run and change whenever the config changes.
+/// Cross-run or cross-version stability is not required.
+fn fnv1a_hash(dynamic: &DynamicConfig) -> u64 {
+    use std::collections::hash_map::DefaultHasher;
+    let mut hasher = DefaultHasher::new();
+    format!("{:?}", dynamic).hash(&mut hasher);
+    hasher.finish()
 }
 
 /// Build the initial `SharedRateLimiter` from the starting `DynamicConfig`.

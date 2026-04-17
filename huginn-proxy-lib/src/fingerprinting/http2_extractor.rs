@@ -28,7 +28,7 @@ pub struct CapturingStream<S> {
     seen_settings_frame: bool,
     seen_headers_frame: bool,
     extraction_start: Option<Instant>,
-    metrics: Option<Arc<crate::telemetry::Metrics>>,
+    metrics: Arc<crate::telemetry::Metrics>,
 }
 
 impl<S> CapturingStream<S> {
@@ -36,7 +36,7 @@ impl<S> CapturingStream<S> {
         inner: S,
         max_capture: usize,
         fingerprint_tx: watch::Sender<Option<AkamaiFingerprint>>,
-        metrics: Option<Arc<crate::telemetry::Metrics>>,
+        metrics: Arc<crate::telemetry::Metrics>,
     ) -> (Self, Arc<AtomicBool>) {
         let fingerprint_extracted = Arc::new(AtomicBool::new(false));
         (
@@ -128,13 +128,13 @@ impl<S: AsyncRead + Unpin> AsyncRead for CapturingStream<S> {
                                             self.fingerprint_extracted
                                                 .store(true, Ordering::Relaxed);
 
-                                            let start = self.extraction_start.take();
-                                            if let (Some(m), Some(start)) =
-                                                (self.metrics.as_ref(), start)
-                                            {
+                                            if let Some(start) = self.extraction_start.take() {
                                                 let duration = start.elapsed().as_secs_f64();
-                                                m.http2_fingerprints_extracted_total.add(1, &[]);
-                                                m.http2_fingerprint_extraction_duration_seconds
+                                                self.metrics
+                                                    .http2_fingerprints_extracted_total
+                                                    .add(1, &[]);
+                                                self.metrics
+                                                    .http2_fingerprint_extraction_duration_seconds
                                                     .record(duration, &[]);
                                             }
                                         }
@@ -143,9 +143,9 @@ impl<S: AsyncRead + Unpin> AsyncRead for CapturingStream<S> {
                                                 "CapturingStream: malformed HEADERS frame, possible spoofed traffic: {}",
                                                 reason
                                             );
-                                            if let Some(m) = &self.metrics {
-                                                m.http2_fingerprint_failures_total.add(1, &[]);
-                                            }
+                                            self.metrics
+                                                .http2_fingerprint_failures_total
+                                                .add(1, &[]);
                                         }
                                         Err(HuginnNetHttpError::NoSettingsFrame) => {
                                             debug!("CapturingStream: SETTINGS frame not yet received, will retry on next read");
@@ -186,9 +186,7 @@ impl<S: AsyncWrite + Unpin> AsyncWrite for CapturingStream<S> {
 
     fn poll_shutdown(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
         if !self.fingerprint_extracted.load(Ordering::Relaxed) {
-            if let Some(m) = &self.metrics {
-                m.http2_fingerprint_failures_total.add(1, &[]);
-            }
+            self.metrics.http2_fingerprint_failures_total.add(1, &[]);
         }
         Pin::new(&mut self.inner).poll_shutdown(cx)
     }

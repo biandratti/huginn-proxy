@@ -26,7 +26,7 @@ pub struct Backend {
 }
 
 /// Route configuration for path-based routing
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone, PartialEq)]
 pub struct Route {
     /// URL path prefix to match (e.g., "/api", "/static")
     /// Routes are matched in order, first match wins

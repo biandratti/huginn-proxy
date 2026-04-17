@@ -17,7 +17,7 @@ pub struct PlainConnectionConfig {
     pub backends: Arc<Vec<crate::config::Backend>>,
     pub keep_alive: crate::config::KeepAliveConfig,
     pub security: crate::proxy::SecurityContext,
-    pub metrics: Option<Arc<Metrics>>,
+    pub metrics: Arc<Metrics>,
     pub builder: ConnBuilder<TokioExecutor>,
     pub preserve_host: bool,
     pub connection_handling_timeout: tokio::time::Duration,
@@ -62,7 +62,7 @@ pub async fn handle_plain_connection(
                 &security,
                 metrics,
                 peer,
-                false, // is_https = false for plain HTTP connections
+                false,
                 preserve_host,
                 &client_pool,
             )
@@ -73,9 +73,7 @@ pub async fn handle_plain_connection(
                 Err(e) => {
                     tracing::error!("{e}");
                     let code = StatusCode::from(e.clone());
-                    if let Some(ref m) = metrics_for_match {
-                        m.record_error(e.error_type());
-                    }
+                    metrics_for_match.record_error(e.error_type());
                     match synthetic_error_response(code) {
                         Ok(resp) => Ok(resp),
                         Err(e) => {

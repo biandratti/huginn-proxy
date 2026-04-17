@@ -12,7 +12,7 @@ use crate::telemetry::Metrics;
 pub async fn serve_with_timeout<F, E>(
     serve_fut: F,
     timeout_duration: tokio::time::Duration,
-    metrics: Option<Arc<Metrics>>,
+    metrics: Arc<Metrics>,
     peer: std::net::SocketAddr,
 ) where
     F: std::future::Future<Output = Result<(), E>>,
@@ -25,9 +25,7 @@ pub async fn serve_with_timeout<F, E>(
         }
         Err(_) => {
             warn!(?peer, "connection handling timeout");
-            if let Some(ref m) = metrics {
-                m.record_timeout(values::TIMEOUT_CONNECTION_HANDLING);
-            }
+            metrics.record_timeout(values::TIMEOUT_CONNECTION_HANDLING);
         }
     }
 }

@@ -25,7 +25,7 @@ pub struct TlsConnectionConfig {
     pub backends: Arc<Vec<crate::config::Backend>>,
     pub keep_alive: crate::config::KeepAliveConfig,
     pub security: crate::proxy::SecurityContext,
-    pub metrics: Option<Arc<Metrics>>,
+    pub metrics: Arc<Metrics>,
     pub builder: ConnBuilder<TokioExecutor>,
     pub preserve_host: bool,
     pub tls_handshake_timeout: tokio::time::Duration,
@@ -40,18 +40,16 @@ pub async fn handle_tls_connection(
     peer: std::net::SocketAddr,
     config: TlsConnectionConfig,
 ) {
-    let metrics_for_connection = config.metrics.clone();
+    let metrics = config.metrics.clone();
     let acc_opt = config.tls_acceptor.read().await.clone();
     if let Some(acc) = acc_opt {
         let handshake_start = Instant::now();
         let (prefix, ja4_fingerprints) =
-            match read_client_hello(&mut stream, metrics_for_connection.clone()).await {
+            match read_client_hello(&mut stream, Arc::clone(&metrics)).await {
                 Ok(v) => v,
                 Err(e) => {
                     warn!(?peer, error = %e, "failed to read client hello");
-                    if let Some(ref m) = metrics_for_connection {
-                        m.tls_handshake_errors_total.add(1, &[]);
-                    }
+                    metrics.tls_handshake_errors_total.add(1, &[]);
                     return;
                 }
             };
@@ -64,31 +62,24 @@ pub async fn handle_tls_connection(
             Ok(Ok(tls)) => tls,
             Ok(Err(e)) => {
                 warn!(?peer, error = %e, "TLS accept failed");
-                if let Some(ref m) = metrics_for_connection {
-                    m.record_tls_handshake_error();
-                }
+                metrics.record_tls_handshake_error();
                 return;
             }
             Err(_) => {
                 warn!(?peer, "TLS handshake timeout");
-                if let Some(ref m) = metrics_for_connection {
-                    m.record_timeout("tls_handshake");
-                    m.record_tls_handshake_error();
-                }
+                metrics.record_timeout("tls_handshake");
+                metrics.record_tls_handshake_error();
                 return;
             }
         };
 
         let handshake_duration = handshake_start.elapsed().as_secs_f64();
-        record_tls_handshake_metrics(&tls, handshake_duration, metrics_for_connection.clone());
+        record_tls_handshake_metrics(&tls, handshake_duration, &metrics);
 
-        // Create guard to decrement TLS connection metrics counter when connection closes
-        // Note: The main active_connections counter is handled by ConnectionGuard
-        let tls_connection_guard = TlsConnectionGuard::new(
-            metrics_for_connection
-                .as_ref()
-                .map(|m| m.tls_connections_active.clone()),
-        );
+        // Guard decrements TLS connection metrics counter when connection closes.
+        // The main active_connections counter is handled by ConnectionGuard.
+        let tls_connection_guard =
+            TlsConnectionGuard::new(Some(metrics.tls_connections_active.clone()));
 
         let ja4_fingerprints = if config.fingerprint_config.tls_enabled {
             ja4_fingerprints
@@ -108,11 +99,10 @@ pub async fn handle_tls_connection(
                 tls,
                 config.fingerprint_config.max_capture,
                 fingerprint_tx.clone(),
-                metrics_for_connection.clone(),
+                Arc::clone(&metrics),
             );
 
             let backends = config.backends.clone();
-            let metrics = metrics_for_connection.clone();
             let routes_template = config.routes.clone();
             let keep_alive = config.keep_alive.clone();
             let security = config.security.clone();
@@ -155,9 +145,7 @@ pub async fn handle_tls_connection(
                             Err(e) => {
                                 tracing::error!("{e}");
                                 let code = StatusCode::from(e.clone());
-                                if let Some(ref m) = metrics_for_match {
-                                    m.record_error(e.error_type());
-                                }
+                                metrics_for_match.record_error(e.error_type());
                                 match synthetic_error_response(code) {
                                     Ok(resp) => Ok(resp),
                                     Err(e) => {
@@ -180,16 +168,10 @@ pub async fn handle_tls_connection(
                 .builder
                 .serve_connection(TokioIo::new(capturing_stream), svc);
 
-            serve_with_timeout(
-                serve_fut,
-                config.connection_handling_timeout,
-                metrics_for_connection,
-                peer,
-            )
-            .await;
+            serve_with_timeout(serve_fut, config.connection_handling_timeout, config.metrics, peer)
+                .await;
         } else {
             let backends = config.backends.clone();
-            let metrics = metrics_for_connection.clone();
             let routes_template = config.routes.clone();
             let keep_alive = config.keep_alive.clone();
             let security = config.security.clone();
@@ -231,9 +213,7 @@ pub async fn handle_tls_connection(
                             Err(e) => {
                                 tracing::error!("{e}");
                                 let code = StatusCode::from(e.clone());
-                                if let Some(ref m) = metrics_for_match {
-                                    m.record_error(e.error_type());
-                                }
+                                metrics_for_match.record_error(e.error_type());
                                 match synthetic_error_response(code) {
                                     Ok(resp) => Ok(resp),
                                     Err(e) => {
@@ -254,13 +234,8 @@ pub async fn handle_tls_connection(
 
             let serve_fut = config.builder.serve_connection(TokioIo::new(tls), svc);
 
-            serve_with_timeout(
-                serve_fut,
-                config.connection_handling_timeout,
-                metrics_for_connection,
-                peer,
-            )
-            .await;
+            serve_with_timeout(serve_fut, config.connection_handling_timeout, config.metrics, peer)
+                .await;
         }
     } else {
         warn!(?peer, "TLS acceptor not initialized");

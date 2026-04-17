@@ -162,7 +162,7 @@ impl BenchFixture {
             let _ = huginn_proxy_lib::run(
                 static_cfg,
                 dynamic_cfg,
-                None,
+                huginn_proxy_lib::Metrics::new_noop(),
                 None,
                 huginn_proxy_lib::WatchOptions::default(),
             )

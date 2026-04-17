@@ -72,7 +72,8 @@ fn http2_preface_and_settings() -> Vec<u8> {
 async fn test_capturing_stream_basic() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let (tx, _rx) = watch::channel(None);
     let mock_stream = MockStream::new(http2_preface_and_settings());
-    let (mut capturing, _extracted) = CapturingStream::new(mock_stream, 64 * 1024, tx, None);
+    let (mut capturing, _extracted) =
+        CapturingStream::new(mock_stream, 64 * 1024, tx, huginn_proxy_lib::Metrics::new_noop());
 
     let mut buf = vec![0u8; 1024];
     let mut read_buf = tokio::io::ReadBuf::new(&mut buf);
@@ -93,7 +94,8 @@ async fn test_capturing_stream_max_capture() -> Result<(), Box<dyn std::error::E
     let large_data = vec![0u8; 100 * 1024]; // 100KB
     let mock_stream = MockStream::new(large_data);
     let max_capture = 64 * 1024; // 64KB limit
-    let (mut capturing, _extracted) = CapturingStream::new(mock_stream, max_capture, tx, None);
+    let (mut capturing, _extracted) =
+        CapturingStream::new(mock_stream, max_capture, tx, huginn_proxy_lib::Metrics::new_noop());
 
     let mut buf = vec![0u8; 1024];
     let mut read_buf = tokio::io::ReadBuf::new(&mut buf);
@@ -118,7 +120,8 @@ async fn test_capturing_stream_write_passthrough(
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let (tx, _rx) = watch::channel(None);
     let mock_stream = MockStream::new(vec![]);
-    let (mut capturing, _extracted) = CapturingStream::new(mock_stream, 64 * 1024, tx, None);
+    let (mut capturing, _extracted) =
+        CapturingStream::new(mock_stream, 64 * 1024, tx, huginn_proxy_lib::Metrics::new_noop());
 
     // Write should pass through
     use tokio::io::AsyncWriteExt;

@@ -9,8 +9,8 @@ agent**.
 
 Huginn Proxy provides comprehensive telemetry through:
 
-- **Prometheus Metrics** - 35 metrics covering connections, requests, TLS, fingerprinting, backends, throughput, rate
-  limiting, IP filtering, header manipulation, and mTLS
+- **Prometheus Metrics** - 41 metrics covering connections, requests, TLS, fingerprinting, backends, throughput, rate
+  limiting, IP filtering, header manipulation, mTLS, and config hot reload
 - **Health Check Endpoints** - Kubernetes-ready: `/health`, `/ready`, `/live`, `/metrics`
 
 All proxy telemetry is exposed on a separate observability server (configurable via `telemetry.metrics_port`).
@@ -246,6 +246,20 @@ histogram_quantile(0.95, rate(huginn_tls_handshake_duration_seconds_bucket[5m]))
 
 **Note**: HTTP/2 fingerprint failures include HTTP/1.1 connections (expected behavior).
 
+#### TCP SYN Fingerprinting (p0f via eBPF)
+
+| Metric                                          | Type      | Description                                              | Labels   |
+|-------------------------------------------------|-----------|----------------------------------------------------------|----------|
+| `huginn_tcp_syn_fingerprints_total`             | Counter   | TCP SYN fingerprint lookups (`result=hit\|miss\|malformed`) | `reason` |
+| `huginn_tcp_syn_fingerprint_duration_seconds`   | Histogram | BPF map lookup and parse duration                        | `reason` |
+| `huginn_tcp_syn_fingerprint_failures_total`     | Counter   | Malformed BPF map entries (undecodable TCP options)      | -        |
+
+**Labels**:
+
+- `reason`: Lookup result — `hit` (fingerprint found and injected), `miss` (no BPF map entry — keep-alive reuse, IPv6 peer, or stale entry), `malformed` (entry present but TCP options undecodable)
+
+**Note**: TCP SYN fingerprinting requires the eBPF agent to be running and pinning BPF maps. The proxy reads from those maps; this metric covers the proxy-side lookup, not the agent-side capture (see eBPF Agent Metrics for capture counters).
+
 **Example queries**:
 
 ```promql
@@ -458,7 +472,30 @@ sum by (protocol) (rate(huginn_mtls_connections_total[5m]))
 
 ---
 
-### 12. Build Info
+### 12. Config Hot Reload Metrics
+
+| Metric                                         | Type    | Description                                                   | Labels   |
+|------------------------------------------------|---------|---------------------------------------------------------------|----------|
+| `huginn_config_reload_total`                   | Counter | Config reload attempts                                        | `result` |
+| `huginn_config_last_reload_timestamp_seconds`  | Gauge   | Unix timestamp of the last successful reload                  | -        |
+| `huginn_config_hash`                           | Gauge   | Semantic hash of the active `DynamicConfig`                   | -        |
+
+**Labels**:
+
+- `result`: Outcome of the reload attempt — `success` or `error`
+
+**Notes**:
+
+- `huginn_config_reload_total` is incremented on every reload attempt triggered by SIGHUP or filesystem watcher,
+  regardless of outcome.
+- `huginn_config_last_reload_timestamp_seconds` is only updated on success; use it together with
+  `huginn_config_reload_total{result="error"}` to detect stuck reloads.
+- `huginn_config_hash` changes whenever the deserialized `DynamicConfig` changes. It is unaffected by TOML formatting
+  changes (whitespace, comments, field ordering within a table) since it hashes the parsed struct, not the raw file.
+
+---
+
+### 13. Build Info
 
 | Metric              | Type  | Description                  | Labels                    |
 |---------------------|-------|------------------------------|---------------------------|
@@ -538,6 +575,13 @@ same health endpoints as the proxy.
 - Backend latency P95: `histogram_quantile(0.95, rate(huginn_backend_duration_seconds_bucket[5m]))`
 - Backend throughput:
   `sum by (backend_address) (rate(huginn_backend_bytes_received_total[5m]) + rate(huginn_backend_bytes_sent_total[5m]))`
+
+**Config Hot Reload Panel**:
+
+- Reload success rate: `rate(huginn_config_reload_total{result="success"}[1h])`
+- Reload error rate: `rate(huginn_config_reload_total{result="error"}[1h])`
+- Time since last successful reload: `time() - huginn_config_last_reload_timestamp_seconds`
+- Active config hash: `huginn_config_hash`
 
 **eBPF Agent Panel** (DaemonSet, one agent per node):
 

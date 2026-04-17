@@ -50,23 +50,28 @@ async fn main() -> Result<(), BoxError> {
     let static_cfg = Arc::new(static_cfg);
     let dynamic_cfg = Arc::new(ArcSwap::from_pointee(dynamic_cfg));
 
-    let (metrics, metrics_handle) = if let Some(metrics_port) = static_cfg.telemetry.metrics_port {
+    let (metrics, metrics_handle) = {
         let (metrics, registry) =
             init_metrics().map_err(|e| format!("Failed to initialize metrics: {e}"))?;
 
-        info!(port = metrics_port, "Metrics initialized, starting observability server");
-        let backends_for_observability = Arc::new(dynamic_cfg.load().backends.clone());
-        let handle = tokio::spawn(async move {
-            if let Err(e) =
-                start_observability_server(metrics_port, registry, backends_for_observability).await
-            {
-                tracing::error!(error = %e, "Observability server error");
-            }
-        });
-        (Some(metrics), Some(handle))
-    } else {
-        info!("Metrics disabled (no metrics_port configured)");
-        (None, None)
+        let handle = if let Some(metrics_port) = static_cfg.telemetry.metrics_port {
+            info!(port = metrics_port, "Metrics initialized, starting observability server");
+            let backends_for_observability = Arc::new(dynamic_cfg.load().backends.clone());
+            Some(tokio::spawn(async move {
+                if let Err(e) =
+                    start_observability_server(metrics_port, registry, backends_for_observability)
+                        .await
+                {
+                    tracing::error!(error = %e, "Observability server error");
+                }
+            }))
+        } else {
+            info!("Metrics initialized (no metrics_port — Prometheus endpoint disabled)");
+            drop(registry);
+            None
+        };
+
+        (metrics, handle)
     };
 
     // TCP SYN fingerprinting via eBPF/XDP.

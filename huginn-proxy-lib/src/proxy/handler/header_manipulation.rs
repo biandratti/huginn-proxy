@@ -10,32 +10,30 @@ use std::sync::Arc;
 /// * `headers` - The header map to modify
 /// * `manipulation` - The header manipulation configuration
 /// * `context` - Context string (use `values::CONTEXT_REQUEST` or `values::CONTEXT_RESPONSE`) for metrics
-/// * `metrics` - Optional metrics for tracking header operations
+/// * `metrics` - Metrics instance for tracking header operations
 ///
 /// # Example
 /// ```
 /// use http::HeaderMap;
 /// use huginn_proxy_lib::config::HeaderManipulationGroup;
 /// use huginn_proxy_lib::proxy::handler::header_manipulation::apply_header_manipulation_group;
-/// use huginn_proxy_lib::telemetry::metrics::values;
+/// use huginn_proxy_lib::telemetry::{metrics::values, Metrics};
 ///
 /// let mut headers = HeaderMap::new();
 /// let manipulation = HeaderManipulationGroup::default();
 ///
-/// apply_header_manipulation_group(&mut headers, &manipulation, values::CONTEXT_REQUEST, None);
+/// apply_header_manipulation_group(&mut headers, &manipulation, values::CONTEXT_REQUEST, &Metrics::new_noop());
 /// ```
 pub fn apply_header_manipulation_group(
     headers: &mut HeaderMap,
     manipulation: &HeaderManipulationGroup,
     context: &str,
-    metrics: Option<&Arc<Metrics>>,
+    metrics: &Arc<Metrics>,
 ) {
     // Remove headers first
     if !manipulation.remove.is_empty() {
         let removed_count = remove_headers(headers, &manipulation.remove);
-        if let Some(m) = metrics {
-            m.record_headers_removed(removed_count, context);
-        }
+        metrics.record_headers_removed(removed_count, context);
     }
 
     // Then add headers
@@ -46,9 +44,7 @@ pub fn apply_header_manipulation_group(
             .map(|h| (h.name.clone(), h.value.clone()))
             .collect();
         let added_count = add_headers(headers, &to_add);
-        if let Some(m) = metrics {
-            m.record_headers_added(added_count, context);
-        }
+        metrics.record_headers_added(added_count, context);
     }
 }
 
@@ -65,14 +61,12 @@ pub fn apply_request_header_manipulation(
     headers: &mut HeaderMap,
     global_manipulation: Option<&HeaderManipulation>,
     route_manipulation: Option<&HeaderManipulation>,
-    metrics: Option<&Arc<Metrics>>,
+    metrics: &Arc<Metrics>,
 ) {
-    // Apply global request header manipulation
     if let Some(global) = global_manipulation {
         apply_header_manipulation_group(headers, &global.request, values::CONTEXT_REQUEST, metrics);
     }
 
-    // Apply per-route request header manipulation (overrides global)
     if let Some(route) = route_manipulation {
         apply_header_manipulation_group(headers, &route.request, values::CONTEXT_REQUEST, metrics);
     }
@@ -91,9 +85,8 @@ pub fn apply_response_header_manipulation(
     headers: &mut HeaderMap,
     global_manipulation: Option<&HeaderManipulation>,
     route_manipulation: Option<&HeaderManipulation>,
-    metrics: Option<&Arc<Metrics>>,
+    metrics: &Arc<Metrics>,
 ) {
-    // Apply global response header manipulation
     if let Some(global) = global_manipulation {
         apply_header_manipulation_group(
             headers,
@@ -103,7 +96,6 @@ pub fn apply_response_header_manipulation(
         );
     }
 
-    // Apply per-route response header manipulation (overrides global)
     if let Some(route) = route_manipulation {
         apply_header_manipulation_group(
             headers,

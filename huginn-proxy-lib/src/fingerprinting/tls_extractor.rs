@@ -7,7 +7,7 @@ use crate::telemetry::Metrics;
 /// Reads TLS ClientHello from the stream and extracts JA4 fingerprint
 pub async fn read_client_hello(
     stream: &mut tokio::net::TcpStream,
-    metrics: Option<Arc<Metrics>>,
+    metrics: Arc<Metrics>,
 ) -> std::io::Result<(Vec<u8>, Option<Ja4Fingerprints>)> {
     use huginn_net_tls::tls_process::parse_tls_client_hello;
     use tokio::io::AsyncReadExt;
@@ -35,20 +35,17 @@ pub async fn read_client_hello(
 
     let fingerprints = match parse_tls_client_hello(&buf) {
         Ok(signature) => {
-            if let Some(ref m) = metrics {
-                m.tls_fingerprints_extracted_total.add(1, &[]);
-                m.tls_fingerprint_extraction_duration_seconds
-                    .record(duration, &[]);
-            }
+            metrics.tls_fingerprints_extracted_total.add(1, &[]);
+            metrics
+                .tls_fingerprint_extraction_duration_seconds
+                .record(duration, &[]);
             let ja4 = signature.generate_ja4();
             let ja4_raw = signature.generate_ja4_original();
             let sni = signature.sni;
             Some(Ja4Fingerprints::new(ja4, ja4_raw, sni))
         }
         Err(_) => {
-            if let Some(ref m) = metrics {
-                m.tls_fingerprint_failures_total.add(1, &[]);
-            }
+            metrics.tls_fingerprint_failures_total.add(1, &[]);
             None
         }
     };

@@ -26,23 +26,18 @@ type RespBody = http_body_util::combinators::BoxBody<bytes::Bytes, hyper::Error>
 fn check_ip_access(
     peer: std::net::SocketAddr,
     ip_filter: &crate::config::IpFilterConfig,
-    metrics: Option<&Arc<Metrics>>,
+    metrics: &Arc<Metrics>,
 ) -> HttpResult<()> {
     let client_ip = peer.ip();
 
     if !crate::security::is_ip_allowed(client_ip, ip_filter) {
         debug!(?peer, "IP blocked by filter");
-        if let Some(m) = metrics {
-            m.record_ip_filter_denied();
-            m.record_error(values::ERROR_IP_BLOCKED);
-        }
+        metrics.record_ip_filter_denied();
+        metrics.record_error(values::ERROR_IP_BLOCKED);
         return Err(HttpError::Forbidden);
     }
 
-    if let Some(m) = metrics {
-        m.record_ip_filter_allowed();
-    }
-
+    metrics.record_ip_filter_allowed();
     Ok(())
 }
 
@@ -57,7 +52,7 @@ pub async fn handle_proxy_request(
     syn_fingerprint: Option<TcpObservation>,
     keep_alive: &KeepAliveConfig,
     security: &crate::proxy::SecurityContext,
-    metrics: Option<Arc<Metrics>>,
+    metrics: Arc<Metrics>,
     peer: std::net::SocketAddr,
     is_https: bool,
     preserve_host: bool,
@@ -67,33 +62,25 @@ pub async fn handle_proxy_request(
     let method = req.method().to_string();
     let protocol = format!("{:?}", req.version());
 
-    if let Some(ref m) = metrics {
-        if let Some(content_length) = req.headers().get(hyper::header::CONTENT_LENGTH) {
-            if let Ok(length_str) = content_length.to_str() {
-                if let Ok(length) = length_str.parse::<u64>() {
-                    m.record_bytes_received(length, &protocol);
-                }
+    if let Some(content_length) = req.headers().get(hyper::header::CONTENT_LENGTH) {
+        if let Ok(length_str) = content_length.to_str() {
+            if let Ok(length) = length_str.parse::<u64>() {
+                metrics.record_bytes_received(length, &protocol);
             }
         }
     }
 
-    check_ip_access(peer, &security.ip_filter, metrics.as_ref())?;
+    check_ip_access(peer, &security.ip_filter, &metrics)?;
 
     let path = req.uri().path();
     let route_match = if let Some(route) =
         crate::proxy::forwarding::pick_route_with_fingerprinting(path, &routes)
     {
-        // Route matched: use route's fingerprinting configuration
-        if let Some(ref m) = metrics {
-            m.record_backend_selection(route.backend);
-        }
+        metrics.record_backend_selection(route.backend);
         route
     } else {
-        // No route matched: return 404
         let error = HttpError::NoMatchingRoute;
-        if let Some(ref m) = metrics {
-            m.record_error(error.error_type());
-        }
+        metrics.record_error(error.error_type());
         return Err(error);
     };
 
@@ -103,7 +90,7 @@ pub async fn handle_proxy_request(
         &route_match,
         peer,
         req.headers(),
-        metrics.as_ref(),
+        &metrics,
     ) {
         return Ok(rate_limited_response);
     }
@@ -145,16 +132,12 @@ pub async fn handle_proxy_request(
                         .insert(HeaderName::from_static(names::HTTP2_AKAMAI), hv);
                 } else {
                     debug!("Handler: no HTTP fingerprint header to inject (HTTP/2 connection but fingerprint not extracted)");
-                    if let Some(ref m) = metrics {
-                        m.http2_fingerprint_failures_total.add(1, &[]);
-                    }
+                    metrics.http2_fingerprint_failures_total.add(1, &[]);
                 }
             } else {
                 // HTTP/1.1 connection - Akamai fingerprint not applicable
                 debug!("Handler: HTTP/1.1 connection, Akamai fingerprint not applicable");
-                if let Some(ref m) = metrics {
-                    m.http2_fingerprint_failures_total.add(1, &[]);
-                }
+                metrics.http2_fingerprint_failures_total.add(1, &[]);
             }
         }
         match syn_fingerprint {
@@ -174,27 +157,23 @@ pub async fn handle_proxy_request(
     }
 
     // Add X-Forwarded-* headers after fingerprinting
-    // Note: Fingerprints are extracted from TLS handshake/HTTP2 frames (before HTTP request parsing),
-    // so adding these headers doesn't affect fingerprint generation
     let sni = ja4_fingerprints.as_ref().and_then(|fp| fp.sni.as_deref());
     add_forwarded_headers(&mut req, peer, is_https, sni);
 
-    // Apply request header manipulation (global + per-route)
     apply_request_header_manipulation(
         req.headers_mut(),
         security.global_header_manipulation.as_ref(),
         route_match.headers,
-        metrics.as_ref(),
+        &metrics,
     );
 
-    // Forward request
     let result = forward(
         req,
         route_match.backend.to_string(),
         crate::proxy::forwarding::ForwardConfig {
             backends: &backends,
             keep_alive,
-            metrics: metrics.clone(),
+            metrics: Arc::clone(&metrics),
             matched_prefix: route_match.matched_prefix,
             replace_path: route_match.replace_path,
             security_headers: Some(&security.headers),
@@ -209,12 +188,10 @@ pub async fn handle_proxy_request(
 
     let mut result = result;
     if let Ok(ref mut response) = result {
-        if let Some(ref m) = metrics {
-            if let Some(content_length) = response.headers().get(hyper::header::CONTENT_LENGTH) {
-                if let Ok(length_str) = content_length.to_str() {
-                    if let Ok(length) = length_str.parse::<u64>() {
-                        m.record_bytes_sent(length, &protocol);
-                    }
+        if let Some(content_length) = response.headers().get(hyper::header::CONTENT_LENGTH) {
+            if let Ok(length_str) = content_length.to_str() {
+                if let Ok(length) = length_str.parse::<u64>() {
+                    metrics.record_bytes_sent(length, &protocol);
                 }
             }
         }
@@ -223,7 +200,7 @@ pub async fn handle_proxy_request(
             response.headers_mut(),
             security.global_header_manipulation.as_ref(),
             route_match.headers,
-            metrics.as_ref(),
+            &metrics,
         );
     }
 
@@ -236,16 +213,14 @@ pub async fn handle_proxy_request(
         }
     };
 
-    if let Some(ref m) = metrics {
-        m.record_request(&method, status_code, &protocol, route_match.matched_prefix);
-        m.record_request_duration(
-            duration,
-            &method,
-            status_code,
-            &protocol,
-            route_match.matched_prefix,
-        );
-    }
+    metrics.record_request(&method, status_code, &protocol, route_match.matched_prefix);
+    metrics.record_request_duration(
+        duration,
+        &method,
+        status_code,
+        &protocol,
+        route_match.matched_prefix,
+    );
 
     result
 }

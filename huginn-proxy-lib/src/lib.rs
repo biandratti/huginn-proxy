@@ -20,4 +20,5 @@ pub use load_balancing::RoundRobin;
 pub use proxy::reload::{SharedClientPool, SharedRateLimiter};
 pub use proxy::server::{SynProbe, WatchOptions};
 pub use proxy::{forwarding, run};
+pub use telemetry::Metrics;
 pub use tls::build_tls_acceptor;

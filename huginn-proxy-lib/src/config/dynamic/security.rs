@@ -39,7 +39,7 @@ pub(crate) fn default_max_connections() -> usize {
 ///
 /// Contains only the fields that can change without restart. `max_connections`
 /// is excluded because it controls a process-level resource (ConnectionManager).
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct SecurityDynamicConfig {
     /// Security headers injected into responses
     pub headers: SecurityHeaders,

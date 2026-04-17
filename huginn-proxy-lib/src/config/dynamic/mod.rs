@@ -15,7 +15,7 @@ pub use security::{
 /// These can change at runtime without restarting the process or dropping
 /// existing connections. Constructed from `Config::into_parts()`, not
 /// deserialized directly from TOML.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct DynamicConfig {
     /// List of backend servers
     pub backends: Vec<Backend>,

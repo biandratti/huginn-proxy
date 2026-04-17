@@ -54,7 +54,7 @@ impl ConnectionManager {
     pub fn try_accept(
         &self,
         peer: std::net::SocketAddr,
-        metrics: Option<&Arc<Metrics>>,
+        metrics: &Arc<Metrics>,
     ) -> Result<ConnectionGuard, ConnectionError> {
         // Check if shutdown was requested
         if self.is_shutdown() {
@@ -64,9 +64,7 @@ impl ConnectionManager {
         // Check connection limit (DoS protection)
         let current_connections = self.active_connections.load(Ordering::Relaxed);
         if current_connections >= self.max_connections {
-            if let Some(m) = metrics {
-                m.connections_rejected_total.add(1, &[]);
-            }
+            metrics.connections_rejected_total.add(1, &[]);
             warn!(
                 current = current_connections,
                 limit = self.max_connections,
@@ -81,15 +79,13 @@ impl ConnectionManager {
 
         self.active_connections.fetch_add(1, Ordering::Relaxed);
 
-        if let Some(m) = metrics {
-            m.connections_total.add(1, &[]);
-            m.connections_active.add(1, &[]);
-        }
+        metrics.connections_total.add(1, &[]);
+        metrics.connections_active.add(1, &[]);
 
         Ok(ConnectionGuard::new(
             self.active_connections.clone(),
             self.connections_closed_tx.clone(),
-            metrics.map(|m| m.connections_active.clone()),
+            metrics.connections_active.clone(),
         ))
     }
 }
