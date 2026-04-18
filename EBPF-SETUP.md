@@ -217,36 +217,3 @@ A `SynResult::Miss` (no header injected) happens when:
 `force_new_connection = true` is unrelated to fingerprint availability — it controls whether
 the proxy opens a new TCP connection to the **backend** per request, not whether the client
 SYN is re-captured.
-
----
-
-## Verify the setup
-
-A dev-only workspace example loads the XDP ELF and checks that expected maps exist. It needs `CAP_BPF` to create BPF maps. Build as your user, then run the binary with sudo (so `cargo` is not needed under sudo):
-
-```bash
-cargo build -p bpf-test
-sudo ./target/debug/bpf-test
-```
-
-Expected output on success:
-```
-INFO Loading XDP ELF and checking maps...
-INFO   map 'tcp_syn_map_v4' OK
-INFO   map 'syn_counter' OK
-INFO   map 'syn_insert_failures' OK
-INFO SUCCESS: ELF loaded and all expected maps present
-```
-
-If you get `PermissionDenied` on map creation:
-
-```bash
-# Is unprivileged BPF disabled? (0 = allowed, 1/2 = restricted)
-sudo cat /proc/sys/kernel/unprivileged_bpf_disabled
-
-# Recent BPF-related kernel messages
-sudo dmesg | grep -i bpf | tail -10
-
-# Check process capabilities
-cat /proc/self/status | grep Cap
-```

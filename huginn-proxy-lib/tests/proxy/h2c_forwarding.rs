@@ -1,8 +1,6 @@
 //! Integration tests for h2c (HTTP/2 cleartext) backend forwarding.
 //!
 //! These tests cover the `http_version: http2` / `http_version: preserve` code paths
-//! at the network level.  They cannot be exercised by the e2e suite because the
-//! external backend image (traefik/whoami) does not support h2c.
 //!
 //! Architecture of each test:
 //!   [h2c client (same config as ClientPool::http2)]

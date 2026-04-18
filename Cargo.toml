@@ -1,6 +1,5 @@
 [workspace]
 members = [
-    "examples/bpf_test",
     "huginn-ebpf",
     "huginn-ebpf-agent",
     "huginn-ebpf-common",

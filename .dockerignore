@@ -10,7 +10,7 @@ tests-e2e/tests/
 tests-e2e/README.md
 benches/
 
-# Examples - exclude config and docs, but allow backend/ for backend Dockerfiles
+# Examples - exclude config and docs (not needed in the image build context)
 examples/config/
 examples/README.md
 
