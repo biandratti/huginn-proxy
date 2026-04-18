@@ -44,6 +44,12 @@ routes:
     fingerprinting: true
     replace_path: "/new"
 
+  # Path rewriting to versioned API: /v1/endpoint → /api/v1/endpoint
+  - prefix: "/v1"
+    backend: "backend-a:9000"
+    fingerprinting: true
+    replace_path: "/api/v1"
+
   # Default catch-all
   - prefix: "/"
     backend: "backend-b:9000"
