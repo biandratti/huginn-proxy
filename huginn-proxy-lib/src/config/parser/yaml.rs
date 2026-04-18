@@ -6,7 +6,7 @@ pub struct YamlParser;
 
 impl ConfigParser for YamlParser {
     fn parse(&self, content: &str) -> Result<Config> {
-        serde_yml::from_str(content)
+        serde_norway::from_str(content)
             .map_err(|e| ProxyError::Config(format!("YAML parse error: {e}")))
     }
 
