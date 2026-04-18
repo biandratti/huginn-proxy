@@ -84,18 +84,22 @@ chmod 644 examples/certs/server.key examples/certs/server.crt
 
 ### 2. Start Services
 
-Two compose files are provided depending on your environment:
+Pick **one** stack. Both give you **JA4** (and related TLS/JA4H-style signals) and **Akamai-style** HTTP fingerprinting from the proxy. The only fork is whether you also run **TCP SYN** capture via **eBPF/XDP**.
 
-| Compose file | Dockerfile | Requirements |
+| | **Full stack** (`docker-compose.yml`) | **Plain stack** (`docker-compose.plain.yml`) |
 |---|---|---|
-| `docker-compose.yml` | `docker/proxy.Dockerfile` (target: ebpf) + `docker/ebpf-agent.Dockerfile` | Linux kernel ≥ 5.11, `cap_add` granted by Docker |
-| `docker-compose.plain.yml` | `docker/proxy.Dockerfile` (target: plain) | Any Linux kernel, no extra capabilities |
+| **Fingerprints** | JA4 + Akamai + **TCP SYN** (kernel) | JA4 + Akamai **only** (no TCP SYN) |
+| **Images built from this repo** | **Two:** `proxy` (Dockerfile target `ebpf`) + `ebpf-agent` | **One:** `proxy` (Dockerfile target `plain`) |
+| **Extra volume** | **`bpffs`** — shared BPF filesystem for maps between proxy and agent | None |
+| **Host requirements** | Linux kernel ≥ 5.11, Docker grants `cap_add` (see compose) | Any recent Linux kernel, no BPF caps |
+
+Both files also start the same **demo backends** (`traefik/whoami`) — that is unrelated to the choice above.
 
 ```bash
-# With eBPF/XDP TCP SYN fingerprinting (Linux kernel ≥ 5.11)
+# JA4 + Akamai + TCP SYN — two images + bpffs volume (kernel ≥ 5.11)
 docker compose -f examples/docker-compose.yml up --build
 
-# Without eBPF (any kernel, simpler setup)
+# JA4 + Akamai — single proxy image, no eBPF agent or bpffs volume
 docker compose -f examples/docker-compose.plain.yml up --build
 ```
 
