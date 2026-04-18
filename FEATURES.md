@@ -191,9 +191,10 @@ Limitation: No distributed tracing. No request logging to files. No custom metri
 
 Dynamic config sections are swapped atomically using `ArcSwap` — in-flight requests complete with the old config, new requests use the new config immediately. No connections are dropped.
 
-Trigger options:
+Reload triggers and config:
 - **SIGHUP** — always available: `kill -SIGHUP <pid>` or `docker kill --signal=SIGHUP <container>`
 - **File watcher** — enabled with `--watch` flag (or `HUGINN_WATCH=true`). Configurable debounce via `--watch-delay-secs` / `HUGINN_WATCH_DELAY_SECS` (default: 60s).
+- **TOML or YAML** — both formats are supported; the parser is chosen from the file extension (`.yaml`/`.yml` vs `.toml` or anything else). Hot reload behaves the same. See [SETTINGS.md](SETTINGS.md).
 
 On reload, if the new config is invalid the proxy keeps the current config and logs the error. If static sections changed, the proxy logs a warning and ignores those changes (restart required).
 

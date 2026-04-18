@@ -9,22 +9,6 @@
 //! |-----------------|--------|
 //! | `.toml`         | TOML   |
 //! | `.yaml`, `.yml` | YAML   |
-//!
-//! # Example
-//!
-//! ```no_run
-//! use std::path::Path;
-//! use huginn_proxy_lib::config::parser::ConfigFormat;
-//!
-//! let fmt = ConfigFormat::from_path(Path::new("config.yaml"));
-//! let cfg = fmt.parser().parse(r#"
-//! backends:
-//!   - address: "localhost:3000"
-//! routes:
-//!   - prefix: "/"
-//!     backend: "localhost:3000"
-//! "#).unwrap();
-//! ```
 
 mod toml;
 mod yaml;
