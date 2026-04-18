@@ -34,7 +34,9 @@ function getHeader(headers, name) {
   const want = name.toLowerCase();
   for (const k of Object.keys(headers)) {
     if (k.toLowerCase() === want) {
-      return headers[k];
+      // whoami returns header values as arrays; custom backend returns strings
+      const v = headers[k];
+      return Array.isArray(v) ? v[0] : v;
     }
   }
   return undefined;

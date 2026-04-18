@@ -9,9 +9,9 @@ listen:
 
 backends:
   - address: "backend-a:9000"
-    http_version: preserve
+    http_version: http11
   - address: "backend-b:9000"
-    http_version: preserve
+    http_version: http11
 
 routes:
   # Basic route with fingerprinting and connection pooling

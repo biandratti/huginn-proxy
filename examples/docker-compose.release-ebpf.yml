@@ -66,14 +66,12 @@ services:
         condition: service_started
 
   backend-a:
-    build:
-      context: ..
-      dockerfile: examples/backend/Dockerfile
+    image: traefik/whoami
+    command: ["--port", "9000"]
 
   backend-b:
-    build:
-      context: ..
-      dockerfile: examples/backend/Dockerfile
+    image: traefik/whoami
+    command: ["--port", "9000"]
 
 networks:
   default:

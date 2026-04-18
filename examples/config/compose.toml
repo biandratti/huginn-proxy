@@ -8,11 +8,11 @@ addrs = ["0.0.0.0:7000", "[::]:7000"]
 
 [[backends]]
 address = "backend-a:9000"
-http_version = "preserve"
+http_version = "http11"
 
 [[backends]]
 address = "backend-b:9000"
-http_version = "preserve"
+http_version = "http11"
 
 # Basic route without path manipulation (with connection pooling)
 [[routes]]

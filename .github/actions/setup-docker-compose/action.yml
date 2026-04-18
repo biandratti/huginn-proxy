@@ -53,14 +53,6 @@ runs:
           -t examples_ebpf-agent:latest \
           --load \
           ..
-        docker buildx build \
-          --cache-from type=gha \
-          --cache-to type=gha,mode=max \
-          -f ../examples/backend/Dockerfile \
-          -t examples_backend-a:latest \
-          -t examples_backend-b:latest \
-          --load \
-          ..
         docker compose up -d
         echo "Waiting for proxy and ebpf-agent to be healthy..."
         timeout ${{ inputs.health-timeout }} bash -c \
