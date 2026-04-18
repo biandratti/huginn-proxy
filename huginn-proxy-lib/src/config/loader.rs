@@ -1,14 +1,18 @@
 use std::fs;
 use std::path::Path;
 
+use crate::config::parser::ConfigFormat;
 use crate::config::Config;
 use crate::error::{ProxyError, Result};
 
 pub fn load_from_path<P: AsRef<Path>>(p: P) -> Result<Config> {
-    let txt = fs::read_to_string(p)
+    let path = p.as_ref();
+    let format = ConfigFormat::from_path(path)?;
+
+    let content = fs::read_to_string(path)
         .map_err(|e| ProxyError::Config(format!("Failed to read config file: {e}")))?;
-    let cfg: Config = toml::from_str(&txt)
-        .map_err(|e| ProxyError::Config(format!("Failed to parse config: {e}")))?;
+
+    let cfg = format.parser().parse(&content)?;
 
     validate_config(&cfg)?;
 

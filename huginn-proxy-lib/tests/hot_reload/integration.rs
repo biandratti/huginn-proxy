@@ -1,7 +1,6 @@
 use std::time::Duration;
 
 use serial_test::serial;
-use tempfile::NamedTempFile;
 
 use super::helpers::{
     free_port, http_get, send_sighup, spawn_mock_backend, spawn_proxy, toml_single_backend,
@@ -16,7 +15,7 @@ async fn watch_triggers_reload_on_toml_change() -> TestResult {
     let (backend_b, _bh_b) = spawn_mock_backend("b").await?;
 
     let listen_port = free_port()?;
-    let tmp = NamedTempFile::new()?;
+    let tmp = tempfile::Builder::new().suffix(".toml").tempfile()?;
 
     write_toml(tmp.path(), &toml_single_backend(listen_port, backend_a))?;
 
@@ -42,7 +41,7 @@ async fn sighup_triggers_reload() -> TestResult {
     let (backend_b, _bh_b) = spawn_mock_backend("b").await?;
 
     let listen_port = free_port()?;
-    let tmp = NamedTempFile::new()?;
+    let tmp = tempfile::Builder::new().suffix(".toml").tempfile()?;
 
     write_toml(tmp.path(), &toml_single_backend(listen_port, backend_a))?;
 
@@ -75,7 +74,7 @@ async fn new_route_is_accessible_after_reload() -> TestResult {
     let (backend_b, _bh_b) = spawn_mock_backend("b").await?;
 
     let listen_port = free_port()?;
-    let tmp = NamedTempFile::new()?;
+    let tmp = tempfile::Builder::new().suffix(".toml").tempfile()?;
 
     write_toml(tmp.path(), &toml_single_backend(listen_port, backend_a))?;
 
