@@ -7,7 +7,7 @@ use crate::error::{ProxyError, Result};
 
 pub fn load_from_path<P: AsRef<Path>>(p: P) -> Result<Config> {
     let path = p.as_ref();
-    let format = ConfigFormat::from_path(path);
+    let format = ConfigFormat::from_path(path)?;
 
     let content = fs::read_to_string(path)
         .map_err(|e| ProxyError::Config(format!("Failed to read config file: {e}")))?;

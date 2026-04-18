@@ -3,7 +3,6 @@ use huginn_proxy_lib::config::{
     LoggingConfig, SecurityConfig, TelemetryConfig, TimeoutConfig,
 };
 use std::io::Write;
-use tempfile::NamedTempFile;
 
 fn create_test_config(listen: &str, backends: Vec<Backend>) -> Config {
     Config {
@@ -41,7 +40,7 @@ fn create_test_config(listen: &str, backends: Vec<Backend>) -> Config {
 
 #[tokio::test]
 async fn test_config_loads_valid_file() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let mut file = NamedTempFile::new()?;
+    let mut file = tempfile::Builder::new().suffix(".toml").tempfile()?;
     writeln!(
         file,
         r#"
@@ -62,7 +61,7 @@ backends = [
 
 #[tokio::test]
 async fn test_config_with_routes() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let mut file = NamedTempFile::new()?;
+    let mut file = tempfile::Builder::new().suffix(".toml").tempfile()?;
     writeln!(
         file,
         r#"
@@ -143,7 +142,7 @@ fn test_config_with_custom_max_connections() {
 #[tokio::test]
 async fn test_config_loads_security_settings(
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let mut file = NamedTempFile::new()?;
+    let mut file = tempfile::Builder::new().suffix(".toml").tempfile()?;
     writeln!(
         file,
         r#"
@@ -177,7 +176,7 @@ fn test_config_keep_alive_defaults() {
 #[tokio::test]
 async fn test_config_loads_keep_alive_settings(
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let mut file = NamedTempFile::new()?;
+    let mut file = tempfile::Builder::new().suffix(".toml").tempfile()?;
     writeln!(
         file,
         r#"

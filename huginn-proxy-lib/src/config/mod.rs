@@ -15,7 +15,7 @@ pub use dynamic::{
     HeaderManipulation, HeaderManipulationGroup, Route,
 };
 pub use loader::load_from_path;
-pub use parser::{ConfigFormat, ConfigParser};
+pub use parser::{ConfigFormat, ConfigParser, TomlParser, YamlParser};
 pub use root::{Config, ConfigParts};
 pub use startup::{
     ClientAuth, FingerprintConfig, KeepAliveConfig, ListenConfig, LoggingConfig,

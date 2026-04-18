@@ -2,7 +2,6 @@ use std::io::Write as _;
 use std::sync::Arc;
 
 use arc_swap::ArcSwap;
-use tempfile::NamedTempFile;
 
 use huginn_proxy_lib::{
     initial_client_pool, initial_rate_limiter, try_reload, Config, DynamicConfig, Metrics,
@@ -88,7 +87,7 @@ async fn reload_invalid_toml_keeps_current_config() -> TestResult {
 
     let before = (*shared_dyn.load_full()).clone();
 
-    let tmp = NamedTempFile::new()?;
+    let tmp = tempfile::Builder::new().suffix(".toml").tempfile()?;
     write!(tmp.as_file(), "this is not valid toml !!!! @@@")?;
 
     let reload_mutex = tokio::sync::Mutex::new(());
@@ -117,7 +116,7 @@ async fn drain_removed_backend_replaces_pool() -> TestResult {
 
     let listen_port = free_port()?;
 
-    let initial_toml_file = NamedTempFile::new()?;
+    let initial_toml_file = tempfile::Builder::new().suffix(".toml").tempfile()?;
     write_toml(
         initial_toml_file.path(),
         &toml_with_routes(
@@ -166,7 +165,7 @@ async fn reload_static_change_proceeds_without_crash() -> TestResult {
     let listen_port = free_port()?;
     let different_listen_port = free_port()?;
 
-    let tmp = NamedTempFile::new()?;
+    let tmp = tempfile::Builder::new().suffix(".toml").tempfile()?;
     write_toml(tmp.path(), &toml_single_backend(listen_port, backend_a))?;
 
     let config = huginn_proxy_lib::config::load_from_path(tmp.path())?;
@@ -205,7 +204,7 @@ async fn concurrent_reloads_are_serialized() -> TestResult {
     let (backend_addr, _bh) = spawn_mock_backend("a").await?;
 
     let listen_port = free_port()?;
-    let tmp = NamedTempFile::new()?;
+    let tmp = tempfile::Builder::new().suffix(".toml").tempfile()?;
     write_toml(tmp.path(), &toml_single_backend(listen_port, backend_addr))?;
 
     let config = huginn_proxy_lib::config::load_from_path(tmp.path())?;
@@ -255,7 +254,7 @@ async fn reload_toggles_rate_limiter() -> TestResult {
     let (backend_addr, _bh) = spawn_mock_backend("a").await?;
 
     let listen_port = free_port()?;
-    let tmp = NamedTempFile::new()?;
+    let tmp = tempfile::Builder::new().suffix(".toml").tempfile()?;
 
     write_toml(tmp.path(), &toml_single_backend(listen_port, backend_addr))?;
 

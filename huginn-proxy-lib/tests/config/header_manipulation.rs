@@ -1,6 +1,5 @@
 use huginn_proxy_lib::config::{load_from_path, HeaderManipulation, HeaderManipulationGroup};
 use std::io::Write;
-use tempfile::NamedTempFile;
 
 #[test]
 fn test_header_manipulation_defaults() {
@@ -18,7 +17,7 @@ fn test_header_manipulation_defaults() {
 #[tokio::test]
 async fn test_header_manipulation_only_request_add(
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let mut file = NamedTempFile::new()?;
+    let mut file = tempfile::Builder::new().suffix(".toml").tempfile()?;
     writeln!(
         file,
         r#"
@@ -55,7 +54,7 @@ add = [
 #[tokio::test]
 async fn test_header_manipulation_only_request_remove(
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let mut file = NamedTempFile::new()?;
+    let mut file = tempfile::Builder::new().suffix(".toml").tempfile()?;
     writeln!(
         file,
         r#"
@@ -89,7 +88,7 @@ remove = ["Server", "X-Powered-By"]
 #[tokio::test]
 async fn test_header_manipulation_only_response_add(
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let mut file = NamedTempFile::new()?;
+    let mut file = tempfile::Builder::new().suffix(".toml").tempfile()?;
     writeln!(
         file,
         r#"
@@ -126,7 +125,7 @@ add = [
 #[tokio::test]
 async fn test_header_manipulation_only_response_remove(
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let mut file = NamedTempFile::new()?;
+    let mut file = tempfile::Builder::new().suffix(".toml").tempfile()?;
     writeln!(
         file,
         r#"
@@ -160,7 +159,7 @@ remove = ["Server"]
 #[tokio::test]
 async fn test_header_manipulation_mixed_request_response(
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let mut file = NamedTempFile::new()?;
+    let mut file = tempfile::Builder::new().suffix(".toml").tempfile()?;
     writeln!(
         file,
         r#"
@@ -193,7 +192,7 @@ remove = ["Server"]
 #[tokio::test]
 async fn test_header_manipulation_per_route_defaults(
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let mut file = NamedTempFile::new()?;
+    let mut file = tempfile::Builder::new().suffix(".toml").tempfile()?;
     writeln!(
         file,
         r#"
