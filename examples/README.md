@@ -112,15 +112,15 @@ Alternatively, pull a pre-built image from the registry:
 Use `127.0.0.1` here so the host matches published ports reliably (some systems resolve `localhost` to IPv6 first; the compose example publishes both IPv4 and IPv6, but explicit IPv4 avoids surprises in CI and scripts).
 
 ```bash
-curl -sk https://127.0.0.1:7000/api/test | jq .
+curl -sk https://127.0.0.1:7000/api/test
 curl http://127.0.0.1:9090/metrics | grep huginn_proxy
 ```
 
 To pick a stack explicitly when using a hostname (e.g. `localhost`), curl supports `-4` / `--ipv4` and `-6` / `--ipv6`:
 
 ```bash
-curl -4 -sk https://localhost:7000/api/test | jq .    # IPv4 only
-curl -6 -sk https://localhost:7000/api/test | jq .    # IPv6 only (or https://[::1]:7000/...)
+curl -4 -sk https://localhost:7000/api/test    # IPv4 only
+curl -6 -sk https://localhost:7000/api/test    # IPv6 only (or https://[::1]:7000/...)
 
 curl -4 http://localhost:9090/metrics | grep huginn_proxy
 curl -6 http://localhost:9090/metrics | grep huginn_proxy
@@ -192,8 +192,8 @@ seq 1 150 | xargs -P 50 -I {} curl -sk https://127.0.0.1:7000/api/test 2>&1 \
   | grep "Too Many Requests" | head -1
 
 # Test different endpoints with different limits
-curl -sk https://127.0.0.1:7000/public/test | jq .     # 200 req/s
-curl -sk https://127.0.0.1:7000/premium/test | jq .    # Header-based
+curl -sk https://127.0.0.1:7000/public/test     # 200 req/s
+curl -sk https://127.0.0.1:7000/premium/test    # Header-based
 ```
 
 ### TLS Fingerprinting
