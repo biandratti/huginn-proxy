@@ -1,6 +1,6 @@
 //! Common utilities for browser integration tests
 
-use serde_json::Value;
+use std::collections::HashMap;
 use thirtyfour::prelude::*;
 
 pub const PROXY_URL: &str = "https://localhost:7000";
@@ -30,7 +30,78 @@ pub const FIREFOX_FINGERPRINTS: BrowserFingerprints = BrowserFingerprints {
     tls_ja4: "t13d1717h2_5b57614c22b0_3cbfd9057e0d",
 };
 
-/// Verify Chrome version matches expected version
+// ── response parsing ──────────────────────────────────────────────────────────
+
+/// Parse the plain-text body returned by traefik/whoami.
+///
+/// Whoami echoes the incoming request as:
+/// ```text
+/// Hostname: <name>
+/// IP: …
+/// RemoteAddr: …
+/// GET /path HTTP/1.1
+/// Host: …
+/// Header-Name: value
+/// ```
+///
+/// Returns a map of lowercase header name → value.
+pub fn parse_backend_echo(
+    text: &str,
+) -> Result<HashMap<String, String>, Box<dyn std::error::Error>> {
+    let mut headers = HashMap::new();
+    let mut in_headers = false;
+
+    for line in text.lines() {
+        if !in_headers {
+            let parts: Vec<&str> = line.splitn(3, ' ').collect();
+            if parts.len() == 3
+                && matches!(
+                    parts[0],
+                    "GET" | "POST" | "PUT" | "DELETE" | "HEAD" | "OPTIONS" | "PATCH"
+                )
+                && parts[2].starts_with("HTTP/")
+            {
+                in_headers = true;
+            }
+        } else if let Some((name, value)) = line.split_once(": ") {
+            headers.insert(name.to_lowercase(), value.to_string());
+        }
+    }
+
+    if in_headers {
+        Ok(headers)
+    } else {
+        Err(
+            format!("Failed to parse backend echo — no HTTP request line found. Content: {text}")
+                .into(),
+        )
+    }
+}
+
+pub fn verify_fingerprint_headers(
+    headers: &HashMap<String, String>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    for key in [
+        HEADER_HTTP2_AKAMAI,
+        HEADER_TLS_JA4,
+        HEADER_TLS_JA4_R,
+        HEADER_TLS_JA4_O,
+        HEADER_TLS_JA4_OR,
+    ] {
+        if !headers.contains_key(key) {
+            return Err(format!("Missing {key} header").into());
+        }
+    }
+    Ok(())
+}
+
+pub fn get_http2_fingerprint(headers: &HashMap<String, String>) -> Option<&str> {
+    headers.get(HEADER_HTTP2_AKAMAI).map(|s| s.as_str())
+}
+
+// ── browser helpers ───────────────────────────────────────────────────────────
+
+/// Verify Chrome version (informational — does not fail).
 pub async fn verify_chrome_version(driver: &WebDriver) -> Result<(), Box<dyn std::error::Error>> {
     let user_agent: String = driver
         .execute("return navigator.userAgent;", vec![])
@@ -45,8 +116,7 @@ pub async fn verify_chrome_version(driver: &WebDriver) -> Result<(), Box<dyn std
             let end_pos = version_start
                 .checked_add(version_end)
                 .ok_or("User-Agent parsing: end position overflow")?;
-            let version = &user_agent[version_start..end_pos];
-            println!("Chrome version detected: {}", version);
+            println!("Chrome version detected: {}", &user_agent[version_start..end_pos]);
         }
     }
 
@@ -63,17 +133,16 @@ pub async fn verify_firefox_version(driver: &WebDriver) -> Result<(), Box<dyn st
         let version_start = firefox_start
             .checked_add(8)
             .ok_or("User-Agent parsing: position overflow")?;
-        if let Some(version_end) = user_agent[version_start..].find(' ') {
-            let end_pos = version_start
-                .checked_add(version_end)
-                .ok_or("User-Agent parsing: end position overflow")?;
-            let version = &user_agent[version_start..end_pos];
-            if version != FIREFOX_FINGERPRINTS.version {
-                return Err(format!(
-                    "Firefox version mismatch! Expected: {}, Got: {}. Browser fingerprints are version-specific. Install Firefox {} or update FIREFOX_FINGERPRINTS in lib.rs.",
-                    FIREFOX_FINGERPRINTS.version, version, FIREFOX_FINGERPRINTS.version
-                ).into());
-            }
+        // Firefox UA ends at end-of-string, not a space
+        let version = user_agent[version_start..].trim();
+        if version != FIREFOX_FINGERPRINTS.version {
+            return Err(format!(
+                "Firefox version mismatch! Expected: {}, Got: {}. \
+                 Browser fingerprints are version-specific. \
+                 Install Firefox {} or update FIREFOX_FINGERPRINTS in lib.rs.",
+                FIREFOX_FINGERPRINTS.version, version, FIREFOX_FINGERPRINTS.version
+            )
+            .into());
         }
     } else {
         return Err("Could not detect Firefox version from User-Agent".into());
@@ -82,122 +151,30 @@ pub async fn verify_firefox_version(driver: &WebDriver) -> Result<(), Box<dyn st
     Ok(())
 }
 
+/// Read the page body text from Chrome.
+/// Chrome renders plain-text responses inside a `<pre>` element.
 pub async fn get_chrome_json(driver: &WebDriver) -> Result<String, Box<dyn std::error::Error>> {
     let element = driver.find(By::Tag("pre")).await?;
     Ok(element.text().await?)
 }
 
+/// Read the page body text from Firefox.
+/// Firefox renders plain-text responses inside a `<pre>` element (same as Chrome).
+/// Falls back to the full `<body>` text content if `<pre>` is absent or empty.
 pub async fn get_firefox_json(driver: &WebDriver) -> Result<String, Box<dyn std::error::Error>> {
-    if let Ok(raw_tab) = driver.find(By::Id("rawdata-tab")).await {
-        let _ = raw_tab.click().await;
-    }
-
-    let script = r#"
-        const script = document.getElementById('data');
-        if (script && script.textContent) {
-            return script.textContent.trim();
-        }
-        return null;
-    "#;
-
-    if let Ok(result) = driver.execute(script, vec![]).await {
-        if let Ok(json_str) = result.convert::<String>() {
-            if let Some(json) = json_str.strip_prefix("null") {
-                if !json.trim().is_empty() {
-                    return Ok(json.trim().to_string());
-                }
-            } else if !json_str.is_empty() && json_str != "null" {
-                return Ok(json_str);
-            }
-        }
-    }
-
-    let html = driver.source().await?;
-    if let Some(start) = html.find(r#"<script id="data" type="application/json">"#) {
-        let tag_len = r#"<script id="data" type="application/json">"#.len();
-        let start_pos = start
-            .checked_add(tag_len)
-            .ok_or("HTML parsing: position overflow")?;
-        if let Some(end) = html[start_pos..].find("</script>") {
-            let end_pos = start_pos
-                .checked_add(end)
-                .ok_or("HTML parsing: end position overflow")?;
-            let json_str = html[start_pos..end_pos].trim();
-            if !json_str.is_empty() {
-                return Ok(json_str.to_string());
-            }
-        }
-    }
-
-    if let Ok(panel) = driver.find(By::Id("rawdata-panel")).await {
-        let text = panel.text().await?;
-        if let Some(json_start) = text.find('{') {
-            if let Some(json_end) = text.rfind('}') {
-                let json_str = &text[json_start..=json_end];
-                if serde_json::from_str::<Value>(json_str).is_ok() {
-                    return Ok(json_str.to_string());
-                }
-            }
-        }
-    }
-
     if let Ok(element) = driver.find(By::Tag("pre")).await {
         let text = element.text().await?;
-        if let Some(json_start) = text.find('{') {
-            if let Some(json_end) = text.rfind('}') {
-                let json_str = &text[json_start..=json_end];
-                if serde_json::from_str::<Value>(json_str).is_ok() {
-                    return Ok(json_str.to_string());
-                }
-            }
+        if !text.is_empty() {
+            return Ok(text);
         }
     }
 
-    if let Some(json_start) = html.find('{') {
-        if let Some(json_end) = html.rfind('}') {
-            let json_str = html[json_start..=json_end].trim();
-            if serde_json::from_str::<Value>(json_str).is_ok() {
-                return Ok(json_str.to_string());
-            }
+    if let Ok(element) = driver.find(By::Tag("body")).await {
+        let text = element.text().await?;
+        if !text.is_empty() {
+            return Ok(text);
         }
     }
 
-    Err("Could not extract valid JSON from Firefox viewer".into())
-}
-
-pub fn parse_response(
-    content: &str,
-) -> Result<serde_json::Map<String, Value>, Box<dyn std::error::Error>> {
-    let json: Value = serde_json::from_str(content)
-        .map_err(|e| format!("Failed to parse JSON: {}. Content: {}", e, content))?;
-
-    json["headers"]
-        .as_object()
-        .cloned()
-        .ok_or("Missing headers in response".into())
-}
-
-pub fn verify_fingerprint_headers(
-    headers: &serde_json::Map<String, Value>,
-) -> Result<(), Box<dyn std::error::Error>> {
-    if !headers.contains_key(HEADER_HTTP2_AKAMAI) {
-        return Err(format!("Missing {} header", HEADER_HTTP2_AKAMAI).into());
-    }
-    if !headers.contains_key(HEADER_TLS_JA4) {
-        return Err(format!("Missing {} header", HEADER_TLS_JA4).into());
-    }
-    if !headers.contains_key(HEADER_TLS_JA4_R) {
-        return Err(format!("Missing {} header", HEADER_TLS_JA4_R).into());
-    }
-    if !headers.contains_key(HEADER_TLS_JA4_O) {
-        return Err(format!("Missing {} header", HEADER_TLS_JA4_O).into());
-    }
-    if !headers.contains_key(HEADER_TLS_JA4_OR) {
-        return Err(format!("Missing {} header", HEADER_TLS_JA4_OR).into());
-    }
-    Ok(())
-}
-
-pub fn get_http2_fingerprint(headers: &serde_json::Map<String, Value>) -> Option<&str> {
-    headers.get(HEADER_HTTP2_AKAMAI)?.as_str()
+    Err("Could not extract page text content from Firefox".into())
 }

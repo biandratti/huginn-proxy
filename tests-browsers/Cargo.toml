@@ -10,7 +10,6 @@ name = "tests_browsers"
 path = "src/lib.rs"
 
 [dependencies]
-serde_json.workspace = true
 serial_test.workspace = true
 thirtyfour = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }

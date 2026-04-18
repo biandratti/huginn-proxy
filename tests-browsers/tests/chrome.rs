@@ -22,7 +22,7 @@
 //! ```
 
 use tests_browsers::{
-    get_chrome_json, parse_response, verify_chrome_version, verify_fingerprint_headers,
+    get_chrome_json, parse_backend_echo, verify_chrome_version, verify_fingerprint_headers,
     CHROME_FINGERPRINTS, HEADER_HTTP2_AKAMAI, HEADER_TCP_SYN, HEADER_TLS_JA4, HEADER_TLS_JA4_R,
     PROXY_URL,
 };
@@ -51,32 +51,33 @@ async fn test_chrome_fingerprint() -> Result<(), Box<dyn std::error::Error>> {
         driver.goto(&url).await?;
 
         let content = get_chrome_json(&driver).await?;
-        let headers = parse_response(&content)?;
+        let headers = parse_backend_echo(&content)?;
 
         let http2_fp = headers
             .get(HEADER_HTTP2_AKAMAI)
-            .and_then(|v| v.as_str())
+            .map(|s| s.as_str())
             .ok_or(format!("Missing {} header", HEADER_HTTP2_AKAMAI))?;
 
         assert_eq!(
             http2_fp, CHROME_FINGERPRINTS.http2_akamai,
-            "HTTP/2 fingerprint mismatch. Expected Chrome {} fingerprint: {}. Got: {}. Update CHROME_FINGERPRINTS in lib.rs if Chrome version changed.",
+            "HTTP/2 fingerprint mismatch. Expected Chrome {} fingerprint: {}. Got: {}. \
+             Update CHROME_FINGERPRINTS in lib.rs if Chrome version changed.",
             CHROME_FINGERPRINTS.version, CHROME_FINGERPRINTS.http2_akamai, http2_fp
         );
 
         let ja4_fp = headers
             .get(HEADER_TLS_JA4)
-            .and_then(|v| v.as_str())
+            .map(|s| s.as_str())
             .ok_or(format!("Missing {} header", HEADER_TLS_JA4))?;
 
         let ja4_fp_r = headers
             .get(HEADER_TLS_JA4_R)
-            .and_then(|v| v.as_str())
+            .map(|s| s.as_str())
             .ok_or(format!("Missing {} header", HEADER_TLS_JA4_R))?;
 
         let tcp_syn_fp = headers
             .get(HEADER_TCP_SYN)
-            .and_then(|v| v.as_str())
+            .map(|s| s.as_str())
             .ok_or(format!("Missing {} header on first Chrome navigation", HEADER_TCP_SYN))?;
         assert!(!tcp_syn_fp.is_empty(), "TCP SYN fingerprint should not be empty");
         assert!(
@@ -94,7 +95,8 @@ async fn test_chrome_fingerprint() -> Result<(), Box<dyn std::error::Error>> {
 
         assert_eq!(
             ja4_fp, CHROME_FINGERPRINTS.tls_ja4,
-            "JA4 fingerprint mismatch. Expected Chrome {} fingerprint: {}. Got: {}. Update CHROME_FINGERPRINTS in lib.rs if Chrome version changed.",
+            "JA4 fingerprint mismatch. Expected Chrome {} fingerprint: {}. Got: {}. \
+             Update CHROME_FINGERPRINTS in lib.rs if Chrome version changed.",
             CHROME_FINGERPRINTS.version, CHROME_FINGERPRINTS.tls_ja4, ja4_fp
         );
 
@@ -120,12 +122,12 @@ async fn test_chrome_multiple_requests() -> Result<(), Box<dyn std::error::Error
     })?;
 
     let result = async {
-        for i in 1..=3 {
+        for i in 1..=3_u8 {
             let url = format!("{}/anything?request={}", PROXY_URL, i);
             driver.goto(&url).await?;
 
             let content = get_chrome_json(&driver).await?;
-            let headers = parse_response(&content)?;
+            let headers = parse_backend_echo(&content)?;
             verify_fingerprint_headers(&headers)?;
         }
 

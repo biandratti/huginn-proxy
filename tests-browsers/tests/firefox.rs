@@ -53,7 +53,7 @@
 
 use serial_test::serial;
 use tests_browsers::{
-    get_chrome_json, get_firefox_json, get_http2_fingerprint, parse_response,
+    get_chrome_json, get_firefox_json, get_http2_fingerprint, parse_backend_echo,
     verify_fingerprint_headers, verify_firefox_version, FIREFOX_FINGERPRINTS, HEADER_HTTP2_AKAMAI,
     HEADER_TCP_SYN, HEADER_TLS_JA4, HEADER_TLS_JA4_R, PROXY_URL,
 };
@@ -76,11 +76,11 @@ async fn test_firefox_fingerprint() -> Result<(), Box<dyn std::error::Error>> {
         driver.goto(&url).await?;
 
         let content = get_firefox_json(&driver).await?;
-        let headers = parse_response(&content)?;
+        let headers = parse_backend_echo(&content)?;
 
         let http2_fp = headers
             .get(HEADER_HTTP2_AKAMAI)
-            .and_then(|v| v.as_str())
+            .map(|s| s.as_str())
             .ok_or(format!("Missing {} header", HEADER_HTTP2_AKAMAI))?;
 
         assert!(
@@ -91,20 +91,23 @@ async fn test_firefox_fingerprint() -> Result<(), Box<dyn std::error::Error>> {
 
         let ja4_fp = headers
             .get(HEADER_TLS_JA4)
-            .and_then(|v| v.as_str())
+            .map(|s| s.as_str())
             .ok_or(format!("Missing {} header", HEADER_TLS_JA4))?;
 
         let ja4_fp_r = headers
             .get(HEADER_TLS_JA4_R)
-            .and_then(|v| v.as_str())
+            .map(|s| s.as_str())
             .ok_or(format!("Missing {} header", HEADER_TLS_JA4_R))?;
 
         let tcp_syn_fp = headers
             .get(HEADER_TCP_SYN)
-            .and_then(|v| v.as_str())
+            .map(|s| s.as_str())
             .ok_or(format!("Missing {} header on first Firefox navigation", HEADER_TCP_SYN))?;
         assert!(!tcp_syn_fp.is_empty(), "TCP SYN fingerprint should not be empty");
-        assert!(tcp_syn_fp.starts_with("4:"), "TCP SYN fingerprint should start with '4:' (IPv4)");
+        assert!(
+            tcp_syn_fp.starts_with("4:"),
+            "TCP SYN fingerprint should start with '4:' (IPv4)"
+        );
 
         println!("Firefox fingerprints:");
         println!("  TLS JA4: {}", ja4_fp);
@@ -116,7 +119,8 @@ async fn test_firefox_fingerprint() -> Result<(), Box<dyn std::error::Error>> {
 
         assert_eq!(
             ja4_fp, FIREFOX_FINGERPRINTS.tls_ja4,
-            "JA4 fingerprint mismatch. Expected Firefox {} fingerprint: {}. Got: {}. Update FIREFOX_FINGERPRINTS in lib.rs if Firefox version changed.",
+            "JA4 fingerprint mismatch. Expected Firefox {} fingerprint: {}. Got: {}. \
+             Update FIREFOX_FINGERPRINTS in lib.rs if Firefox version changed.",
             FIREFOX_FINGERPRINTS.version, FIREFOX_FINGERPRINTS.tls_ja4, ja4_fp
         );
 
@@ -138,12 +142,12 @@ async fn test_firefox_multiple_requests() -> Result<(), Box<dyn std::error::Erro
     let driver = WebDriver::new(GECKODRIVER_URL, caps).await?;
 
     let result = async {
-        for i in 1..=3 {
+        for i in 1..=3_u8 {
             let url = format!("{}/anything?request={}", PROXY_URL, i);
             driver.goto(&url).await?;
 
             let content = get_firefox_json(&driver).await?;
-            let headers = parse_response(&content)?;
+            let headers = parse_backend_echo(&content)?;
             verify_fingerprint_headers(&headers)?;
         }
 
@@ -169,9 +173,11 @@ async fn test_firefox_vs_chrome_different_fingerprints() -> Result<(), Box<dyn s
         firefox_driver.goto(&firefox_url).await?;
 
         let firefox_content = get_firefox_json(&firefox_driver).await?;
-        let firefox_headers = parse_response(&firefox_content)?;
-        let firefox_http2 = get_http2_fingerprint(&firefox_headers).unwrap_or("");
-        Ok::<String, Box<dyn std::error::Error>>(firefox_http2.to_string())
+        let firefox_headers = parse_backend_echo(&firefox_content)?;
+        let firefox_http2 = get_http2_fingerprint(&firefox_headers)
+            .unwrap_or("")
+            .to_string();
+        Ok::<String, Box<dyn std::error::Error>>(firefox_http2)
     }
     .await;
 
@@ -200,9 +206,11 @@ async fn test_firefox_vs_chrome_different_fingerprints() -> Result<(), Box<dyn s
         chrome_driver.goto(&chrome_url).await?;
 
         let chrome_content = get_chrome_json(&chrome_driver).await?;
-        let chrome_headers = parse_response(&chrome_content)?;
-        let chrome_http2 = get_http2_fingerprint(&chrome_headers).unwrap_or("");
-        Ok::<String, Box<dyn std::error::Error>>(chrome_http2.to_string())
+        let chrome_headers = parse_backend_echo(&chrome_content)?;
+        let chrome_http2 = get_http2_fingerprint(&chrome_headers)
+            .unwrap_or("")
+            .to_string();
+        Ok::<String, Box<dyn std::error::Error>>(chrome_http2)
     }
     .await;
 

@@ -2854,7 +2854,6 @@ dependencies = [
 name = "tests-browsers"
 version = "0.0.1"
 dependencies = [
- "serde_json",
  "serial_test",
  "thirtyfour",
  "tokio",
