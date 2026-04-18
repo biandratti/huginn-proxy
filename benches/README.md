@@ -230,7 +230,7 @@ Criterion exits with code 0 even when regressions are detected; post-process
 
 Use the same TLS stack as the sustained-load examples: bring up the proxy (and eBPF agent) with Compose, then run k6 from the **repository root**. The URL is **`https://`**: traffic is still **TLS-encrypted**. **`--insecure-skip-tls-verify`** only disables **certificate chain / hostname verification** against the system trust store (needed for the usual self-signed dev certs). It does **not** turn off TLS — same role as `curl -k` or `oha --insecure`. Drop the flag when using a CA-trusted certificate.
 
-The script **checks** that JA4 (and Akamai on HTTP/2) appear in the **backend JSON echo** (header echo), not on the response seen by the k6 client.
+The script **checks** that fingerprint headers (JA4, Akamai, TCP SYN) appear in the **backend echo** (header echo from `traefik/whoami`), not on the response seen by the k6 client.
 
 ```bash
 docker compose -f examples/docker-compose.release-ebpf.yml up --build
@@ -238,7 +238,33 @@ docker compose -f examples/docker-compose.release-ebpf.yml up --build
 k6 run --insecure-skip-tls-verify benches/load/k6/fingerprints.js
 ```
 
-For JA4-only (HTTP/1.1, no Akamai check): `K6_NO_HTTP2=true k6 run --insecure-skip-tls-verify benches/load/k6/fingerprints.js`. Optional SYN header when eBPF has populated maps: `EXPECT_TCP_SYN=true`.
+All fingerprint checks are **on by default**. Disable individual checks with env vars:
+
+| Variable | Description |
+|---|---|
+| `NO_CHECK_JA4=true` | Skip JA4 TLS fingerprint checks (`ja4`, `ja4_r`, `ja4_o`, `ja4_or`) |
+| `NO_CHECK_AKAMAI=true` | Skip Akamai HTTP/2 fingerprint check (auto-skipped when `K6_NO_HTTP2=true`) |
+| `NO_CHECK_TCP_SYN=true` | Skip TCP SYN fingerprint check — use when running without the eBPF agent (`docker-compose.plain.yml`) |
+
+Examples:
+
+```bash
+# Default: 5 VUs / 30s with all fingerprint checks
+k6 run --insecure-skip-tls-verify benches/load/k6/fingerprints.js
+
+# Higher steady load (TCP SYN check → noConnectionReuse → full TLS handshake per request)
+k6 run --env VUS=50 --env DURATION=60s --insecure-skip-tls-verify benches/load/k6/fingerprints.js
+
+# Ramp to saturation: 10 → 50 → 150 → 300 VUs (~3.5 min)
+# Watch http_req_duration and checks_failed to identify where the proxy degrades
+k6 run --env RAMP=true --insecure-skip-tls-verify benches/load/k6/fingerprints.js
+
+# HTTP/1.1 only (Akamai auto-skipped)
+k6 run --env K6_NO_HTTP2=true --insecure-skip-tls-verify benches/load/k6/fingerprints.js
+
+# Without eBPF agent (also re-enables keep-alive for higher throughput)
+k6 run --env NO_CHECK_TCP_SYN=true --insecure-skip-tls-verify benches/load/k6/fingerprints.js
+```
 
 ### CPU / memory (container)
 

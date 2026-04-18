@@ -1,4 +1,6 @@
-use tests_e2e::common::{wait_for_service, DEFAULT_SERVICE_TIMEOUT_SECS, PROXY_HTTPS_URL_IPV4};
+use tests_e2e::common::{
+    parse_backend_echo, wait_for_service, DEFAULT_SERVICE_TIMEOUT_SECS, PROXY_HTTPS_URL_IPV4,
+};
 
 #[tokio::test]
 async fn test_global_header_manipulation() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -21,34 +23,24 @@ async fn test_global_header_manipulation() -> Result<(), Box<dyn std::error::Err
 
     assert_eq!(response.status(), reqwest::StatusCode::OK);
 
-    let body: serde_json::Value = response
-        .json()
-        .await
-        .map_err(|e| format!("Failed to parse response as JSON: {e}"))?;
-
-    let headers = body
-        .get("headers")
-        .and_then(|h| h.as_object())
-        .ok_or("Response should contain headers object")?;
+    let echo = parse_backend_echo(response).await?;
 
     assert!(
-        headers.contains_key("x-proxy-name"),
+        echo.has_header("x-proxy-name"),
         "X-Proxy-Name header should be present (added by global config)"
     );
-    let proxy_name = headers
-        .get("x-proxy-name")
-        .and_then(|v| v.as_str())
-        .ok_or("X-Proxy-Name should be a string")?;
+    let proxy_name = echo
+        .header("x-proxy-name")
+        .ok_or("X-Proxy-Name should be present")?;
     assert_eq!(proxy_name, "huginn-proxy", "X-Proxy-Name should be 'huginn-proxy'");
 
     assert!(
-        headers.contains_key("x-proxy-version"),
+        echo.has_header("x-proxy-version"),
         "X-Proxy-Version header should be present (added by global config)"
     );
-    let proxy_version = headers
-        .get("x-proxy-version")
-        .and_then(|v| v.as_str())
-        .ok_or("X-Proxy-Version should be a string")?;
+    let proxy_version = echo
+        .header("x-proxy-version")
+        .ok_or("X-Proxy-Version should be present")?;
     assert_eq!(proxy_version, "0.0.1", "X-Proxy-Version should be '0.0.1'");
 
     println!("\n✓ Test passed: Global request header manipulation works correctly");
@@ -130,19 +122,12 @@ async fn test_request_header_removal() -> Result<(), Box<dyn std::error::Error +
 
     assert_eq!(response.status(), reqwest::StatusCode::OK);
 
-    let body: serde_json::Value = response
-        .json()
-        .await
-        .map_err(|e| format!("Failed to parse response as JSON: {e}"))?;
-
-    let headers = body
-        .get("headers")
-        .and_then(|h| h.as_object())
-        .ok_or("Response should contain headers object")?;
+    let echo = parse_backend_echo(response).await?;
 
     assert!(
-        !headers.contains_key("x-forwarded-server"),
-        "X-Forwarded-Server should be removed by global config. Headers: {headers:?}"
+        !echo.has_header("x-forwarded-server"),
+        "X-Forwarded-Server should be removed by global config. Headers: {:?}",
+        echo.headers
     );
 
     println!("\n✓ Test passed: Request header removal works correctly");
@@ -174,28 +159,18 @@ async fn test_header_override_behavior() -> Result<(), Box<dyn std::error::Error
 
     assert_eq!(response.status(), reqwest::StatusCode::OK);
 
-    let body: serde_json::Value = response
-        .json()
-        .await
-        .map_err(|e| format!("Failed to parse response as JSON: {e}"))?;
+    let echo = parse_backend_echo(response).await?;
 
-    let headers = body
-        .get("headers")
-        .and_then(|h| h.as_object())
-        .ok_or("Response should contain headers object")?;
-
-    let proxy_name = headers
-        .get("x-proxy-name")
-        .and_then(|v| v.as_str())
+    let proxy_name = echo
+        .header("x-proxy-name")
         .ok_or("X-Proxy-Name should be present")?;
     assert_eq!(
         proxy_name, "huginn-proxy",
         "X-Proxy-Name should be overridden to 'huginn-proxy', not 'fake-proxy'"
     );
 
-    let proxy_version = headers
-        .get("x-proxy-version")
-        .and_then(|v| v.as_str())
+    let proxy_version = echo
+        .header("x-proxy-version")
         .ok_or("X-Proxy-Version should be present")?;
     assert_eq!(
         proxy_version, "0.0.1",
@@ -240,19 +215,12 @@ async fn test_case_insensitive_header_removal(
 
         assert_eq!(response.status(), reqwest::StatusCode::OK);
 
-        let body: serde_json::Value = response
-            .json()
-            .await
-            .map_err(|e| format!("Failed to parse response as JSON: {e}"))?;
-
-        let headers = body
-            .get("headers")
-            .and_then(|h| h.as_object())
-            .ok_or("Response should contain headers object")?;
+        let echo = parse_backend_echo(response).await?;
 
         assert!(
-            !headers.contains_key("x-forwarded-server"),
-            "Header '{header_name}' should be removed (case-insensitive). Headers: {headers:?}"
+            !echo.has_header("x-forwarded-server"),
+            "Header '{header_name}' should be removed (case-insensitive). Headers: {:?}",
+            echo.headers
         );
 
         println!("✓ Header '{header_name}' correctly removed");

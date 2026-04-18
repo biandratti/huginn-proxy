@@ -1,6 +1,7 @@
 //! E2E test helpers and common utilities
 
 use reqwest::Client;
+use std::collections::HashMap;
 
 pub const PROXY_HTTPS_URL_IPV4: &str = "https://127.0.0.1:7000";
 
@@ -14,6 +15,84 @@ pub const DEFAULT_SERVICE_TIMEOUT_SECS: u32 = 60;
 
 /// Default timeout for health check endpoints (in seconds)
 pub const DEFAULT_HEALTH_CHECK_TIMEOUT_SECS: u32 = 30;
+
+/// Parsed backend echo response from traefik/whoami.
+///
+/// Whoami returns a plain-text echo of the incoming request:
+/// ```text
+/// Hostname: <hostname>
+/// IP: 127.0.0.1
+/// RemoteAddr: <addr>
+/// GET /path HTTP/1.1
+/// Host: <backend-host>
+/// X-Some-Header: value
+/// ```
+///
+/// `BackendEcho` extracts the request path and all headers (keys normalised to lowercase).
+#[derive(Debug, Default)]
+pub struct BackendEcho {
+    pub path: String,
+    pub headers: HashMap<String, String>,
+}
+
+impl BackendEcho {
+    /// Parse the plain-text body returned by traefik/whoami.
+    pub fn parse(text: &str) -> Option<Self> {
+        let mut path = None;
+        let mut headers = HashMap::new();
+        let mut in_headers = false;
+
+        for line in text.lines() {
+            if !in_headers {
+                // HTTP request line: METHOD /path HTTP/x.x
+                let parts: Vec<&str> = line.splitn(3, ' ').collect();
+                if parts.len() == 3
+                    && matches!(
+                        parts[0],
+                        "GET" | "POST" | "PUT" | "DELETE" | "HEAD" | "OPTIONS" | "PATCH"
+                    )
+                    && parts[2].starts_with("HTTP/")
+                {
+                    // Strip query string — whoami includes it in the request line
+                    // but the proxy path tests only care about the path component.
+                    let raw = parts[1];
+                    path = Some(
+                        raw.split_once('?')
+                            .map(|(p, _)| p)
+                            .unwrap_or(raw)
+                            .to_string(),
+                    );
+                    in_headers = true;
+                }
+            } else if let Some((name, value)) = line.split_once(": ") {
+                headers.insert(name.to_lowercase(), value.to_string());
+            }
+        }
+
+        path.map(|p| BackendEcho { path: p, headers })
+    }
+
+    /// Case-insensitive header lookup. Returns `None` if the header is absent.
+    pub fn header(&self, name: &str) -> Option<&str> {
+        self.headers.get(&name.to_lowercase()).map(|s| s.as_str())
+    }
+
+    /// Case-insensitive header presence check.
+    pub fn has_header(&self, name: &str) -> bool {
+        self.headers.contains_key(&name.to_lowercase())
+    }
+}
+
+/// Reads a response body as text and parses it as a [`BackendEcho`].
+pub async fn parse_backend_echo(
+    response: reqwest::Response,
+) -> Result<BackendEcho, Box<dyn std::error::Error + Send + Sync>> {
+    let text = response
+        .text()
+        .await
+        .map_err(|e| format!("Failed to read response body: {e}"))?;
+    BackendEcho::parse(&text).ok_or_else(|| "Failed to parse backend echo response".into())
+}
 
 /// Helper to wait for a service to be ready
 ///

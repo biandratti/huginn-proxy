@@ -9,13 +9,12 @@
 
 use huginn_proxy_lib::fingerprinting::names;
 use tests_e2e::common::{
-    wait_for_service, DEFAULT_SERVICE_TIMEOUT_SECS, PROXY_HTTPS_URL_IPV4, PROXY_HTTPS_URL_IPV6,
+    parse_backend_echo, wait_for_service, DEFAULT_SERVICE_TIMEOUT_SECS, PROXY_HTTPS_URL_IPV4,
+    PROXY_HTTPS_URL_IPV6,
 };
 
 // ── impl ──────────────────────────────────────────────────────────────────────
 
-/// Asserts that the TCP SYN fingerprint header is present with the correct IP-version prefix
-/// and field count, and remains injected across a keep-alive second request.
 async fn test_tcp_syn_impl(
     url: &str,
     is_ipv6: bool,
@@ -43,20 +42,15 @@ async fn test_tcp_syn_impl(
         .map_err(|e| format!("Failed to send request: {e}"))?;
     assert_eq!(response.status(), reqwest::StatusCode::OK);
 
-    let body: serde_json::Value = response.json().await?;
-    let headers = body
-        .get("headers")
-        .and_then(|h| h.as_object())
-        .ok_or("Response should contain headers")?;
+    let echo = parse_backend_echo(response).await?;
 
     assert!(
-        headers.contains_key(names::TCP_SYN),
+        echo.has_header(names::TCP_SYN),
         "TCP SYN fingerprint should be present on first request (new TCP connection)"
     );
-    let tcp_fp = headers
-        .get(names::TCP_SYN)
-        .and_then(|v| v.as_str())
-        .ok_or("TCP SYN fingerprint should be a string")?;
+    let tcp_fp = echo
+        .header(names::TCP_SYN)
+        .ok_or("TCP SYN fingerprint should be present")?;
     assert!(!tcp_fp.is_empty(), "TCP SYN fingerprint should not be empty");
 
     // IP-version prefix
@@ -89,18 +83,13 @@ async fn test_tcp_syn_impl(
         .send()
         .await
         .map_err(|e| format!("Failed to send second request: {e}"))?;
-    let body2: serde_json::Value = response2.json().await?;
-    let headers2 = body2
-        .get("headers")
-        .and_then(|h| h.as_object())
-        .ok_or("Second response should contain headers")?;
+    let echo2 = parse_backend_echo(response2).await?;
     assert!(
-        headers2.contains_key(names::TCP_SYN),
+        echo2.has_header(names::TCP_SYN),
         "TCP SYN fingerprint should be present on keep-alive request (same TCP connection)"
     );
-    let tcp_fp2 = headers2
-        .get(names::TCP_SYN)
-        .and_then(|v| v.as_str())
+    let tcp_fp2 = echo2
+        .header(names::TCP_SYN)
         .ok_or("TCP SYN missing in second response")?;
     assert_eq!(
         tcp_fp, tcp_fp2,
@@ -110,8 +99,6 @@ async fn test_tcp_syn_impl(
     Ok(())
 }
 
-/// Asserts that the TCP SYN fingerprint header is absent on the `/static` route (disabled)
-/// and present with the correct IP-version prefix on the `/api` route (enabled).
 async fn test_tcp_syn_per_route_impl(
     url: &str,
     is_ipv6: bool,
@@ -139,13 +126,9 @@ async fn test_tcp_syn_per_route_impl(
         .await
         .map_err(|e| format!("Failed to send request to /static: {e}"))?;
     assert_eq!(response.status(), reqwest::StatusCode::OK);
-    let body: serde_json::Value = response.json().await?;
-    let headers = body
-        .get("headers")
-        .and_then(|h| h.as_object())
-        .ok_or("Response should contain headers")?;
+    let echo = parse_backend_echo(response).await?;
     assert!(
-        !headers.contains_key(names::TCP_SYN),
+        !echo.has_header(names::TCP_SYN),
         "TCP SYN should NOT be present on /static (fingerprinting disabled)"
     );
 
@@ -156,19 +139,14 @@ async fn test_tcp_syn_per_route_impl(
         .await
         .map_err(|e| format!("Failed to send request to /api: {e}"))?;
     assert_eq!(response2.status(), reqwest::StatusCode::OK);
-    let body2: serde_json::Value = response2.json().await?;
-    let headers2 = body2
-        .get("headers")
-        .and_then(|h| h.as_object())
-        .ok_or("/api response should contain headers")?;
+    let echo2 = parse_backend_echo(response2).await?;
     assert!(
-        headers2.contains_key(names::TCP_SYN),
+        echo2.has_header(names::TCP_SYN),
         "TCP SYN should be present on /api (fingerprinting enabled)"
     );
-    let tcp_fp = headers2
-        .get(names::TCP_SYN)
-        .and_then(|v| v.as_str())
-        .ok_or("TCP SYN fingerprint should be a string")?;
+    let tcp_fp = echo2
+        .header(names::TCP_SYN)
+        .ok_or("TCP SYN fingerprint should be present")?;
     if is_ipv6 {
         assert!(
             tcp_fp.starts_with("6:"),

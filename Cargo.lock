@@ -232,21 +232,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "backend"
-version = "0.1.0"
-dependencies = [
- "bytes",
- "http-body-util",
- "hyper",
- "hyper-util",
- "serde",
- "serde_json",
- "tokio",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
 name = "base64"
 version = "0.22.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -271,16 +256,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cdd35008169921d80bc60d3d0ab416eecb028c4cd653352907921d95084790be"
 dependencies = [
  "hybrid-array",
-]
-
-[[package]]
-name = "bpf-test"
-version = "0.0.1"
-dependencies = [
- "aya",
- "huginn-ebpf",
- "tracing",
- "tracing-subscriber",
 ]
 
 [[package]]
@@ -2879,7 +2854,6 @@ dependencies = [
 name = "tests-browsers"
 version = "0.0.1"
 dependencies = [
- "serde_json",
  "serial_test",
  "thirtyfour",
  "tokio",
@@ -2891,7 +2865,6 @@ version = "0.0.1"
 dependencies = [
  "huginn-proxy-lib",
  "reqwest 0.13.2",
- "serde_json",
  "tokio",
 ]
 

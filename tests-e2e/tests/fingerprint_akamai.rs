@@ -8,15 +8,14 @@
 
 use huginn_proxy_lib::fingerprinting::names;
 use tests_e2e::common::{
-    wait_for_service, DEFAULT_SERVICE_TIMEOUT_SECS, PROXY_HTTPS_URL_IPV4, PROXY_HTTPS_URL_IPV6,
+    parse_backend_echo, wait_for_service, DEFAULT_SERVICE_TIMEOUT_SECS, PROXY_HTTPS_URL_IPV4,
+    PROXY_HTTPS_URL_IPV6,
 };
 
 const EXPECTED_AKAMAI: &str = "2:0;4:2097152;5:16384;6:16384|5177345|0|m,s,a,p";
 
 // ── impl ──────────────────────────────────────────────────────────────────────
 
-/// Asserts that the Akamai fingerprint header is present with the exact expected value
-/// and is stable across a keep-alive second request (HTTP/2 connection).
 async fn test_akamai_present_impl(
     url: &str,
     is_ipv6: bool,
@@ -39,20 +38,15 @@ async fn test_akamai_present_impl(
         .map_err(|e| format!("Failed to send HTTP/2 request: {e}"))?;
     assert_eq!(response.status(), reqwest::StatusCode::OK);
 
-    let body: serde_json::Value = response.json().await?;
-    let headers = body
-        .get("headers")
-        .and_then(|h| h.as_object())
-        .ok_or("Response should contain headers")?;
+    let echo = parse_backend_echo(response).await?;
 
     assert!(
-        headers.contains_key(names::HTTP2_AKAMAI),
+        echo.has_header(names::HTTP2_AKAMAI),
         "Akamai fingerprint should be present for HTTP/2 connection"
     );
-    let akamai_fp = headers
-        .get(names::HTTP2_AKAMAI)
-        .and_then(|v| v.as_str())
-        .ok_or("Akamai fingerprint should be a string")?;
+    let akamai_fp = echo
+        .header(names::HTTP2_AKAMAI)
+        .ok_or("Akamai fingerprint should be present")?;
     assert!(!akamai_fp.is_empty(), "Akamai fingerprint should not be empty");
     assert!(akamai_fp.contains('|'), "Akamai fingerprint should contain pipe separator");
     assert_eq!(akamai_fp, EXPECTED_AKAMAI, "Akamai fingerprint should match expected value");
@@ -66,14 +60,9 @@ async fn test_akamai_present_impl(
         .send()
         .await
         .map_err(|e| format!("Failed to send second HTTP/2 request: {e}"))?;
-    let body2: serde_json::Value = response2.json().await?;
-    let headers2 = body2
-        .get("headers")
-        .and_then(|h| h.as_object())
-        .ok_or("Second response should contain headers")?;
-    let akamai_fp2 = headers2
-        .get(names::HTTP2_AKAMAI)
-        .and_then(|v| v.as_str())
+    let echo2 = parse_backend_echo(response2).await?;
+    let akamai_fp2 = echo2
+        .header(names::HTTP2_AKAMAI)
         .ok_or("Akamai fingerprint missing in second response")?;
     assert_eq!(akamai_fp, akamai_fp2, "Akamai fingerprint must be consistent across requests");
     assert_eq!(akamai_fp2, EXPECTED_AKAMAI, "Second request Akamai must match expected value");
@@ -81,8 +70,6 @@ async fn test_akamai_present_impl(
     Ok(())
 }
 
-/// Asserts that the Akamai fingerprint header is **absent** for HTTP/1.1 connections —
-/// there are no HTTP/2 frames to fingerprint.
 async fn test_akamai_absent_impl(
     url: &str,
     is_ipv6: bool,
@@ -105,14 +92,10 @@ async fn test_akamai_absent_impl(
         .map_err(|e| format!("Failed to send HTTP/1.1 request: {e}"))?;
     assert_eq!(response.status(), reqwest::StatusCode::OK);
 
-    let body: serde_json::Value = response.json().await?;
-    let headers = body
-        .get("headers")
-        .and_then(|h| h.as_object())
-        .ok_or("Response should contain headers")?;
+    let echo = parse_backend_echo(response).await?;
 
     assert!(
-        !headers.contains_key(names::HTTP2_AKAMAI),
+        !echo.has_header(names::HTTP2_AKAMAI),
         "Akamai fingerprint should NOT be present for HTTP/1.1 connection"
     );
 
@@ -122,8 +105,6 @@ async fn test_akamai_absent_impl(
     Ok(())
 }
 
-/// Asserts that the Akamai fingerprint header is absent on the `/static` route (disabled)
-/// and present on the `/api` route (enabled), using HTTP/2.
 async fn test_akamai_per_route_impl(
     url: &str,
     is_ipv6: bool,
@@ -146,13 +127,9 @@ async fn test_akamai_per_route_impl(
         .await
         .map_err(|e| format!("Failed to send request to /static: {e}"))?;
     assert_eq!(response.status(), reqwest::StatusCode::OK);
-    let body: serde_json::Value = response.json().await?;
-    let headers = body
-        .get("headers")
-        .and_then(|h| h.as_object())
-        .ok_or("Response should contain headers")?;
+    let echo = parse_backend_echo(response).await?;
     assert!(
-        !headers.contains_key(names::HTTP2_AKAMAI),
+        !echo.has_header(names::HTTP2_AKAMAI),
         "Akamai should NOT be present on /static (fingerprinting disabled)"
     );
 
@@ -163,19 +140,14 @@ async fn test_akamai_per_route_impl(
         .await
         .map_err(|e| format!("Failed to send request to /api: {e}"))?;
     assert_eq!(response2.status(), reqwest::StatusCode::OK);
-    let body2: serde_json::Value = response2.json().await?;
-    let headers2 = body2
-        .get("headers")
-        .and_then(|h| h.as_object())
-        .ok_or("/api response should contain headers")?;
+    let echo2 = parse_backend_echo(response2).await?;
     assert!(
-        headers2.contains_key(names::HTTP2_AKAMAI),
+        echo2.has_header(names::HTTP2_AKAMAI),
         "Akamai should be present on /api (fingerprinting enabled)"
     );
-    let akamai_fp = headers2
-        .get(names::HTTP2_AKAMAI)
-        .and_then(|v| v.as_str())
-        .ok_or("Akamai fingerprint should be a string")?;
+    let akamai_fp = echo2
+        .header(names::HTTP2_AKAMAI)
+        .ok_or("Akamai fingerprint should be present")?;
     assert_eq!(akamai_fp, EXPECTED_AKAMAI, "Akamai on /api must match expected value");
 
     let ip_ver = if is_ipv6 { "IPv6" } else { "IPv4" };

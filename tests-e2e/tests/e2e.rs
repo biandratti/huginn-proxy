@@ -2,7 +2,6 @@
 //!
 //! These tests require Docker and Docker Compose to be available.
 //! They use the Docker Compose configuration from `examples/docker-compose.yml`
-//! which includes the proxy and backend services (using `examples/backend/Dockerfile`).
 //!
 //! To run these tests:
 //! 1. Start Docker Compose: `cd examples && docker compose up -d --build`

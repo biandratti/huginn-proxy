@@ -16,11 +16,6 @@ use crate::XdpMode;
 /// `include_bytes_aligned!` ensures 8-byte alignment required by aya's ELF parser.
 static XDP_BPF_BYTES: &[u8] = aya::include_bytes_aligned!(concat!(env!("OUT_DIR"), "/xdp.bpf.o"));
 
-/// For dev/diagnostics only (e.g. workspace example `examples/bpf_test`).
-pub(crate) fn bpf_object_bytes() -> &'static [u8] {
-    XDP_BPF_BYTES
-}
-
 /// Default max entries for the TCP SYN LRU map when not overridden by the agent.
 /// Must match huginn-ebpf-xdp's TCP_SYN_MAP_V4_MAX_ENTRIES (ELF default).
 pub const DEFAULT_SYN_MAP_MAX_ENTRIES: u32 = 8192;

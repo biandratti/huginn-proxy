@@ -1,5 +1,6 @@
 use tests_e2e::common::{
-    wait_for_service, DEFAULT_SERVICE_TIMEOUT_SECS, PROXY_HTTPS_URL_IPV4, PROXY_HTTPS_URL_IPV6,
+    parse_backend_echo, wait_for_service, DEFAULT_SERVICE_TIMEOUT_SECS, PROXY_HTTPS_URL_IPV4,
+    PROXY_HTTPS_URL_IPV6,
 };
 
 async fn test_proxy_forwarding_impl(
@@ -19,12 +20,9 @@ async fn test_proxy_forwarding_impl(
         .await
         .map_err(|e| format!("Failed to send request: {e}"))?;
     assert_eq!(response.status(), reqwest::StatusCode::OK);
-    let body: serde_json::Value = response
-        .json()
-        .await
-        .map_err(|e| format!("Failed to parse response as JSON: {e}"))?;
-    assert!(body.get("path").is_some());
-    assert!(body.get("headers").is_some());
+    let echo = parse_backend_echo(response).await?;
+    assert!(!echo.path.is_empty());
+    assert!(!echo.headers.is_empty());
     Ok(())
 }
 

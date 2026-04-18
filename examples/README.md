@@ -84,18 +84,22 @@ chmod 644 examples/certs/server.key examples/certs/server.crt
 
 ### 2. Start Services
 
-Two compose files are provided depending on your environment:
+Pick **one** stack. Both give you **JA4** (and related TLS/JA4H-style signals) and **Akamai-style** HTTP fingerprinting from the proxy. The only fork is whether you also run **TCP SYN** capture via **eBPF/XDP**.
 
-| Compose file | Dockerfile | Requirements |
+| | **Full stack** (`docker-compose.yml`) | **Plain stack** (`docker-compose.plain.yml`) |
 |---|---|---|
-| `docker-compose.yml` | `docker/proxy.Dockerfile` (target: ebpf) + `docker/ebpf-agent.Dockerfile` | Linux kernel ≥ 5.11, `cap_add` granted by Docker |
-| `docker-compose.plain.yml` | `docker/proxy.Dockerfile` (target: plain) | Any Linux kernel, no extra capabilities |
+| **Fingerprints** | JA4 + Akamai + **TCP SYN** (kernel) | JA4 + Akamai **only** (no TCP SYN) |
+| **Images built from this repo** | **Two:** `proxy` (Dockerfile target `ebpf`) + `ebpf-agent` | **One:** `proxy` (Dockerfile target `plain`) |
+| **Extra volume** | **`bpffs`** — shared BPF filesystem for maps between proxy and agent | None |
+| **Host requirements** | Linux kernel ≥ 5.11, Docker grants `cap_add` (see compose) | Any recent Linux kernel, no BPF caps |
+
+Both files also start the same **demo backends** (`traefik/whoami`) — that is unrelated to the choice above.
 
 ```bash
-# With eBPF/XDP TCP SYN fingerprinting (Linux kernel ≥ 5.11)
+# JA4 + Akamai + TCP SYN — two images + bpffs volume (kernel ≥ 5.11)
 docker compose -f examples/docker-compose.yml up --build
 
-# Without eBPF (any kernel, simpler setup)
+# JA4 + Akamai — single proxy image, no eBPF agent or bpffs volume
 docker compose -f examples/docker-compose.plain.yml up --build
 ```
 
@@ -112,15 +116,15 @@ Alternatively, pull a pre-built image from the registry:
 Use `127.0.0.1` here so the host matches published ports reliably (some systems resolve `localhost` to IPv6 first; the compose example publishes both IPv4 and IPv6, but explicit IPv4 avoids surprises in CI and scripts).
 
 ```bash
-curl -sk https://127.0.0.1:7000/api/test | jq .
+curl -sk https://127.0.0.1:7000/api/test
 curl http://127.0.0.1:9090/metrics | grep huginn_proxy
 ```
 
 To pick a stack explicitly when using a hostname (e.g. `localhost`), curl supports `-4` / `--ipv4` and `-6` / `--ipv6`:
 
 ```bash
-curl -4 -sk https://localhost:7000/api/test | jq .    # IPv4 only
-curl -6 -sk https://localhost:7000/api/test | jq .    # IPv6 only (or https://[::1]:7000/...)
+curl -4 -sk https://localhost:7000/api/test    # IPv4 only
+curl -6 -sk https://localhost:7000/api/test    # IPv6 only (or https://[::1]:7000/...)
 
 curl -4 http://localhost:9090/metrics | grep huginn_proxy
 curl -6 http://localhost:9090/metrics | grep huginn_proxy
@@ -192,8 +196,8 @@ seq 1 150 | xargs -P 50 -I {} curl -sk https://127.0.0.1:7000/api/test 2>&1 \
   | grep "Too Many Requests" | head -1
 
 # Test different endpoints with different limits
-curl -sk https://127.0.0.1:7000/public/test | jq .     # 200 req/s
-curl -sk https://127.0.0.1:7000/premium/test | jq .    # Header-based
+curl -sk https://127.0.0.1:7000/public/test     # 200 req/s
+curl -sk https://127.0.0.1:7000/premium/test    # Header-based
 ```
 
 ### TLS Fingerprinting
