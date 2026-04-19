@@ -41,7 +41,7 @@ Do **not** duplicate certificate recipes here — they drift easily. Follow **[`
 
 **Reference file (pre-built GHCR images):** [`examples/docker-compose.release-ebpf.yml`](https://github.com/biandratti/huginn-proxy/blob/master/examples/docker-compose.release-ebpf.yml)
 
-The proxy command passes the config file (e.g. `/config/compose.toml`); ensure **`fingerprint.tcp_enabled`** and the rest of the stack match what this layout provides.
+**Proxy `command` and `environment`:** the first CLI argument is the config path — **`compose.toml`** or **`compose.yaml`** (or any name); TOML vs YAML follows the **file extension**. Typical **`environment`** entries in that Compose file: **`HUGINN_EBPF_PIN_PATH`** and **`HUGINN_EBPF_SYN_MAP_MAX_ENTRIES`** (must match the agent), optional **`HUGINN_WATCH`** / **`HUGINN_WATCH_DELAY_SECS`** for reload-on-change. See [Configuration overview — Environment variables](/huginn-proxy/docs/configuration/#environment-variables) and [eBPF TCP setup](/huginn-proxy/docs/ebpf-setup/#environment-variables). Ensure **`fingerprint.tcp_enabled`** matches this stack.
 
 ```bash
 git clone https://github.com/biandratti/huginn-proxy.git
@@ -69,7 +69,7 @@ Pin **`:latest`** to **`:vX.Y.Z`** on **all** `huginn-proxy*` images from the sa
 
 **Reference file (pull from registry):** [`examples/docker-compose.release.yml`](https://github.com/biandratti/huginn-proxy/blob/master/examples/docker-compose.release.yml)
 
-It mounts config and certs like the eBPF release file; set `HUGINN_CONFIG_PATH` / volumes to match **`compose.toml`** or **`compose.yaml`** as you prefer.
+It mounts config and certs like the eBPF release file. Pass the config via **`command`** (first arg) and/or **`HUGINN_CONFIG_PATH`**; **`.yaml` / `.yml` vs `.toml`** is determined by the path extension. Optional **`HUGINN_WATCH`** / **`HUGINN_WATCH_DELAY_SECS`**: [Environment variables](/huginn-proxy/docs/configuration/#environment-variables). No **`HUGINN_EBPF_*`** vars on the plain image unless you mistakenly mix layouts.
 
 ```bash
 git clone https://github.com/biandratti/huginn-proxy.git

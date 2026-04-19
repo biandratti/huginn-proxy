@@ -22,6 +22,19 @@ huginn-proxy --validate config.yaml
 
 **Hot reload:** dynamic sections update on `SIGHUP` or a file-watcher trigger without dropping connections. Static sections require a process restart — changes are logged as a warning and ignored. See the [SETTINGS.md](https://github.com/biandratti/huginn-proxy/blob/master/SETTINGS.md) reference on GitHub for the static/dynamic split per section.
 
+## Environment variables
+
+These apply to the **`huginn-proxy`** process. They do **not** change how TOML vs YAML is detected: that is always from the **config file path** you pass (positional argument or `HUGINN_CONFIG_PATH`) — extension `.yaml` / `.yml` → YAML, `.toml` or other → TOML.
+
+| Variable | Role |
+| --- | --- |
+| `HUGINN_CONFIG_PATH` | Path to the config file when you do **not** pass it as the sole CLI argument (equivalent to `huginn-proxy /path/to/config`). |
+| `HUGINN_WATCH` | Set to `true` to enable a **file watcher** so config (and other reloadable files, e.g. TLS PEMs) can refresh without sending `SIGHUP`. |
+| `HUGINN_WATCH_DELAY_SECS` | Debounce delay in **seconds** after a file change before reload (avoids thrashing on editors that rewrite often). |
+| `RUST_LOG` | Overrides log filtering at the Rust tracing layer; can override `[logging].level` — see [Logging](/huginn-proxy/docs/logging/). |
+
+**eBPF (TCP SYN path):** when the proxy uses pinned BPF maps, it also reads **`HUGINN_EBPF_PIN_PATH`** and **`HUGINN_EBPF_SYN_MAP_MAX_ENTRIES`** — they must match the agent. Documented in [eBPF TCP setup](/huginn-proxy/docs/ebpf-setup/#environment-variables).
+
 Canonical field tables and copy-paste snippets: **[SETTINGS.md](https://github.com/biandratti/huginn-proxy/blob/master/SETTINGS.md)** (same content as the shipped reference in the repo).
 
 Use the pages below for narrative, behavior, and examples alongside the reference.
