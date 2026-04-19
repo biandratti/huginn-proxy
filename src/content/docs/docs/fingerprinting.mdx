@@ -5,11 +5,13 @@ sidebar:
   order: 6
 ---
 
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
 Huginn Proxy passively extracts fingerprints and forwards them as request headers. Analysis and blocking decisions belong on the backend.
 
 For a full feature overview (protocols, limitations, metrics), see [Features](https://github.com/biandratti/huginn-proxy/blob/master/FEATURES.md) on GitHub.
 
-Global toggles live under **`[fingerprint]`**. Per-route control uses **`fingerprinting`** on each route (TLS + HTTP/2 only; TCP SYN stays global).
+Global toggles live under **`[fingerprint]`** (**static**). Per-route control uses **`fingerprinting`** on each route (TLS + HTTP/2 only; TCP SYN stays global).
 
 ## TLS [JA4]
 
@@ -26,11 +28,25 @@ TLS fingerprints are usually **once per TLS session**. For debugging per-connect
 
 **Enable or disable globally** with `tls_enabled`:
 
+<Tabs syncKey="huginn-config">
+  <TabItem label="YAML">
+
+```yaml
+fingerprint:
+  tls_enabled: true
+```
+
+  </TabItem>
+  <TabItem label="TOML">
+
 ```toml
 [fingerprint]
 tls_enabled = true   # default: inject JA4 headers when TLS is used
 # tls_enabled = false  # no TLS fingerprint headers on any route
 ```
+
+  </TabItem>
+</Tabs>
 
 **Per route:** use `fingerprinting` on the route (see [Per-route](#per-route-toggle)); it turns **TLS and HTTP/2** fingerprint headers on or off together for that prefix.
 
@@ -40,11 +56,25 @@ On HTTP/2 connections only, a compact signature is emitted as `x-huginn-net-akam
 
 **Enable or disable globally** with `http_enabled`:
 
+<Tabs syncKey="huginn-config">
+  <TabItem label="YAML">
+
+```yaml
+fingerprint:
+  http_enabled: true
+```
+
+  </TabItem>
+  <TabItem label="TOML">
+
 ```toml
 [fingerprint]
 http_enabled = true   # default: Akamai header on h2 when fingerprinting is on
 # http_enabled = false  # no HTTP/2 fingerprint header on any route
 ```
+
+  </TabItem>
+</Tabs>
 
 If `tls_enabled` or `http_enabled` is `false`, the corresponding headers are not injected. Per-route `fingerprinting` applies to **both** TLS and HTTP/2 fingerprints for that route.
 
@@ -54,11 +84,25 @@ When built with `ebpf-tcp`, `tcp_enabled = true`, and the [eBPF agent](/huginn-p
 
 **Enable or disable globally.** There is **no per-route** TCP SYN toggle:
 
+<Tabs syncKey="huginn-config">
+  <TabItem label="YAML">
+
+```yaml
+fingerprint:
+  tcp_enabled: true
+```
+
+  </TabItem>
+  <TabItem label="TOML">
+
 ```toml
 [fingerprint]
 tcp_enabled = true
 # tcp_enabled = false   # no x-huginn-net-tcp; proxy still runs without eBPF TCP path
 ```
+
+  </TabItem>
+</Tabs>
 
 **Constraints**
 
@@ -71,19 +115,63 @@ tcp_enabled = true
 
 Example: fingerprints on `/api`, but not on `/static`:
 
+<Tabs syncKey="huginn-config">
+  <TabItem label="YAML">
+
+```yaml
+routes:
+  - prefix: "/api"
+    backend: "api:9000"
+    fingerprinting: true
+  - prefix: "/static"
+    backend: "cdn:9000"
+    fingerprinting: false
+
+fingerprint:
+  tls_enabled: true
+  http_enabled: true
+  tcp_enabled: true
+  max_capture: 65536
+```
+
+  </TabItem>
+  <TabItem label="TOML">
+
 ```toml
-routes = [
-    { prefix = "/api", backend = "api:9000", fingerprinting = true },
-    { prefix = "/static", backend = "cdn:9000", fingerprinting = false },
-]
+[[routes]]
+prefix = "/api"
+backend = "api:9000"
+fingerprinting = true
+
+[[routes]]
+prefix = "/static"
+backend = "cdn:9000"
+fingerprinting = false
 
 [fingerprint]
 tls_enabled = true
 http_enabled = true
 tcp_enabled = true   # still applies to all routes when eBPF is available
+max_capture = 65536
 ```
 
+  </TabItem>
+</Tabs>
+
 Example: disable TLS + HTTP/2 fingerprints everywhere via config, but keep the section for documentation:
+
+<Tabs syncKey="huginn-config">
+  <TabItem label="YAML">
+
+```yaml
+fingerprint:
+  tls_enabled: false
+  http_enabled: false
+  tcp_enabled: true
+```
+
+  </TabItem>
+  <TabItem label="TOML">
 
 ```toml
 [fingerprint]
@@ -91,5 +179,8 @@ tls_enabled = false
 http_enabled = false
 tcp_enabled = true   # only TCP SYN headers (if eBPF build + agent)
 ```
+
+  </TabItem>
+</Tabs>
 
 See [Configuration overview](/huginn-proxy/docs/configuration/) for where `[fingerprint]` sits in the file; fields include `max_capture` (HTTP/2 capture cap).

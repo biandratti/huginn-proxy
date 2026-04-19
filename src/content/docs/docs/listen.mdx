@@ -1,0 +1,42 @@
+---
+title: Listen
+description: Bind addresses and TCP backlog. Beta.
+sidebar:
+  order: 2
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+The **`[listen]`** section controls where the proxy accepts client connections. **Static** — changing it requires a process restart.
+
+## Fields
+
+- **`addrs`:** list of socket addresses (IPv4 and/or IPv6), for example `0.0.0.0:7000` and `[::]:7000` for dual-stack.
+- **`tcp_backlog`:** listen queue depth (default **`4096`**).
+
+## Example
+
+<Tabs syncKey="huginn-config">
+  <TabItem label="YAML">
+
+```yaml
+listen:
+  addrs:
+    - "0.0.0.0:7000"
+    - "[::]:7000"
+  # tcp_backlog: 4096
+```
+
+  </TabItem>
+  <TabItem label="TOML">
+
+```toml
+[listen]
+addrs = ["0.0.0.0:7000", "[::]:7000"]
+# tcp_backlog = 4096
+```
+
+  </TabItem>
+</Tabs>
+
+See [Configuration overview](/huginn-proxy/docs/configuration/) for the full config layout.

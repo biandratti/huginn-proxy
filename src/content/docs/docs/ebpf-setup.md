@@ -40,9 +40,18 @@ These must be **consistent** between agent and proxy where shared (pin path, map
 | `HUGINN_EBPF_DST_IP_V6` | IPv6 counterpart (e.g. `::` for any). |
 | `HUGINN_EBPF_SYN_MAP_MAX_ENTRIES` | BPF map capacity for SYN entries; **same** on agent and proxy. |
 | `HUGINN_EBPF_XDP_MODE` | XDP attach mode (e.g. `skb` vs `native` / driver-dependent; see agent docs in repo). |
-| `HUGINN_EBPF_METRICS_ADDR` / `HUGINN_EBPF_METRICS_PORT` | Where the **agent** binds its HTTP health/metrics (often `127.0.0.1` inside the proxy netns; publish `9091` on the proxy service if you scrape from the host). |
+| `HUGINN_EBPF_METRICS_ADDR` / `HUGINN_EBPF_METRICS_PORT` | Where the **agent** binds its HTTP server for `/metrics`, `/health`, `/ready`, `/live`. See [Agent metrics bind address](#agent-metrics-bind-address) below. |
 
 Full stack layout (Compose, caps, volumes) is maintained in [`examples/docker-compose.yml`](https://github.com/biandratti/huginn-proxy/blob/master/examples/docker-compose.yml); **do not treat this table as a second source of truth** if the repo changes defaults.
+
+### Agent metrics bind address
+
+| `HUGINN_EBPF_METRICS_ADDR` | Listens on | Scrape / curl from |
+| --- | --- | --- |
+| **`127.0.0.1`** | Loopback in the agent netns only | Same netns, or host `127.0.0.1:$PORT` when the port is published. |
+| **`0.0.0.0`** | All interfaces in that netns | Host or pod **IP** (+ port) when scraping **remotely**—not `127.0.0.1` from another machine. |
+
+See [`docker-compose.release-ebpf.yml`](https://github.com/biandratti/huginn-proxy/blob/master/examples/docker-compose.release-ebpf.yml) for a Compose example using `0.0.0.0`.
 
 ## Docker Compose specifics
 
@@ -50,7 +59,7 @@ Full stack layout (Compose, caps, volumes) is maintained in [`examples/docker-co
 - **`bpffs`** must be mounted into **both** containers at `/sys/fs/bpf` (or adjust paths consistently).
 - **Health:** agent `/ready` should succeed when maps are pinned; proxy `/health` on `telemetry.metrics_port` is separate.
 
-See [Docker Compose](/huginn-proxy/docs/deployment/) for the Compose file index and clone/run flow, and [Artifacts](/huginn-proxy/docs/artifacts/) for GHCR image names.
+See [Containers](/huginn-proxy/docs/containers/) for the two Compose layouts (eBPF vs plain) and clone/run flow, and [Artifacts](/huginn-proxy/docs/artifacts/) for GHCR image names.
 
 ## Kubernetes networking
 

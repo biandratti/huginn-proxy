@@ -1,0 +1,205 @@
+---
+title: Routes
+description: preserve_host, prefix matching, path strip/rewrite, and backend connection reuse. Beta.
+sidebar:
+  order: 4
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+Each route maps a **URL prefix** to a **backend** `address` (defined under [`backends`](/huginn-proxy/docs/backends/)). Optional fields control fingerprint headers, rate limits, path rewrites, and connection pooling. **Dynamic** — hot-reloadable.
+
+## Preserve host
+
+Top-level boolean (not inside `[[routes]]`). When **`true`**, the original client **`Host`** header is forwarded to the upstream; when **`false`**, the proxy substitutes **`Host`** with the backend address.
+
+<Tabs syncKey="huginn-config">
+  <TabItem label="YAML">
+
+```yaml
+preserve_host: false
+```
+
+  </TabItem>
+  <TabItem label="TOML">
+
+```toml
+preserve_host = false
+```
+
+  </TabItem>
+</Tabs>
+
+## Prefix matching
+
+Routes are matched by **URL prefix**. **First match wins:** declare more specific prefixes before general ones (for example `/api` and `/api/v2` before `/`).
+
+**Example (order matters):**
+
+<Tabs syncKey="huginn-config">
+  <TabItem label="YAML">
+
+```yaml
+routes:
+  - prefix: "/api/v2"
+    backend: "backend-a:9000"
+  - prefix: "/api"
+    backend: "backend-b:9000"
+  - prefix: "/"
+    backend: "backend-b:9000"
+```
+
+  </TabItem>
+  <TabItem label="TOML">
+
+```toml
+[[routes]]
+prefix = "/api/v2"
+backend = "backend-a:9000"
+
+[[routes]]
+prefix = "/api"
+backend = "backend-b:9000"
+
+[[routes]]
+prefix = "/"
+backend = "backend-b:9000"
+```
+
+  </TabItem>
+</Tabs>
+
+A request to `/api/v2/health` matches `/api/v2`, not `/api`.
+
+## Path manipulation
+
+Per route you can:
+
+- Forward the path unchanged (omit `replace_path`)
+- **Strip** the matched prefix so the backend sees a shorter path (`replace_path = ""`)
+- **Rewrite** the prefix to a different prefix (`replace_path = "/new/..."`). Query strings are preserved.
+
+There is **no regular-expression** routing, only prefix matching.
+
+**Strip:** request `/strip/users` → backend receives `/users`:
+
+<Tabs syncKey="huginn-config">
+  <TabItem label="YAML">
+
+```yaml
+routes:
+  - prefix: "/strip"
+    backend: "backend-a:9000"
+    replace_path: ""
+```
+
+  </TabItem>
+  <TabItem label="TOML">
+
+```toml
+[[routes]]
+prefix = "/strip"
+backend = "backend-a:9000"
+replace_path = ""
+```
+
+  </TabItem>
+</Tabs>
+
+**Rewrite:** request `/old/data` → backend receives `/new/data`:
+
+<Tabs syncKey="huginn-config">
+  <TabItem label="YAML">
+
+```yaml
+routes:
+  - prefix: "/old"
+    backend: "backend-b:9000"
+    replace_path: "/new"
+```
+
+  </TabItem>
+  <TabItem label="TOML">
+
+```toml
+[[routes]]
+prefix = "/old"
+backend = "backend-b:9000"
+replace_path = "/new"
+```
+
+  </TabItem>
+</Tabs>
+
+**Rewrite to a versioned API:** request `/v1/endpoint` → backend receives `/api/v1/endpoint`:
+
+<Tabs syncKey="huginn-config">
+  <TabItem label="YAML">
+
+```yaml
+routes:
+  - prefix: "/v1"
+    backend: "backend-a:9000"
+    replace_path: "/api/v1"
+```
+
+  </TabItem>
+  <TabItem label="TOML">
+
+```toml
+[[routes]]
+prefix = "/v1"
+backend = "backend-a:9000"
+replace_path = "/api/v1"
+```
+
+  </TabItem>
+</Tabs>
+
+## Route fields (summary)
+
+- **`prefix`**, **`backend`**, **`fingerprinting`**, **`force_new_connection`**, **`replace_path`**
+- Optional **`[routes.rate_limit]`:** see [Rate limiting](/huginn-proxy/docs/rate-limiting/)
+- Optional per-route **`[routes.headers]`:** same shape as global `[headers]` — see [Headers](/huginn-proxy/docs/headers/)
+- Top-level **`preserve_host`:** [see above](#preserve-host)
+
+## Connection reuse
+
+HTTP/1.1 and HTTP/2 reuse **connections to backends** where possible; pool settings are under **[`[backend_pool]`](/huginn-proxy/docs/backends/#backend-pool)** on the Backends page. `force_new_connection = true` bypasses that pool and opens a **new TCP connection to the upstream** for each request (and a new TLS session if the backend speaks TLS). That is **only** about the proxy→backend leg.
+
+It does **not** change whether client fingerprints are available: TLS JA4 and HTTP/2 signatures come from the client→proxy connection; TCP SYN (`x-huginn-net-tcp`) is captured on the client→proxy path via eBPF and is unrelated to backend pooling. Forcing new backend connections does **not** re-capture the client’s SYN.
+
+<Tabs syncKey="huginn-config">
+  <TabItem label="YAML">
+
+```yaml
+routes:
+  - prefix: "/isolated"
+    backend: "backend-a:9000"
+    force_new_connection: true
+  - prefix: "/api"
+    backend: "backend-a:9000"
+    force_new_connection: false
+```
+
+  </TabItem>
+  <TabItem label="TOML">
+
+```toml
+[[routes]]
+prefix = "/isolated"
+backend = "backend-a:9000"
+force_new_connection = true
+
+[[routes]]
+prefix = "/api"
+backend = "backend-a:9000"
+force_new_connection = false
+```
+
+  </TabItem>
+</Tabs>
+
+`force_new_connection = true` adds latency; use it only when you need per-request upstream connections.
+
+See [Configuration overview](/huginn-proxy/docs/configuration/) for the full config layout.

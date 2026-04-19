@@ -9,7 +9,7 @@ Split responsibilities: the **eBPF agent** loads XDP and pins maps; the **proxy*
 
 ## eBPF agent (DaemonSet)
 
-Loads XDP and pins BPF maps (e.g. under `HUGINN_EBPF_PIN_PATH`). Exposes `/metrics` and `/ready` (configure with `HUGINN_EBPF_METRICS_ADDR` / `HUGINN_EBPF_METRICS_PORT`). Use an HTTP readiness probe to `/ready`.
+Loads XDP and pins BPF maps (e.g. under `HUGINN_EBPF_PIN_PATH`). Exposes `/metrics` and `/ready` (configure with `HUGINN_EBPF_METRICS_ADDR` / `HUGINN_EBPF_METRICS_PORT`). Use an HTTP readiness probe to `/ready`. If you use **`127.0.0.1`** for `HUGINN_EBPF_METRICS_ADDR` (as below), probes from the **same pod** can hit loopback; if you switch to **`0.0.0.0`**, scrape from outside the pod using the **pod or Service IP** and port—not `127.0.0.1` from another host. See [eBPF setup — Agent metrics bind address](/huginn-proxy/docs/ebpf-setup/#agent-metrics-bind-address).
 
 Example security and mounts:
 

@@ -21,6 +21,46 @@
 		'Liberation Mono', 'Courier New', monospace;
 }
 
+/* Config examples: framed tab groups (YAML / TOML) */
+starlight-tabs {
+	display: block;
+	margin: 1rem 0 1.25rem;
+	border-radius: 0.5rem;
+	border: 1px solid var(--sl-color-hairline);
+	background: var(--sl-color-bg-inline-code);
+	overflow: hidden;
+}
+
+starlight-tabs .tablist-wrapper {
+	padding: 0.35rem 0.5rem 0;
+	background: var(--sl-color-bg-sidebar);
+	border-bottom: 1px solid var(--sl-color-hairline);
+}
+
+starlight-tabs [role='tablist'] {
+	gap: 0.25rem;
+}
+
+starlight-tabs [role='tab'] {
+	border-radius: 0.375rem 0.375rem 0 0;
+	padding: 0.4rem 0.85rem;
+	font-weight: 600;
+	font-size: var(--sl-text-sm);
+}
+
+starlight-tabs [role='tab'][aria-selected='true'] {
+	background: var(--sl-color-bg-inline-code);
+	color: var(--sl-color-accent);
+}
+
+starlight-tabs [role='tabpanel'] {
+	padding: 0.5rem 0.75rem 0.75rem;
+}
+
+starlight-tabs [role='tabpanel'] .expressive-code {
+	margin: 0;
+}
+
 /*
  * Docs (Starlight): prev/next pagination was at the foot of the page behind mobile browser
  * chrome and hard to tap. Show pagination first in the footer on narrow viewports, enlarge

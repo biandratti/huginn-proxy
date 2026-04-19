@@ -1,0 +1,102 @@
+---
+title: Telemetry
+description: Proxy vs eBPF agent observability, ports, and Prometheus scraping. Beta.
+sidebar:
+  order: 9
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+There are **two separate HTTP servers**: one on **Huginn Proxy** (config file) and one on the **eBPF agent** (environment variables only). They are **not** merged: scrape **both** when you run the full TCP SYN stack; scrape **only the proxy** when eBPF is off.
+
+**Full metric names, labels, and PromQL examples** live in the repo — do not duplicate them here: **[TELEMETRY.md](https://github.com/biandratti/huginn-proxy/blob/master/TELEMETRY.md)**.
+
+---
+
+## Proxy (`huginn-proxy`)
+
+Configured under **`[telemetry]`** in the config file. **Static** — the listener port is fixed at startup.
+
+| Key | Default | Description |
+| --- | --- | --- |
+| `metrics_port` | omitted (disabled) | Port for Prometheus + health HTTP server (`/metrics`, `/health`, `/ready`, `/live`). |
+| `otel_log_level` | `"warn"` | OpenTelemetry SDK internal log level (not application logs). |
+
+<Tabs syncKey="huginn-config">
+  <TabItem label="YAML">
+
+```yaml
+telemetry:
+  metrics_port: 9090
+  otel_log_level: "warn"
+```
+
+  </TabItem>
+  <TabItem label="TOML">
+
+```toml
+[telemetry]
+metrics_port = 9090
+otel_log_level = "warn"
+```
+
+  </TabItem>
+</Tabs>
+
+### Endpoints (proxy)
+
+| Path | Role |
+| --- | --- |
+| `/health` | Process is running |
+| `/ready` | Ready to serve (503 when not ready, e.g. no backends) |
+| `/live` | Liveness |
+| `/metrics` | Prometheus text |
+
+Health responses are JSON; `/metrics` is Prometheus exposition format.
+
+**Scrape URL:** `http://<host>:<metrics_port>/metrics` (e.g. `http://localhost:9090/metrics`).
+
+### Metric families (proxy, summary)
+
+Roughly **40+** `huginn_*` metrics: connections, requests, throughput, TLS, JA4 / HTTP/2 fingerprinting, backend timings, rate limits, IP filter, headers, mTLS, config reload, build info. TCP SYN **lookup** metrics on the proxy reflect map reads; **capture** counters are on the agent — see [TELEMETRY.md](https://github.com/biandratti/huginn-proxy/blob/master/TELEMETRY.md).
+
+---
+
+## eBPF agent (`huginn-ebpf-agent`)
+
+Only when the **TCP SYN** path is enabled. Configured with **environment variables**, not `[telemetry]`:
+
+| Variable | Role |
+| --- | --- |
+| `HUGINN_EBPF_METRICS_ADDR` | Bind address for the agent HTTP server |
+| `HUGINN_EBPF_METRICS_PORT` | Port (often `9091`) |
+
+Same **four paths** as the proxy (`/health`, `/ready`, `/live`, `/metrics`) for Kubernetes-style probes. **`/ready`** may return 503 until BPF maps are pinned.
+
+**Agent-only** metrics (examples): `tcp_syn_captured_total`, `tcp_syn_insert_failures_total`, `tcp_syn_malformed_total`, `agent_up`, `huginn_ebpf_agent_build_info` — full list in [TELEMETRY.md — eBPF Agent Metrics](https://github.com/biandratti/huginn-proxy/blob/master/TELEMETRY.md#ebpf-agent-metrics).
+
+**Bind address vs scrape URL:** [eBPF TCP setup — Agent metrics bind address](/huginn-proxy/docs/ebpf-setup/#agent-metrics-bind-address).
+
+---
+
+## Prometheus (two jobs when using eBPF)
+
+Scrape the **proxy** and the **agent** on **different ports** (e.g. `9090` and `9091`). Example:
+
+```yaml
+scrape_configs:
+  - job_name: huginn-proxy
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  - job_name: huginn-ebpf-agent
+    static_configs:
+      - targets: ["localhost:9091"]
+```
+
+Adjust hosts to your Docker/Kubernetes networking. With eBPF Compose, ports are often published on the host as in [`docker-compose.release-ebpf.yml`](https://github.com/biandratti/huginn-proxy/blob/master/examples/docker-compose.release-ebpf.yml).
+
+## Related
+
+- [Containers](/huginn-proxy/docs/containers/): which stack exposes which listeners
+- [Configuration overview](/huginn-proxy/docs/configuration/): `telemetry` vs env vars

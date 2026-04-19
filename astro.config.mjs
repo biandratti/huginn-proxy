@@ -17,6 +17,9 @@ export default defineConfig({
 	site,
 	base,
 	trailingSlash: 'always',
+	redirects: {
+		'/docs/deployment/': '/docs/containers/',
+	},
 	integrations: [
 		starlight({
 			components: {
@@ -84,22 +87,37 @@ export default defineConfig({
 					label: 'Configuration',
 					items: [
 						{ label: 'Overview', slug: 'docs/configuration' },
-						{ label: 'Listen', slug: 'docs/listen' },
-						{ label: 'Backends', slug: 'docs/backends' },
-						{ label: 'Routes', slug: 'docs/routes' },
-						{ label: 'TLS', slug: 'docs/tls' },
-						{ label: 'Fingerprinting', slug: 'docs/fingerprinting' },
-						{ label: 'Security', slug: 'docs/security' },
-						{ label: 'Rate limiting', slug: 'docs/rate-limiting' },
-						{ label: 'Telemetry', slug: 'docs/telemetry' },
-						{ label: 'Headers', slug: 'docs/headers' },
+						{
+							label: 'Static',
+							collapsed: false,
+							items: [
+								{ label: 'Listen', slug: 'docs/listen' },
+								{ label: 'Timeout', slug: 'docs/timeout' },
+								{ label: 'TLS', slug: 'docs/tls' },
+								{ label: 'Fingerprinting', slug: 'docs/fingerprinting' },
+								{ label: 'Logging', slug: 'docs/logging' },
+								{ label: 'Telemetry', slug: 'docs/telemetry' },
+							],
+						},
+						{
+							label: 'Dynamic',
+							collapsed: false,
+							items: [
+								{ label: 'Backends', slug: 'docs/backends' },
+								{ label: 'Routes', slug: 'docs/routes' },
+								{ label: 'Security', slug: 'docs/security' },
+								{ label: 'IP filtering', slug: 'docs/ip-filtering' },
+								{ label: 'Rate limiting', slug: 'docs/rate-limiting' },
+								{ label: 'Headers', slug: 'docs/headers' },
+							],
+						},
 					],
 				},
 				{
 					label: 'Deployment',
 					items: [
 						{ label: 'Artifacts', slug: 'docs/artifacts' },
-						{ label: 'Docker Compose', slug: 'docs/deployment' },
+						{ label: 'Containers', slug: 'docs/containers' },
 						{ label: 'Kubernetes', slug: 'docs/kubernetes' },
 						{ label: 'eBPF TCP setup', slug: 'docs/ebpf-setup' },
 					],
