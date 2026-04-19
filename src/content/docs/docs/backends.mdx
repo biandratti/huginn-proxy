@@ -1,6 +1,6 @@
 ---
 title: Backends
-description: Upstream pool and HTTP version hints. Beta.
+description: Upstream definitions, backend connection pool, and HTTP version hints. Beta.
 sidebar:
   order: 3
 ---
@@ -42,6 +42,39 @@ http_version = "http11"
 
   </TabItem>
 </Tabs>
+
+## Backend pool
+
+The **`[backend_pool]`** block configures the HTTP **connection pool** for proxy → backend traffic. **Dynamic** — changing it triggers pool recreation and draining of old connections.
+
+<Tabs syncKey="huginn-config">
+  <TabItem label="YAML">
+
+```yaml
+backend_pool:
+  enabled: true
+  idle_timeout: 90
+  pool_max_idle_per_host: 0
+```
+
+  </TabItem>
+  <TabItem label="TOML">
+
+```toml
+[backend_pool]
+enabled = true
+idle_timeout = 90
+pool_max_idle_per_host = 0
+```
+
+  </TabItem>
+</Tabs>
+
+| Key | Default | Description |
+| --- | --- | --- |
+| `enabled` | `true` | Enable pooling (`false` = new connection per request; not recommended for production). |
+| `idle_timeout` | `90` | Seconds before an idle pooled connection is closed. |
+| `pool_max_idle_per_host` | `0` | Max idle connections per backend host; `0` = unlimited. |
 
 ## Load balancing
 

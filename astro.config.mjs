@@ -89,8 +89,10 @@ export default defineConfig({
 							collapsed: false,
 							items: [
 								{ label: 'Listen', slug: 'docs/listen' },
+								{ label: 'Timeout', slug: 'docs/timeout' },
 								{ label: 'TLS', slug: 'docs/tls' },
 								{ label: 'Fingerprinting', slug: 'docs/fingerprinting' },
+								{ label: 'Logging', slug: 'docs/logging' },
 								{ label: 'Telemetry', slug: 'docs/telemetry' },
 							],
 						},

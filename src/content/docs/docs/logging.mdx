@@ -1,0 +1,43 @@
+---
+title: Logging
+description: Log level and optional Rust target in log lines. Static.
+sidebar:
+  order: 7
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+The **`[logging]`** section configures application logging. **Static** — the logger is initialized once at startup.
+
+The **`level`** can be overridden with the **`RUST_LOG`** environment variable.
+
+<Tabs syncKey="huginn-config">
+  <TabItem label="YAML">
+
+```yaml
+logging:
+  level: "info"
+  show_target: false
+```
+
+  </TabItem>
+  <TabItem label="TOML">
+
+```toml
+[logging]
+level = "info"
+show_target = false
+```
+
+  </TabItem>
+</Tabs>
+
+| Key | Default | Description |
+| --- | --- | --- |
+| `level` | `"info"` | `trace`, `debug`, `info`, `warn`, or `error`. |
+| `show_target` | `false` | Include the Rust module path in log lines (useful for debugging). |
+
+## Related
+
+- [Telemetry](/huginn-proxy/docs/telemetry/): metrics and health HTTP server
+- [Configuration overview](/huginn-proxy/docs/configuration/)

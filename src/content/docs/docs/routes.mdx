@@ -1,6 +1,6 @@
 ---
 title: Routes
-description: Prefix matching, path strip/rewrite, and backend connection reuse. Beta.
+description: preserve_host, prefix matching, path strip/rewrite, and backend connection reuse. Beta.
 sidebar:
   order: 4
 ---
@@ -8,6 +8,27 @@ sidebar:
 import { Tabs, TabItem } from '@astrojs/starlight/components';
 
 Each route maps a **URL prefix** to a **backend** `address` (defined under [`backends`](/huginn-proxy/docs/backends/)). Optional fields control fingerprint headers, rate limits, path rewrites, and connection pooling. **Dynamic** — hot-reloadable.
+
+## Preserve host
+
+Top-level boolean (not inside `[[routes]]`). When **`true`**, the original client **`Host`** header is forwarded to the upstream; when **`false`**, the proxy substitutes **`Host`** with the backend address.
+
+<Tabs syncKey="huginn-config">
+  <TabItem label="YAML">
+
+```yaml
+preserve_host: false
+```
+
+  </TabItem>
+  <TabItem label="TOML">
+
+```toml
+preserve_host = false
+```
+
+  </TabItem>
+</Tabs>
 
 ## Prefix matching
 
@@ -140,12 +161,11 @@ replace_path = "/api/v1"
 - **`prefix`**, **`backend`**, **`fingerprinting`**, **`force_new_connection`**, **`replace_path`**
 - Optional **`[routes.rate_limit]`:** see [Rate limiting](/huginn-proxy/docs/rate-limiting/)
 - Optional per-route **`[routes.headers]`:** same shape as global `[headers]` — see [Headers](/huginn-proxy/docs/headers/)
-
-**`preserve_host`** (top-level): when `true`, the original client `Host` header can be forwarded upstream; see [Configuration overview](/huginn-proxy/docs/configuration/).
+- Top-level **`preserve_host`:** [see above](#preserve-host)
 
 ## Connection reuse
 
-HTTP/1.1 and HTTP/2 reuse **connections to backends** where possible (see `[backend_pool]` in [Configuration overview](/huginn-proxy/docs/configuration/)). `force_new_connection = true` bypasses that pool and opens a **new TCP connection to the upstream** for each request (and a new TLS session if the backend speaks TLS). That is **only** about the proxy→backend leg.
+HTTP/1.1 and HTTP/2 reuse **connections to backends** where possible; pool settings are under **[`[backend_pool]`](/huginn-proxy/docs/backends/#backend-pool)** on the Backends page. `force_new_connection = true` bypasses that pool and opens a **new TCP connection to the upstream** for each request (and a new TLS session if the backend speaks TLS). That is **only** about the proxy→backend leg.
 
 It does **not** change whether client fingerprints are available: TLS JA4 and HTTP/2 signatures come from the client→proxy connection; TCP SYN (`x-huginn-net-tcp`) is captured on the client→proxy path via eBPF and is unrelated to backend pooling. Forcing new backend connections does **not** re-capture the client’s SYN.
 

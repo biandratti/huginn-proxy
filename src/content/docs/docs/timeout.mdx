@@ -1,0 +1,61 @@
+---
+title: Timeout
+description: Connect, idle, TLS handshake, shutdown, and HTTP/1.1 keep-alive. Static.
+sidebar:
+  order: 3
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+The **`[timeout]`** section sets connection timeouts and graceful shutdown behavior. **Static** — applied at startup.
+
+| Key | Default | Description |
+| --- | --- | --- |
+| `upstream_connect_ms` | absent (no timeout) | TCP connect to backend (ms). Omitted = no limit. |
+| `proxy_idle_ms` | `60000` | Inbound idle timeout (ms). |
+| `tls_handshake_secs` | `15` | Max time for client TLS handshake. |
+| `connection_handling_secs` | `300` | Max time for full request/response on a connection. |
+| `shutdown_secs` | `30` | Graceful shutdown window. |
+
+<Tabs syncKey="huginn-config">
+  <TabItem label="YAML">
+
+```yaml
+timeout:
+  upstream_connect_ms: 5000
+  proxy_idle_ms: 60000
+  tls_handshake_secs: 15
+  connection_handling_secs: 300
+  shutdown_secs: 30
+  keep_alive:
+    enabled: true
+    upstream_idle_timeout: 60
+```
+
+  </TabItem>
+  <TabItem label="TOML">
+
+```toml
+[timeout]
+upstream_connect_ms = 5000
+proxy_idle_ms = 60000
+tls_handshake_secs = 15
+connection_handling_secs = 300
+shutdown_secs = 30
+
+[timeout.keep_alive]
+enabled = true
+upstream_idle_timeout = 60
+```
+
+  </TabItem>
+</Tabs>
+
+### `[timeout.keep_alive]`
+
+HTTP/1.1 keep-alive and upstream TCP keepalive. Applies only to **HTTP/1.1**; HTTP/2 connections are always persistent.
+
+## Related
+
+- [Listen](/huginn-proxy/docs/listen/): bind addresses and accept backlog
+- [Configuration overview](/huginn-proxy/docs/configuration/)
