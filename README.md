@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="https://raw.githubusercontent.com/biandratti/huginn-net/master/huginn-net.png" alt="Huginn Proxy Logo" width="200"/>
+  <img src="huginn-proxy.png" alt="Huginn Net Logo" width="250"/>
 
 # Huginn Proxy
 
