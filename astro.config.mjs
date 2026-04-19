@@ -84,15 +84,28 @@ export default defineConfig({
 					label: 'Configuration',
 					items: [
 						{ label: 'Overview', slug: 'docs/configuration' },
-						{ label: 'Listen', slug: 'docs/listen' },
-						{ label: 'Backends', slug: 'docs/backends' },
-						{ label: 'Routes', slug: 'docs/routes' },
-						{ label: 'TLS', slug: 'docs/tls' },
-						{ label: 'Fingerprinting', slug: 'docs/fingerprinting' },
-						{ label: 'Security', slug: 'docs/security' },
-						{ label: 'Rate limiting', slug: 'docs/rate-limiting' },
-						{ label: 'Telemetry', slug: 'docs/telemetry' },
-						{ label: 'Headers', slug: 'docs/headers' },
+						{
+							label: 'Static',
+							collapsed: false,
+							items: [
+								{ label: 'Listen', slug: 'docs/listen' },
+								{ label: 'TLS', slug: 'docs/tls' },
+								{ label: 'Fingerprinting', slug: 'docs/fingerprinting' },
+								{ label: 'Telemetry', slug: 'docs/telemetry' },
+							],
+						},
+						{
+							label: 'Dynamic',
+							collapsed: false,
+							items: [
+								{ label: 'Backends', slug: 'docs/backends' },
+								{ label: 'Routes', slug: 'docs/routes' },
+								{ label: 'Security', slug: 'docs/security' },
+								{ label: 'IP filtering', slug: 'docs/ip-filtering' },
+								{ label: 'Rate limiting', slug: 'docs/rate-limiting' },
+								{ label: 'Headers', slug: 'docs/headers' },
+							],
+						},
 					],
 				},
 				{

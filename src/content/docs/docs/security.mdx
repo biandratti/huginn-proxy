@@ -1,13 +1,13 @@
 ---
 title: Security
-description: IP ACL, connection limits, response security headers, and trusted forwarding. Beta.
+description: Connection limits, response security headers, and trusted forwarding. Beta.
 sidebar:
   order: 7
 ---
 
 import { Tabs, TabItem } from '@astrojs/starlight/components';
 
-The **`[security]`** block groups controls that apply **before** and **around** request handling: who may connect (IP ACL), how fast they may send traffic (see [Rate limiting](/huginn-proxy/docs/rate-limiting/) for `[security.rate_limit]`), connection caps, and **response** security headers (HSTS, CSP, custom).
+The **`[security]`** block groups controls that apply **before** and **around** request handling: connection caps, how fast clients may send traffic (see [Rate limiting](/huginn-proxy/docs/rate-limiting/) for `[security.rate_limit]`), and **response** security headers (HSTS, CSP, custom). **IP allow/deny lists** live under the same top-level `[security]` table but are documented on **[IP filtering](/huginn-proxy/docs/ip-filtering/)**.
 
 **TLS** termination and **mTLS** are configured under **`[tls]`**; see [TLS](/huginn-proxy/docs/tls/).
 
@@ -31,90 +31,6 @@ security:
 ```toml
 [security]
 max_connections = 512
-```
-
-  </TabItem>
-</Tabs>
-
-## IP filtering
-
-`[security.ip_filter]` supports **allowlist** or **denylist** mode with IPv4/IPv6 **CIDR** entries. Empty allowlist denies all; empty denylist allows all (per the configured mode). **Dynamic.**
-
-There is **no** GeoIP or ASN filtering in the proxy itself.
-
-**Disabled (default in many examples):**
-
-<Tabs syncKey="huginn-config">
-  <TabItem label="YAML">
-
-```yaml
-security:
-  ip_filter:
-    mode: "disabled"
-```
-
-  </TabItem>
-  <TabItem label="TOML">
-
-```toml
-[security.ip_filter]
-mode = "disabled"
-```
-
-  </TabItem>
-</Tabs>
-
-**Allowlist (only these networks can reach the proxy):**
-
-<Tabs syncKey="huginn-config">
-  <TabItem label="YAML">
-
-```yaml
-security:
-  ip_filter:
-    mode: "allowlist"
-    allowlist:
-      - "127.0.0.1/32"
-      - "::1/128"
-      - "10.0.0.0/8"
-```
-
-  </TabItem>
-  <TabItem label="TOML">
-
-```toml
-[security.ip_filter]
-mode = "allowlist"
-allowlist = [
-  "127.0.0.1/32",
-  "::1/128",
-  "10.0.0.0/8",
-]
-```
-
-  </TabItem>
-</Tabs>
-
-**Denylist (block specific ranges):**
-
-<Tabs syncKey="huginn-config">
-  <TabItem label="YAML">
-
-```yaml
-security:
-  ip_filter:
-    mode: "denylist"
-    denylist:
-      - "198.51.100.0/24"
-```
-
-  </TabItem>
-  <TabItem label="TOML">
-
-```toml
-[security.ip_filter]
-mode = "denylist"
-denylist = ["198.51.100.0/24"]
 ```
 
   </TabItem>
@@ -183,6 +99,7 @@ You do not need to configure these in the config file for standard behavior. Glo
 
 ## Related
 
+- [IP filtering](/huginn-proxy/docs/ip-filtering/): `[security.ip_filter]` allowlist / denylist
 - [Rate limiting](/huginn-proxy/docs/rate-limiting/): `[security.rate_limit]` and per-route overrides
 - [TLS](/huginn-proxy/docs/tls/): certificates and mTLS
 - [Configuration overview](/huginn-proxy/docs/configuration/)

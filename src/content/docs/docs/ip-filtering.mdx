@@ -1,0 +1,102 @@
+---
+title: IP filtering
+description: Allowlist and denylist by CIDR under [security.ip_filter]. Hot-reloadable. Beta.
+sidebar:
+  order: 7
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+The **`[security.ip_filter]`** block controls which client IPs may connect, using IPv4/IPv6 **CIDR** ranges. **Dynamic** — changes apply on reload without restarting the process.
+
+There is **no** GeoIP or ASN filtering in the proxy itself.
+
+## Modes
+
+- **`disabled`:** no IP-based blocking (default in many examples).
+- **`allowlist`:** only listed networks can reach the proxy. An **empty** allowlist **denies all** traffic.
+- **`denylist`:** listed networks are blocked. An **empty** denylist **allows all** traffic.
+
+## Disabled (default in many examples)
+
+<Tabs syncKey="huginn-config">
+  <TabItem label="YAML">
+
+```yaml
+security:
+  ip_filter:
+    mode: "disabled"
+```
+
+  </TabItem>
+  <TabItem label="TOML">
+
+```toml
+[security.ip_filter]
+mode = "disabled"
+```
+
+  </TabItem>
+</Tabs>
+
+## Allowlist (only these networks can reach the proxy)
+
+<Tabs syncKey="huginn-config">
+  <TabItem label="YAML">
+
+```yaml
+security:
+  ip_filter:
+    mode: "allowlist"
+    allowlist:
+      - "127.0.0.1/32"
+      - "::1/128"
+      - "10.0.0.0/8"
+```
+
+  </TabItem>
+  <TabItem label="TOML">
+
+```toml
+[security.ip_filter]
+mode = "allowlist"
+allowlist = [
+  "127.0.0.1/32",
+  "::1/128",
+  "10.0.0.0/8",
+]
+```
+
+  </TabItem>
+</Tabs>
+
+## Denylist (block specific ranges)
+
+<Tabs syncKey="huginn-config">
+  <TabItem label="YAML">
+
+```yaml
+security:
+  ip_filter:
+    mode: "denylist"
+    denylist:
+      - "198.51.100.0/24"
+```
+
+  </TabItem>
+  <TabItem label="TOML">
+
+```toml
+[security.ip_filter]
+mode = "denylist"
+denylist = ["198.51.100.0/24"]
+```
+
+  </TabItem>
+</Tabs>
+
+## Related
+
+- [Security](/huginn-proxy/docs/security/): connection limits, security headers, trusted forwarding
+- [Rate limiting](/huginn-proxy/docs/rate-limiting/): `[security.rate_limit]`
+- [Configuration overview](/huginn-proxy/docs/configuration/)

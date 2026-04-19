@@ -5,7 +5,7 @@ sidebar:
   order: 3
 ---
 
-Traffic enters the proxy listener (plain or TLS). The first matching **route** wins. Security policies (IP ACL, rate limits) run before forwarding. Fingerprints are derived from the **client→proxy** side of the connection; the proxy then injects **trusted** headers so backends do not rely on spoofable client fields.
+Traffic enters the proxy listener (plain or TLS). The first matching **route** wins. Security policies ([IP filtering](/huginn-proxy/docs/ip-filtering/), rate limits) run before forwarding. Fingerprints are derived from the **client→proxy** side of the connection; the proxy then injects **trusted** headers so backends do not rely on spoofable client fields.
 
 ## Fingerprint timing
 
