@@ -11,7 +11,9 @@
 [![Pure Rust](https://img.shields.io/badge/pure-Rust-brightgreen.svg)](https://deps.rs/repo/github/biandratti/huginn-proxy)
 [![codecov](https://codecov.io/gh/biandratti/huginn-proxy/graph/badge.svg)](https://codecov.io/gh/biandratti/huginn-proxy)
 [![GitHub Release](https://img.shields.io/github/v/release/biandratti/huginn-proxy)](https://github.com/biandratti/huginn-proxy/releases)
-[![Docker](https://img.shields.io/badge/ghcr.io-huginn--proxy-blue?logo=docker)](https://github.com/biandratti/huginn-proxy/pkgs/container/huginn-proxy)
+[![GHCR packages](https://img.shields.io/badge/GHCR-container%20images-blue?logo=docker)](https://github.com/biandratti?tab=packages&repo_name=huginn-proxy)
+
+**`ghcr.io/biandratti/`** — `huginn-proxy`, `huginn-proxy-plain`, `huginn-proxy-ebpf-agent` ([images & layout](#architecture))
 
 **High-performance reverse proxy with passive fingerprinting capabilities powered by Huginn Net.**
 </div>
@@ -26,15 +28,14 @@ and [rust-rpxy](https://github.com/junkurihara/rust-rpxy).
 
 ## Quick Start
 
-See [`examples/`](examples/) for the full setup guide, including:
-
-- Building from source (standard and with eBPF/TCP SYN fingerprinting)
-- Generating TLS certificates
-- Running with Docker Compose
-- Configuration examples (rate limiting, routing, …)
+See [`examples/`](examples/).
 
 ## Features
 
+- **Configuration** - One file, **[TOML or YAML](SETTINGS.md)** (picked from the extension). **Dynamic** sections (routes,
+  backends, pools, headers, security filters, rate limits, …) **hot-reload** on SIGHUP or `--watch`; **static** sections
+  (listen, TLS, fingerprint flags, logging, telemetry, timeouts, …) need a **restart** (reload ignores them). See
+  [DEPLOYMENT.md](DEPLOYMENT.md).
 - **IPv4 & IPv6 Dual-Stack** - Listen on both address families simultaneously with per-family eBPF maps
 - **HTTP/1.x & HTTP/2** - Full support for both protocol versions
 - **Load Balancing** - Round-robin load balancing across multiple backends
@@ -59,7 +60,7 @@ See [`examples/`](examples/) for the full setup guide, including:
 - **Easy Deployment** - Single binary, Docker-ready
 
 See [FEATURES.md](FEATURES.md) for detailed descriptions and limitations of each feature.
-See [SETTINGS.md](SETTINGS.md) for the full TOML configuration reference.
+See [SETTINGS.md](SETTINGS.md) for the full configuration reference (TOML and YAML).
 
 For deployment instructions, see [DEPLOYMENT.md](DEPLOYMENT.md).
 
@@ -99,27 +100,6 @@ x-forwarded-host:    localhost
 
 These headers always override any client-provided values to prevent spoofing.
 
-## Advanced Configuration Options
-
-### Per-Route Settings
-
-- **`fingerprinting`** (bool, default: `true`) - Enable/disable TLS (JA4) and HTTP/2 (Akamai) fingerprint extraction and
-  header injection
-- TLS fingerprints are captured **once per TLS session** and reused for all HTTP requests on that connection this is by design. To observe per-connection variation (e.g. Chrome's extension-order randomization), set `alpn = ["http/1.1"]` and `keep_alive.enabled = false` for debugging only; this is a protocol downgrade not suitable for production.
-
-## Health Check Endpoints
-
-When `telemetry.metrics_port` is configured, Huginn Proxy exposes health check endpoints on the observability server (
-separate from the main proxy port):
-
-- **`/health`** - General health check (`200 OK` if process is running)
-- **`/ready`** - Readiness check (`200 OK` if backends configured, `503` otherwise) - for Kubernetes readiness probes
-- **`/live`** - Liveness check (`200 OK` if process is running) - for Kubernetes liveness probes
-- **`/metrics`** - Prometheus metrics endpoint
-
-All endpoints return JSON responses (except `/metrics` which returns Prometheus format) and follow Kubernetes health
-check conventions.
-
 ## Performance
 
 - **Fingerprinting Overhead**: ~2.2% (minimal impact)
@@ -140,48 +120,16 @@ Published images (`linux/amd64`, `linux/arm64`), release binaries, and capabilit
 
 For module structure and design decisions, see [ARCHITECTURE.md](ARCHITECTURE.md).
 
-| Fingerprint | Header | eBPF agent required |
-|---|---|---|
-| TLS (JA4) | `x-huginn-net-ja4` | No |
-| HTTP/2 (Akamai) | `x-huginn-net-akamai` | No |
-| TCP SYN (p0f) | `x-huginn-net-tcp` | **Yes** — Linux only, kernel ≥ 5.11 |
+| Fingerprint | Header | eBPF agent required                 |
+|---|---|-------------------------------------|
+| TLS (JA4) | `x-huginn-net-ja4` | No                                  |
+| HTTP/2 (Akamai) | `x-huginn-net-akamai` | No                                  |
+| TCP SYN (p0f) | `x-huginn-net-tcp` | **Yes** - Linux only, kernel ≥ 5.11 |
 
-<details>
-<summary><strong>TCP SYN Fingerprinting — Deployment Architecture</strong></summary>
+**GHCR:** three container packages ([`huginn-proxy`](https://github.com/biandratti/huginn-proxy/pkgs/container/huginn-proxy), [`huginn-proxy-plain`](https://github.com/biandratti/huginn-proxy/pkgs/container/huginn-proxy-plain), [`huginn-proxy-ebpf-agent`](https://github.com/biandratti/huginn-proxy-ebpf-agent/pkgs/container/huginn-proxy-ebpf-agent)). How many you run depends on the setup:
 
-```
-┌─────────────────────────────────────────────────────────┐
-│  Node                                                   │
-│                                                         │
-│  ┌─────────────────────────┐                            │
-│  │  huginn-ebpf-agent      │  CAP_BPF + CAP_NET_ADMIN   │
-│  │                         │  + CAP_PERFMON             │
-│  │  XDP program (kernel)   │  + seccomp:unconfined      │
-│  │  ┌─────────────────┐    │  + apparmor:unconfined     │
-│  │  │ tcp_syn_map     │    │  (no open ports)           │
-│  │  │ syn_counter     │    │                            │
-│  │  └────────┬────────┘    │                            │
-│  │           │ pin_maps()  │                            │
-│  └───────────┼─────────────┘                            │
-│              │ /sys/fs/bpf/huginn/                      │
-│  ┌───────────┼─────────────┐                            │
-│  │  huginn-proxy (×N)      │  CAP_BPF only              │
-│  │           │             │  seccomp: default          │
-│  │  ┌────────┴────────┐    │  USER 10001                │
-│  │  │ from_pinned()   │    │                            │
-│  │  │ map lookup      │    │                            │
-│  │  └─────────────────┘    │                            │
-│  │                         │                            │
-│  │  HTTP/TLS → backends    │                            │
-│  │  x-huginn-net-tcp ──►   │                            │
-│  └─────────────────────────┘                            │
-└─────────────────────────────────────────────────────────┘
-```
-
-The agent loads the XDP program once per node and pins BPF maps under `/sys/fs/bpf/huginn/`.
-Multiple proxy replicas read the shared maps in read-only mode.
-
-</details>
+- **Proxy + eBPF agent (TCP SYN):** **`huginn-proxy`** + **`huginn-proxy-ebpf-agent`** two containers; JA4, Akamai, and `x-huginn-net-tcp`.
+- **Proxy only (no TCP SYN):** **`huginn-proxy-plain`** one container; JA4 and Akamai, no kernel SYN path.
 
 ## License
 
