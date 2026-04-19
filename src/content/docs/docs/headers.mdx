@@ -1,0 +1,67 @@
+---
+title: Headers
+description: Global request and response header add/remove. Beta.
+sidebar:
+  order: 10
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+The **`[headers]`** section configures **global** request and response header manipulation. **Dynamic.** It is distinct from:
+
+- **Per-route** header rules under **`[routes.headers]`** on each route (same shape as below; applied after global headers)
+- **`[security.headers]`:** HSTS, CSP, and custom **security** response headers (see [Security](/huginn-proxy/docs/security/))
+- **Forwarding:** `X-Forwarded-*` set by the proxy (see [Security](/huginn-proxy/docs/security/#forwarding-headers))
+
+## Structure
+
+- **`[headers.request]`:** `add` / `remove` lists
+- **`[headers.response]`:** `add` / `remove` lists
+
+## Example
+
+<Tabs syncKey="huginn-config">
+  <TabItem label="YAML">
+
+```yaml
+headers:
+  request:
+    remove:
+      - "X-Forwarded-Server"
+    add:
+      - name: "X-Proxy-Name"
+        value: "huginn-proxy"
+  response:
+    remove:
+      - "Server"
+      - "X-Powered-By"
+    add:
+      - name: "X-Proxy"
+        value: "huginn-proxy"
+```
+
+  </TabItem>
+  <TabItem label="TOML">
+
+```toml
+[headers.request]
+remove = ["X-Forwarded-Server"]
+add = [
+    { name = "X-Proxy-Name", value = "huginn-proxy" },
+]
+
+[headers.response]
+remove = ["Server", "X-Powered-By"]
+add = [
+    { name = "X-Proxy", value = "huginn-proxy" },
+]
+```
+
+  </TabItem>
+</Tabs>
+
+See [`examples/config/compose.toml`](https://github.com/biandratti/huginn-proxy/blob/master/examples/config/compose.toml) and [`compose.yaml`](https://github.com/biandratti/huginn-proxy/blob/master/examples/config/compose.yaml) on GitHub for complete examples.
+
+## Related
+
+- [Configuration overview](/huginn-proxy/docs/configuration/)

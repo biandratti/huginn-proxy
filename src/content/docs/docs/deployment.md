@@ -20,7 +20,7 @@ Canonical Compose files under [`examples/`](https://github.com/biandratti/huginn
 
 Pin versions by replacing `:latest` with `:vX.Y.Z` on **all** `huginn-proxy*` images so proxy and agent stay in sync.
 
-**TLS and config paths:** the release Compose files mount `./config/compose.toml` and **`./certs`** into the proxy container (`/config/certs` read-only). Create `examples/certs/` on the host with the certificate and key expected by your config (see the [`examples/` README](https://github.com/biandratti/huginn-proxy/tree/master/examples)); files must be readable by the container user (UID **10001**).
+**TLS and config paths:** the release Compose files mount `./config/compose.toml` (or **`compose.yaml`** if you use YAML) and **`./certs`** into the proxy container (`/config/certs` read-only). Create `examples/certs/` on the host with the certificate and key expected by your config (see the [`examples/` README](https://github.com/biandratti/huginn-proxy/tree/master/examples)); files must be readable by the container user (UID **10001**).
 
 ```bash
 git clone https://github.com/biandratti/huginn-proxy.git

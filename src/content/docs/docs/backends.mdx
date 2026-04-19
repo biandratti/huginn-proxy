@@ -5,21 +5,43 @@ sidebar:
   order: 3
 ---
 
-The top-level **`backends`** array defines upstream targets. Each route references a backend by its **`address`** string (must match exactly).
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+The **`[[backends]]`** entries define upstream targets. Each route references a backend by its **`address`** string (must match exactly). **Dynamic** — hot-reloadable.
 
 ## Fields (per backend)
 
 - **`address`:** `host:port` (or bracketed IPv6). In orchestrated setups this is usually a **service name** (Docker Compose, Kubernetes DNS, etc.).
-- **`http_version`:** optional. Values: `http11`, `http2`, or negotiate with the upstream using **`preserve`** (default behavior depends on config schema).
+- **`http_version`:** optional. Values: `http11`, `http2`, or **`preserve`** (negotiate from the client; default when omitted / null).
 
 ## Example
 
-```toml
-backends = [
-    { address = "backend-a:9000", http_version = "preserve" },
-    { address = "backend-b:9000", http_version = "preserve" },
-]
+<Tabs syncKey="huginn-config">
+  <TabItem label="YAML">
+
+```yaml
+backends:
+  - address: "backend-a:9000"
+    http_version: preserve
+  - address: "backend-b:9000"
+    http_version: http11
 ```
+
+  </TabItem>
+  <TabItem label="TOML">
+
+```toml
+[[backends]]
+address = "backend-a:9000"
+http_version = "preserve"
+
+[[backends]]
+address = "backend-b:9000"
+http_version = "http11"
+```
+
+  </TabItem>
+</Tabs>
 
 ## Load balancing
 

@@ -1,0 +1,219 @@
+---
+title: Configuration overview
+description: Single config file in TOML or YAML, validation, reload behavior, and links to each section. Beta.
+sidebar:
+  order: 1
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+Configuration is read from a **single file** in **TOML** or **YAML**. The format is chosen from the path’s extension: `.yaml` / `.yml` → YAML; `.toml` and anything else (including a missing extension) → TOML. Pass the file path as the positional `CONFIG` argument or via `HUGINN_CONFIG_PATH`:
+
+```bash
+huginn-proxy config.toml
+huginn-proxy config.yaml
+HUGINN_CONFIG_PATH=config.yaml huginn-proxy
+```
+
+Validate a config file without starting the proxy:
+
+```bash
+huginn-proxy --validate config.toml
+huginn-proxy --validate config.yaml
+```
+
+**Hot reload:** dynamic sections update on `SIGHUP` or a file-watcher trigger without dropping connections. Static sections require a process restart — changes are logged as a warning and ignored. See the [SETTINGS.md](https://github.com/biandratti/huginn-proxy/blob/master/SETTINGS.md) reference on GitHub for the static/dynamic split per section.
+
+Canonical field tables and copy-paste snippets: **[SETTINGS.md](https://github.com/biandratti/huginn-proxy/blob/master/SETTINGS.md)** (same content as the shipped reference in the repo).
+
+Use the pages below for narrative, behavior, and examples alongside the reference.
+
+## Top-level keys
+
+| Key | Page / notes |
+| --- | --- |
+| `preserve_host` | Top-level bool; behavior when forwarding upstream — see [Routes](/huginn-proxy/docs/routes/) |
+| `[listen]` | [Listen](/huginn-proxy/docs/listen/) — **static** |
+| `[[backends]]` | [Backends](/huginn-proxy/docs/backends/) — **dynamic** |
+| `[[routes]]` | [Routes](/huginn-proxy/docs/routes/) — **dynamic** |
+| `[tls]` | [TLS](/huginn-proxy/docs/tls/) — **static** (cert file contents may reload via watcher) |
+| `[fingerprint]` | [Fingerprinting](/huginn-proxy/docs/fingerprinting/) — **static** |
+| `[security]` | [Security](/huginn-proxy/docs/security/) — mixed (see reference) |
+| `[security.rate_limit]` | [Rate limiting](/huginn-proxy/docs/rate-limiting/) — **dynamic** |
+| `[timeout]` | Below — **static** |
+| `[logging]` | Below — **static** |
+| `[telemetry]` | [Telemetry](/huginn-proxy/docs/telemetry/) — **static** |
+| `[headers]` | [Headers](/huginn-proxy/docs/headers/) — **dynamic** |
+| `[backend_pool]` | Below — **dynamic** |
+
+### `preserve_host`
+
+<Tabs syncKey="huginn-config">
+  <TabItem label="YAML">
+
+```yaml
+preserve_host: false
+```
+
+  </TabItem>
+  <TabItem label="TOML">
+
+```toml
+preserve_host = false
+```
+
+  </TabItem>
+</Tabs>
+
+### `[timeout]`
+
+Connection timeouts and graceful shutdown. **Static.**
+
+| Key | Default | Description |
+| --- | --- | --- |
+| `upstream_connect_ms` | absent (no timeout) | TCP connect to backend (ms). Omitted = no limit. |
+| `proxy_idle_ms` | `60000` | Inbound idle timeout (ms). |
+| `tls_handshake_secs` | `15` | Max time for client TLS handshake. |
+| `connection_handling_secs` | `300` | Max time for full request/response on a connection. |
+| `shutdown_secs` | `30` | Graceful shutdown window. |
+
+<Tabs syncKey="huginn-config">
+  <TabItem label="YAML">
+
+```yaml
+timeout:
+  upstream_connect_ms: 5000
+  proxy_idle_ms: 60000
+  tls_handshake_secs: 15
+  connection_handling_secs: 300
+  shutdown_secs: 30
+  keep_alive:
+    enabled: true
+    upstream_idle_timeout: 60
+```
+
+  </TabItem>
+  <TabItem label="TOML">
+
+```toml
+[timeout]
+upstream_connect_ms = 5000
+proxy_idle_ms = 60000
+tls_handshake_secs = 15
+connection_handling_secs = 300
+shutdown_secs = 30
+
+[timeout.keep_alive]
+enabled = true
+upstream_idle_timeout = 60
+```
+
+  </TabItem>
+</Tabs>
+
+`[timeout.keep_alive]` applies to **HTTP/1.1**; HTTP/2 connections are always persistent.
+
+### `[logging]`
+
+**Static.** `RUST_LOG` can override `level`.
+
+<Tabs syncKey="huginn-config">
+  <TabItem label="YAML">
+
+```yaml
+logging:
+  level: "info"
+  show_target: false
+```
+
+  </TabItem>
+  <TabItem label="TOML">
+
+```toml
+[logging]
+level = "info"
+show_target = false
+```
+
+  </TabItem>
+</Tabs>
+
+### `[backend_pool]`
+
+HTTP connection pool for proxy → backend. **Dynamic** (reload recreates the pool and drains old connections).
+
+<Tabs syncKey="huginn-config">
+  <TabItem label="YAML">
+
+```yaml
+backend_pool:
+  enabled: true
+  idle_timeout: 90
+  pool_max_idle_per_host: 0
+```
+
+  </TabItem>
+  <TabItem label="TOML">
+
+```toml
+[backend_pool]
+enabled = true
+idle_timeout = 90
+pool_max_idle_per_host = 0
+```
+
+  </TabItem>
+</Tabs>
+
+| Key | Default | Description |
+| --- | --- | --- |
+| `enabled` | `true` | Enable pooling (`false` = new connection per request; not recommended for production). |
+| `idle_timeout` | `90` | Seconds before an idle pooled connection is closed. |
+| `pool_max_idle_per_host` | `0` | Max idle connections per backend host; `0` = unlimited. |
+
+## Minimal example
+
+<Tabs syncKey="huginn-config">
+  <TabItem label="YAML">
+
+```yaml
+preserve_host: false
+
+listen:
+  addrs:
+    - "0.0.0.0:8080"
+
+backends:
+  - address: "localhost:3000"
+
+routes:
+  - prefix: "/"
+    backend: "localhost:3000"
+```
+
+  </TabItem>
+  <TabItem label="TOML">
+
+```toml
+preserve_host = false
+
+[listen]
+addrs = ["0.0.0.0:8080"]
+
+[[backends]]
+address = "localhost:3000"
+
+[[routes]]
+prefix = "/"
+backend = "localhost:3000"
+```
+
+  </TabItem>
+</Tabs>
+
+Production-style samples: [`examples/config/compose.toml`](https://github.com/biandratti/huginn-proxy/blob/master/examples/config/compose.toml) and [`compose.yaml`](https://github.com/biandratti/huginn-proxy/blob/master/examples/config/compose.yaml).
+
+## Related
+
+- [How it works](/huginn-proxy/docs/how-it-works/): request path through the proxy
+- [Quick start](/huginn-proxy/docs/quick-example/): first request end-to-end

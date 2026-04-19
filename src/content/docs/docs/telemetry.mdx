@@ -5,12 +5,35 @@ sidebar:
   order: 9
 ---
 
-The **`[telemetry]`** section sets the **metrics and health** HTTP server. When `metrics_port` is set, Huginn Proxy serves observability on **that port only**, separate from the main proxy listener.
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+The **`[telemetry]`** section sets the **metrics and health** HTTP server. **Static** — the metrics listener binds at startup. When `metrics_port` is set, Huginn Proxy serves observability on **that port only**, separate from the main proxy listener.
+
+| Key | Default | Description |
+| --- | --- | --- |
+| `metrics_port` | omitted (disabled) | Port for Prometheus metrics + health HTTP server. Endpoints: `/metrics`, `/health`, `/ready`, `/live`. |
+| `otel_log_level` | `"warn"` | OpenTelemetry SDK internal log level (not application logs). |
+
+<Tabs syncKey="huginn-config">
+  <TabItem label="YAML">
+
+```yaml
+telemetry:
+  metrics_port: 9090
+  otel_log_level: "warn"
+```
+
+  </TabItem>
+  <TabItem label="TOML">
 
 ```toml
 [telemetry]
 metrics_port = 9090
+otel_log_level = "warn"
 ```
+
+  </TabItem>
+</Tabs>
 
 ## Endpoints
 

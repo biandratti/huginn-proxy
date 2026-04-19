@@ -1,0 +1,136 @@
+---
+title: Rate limiting
+description: Token-bucket limits globally and per route. Beta.
+sidebar:
+  order: 8
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+Token-bucket **global** limits live under **`[security.rate_limit]`**. **Per-route** limits use **`[routes.rate_limit]`** immediately after each **`[[routes]]`** entry (TOML associates the subtable with that route). **Dynamic.**
+
+See [`examples/config/rate-limit-example.toml`](https://github.com/biandratti/huginn-proxy/blob/master/examples/config/rate-limit-example.toml) on GitHub for a full file.
+
+## Strategies
+
+Key **`limit_by`** values:
+
+- **`ip`:** client IP
+- **`header`:** value of a named header (`limit_by_header`)
+- **`route`:** shared limit per route path
+- **`combined`:** IP + route
+
+Responses use **429** when exceeded. Counters are **in-memory** and **per process**; they are **not** shared across replicas.
+
+## Global default
+
+<Tabs syncKey="huginn-config">
+  <TabItem label="YAML">
+
+```yaml
+security:
+  rate_limit:
+    enabled: true
+    requests_per_second: 1000
+    burst: 2000
+    window_seconds: 1
+    limit_by: "ip"
+```
+
+  </TabItem>
+  <TabItem label="TOML">
+
+```toml
+[security.rate_limit]
+enabled = true
+requests_per_second = 1000
+burst = 2000
+window_seconds = 1
+limit_by = "ip"
+```
+
+  </TabItem>
+</Tabs>
+
+## Per-route override
+
+Only the keys you set override the global; unset keys fall back to global config.
+
+<Tabs syncKey="huginn-config">
+  <TabItem label="YAML">
+
+```yaml
+routes:
+  - prefix: "/api"
+    backend: "backend-a:9000"
+    rate_limit:
+      enabled: true
+      requests_per_second: 50
+      burst: 100
+      limit_by: combined
+  - prefix: "/public"
+    backend: "backend-b:9000"
+    rate_limit:
+      enabled: false
+```
+
+  </TabItem>
+  <TabItem label="TOML">
+
+```toml
+[[routes]]
+prefix = "/api"
+backend = "backend-a:9000"
+
+[routes.rate_limit]
+enabled = true
+requests_per_second = 50
+burst = 100
+limit_by = "combined"
+
+[[routes]]
+prefix = "/public"
+backend = "backend-b:9000"
+
+[routes.rate_limit]
+enabled = false   # disable rate limiting for this route
+```
+
+  </TabItem>
+</Tabs>
+
+## Rate limit by header
+
+<Tabs syncKey="huginn-config">
+  <TabItem label="YAML">
+
+```yaml
+security:
+  rate_limit:
+    enabled: true
+    requests_per_second: 200
+    burst: 400
+    limit_by: "header"
+    limit_by_header: "X-API-Key"
+```
+
+  </TabItem>
+  <TabItem label="TOML">
+
+```toml
+[security.rate_limit]
+enabled = true
+requests_per_second = 200
+burst = 400
+limit_by = "header"
+limit_by_header = "X-API-Key"
+```
+
+  </TabItem>
+</Tabs>
+
+## Related
+
+- [Security](/huginn-proxy/docs/security/): IP filter and security headers
+- [Routes](/huginn-proxy/docs/routes/): prefix and backend selection
+- [Configuration overview](/huginn-proxy/docs/configuration/)
