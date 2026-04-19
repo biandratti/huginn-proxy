@@ -17,6 +17,9 @@ export default defineConfig({
 	site,
 	base,
 	trailingSlash: 'always',
+	redirects: {
+		'/docs/deployment/': '/docs/containers/',
+	},
 	integrations: [
 		starlight({
 			components: {
@@ -114,7 +117,7 @@ export default defineConfig({
 					label: 'Deployment',
 					items: [
 						{ label: 'Artifacts', slug: 'docs/artifacts' },
-						{ label: 'Docker Compose', slug: 'docs/deployment' },
+						{ label: 'Containers', slug: 'docs/containers' },
 						{ label: 'Kubernetes', slug: 'docs/kubernetes' },
 						{ label: 'eBPF TCP setup', slug: 'docs/ebpf-setup' },
 					],

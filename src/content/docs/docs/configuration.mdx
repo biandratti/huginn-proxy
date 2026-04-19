@@ -28,22 +28,33 @@ Use the pages below for narrative, behavior, and examples alongside the referenc
 
 ## Top-level keys
 
+Rough split: **static** blocks need a process restart to take effect; **dynamic** blocks reload on `SIGHUP` or the config file watcher (see [SETTINGS.md](https://github.com/biandratti/huginn-proxy/blob/master/SETTINGS.md) for edge cases).
+
+### Static (restart required)
+
 | Key | Page / notes |
 | --- | --- |
-| `preserve_host` | Top-level bool; behavior when forwarding upstream — see [Routes](/huginn-proxy/docs/routes/) |
-| `[listen]` | [Listen](/huginn-proxy/docs/listen/) — **static** |
-| `[[backends]]` | [Backends](/huginn-proxy/docs/backends/) — **dynamic** |
-| `[[routes]]` | [Routes](/huginn-proxy/docs/routes/) — **dynamic** |
-| `[tls]` | [TLS](/huginn-proxy/docs/tls/) — **static** (cert file contents may reload via watcher) |
-| `[fingerprint]` | [Fingerprinting](/huginn-proxy/docs/fingerprinting/) — **static** |
-| `[security]` | [Security](/huginn-proxy/docs/security/) — mixed (see reference) |
-| `[security.ip_filter]` | [IP filtering](/huginn-proxy/docs/ip-filtering/) — **dynamic** |
-| `[security.rate_limit]` | [Rate limiting](/huginn-proxy/docs/rate-limiting/) — **dynamic** |
-| `[timeout]` | [Timeout](/huginn-proxy/docs/timeout/) — **static** |
-| `[logging]` | [Logging](/huginn-proxy/docs/logging/) — **static** |
-| `[telemetry]` | [Telemetry](/huginn-proxy/docs/telemetry/) — **static** |
-| `[headers]` | [Headers](/huginn-proxy/docs/headers/) — **dynamic** |
-| `[backend_pool]` | [Backends](/huginn-proxy/docs/backends/#backend-pool) — **dynamic** |
+| `preserve_host` | Top-level bool — [Routes](/huginn-proxy/docs/routes/) (forwarding `Host` upstream) |
+| `[listen]` | [Listen](/huginn-proxy/docs/listen/) |
+| `[tls]` | [TLS](/huginn-proxy/docs/tls/) — PEM paths may still refresh via watcher |
+| `[fingerprint]` | [Fingerprinting](/huginn-proxy/docs/fingerprinting/) |
+| `[timeout]` | [Timeout](/huginn-proxy/docs/timeout/) |
+| `[logging]` | [Logging](/huginn-proxy/docs/logging/) |
+| `[telemetry]` | [Telemetry](/huginn-proxy/docs/telemetry/) |
+
+### Dynamic (hot-reloadable)
+
+| Key | Page / notes |
+| --- | --- |
+| `[[backends]]` | [Backends](/huginn-proxy/docs/backends/) |
+| `[[routes]]` | [Routes](/huginn-proxy/docs/routes/) |
+| `[security.ip_filter]` | [IP filtering](/huginn-proxy/docs/ip-filtering/) |
+| `[security.rate_limit]` | [Rate limiting](/huginn-proxy/docs/rate-limiting/) |
+| `[security.headers]` | [Security](/huginn-proxy/docs/security/) (HSTS, CSP, custom — reloadable) |
+| `[headers]` | [Headers](/huginn-proxy/docs/headers/) |
+| `[backend_pool]` | [Backends](/huginn-proxy/docs/backends/#backend-pool) |
+
+**`[security]`** also includes **`max_connections`** ([Security](/huginn-proxy/docs/security/)), which is **static** — restart required. Treat **`[security]`** as mixed: use the pages above for each subsection.
 
 ## Examples (repository only)
 

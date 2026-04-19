@@ -7,7 +7,7 @@ sidebar:
 
 Published **container images** (GHCR) and **release binaries**: tags, platforms, and when eBPF applies.
 
-Quick local setup: [`examples/`](https://github.com/biandratti/huginn-proxy/tree/master/examples) on the `master` branch. Deployment topics: [Docker Compose](/huginn-proxy/docs/deployment/), [Kubernetes](/huginn-proxy/docs/kubernetes/).
+Quick local setup: [`examples/`](https://github.com/biandratti/huginn-proxy/tree/master/examples) on the `master` branch. Deployment topics: [Containers](/huginn-proxy/docs/containers/), [Kubernetes](/huginn-proxy/docs/kubernetes/).
 
 ## Docker images
 

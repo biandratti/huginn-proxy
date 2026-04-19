@@ -50,7 +50,7 @@ Full stack layout (Compose, caps, volumes) is maintained in [`examples/docker-co
 - **`bpffs`** must be mounted into **both** containers at `/sys/fs/bpf` (or adjust paths consistently).
 - **Health:** agent `/ready` should succeed when maps are pinned; proxy `/health` on `telemetry.metrics_port` is separate.
 
-See [Docker Compose](/huginn-proxy/docs/deployment/) for the Compose file index and clone/run flow, and [Artifacts](/huginn-proxy/docs/artifacts/) for GHCR image names.
+See [Containers](/huginn-proxy/docs/containers/) for the two Compose layouts (eBPF vs plain) and clone/run flow, and [Artifacts](/huginn-proxy/docs/artifacts/) for GHCR image names.
 
 ## Kubernetes networking
 

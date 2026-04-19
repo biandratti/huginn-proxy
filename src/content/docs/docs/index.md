@@ -18,5 +18,5 @@ This site tracks the **beta** line; verify the [GitHub releases](https://github.
 diving into [Configuration overview](/huginn-proxy/docs/configuration/).
 
 **Coming from another proxy?** Jump straight to [Quick start](/huginn-proxy/docs/quick-example/)
-for a minimal working setup, or [Deployment](/huginn-proxy/docs/deployment/) if you already know
+for a minimal working setup, or [Containers](/huginn-proxy/docs/containers/) if you already know
 what you want.
