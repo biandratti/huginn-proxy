@@ -5,12 +5,15 @@
 services:
   proxy:
     image: ghcr.io/biandratti/huginn-proxy-plain:latest
-    command: ["/usr/local/bin/huginn-proxy", "/config/compose.toml"]
+    command: [ "/usr/local/bin/huginn-proxy" ]
     environment:
+      # - HUGINN_CONFIG_PATH=/config/compose.toml
+      - HUGINN_CONFIG_PATH=/config/compose.yaml
       - HUGINN_WATCH=true
       - HUGINN_WATCH_DELAY_SECS=60
     volumes:
-      - ./config/compose.toml:/config/compose.toml:ro
+      #- ./config/compose.toml:/config/compose.toml:ro
+      - ./config/compose.yaml:/config/compose.yaml:ro
       - ./certs:/config/certs:ro
     ports:
       - "0.0.0.0:7000:7000"
@@ -18,7 +21,7 @@ services:
       - "0.0.0.0:9090:9090"
       - "[::]:9090:9090"
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://127.0.0.1:9090/health || exit 1"]
+      test: [ "CMD-SHELL", "curl -sf http://127.0.0.1:9090/health || exit 1" ]
       interval: 5s
       timeout: 3s
       retries: 12
@@ -31,11 +34,11 @@ services:
 
   backend-a:
     image: traefik/whoami
-    command: ["--port", "9000"]
+    command: [ "--port", "9000" ]
 
   backend-b:
     image: traefik/whoami
-    command: ["--port", "9000"]
+    command: [ "--port", "9000" ]
 
 networks:
   default:
