@@ -86,7 +86,7 @@ chmod 644 examples/certs/server.key examples/certs/server.crt
 
 Pick **one** stack. Both give you **JA4** (and related TLS/JA4H-style signals) and **Akamai-style** HTTP fingerprinting from the proxy. The only fork is whether you also run **TCP SYN** capture via **eBPF/XDP**.
 
-| | **Full stack** (`docker-compose.yml`) | **Plain stack** (`docker-compose.plain.yml`) |
+| | **eBPF stack** (`docker-compose.ebpf.yml`) | **Without-eBPF stack** (`docker-compose.without-ebpf.yml`) |
 |---|---|---|
 | **Fingerprints** | JA4 + Akamai + **TCP SYN** (kernel) | JA4 + Akamai **only** (no TCP SYN) |
 | **Images built from this repo** | **Two:** `proxy` (Dockerfile target `ebpf`) + `ebpf-agent` | **One:** `proxy` (Dockerfile target `plain`) |
@@ -97,10 +97,10 @@ Both files also start the same **demo backends** (`traefik/whoami`) — that is 
 
 ```bash
 # JA4 + Akamai + TCP SYN — two images + bpffs volume (kernel ≥ 5.11)
-docker compose -f examples/docker-compose.yml up --build
+docker compose -f examples/docker-compose.ebpf.yml up --build
 
 # JA4 + Akamai — single proxy image, no eBPF agent or bpffs volume
-docker compose -f examples/docker-compose.plain.yml up --build
+docker compose -f examples/docker-compose.without-ebpf.yml up --build
 ```
 
 Alternatively, pull a pre-built image from the registry:
@@ -159,7 +159,7 @@ The `config/` directory contains example configurations:
 - **`compose.toml`** - Basic proxy setup (default for Docker Compose)
 - **`rate-limit-example.toml`** - Advanced rate limiting configuration
 
-To switch configurations, edit `docker-compose.yml` and change the `command` and `volumes` sections.
+To switch configurations, edit `docker-compose.ebpf.yml` and change the `command` and `volumes` sections.
 
 ---
 
@@ -167,10 +167,11 @@ To switch configurations, edit `docker-compose.yml` and change the `command` and
 
 ### Rate Limiting
 
-To test rate limiting, switch to `rate-limit-example.toml` in `docker-compose.yml`:
+To test rate limiting, switch to `rate-limit-example.toml` in `docker-compose.ebpf.yml`:
 
 ```yaml
-command: [ "/usr/local/bin/huginn-proxy", "/config/rate-limit-example.toml" ]
+environment:
+  - HUGINN_CONFIG_PATH=/config/rate-limit-example.toml
 volumes:
   - ./config/rate-limit-example.toml:/config/rate-limit-example.toml:ro
   - ./certs:/config/certs:ro
@@ -223,8 +224,8 @@ Expected headers:
 
 **Connection refused?**
 
-- Ensure services are running: `docker compose -f examples/docker-compose.yml ps` (or `docker-compose.plain.yml`)
-- Check logs: `docker compose -f examples/docker-compose.yml logs proxy`
+- Ensure services are running: `docker compose -f examples/docker-compose.ebpf.yml ps` (or `docker-compose.without-ebpf.yml`)
+- Check logs: `docker compose -f examples/docker-compose.ebpf.yml logs proxy`
 
 **Rate limits not working?**
 
@@ -237,4 +238,4 @@ Expected headers:
   unsafe)" to proceed, or use `mkcert` (Option B above) for trusted certificates
 - **Command-line testing:** Use `curl -k` flag to ignore certificate validation
 - **Certificate expired:** Regenerate certificates using the commands above
-- **Docker Compose:** Ensure certificates are mounted correctly in `docker-compose.yml` volumes section
+- **Docker Compose:** Ensure certificates are mounted correctly in `docker-compose.ebpf.yml` volumes section

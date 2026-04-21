@@ -1,5 +1,5 @@
 # Pre-built images from GHCR: eBPF agent + proxy (TCP SYN path). Requires Linux, CAP_BPF, bpffs volume.
-# Same layout as docker-compose.yml but images are pulled instead of built.
+# Same layout as docker-compose.ebpf.yml but images are pulled instead of built.
 # Pin a version: replace :latest with :vX.Y.Z from GitHub Releases (same tag on all huginn-proxy* images).
 
 services:

@@ -244,7 +244,7 @@ All fingerprint checks are **on by default**. Disable individual checks with env
 |---|---|
 | `NO_CHECK_JA4=true` | Skip JA4 TLS fingerprint checks (`ja4`, `ja4_r`, `ja4_o`, `ja4_or`) |
 | `NO_CHECK_AKAMAI=true` | Skip Akamai HTTP/2 fingerprint check (auto-skipped when `K6_NO_HTTP2=true`) |
-| `NO_CHECK_TCP_SYN=true` | Skip TCP SYN fingerprint check — use when running without the eBPF agent (`docker-compose.plain.yml`) |
+| `NO_CHECK_TCP_SYN=true` | Skip TCP SYN fingerprint check — use when running without the eBPF agent (`docker-compose.without-ebpf.yml`) |
 
 Examples:
 

@@ -1,5 +1,5 @@
-# Pre-built images from GHCR (plain proxy — no eBPF in the binary).
-# Same layout as docker-compose.plain.yml; backends still build from this repo.
+# Pre-built images from GHCR (proxy without eBPF).
+# Same layout as docker-compose.without-ebpf.yml; backends still build from this repo.
 # Pin a version: replace :latest with :vX.Y.Z from GitHub Releases (same tag on all huginn-proxy* images).
 
 services:
