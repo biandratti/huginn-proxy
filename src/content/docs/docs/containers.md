@@ -39,14 +39,20 @@ Do **not** duplicate certificate recipes here — they drift easily. Follow **[`
 - **`bpffs`** volume mounted in **both** agent and proxy; **`HUGINN_EBPF_PIN_PATH`** must match (e.g. `/sys/fs/bpf/huginn`).
 - **Backends** in the example are sample upstreams (e.g. `traefik/whoami`).
 
-**Reference file (pre-built GHCR images):** [`examples/docker-compose.release-ebpf.yml`](https://github.com/biandratti/huginn-proxy/blob/master/examples/docker-compose.release-ebpf.yml)
+**Reference files:** build from source → [`examples/docker-compose.ebpf.yml`](https://github.com/biandratti/huginn-proxy/blob/master/examples/docker-compose.ebpf.yml) · pre-built GHCR images → [`examples/docker-compose.release-ebpf.yml`](https://github.com/biandratti/huginn-proxy/blob/master/examples/docker-compose.release-ebpf.yml)
 
 **Proxy `command` and `environment`:** the first CLI argument is the config path — **`compose.toml`** or **`compose.yaml`** (or any name); TOML vs YAML follows the **file extension**. Typical **`environment`** entries in that Compose file: **`HUGINN_EBPF_PIN_PATH`** and **`HUGINN_EBPF_SYN_MAP_MAX_ENTRIES`** (must match the agent), optional **`HUGINN_WATCH`** / **`HUGINN_WATCH_DELAY_SECS`** for reload-on-change. See [Configuration overview — Environment variables](/huginn-proxy/docs/configuration/#environment-variables) and [eBPF TCP setup](/huginn-proxy/docs/ebpf-setup/#environment-variables). Ensure **`fingerprint.tcp_enabled`** matches this stack.
 
 ```bash
 git clone https://github.com/biandratti/huginn-proxy.git
 cd huginn-proxy/examples
-# Certs + config: see examples/README.md (TLS section), then:
+# Certs + config: see examples/README.md (TLS section)
+# IPv6 (Linux/macOS): see examples/README.md (Enable IPv6 locally section), then:
+
+# Build from source:
+docker compose -f docker-compose.ebpf.yml up -d --build
+
+# Or pull pre-built GHCR images:
 docker compose -f docker-compose.release-ebpf.yml pull
 docker compose -f docker-compose.release-ebpf.yml up -d
 ```
@@ -67,19 +73,23 @@ Pin **`:latest`** to **`:vX.Y.Z`** on **all** `huginn-proxy*` images from the sa
 - **Single `proxy` service** (plus backends in the example). **No** `ebpf-agent` service.
 - **Pre-built GHCR images:** image `ghcr.io/biandratti/huginn-proxy-plain:latest` — no local Docker build required.
 
-**Reference file (pull from registry):** [`examples/docker-compose.release.yml`](https://github.com/biandratti/huginn-proxy/blob/master/examples/docker-compose.release.yml)
+**Reference files:** build from source → [`examples/docker-compose.without-ebpf.yml`](https://github.com/biandratti/huginn-proxy/blob/master/examples/docker-compose.without-ebpf.yml) · pre-built GHCR images → [`examples/docker-compose.release-without-ebpf.yml`](https://github.com/biandratti/huginn-proxy/blob/master/examples/docker-compose.release-without-ebpf.yml)
 
 It mounts config and certs like the eBPF release file. Pass the config via **`command`** (first arg) and/or **`HUGINN_CONFIG_PATH`**; **`.yaml` / `.yml` vs `.toml`** is determined by the path extension. Optional **`HUGINN_WATCH`** / **`HUGINN_WATCH_DELAY_SECS`**: [Environment variables](/huginn-proxy/docs/configuration/#environment-variables). No **`HUGINN_EBPF_*`** vars on the plain image unless you mistakenly mix layouts.
 
 ```bash
 git clone https://github.com/biandratti/huginn-proxy.git
 cd huginn-proxy/examples
-# Certs + config: see examples/README.md (TLS section), then:
-docker compose -f docker-compose.release.yml pull
-docker compose -f docker-compose.release.yml up -d
-```
+# Certs + config: see examples/README.md (TLS section)
+# IPv6 (Linux/macOS): see examples/README.md (Enable IPv6 locally section), then:
 
-**Build from source instead:** to compile the **`plain`** image locally (no GHCR pull), use [`docker-compose.plain.yml`](https://github.com/biandratti/huginn-proxy/blob/master/examples/docker-compose.plain.yml) — `docker compose -f docker-compose.plain.yml up -d --build`. Same fingerprint model (JA4 + Akamai, no TCP SYN), different delivery path.
+# Build from source:
+docker compose -f docker-compose.without-ebpf.yml up -d --build
+
+# Or pull pre-built GHCR images:
+docker compose -f docker-compose.release-without-ebpf.yml pull
+docker compose -f docker-compose.release-without-ebpf.yml up -d
+```
 
 ---
 

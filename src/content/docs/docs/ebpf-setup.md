@@ -42,7 +42,7 @@ These must be **consistent** between agent and proxy where shared (pin path, map
 | `HUGINN_EBPF_XDP_MODE` | XDP attach mode (e.g. `skb` vs `native` / driver-dependent; see agent docs in repo). |
 | `HUGINN_EBPF_METRICS_ADDR` / `HUGINN_EBPF_METRICS_PORT` | Where the **agent** binds its HTTP server for `/metrics`, `/health`, `/ready`, `/live`. See [Agent metrics bind address](#agent-metrics-bind-address) below. |
 
-Full stack layout (Compose, caps, volumes) is maintained in [`examples/docker-compose.yml`](https://github.com/biandratti/huginn-proxy/blob/master/examples/docker-compose.yml); **do not treat this table as a second source of truth** if the repo changes defaults.
+Full stack layout (Compose, caps, volumes) is maintained in [`examples/docker-compose.ebpf.yml`](https://github.com/biandratti/huginn-proxy/blob/master/examples/docker-compose.ebpf.yml) (build from source) and [`examples/docker-compose.release-ebpf.yml`](https://github.com/biandratti/huginn-proxy/blob/master/examples/docker-compose.release-ebpf.yml) (pre-built GHCR images).
 
 ### Agent metrics bind address
 
