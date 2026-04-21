@@ -1,10 +1,10 @@
 //! End-to-end tests for Huginn Proxy
 //!
 //! These tests require Docker and Docker Compose to be available.
-//! They use the Docker Compose configuration from `examples/docker-compose.yml`
+//! They use the Docker Compose configuration from `examples/docker-compose.ebpf.yml`
 //!
 //! To run these tests:
-//! 1. Start Docker Compose: `cd examples && docker compose up -d --build`
+//! 1. Start Docker Compose: `cd examples && docker compose -f docker-compose.ebpf.yml up -d --build`
 //! 2. Run tests: `cargo test --package tests-e2e --test e2e`
 
 mod basic;

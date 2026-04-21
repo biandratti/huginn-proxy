@@ -2,6 +2,14 @@
 
 This directory contains Docker Compose examples and configuration files to help you get started with huginn-proxy.
 
+> [!IMPORTANT]
+> **macOS (Docker Desktop) limitations:** The compose files bind ports on both IPv4 (`0.0.0.0`) and
+> IPv6 (`[::]`). Docker Desktop may fail to bind the `[::]` entries — if you get port binding errors
+> on startup, remove the `[::]:*` lines from the `ports` section of the compose file you are using.
+> Additionally, all traffic from the macOS host is NATed through Docker Desktop's gateway
+> (`192.168.65.1`), so the proxy always sees an IPv4 source address — even when using `curl -6`.
+> See [Enable IPv6 locally](#2-enable-ipv6-locally) for the workaround.
+
 ---
 
 ## Building from Source
@@ -44,7 +52,8 @@ sudo chown -R $USER:$USER examples/certs/
 
 **Option A: Self-signed certificate (default, works with `curl -k` but browsers will show warnings)**
 
-Include **SAN** (`subjectAltName`) so `https://localhost`, `https://127.0.0.1`, and IPv6 loopback match the certificate — CN-only certs are rejected by many TLS stacks. Requires OpenSSL 1.1.1 or newer (`openssl version`).
+Include **SAN** (`subjectAltName`) so `https://localhost`, `https://127.0.0.1`, and IPv6 loopback match the
+certificate — CN-only certs are rejected by many TLS stacks. Requires OpenSSL 1.1.1 or newer (`openssl version`).
 
 ```bash
 openssl req -x509 -newkey rsa:2048 -nodes \
@@ -82,38 +91,86 @@ chmod 644 examples/certs/server.key examples/certs/server.crt
 > - Use Option B with `mkcert` for trusted certificates
 > - Use `curl -k` for command-line testing (ignores certificate validation)
 
-### 2. Start Services
+### 2. Enable IPv6 locally
 
-Pick **one** stack. Both give you **JA4** (and related TLS/JA4H-style signals) and **Akamai-style** HTTP fingerprinting from the proxy. The only fork is whether you also run **TCP SYN** capture via **eBPF/XDP**.
+Docker requires explicit IPv6 configuration on the host before the compose files can publish
+IPv6 ports and create dual-stack networks.
 
-| | **Full stack** (`docker-compose.yml`) | **Plain stack** (`docker-compose.plain.yml`) |
-|---|---|---|
-| **Fingerprints** | JA4 + Akamai + **TCP SYN** (kernel) | JA4 + Akamai **only** (no TCP SYN) |
-| **Images built from this repo** | **Two:** `proxy` (Dockerfile target `ebpf`) + `ebpf-agent` | **One:** `proxy` (Dockerfile target `plain`) |
-| **Extra volume** | **`bpffs`** — shared BPF filesystem for maps between proxy and agent | None |
-| **Host requirements** | Linux kernel ≥ 5.11, Docker grants `cap_add` (see compose) | Any recent Linux kernel, no BPF caps |
+**Linux (Docker Engine):**
+
+```bash
+sudo tee /etc/docker/daemon.json > /dev/null <<'EOF'
+{
+  "ipv6": true,
+  "fixed-cidr-v6": "fd00::/80"
+}
+EOF
+
+sudo systemctl restart docker
+```
+
+**macOS (Docker Desktop):**
+
+Docker Desktop runs a Linux VM — all `curl` from the macOS host goes through Docker Desktop's NAT
+gateway (`192.168.65.1`), so the proxy always sees an IPv4 source regardless of `-6` or `[::1]`.
+To get a real IPv6 fingerprint, run a container **inside** the Docker network:
+
+```bash
+PROXY_IPV6=$(docker inspect \
+  $(docker compose -f examples/docker-compose.without-ebpf.yml ps -q proxy) \
+  --format '{{range .NetworkSettings.Networks}}{{.GlobalIPv6Address}}{{end}}')
+
+docker run --rm \
+  --network examples_default \
+  curlimages/curl \
+  -sk "https://[${PROXY_IPV6}]:7000/api/test"
+```
+
+To enable IPv6 in Docker Desktop's engine config, go to **Settings → Docker Engine** and add:
+
+```json
+{
+  "ipv6": true,
+  "fixed-cidr-v6": "fd00::/80"
+}
+```
+
+Then click **Apply & restart**.
+
+### 3. Start Services
+
+Pick **one** stack. Both give you **JA4** (and related TLS/JA4H-style signals) and **Akamai-style** HTTP fingerprinting
+from the proxy. The only fork is whether you also run **TCP SYN** capture via **eBPF/XDP**.
+
+|                                 | **eBPF stack** (`docker-compose.ebpf.yml`)                           | **Without-eBPF stack** (`docker-compose.without-ebpf.yml`) |
+|---------------------------------|----------------------------------------------------------------------|------------------------------------------------------------|
+| **Fingerprints**                | JA4 + Akamai + **TCP SYN** (kernel)                                  | JA4 + Akamai **only** (no TCP SYN)                         |
+| **Images built from this repo** | **Two:** `proxy` (Dockerfile target `ebpf`) + `ebpf-agent`           | **One:** `proxy` (Dockerfile target `plain`)               |
+| **Extra volume**                | **`bpffs`** — shared BPF filesystem for maps between proxy and agent | None                                                       |
+| **Host requirements**           | Linux kernel ≥ 5.11, Docker grants `cap_add` (see compose)           | Any recent Linux kernel, no BPF caps                       |
 
 Both files also start the same **demo backends** (`traefik/whoami`) — that is unrelated to the choice above.
 
 ```bash
 # JA4 + Akamai + TCP SYN — two images + bpffs volume (kernel ≥ 5.11)
-docker compose -f examples/docker-compose.yml up --build
+docker compose -f examples/docker-compose.ebpf.yml up --build
 
 # JA4 + Akamai — single proxy image, no eBPF agent or bpffs volume
-docker compose -f examples/docker-compose.plain.yml up --build
+docker compose -f examples/docker-compose.without-ebpf.yml up --build
 ```
 
 Alternatively, pull a pre-built image from the registry:
 
-| Image | Description |
-|---|---|
-| `ghcr.io/<owner>/huginn-proxy:latest` | Proxy with eBPF/XDP — requires Linux kernel ≥ 5.11 and `cap_add` |
-| `ghcr.io/<owner>/huginn-proxy-plain:latest` | Proxy without eBPF — runs on any Linux kernel, no extra capabilities |
-| `ghcr.io/<owner>/huginn-proxy-ebpf-agent:latest` | XDP agent — pairs with the proxy image above |
+| Image                                            | Description                                                          |
+|--------------------------------------------------|----------------------------------------------------------------------|
+| `ghcr.io/<owner>/huginn-proxy:latest`            | Proxy with eBPF/XDP — requires Linux kernel ≥ 5.11 and `cap_add`     |
+| `ghcr.io/<owner>/huginn-proxy-plain:latest`      | Proxy without eBPF — runs on any Linux kernel, no extra capabilities |
+| `ghcr.io/<owner>/huginn-proxy-ebpf-agent:latest` | XDP agent — pairs with the proxy image above                         |
 
-### 3. Test the Proxy
+### 4. Test the Proxy
 
-Use `127.0.0.1` here so the host matches published ports reliably (some systems resolve `localhost` to IPv6 first; the compose example publishes both IPv4 and IPv6, but explicit IPv4 avoids surprises in CI and scripts).
+Use `127.0.0.1` here so the host matches published ports reliably (some systems resolve `localhost` to IPv6 first; the
+compose example publishes both IPv4 and IPv6, but explicit IPv4 avoids surprises in CI and scripts).
 
 ```bash
 curl -sk https://127.0.0.1:7000/api/test
@@ -130,23 +187,25 @@ curl -4 http://localhost:9090/metrics | grep huginn_proxy
 curl -6 http://localhost:9090/metrics | grep huginn_proxy
 ```
 
-**Browser:** Open `https://localhost:7000/` (or `https://127.0.0.1:7000/` if your cert includes that name in SAN — `mkcert` Option B lists both). The self-signed **Option A** cert uses `CN=localhost`, so the hostname `localhost` matches; you may still need to accept the browser warning unless you use `mkcert`.
+**Browser:** Open `https://localhost:7000/` (or `https://127.0.0.1:7000/` if your cert includes that name in SAN —
+`mkcert` Option B lists both). The self-signed **Option A** cert uses `CN=localhost`, so the hostname `localhost`
+matches; you may still need to accept the browser warning unless you use `mkcert`.
 
 ---
 
 ## Endpoints
 
-| Service | URL | Description |
-|---------|-----|-------------|
-| Proxy | `https://127.0.0.1:7000/` | HTTPS proxy |
-| Proxy | `http://127.0.0.1:9090/health` | Health |
-| Proxy | `http://127.0.0.1:9090/ready` | Readiness |
-| Proxy | `http://127.0.0.1:9090/live` | Liveness |
-| Proxy | `http://127.0.0.1:9090/metrics` | Prometheus metrics |
-| eBPF Agent | `http://127.0.0.1:9091/health` | Health |
-| eBPF Agent | `http://127.0.0.1:9091/ready` | Readiness (BPF pins) |
-| eBPF Agent | `http://127.0.0.1:9091/live` | Liveness |
-| eBPF Agent | `http://127.0.0.1:9091/metrics` | Prometheus metrics |
+| Service    | URL                             | Description          |
+|------------|---------------------------------|----------------------|
+| Proxy      | `https://127.0.0.1:7000/`       | HTTPS proxy          |
+| Proxy      | `http://127.0.0.1:9090/health`  | Health               |
+| Proxy      | `http://127.0.0.1:9090/ready`   | Readiness            |
+| Proxy      | `http://127.0.0.1:9090/live`    | Liveness             |
+| Proxy      | `http://127.0.0.1:9090/metrics` | Prometheus metrics   |
+| eBPF Agent | `http://127.0.0.1:9091/health`  | Health               |
+| eBPF Agent | `http://127.0.0.1:9091/ready`   | Readiness (BPF pins) |
+| eBPF Agent | `http://127.0.0.1:9091/live`    | Liveness             |
+| eBPF Agent | `http://127.0.0.1:9091/metrics` | Prometheus metrics   |
 
 eBPF compose examples map agent HTTP on the proxy service (`9091:9091`).
 
@@ -159,7 +218,7 @@ The `config/` directory contains example configurations:
 - **`compose.toml`** - Basic proxy setup (default for Docker Compose)
 - **`rate-limit-example.toml`** - Advanced rate limiting configuration
 
-To switch configurations, edit `docker-compose.yml` and change the `command` and `volumes` sections.
+To switch configurations, edit `docker-compose.ebpf.yml` and change the `command` and `volumes` sections.
 
 ---
 
@@ -167,10 +226,11 @@ To switch configurations, edit `docker-compose.yml` and change the `command` and
 
 ### Rate Limiting
 
-To test rate limiting, switch to `rate-limit-example.toml` in `docker-compose.yml`:
+To test rate limiting, switch to `rate-limit-example.toml` in `docker-compose.ebpf.yml`:
 
 ```yaml
-command: [ "/usr/local/bin/huginn-proxy", "/config/rate-limit-example.toml" ]
+environment:
+  - HUGINN_CONFIG_PATH=/config/rate-limit-example.toml
 volumes:
   - ./config/rate-limit-example.toml:/config/rate-limit-example.toml:ro
   - ./certs:/config/certs:ro
@@ -223,8 +283,9 @@ Expected headers:
 
 **Connection refused?**
 
-- Ensure services are running: `docker compose -f examples/docker-compose.yml ps` (or `docker-compose.plain.yml`)
-- Check logs: `docker compose -f examples/docker-compose.yml logs proxy`
+- Ensure services are running: `docker compose -f examples/docker-compose.ebpf.yml ps` (or
+  `docker-compose.without-ebpf.yml`)
+- Check logs: `docker compose -f examples/docker-compose.ebpf.yml logs proxy`
 
 **Rate limits not working?**
 
@@ -237,4 +298,4 @@ Expected headers:
   unsafe)" to proceed, or use `mkcert` (Option B above) for trusted certificates
 - **Command-line testing:** Use `curl -k` flag to ignore certificate validation
 - **Certificate expired:** Regenerate certificates using the commands above
-- **Docker Compose:** Ensure certificates are mounted correctly in `docker-compose.yml` volumes section
+- **Docker Compose:** Ensure certificates are mounted correctly in `docker-compose.ebpf.yml` volumes section

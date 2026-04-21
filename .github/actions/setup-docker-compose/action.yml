@@ -2,7 +2,7 @@ name: 'Setup Docker Compose services'
 description: 'Set up Docker Buildx, generate TLS certificates, build images, and start Docker Compose services'
 inputs:
   compose-dir:
-    description: 'Directory containing docker-compose.yml (default: examples)'
+    description: 'Directory containing the compose files (default: examples)'
     required: false
     default: 'examples'
   health-timeout:
@@ -53,10 +53,10 @@ runs:
           -t examples_ebpf-agent:latest \
           --load \
           ..
-        docker compose up -d
+        docker compose -f docker-compose.ebpf.yml up -d
         echo "Waiting for proxy and ebpf-agent to be healthy..."
         timeout ${{ inputs.health-timeout }} bash -c \
-          'until docker compose ps proxy | grep -q "(healthy)" && docker compose ps ebpf-agent | grep -q "(healthy)"; do sleep 2; done'
-        docker compose ps
+          'until docker compose -f docker-compose.ebpf.yml ps proxy | grep -q "(healthy)" && docker compose -f docker-compose.ebpf.yml ps ebpf-agent | grep -q "(healthy)"; do sleep 2; done'
+        docker compose -f docker-compose.ebpf.yml ps
         echo "Waiting for services to be ready..."
         sleep ${{ inputs.ready-delay }}

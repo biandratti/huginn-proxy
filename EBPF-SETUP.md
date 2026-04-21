@@ -131,7 +131,7 @@ where the agent starts after the proxy.
 
 ## Docker Compose
 
-See `examples/docker-compose.yml` for the full working example.
+See `examples/docker-compose.ebpf.yml` for the full working example.
 
 The agent shares the proxy's network namespace (`network_mode: "service:proxy"`) so XDP
 on `eth0` captures the SYN packets arriving at the proxy. Both containers share a bpffs

@@ -12,7 +12,7 @@ Use a published image from GHCR (see [DEPLOYMENT-MATRIX.md](DEPLOYMENT-MATRIX.md
 
 From the **repository root**, mount a real config **file** on the host. If the path does not exist, Docker creates an empty **directory** with that name and the proxy fails with `Is a directory (os error 21)` — remove any mistaken `config.toml` directory (`rm -rf ./config.toml`) and point at the file under `examples/config/`.
 
-The checked-in example is `examples/config/compose.toml` (same one `examples/docker-compose.yml` uses). Backends there are `backend-a` / `backend-b` (Docker Compose DNS names); for a working stack use Compose below, or change backends to addresses reachable from the container.
+The checked-in example is `examples/config/compose.toml` (same one `examples/docker-compose.ebpf.yml` uses). Backends there are `backend-a` / `backend-b` (Docker Compose DNS names); for a working stack use Compose below, or change backends to addresses reachable from the container.
 
 **Note:** The process runs as user `app` (UID **10001**). Certificate and key files under `/config/certs` must be readable by that user (e.g. `chmod` / `chown` on the host copy).
 
@@ -20,10 +20,10 @@ The checked-in example is `examples/config/compose.toml` (same one `examples/doc
 
 | File | Images | Use case |
 | --- | --- | --- |
-| `examples/docker-compose.yml` | Built from this repo | Full stack with eBPF agent (dev / CI) |
-| `examples/docker-compose.plain.yml` | Built from this repo | Proxy only (no eBPF in the binary) |
+| `examples/docker-compose.ebpf.yml` | Built from this repo | Full stack with eBPF agent (dev / CI) |
+| `examples/docker-compose.without-ebpf.yml` | Built from this repo | Proxy only (no eBPF in the binary) |
 | `examples/docker-compose.release-ebpf.yml` | **GHCR** `huginn-proxy` + `huginn-proxy-ebpf-agent` | Same as above, using published images |
-| `examples/docker-compose.release.yml` | **GHCR** `huginn-proxy-plain` | Same as plain, using published images |
+| `examples/docker-compose.release-without-ebpf.yml` | **GHCR** `huginn-proxy-plain` | Same as without-eBPF, using published images |
 
 Published image names and tags (`latest` / `vX.Y.Z`): [DEPLOYMENT-MATRIX.md](DEPLOYMENT-MATRIX.md). The three GHCR packages are separate repositories (`huginn-proxy`, `huginn-proxy-plain`, `huginn-proxy-ebpf-agent`); **do not** add `-ebpf-agent` as a suffix on the tag.
 
@@ -33,11 +33,11 @@ Pre-built images from GHCR (pin `latest` to a release tag in the compose file if
 
 ```bash
 cd examples
-docker compose -f docker-compose.release.yml pull
-docker compose -f docker-compose.release.yml up -d
+docker compose -f docker-compose.release-without-ebpf.yml pull
+docker compose -f docker-compose.release-without-ebpf.yml up -d
 ```
 
-With eBPF agent + proxy from GHCR (Linux host; requires `CAP_BPF` and the `bpffs` volume, same as `docker-compose.yml`):
+With eBPF agent + proxy from GHCR (Linux host; requires `CAP_BPF` and the `bpffs` volume, same as `docker-compose.ebpf.yml`):
 
 ```bash
 cd examples

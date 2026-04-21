@@ -1,5 +1,5 @@
 # Pre-built images from GHCR: eBPF agent + proxy (TCP SYN path). Requires Linux, CAP_BPF, bpffs volume.
-# Same layout as docker-compose.yml but images are pulled instead of built.
+# Same layout as docker-compose.ebpf.yml but images are pulled instead of built.
 # Pin a version: replace :latest with :vX.Y.Z from GitHub Releases (same tag on all huginn-proxy* images).
 
 services:
@@ -34,14 +34,17 @@ services:
 
   proxy:
     image: ghcr.io/biandratti/huginn-proxy:latest
-    command: ["/usr/local/bin/huginn-proxy", "/config/compose.toml"]
+    command: ["/usr/local/bin/huginn-proxy"]
     environment:
+    # - HUGINN_CONFIG_PATH=/config/compose.toml
+      - HUGINN_CONFIG_PATH=/config/compose.yaml
       - HUGINN_EBPF_PIN_PATH=/sys/fs/bpf/huginn
       - HUGINN_EBPF_SYN_MAP_MAX_ENTRIES=8192
       - HUGINN_WATCH=true
       - HUGINN_WATCH_DELAY_SECS=60
     volumes:
-      - ./config/compose.toml:/config/compose.toml:ro
+      #- ./config/compose.toml:/config/compose.toml:ro
+      - ./config/compose.yaml:/config/compose.yaml:ro
       - ./certs:/config/certs:ro
       - bpffs:/sys/fs/bpf
     ports:
