@@ -1,0 +1,16 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: "huginn-proxy"
+    static_configs:
+      - targets: ["host.docker.internal:9090"]
+    scrape_interval: 15s
+
+  # Only needed when running the eBPF stack (docker-compose.ebpf.yml or docker-compose.release-ebpf.yml).
+  # Remove or comment out if running the without-ebpf stack.
+  - job_name: "huginn-ebpf-agent"
+    static_configs:
+      - targets: ["host.docker.internal:9091"]
+    scrape_interval: 15s
