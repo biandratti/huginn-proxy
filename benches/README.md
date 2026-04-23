@@ -240,11 +240,32 @@ k6 run --insecure-skip-tls-verify benches/load/k6/fingerprints.js
 
 All fingerprint checks are **on by default**. Disable individual checks with env vars:
 
-| Variable | Description |
-|---|---|
-| `NO_CHECK_JA4=true` | Skip JA4 TLS fingerprint checks (`ja4`, `ja4_r`, `ja4_o`, `ja4_or`) |
-| `NO_CHECK_AKAMAI=true` | Skip Akamai HTTP/2 fingerprint check (auto-skipped when `K6_NO_HTTP2=true`) |
-| `NO_CHECK_TCP_SYN=true` | Skip TCP SYN fingerprint check — use when running without the eBPF agent (`docker-compose.without-ebpf.yml`) |
+| Variable | Default | Description |
+|---|---|---|
+| `NO_CHECK_JA4=true` | off | Skip JA4 TLS fingerprint checks (`ja4`, `ja4_r`, `ja4_o`, `ja4_or`) |
+| `NO_CHECK_AKAMAI=true` | off | Skip Akamai HTTP/2 fingerprint check (auto-skipped when `K6_NO_HTTP2=true`) |
+| `NO_CHECK_TCP_SYN=true` | off | Skip TCP SYN fingerprint check — use when running without the eBPF agent |
+| `K6_CHECKS_RATE` | `0.99` | Minimum required check success rate (e.g. `0.995`) |
+| `K6_FAILED_RATE` | `0` (steady) / `0.02` (ramp) | Maximum tolerated HTTP error rate |
+
+> **RAMP mode thresholds:** `RAMP=true` drives the proxy to saturation by design — some errors
+> at the 300 VU stage are expected. The script uses `rate<=0.02` (≤ 2 % errors) in ramp mode
+> instead of the strict `rate==0` used in steady-state runs. Override with `--env K6_FAILED_RATE=0.01`.
+
+#### OS tuning for high-VU tests
+
+When TCP SYN checks are active (`noConnectionReuse: true`), every request opens a fresh TCP
+connection consuming one ephemeral port. The kernel keeps closed ports in `TIME_WAIT` for
+`tcp_fin_timeout` seconds. At high VU counts this can exhaust the ephemeral port range before
+the proxy becomes the bottleneck.
+
+| Scenario | Required conn/s | Recommended tuning |
+|---|---|---|
+| ≤ 30 VUs + TCP SYN | < 470 | none (default `tcp_fin_timeout=60`, 28k ports) |
+| 50 VUs + TCP SYN | ~700 | `sudo sysctl -w net.ipv4.tcp_fin_timeout=15` |
+| RAMP to 300 VUs | ~2 000 peak | `tcp_fin_timeout=10` + `ip_local_port_range="10000 65535"` |
+| Any VU count, no TCP SYN | n/a | no tuning needed — keep-alive reuses connections |
+
 
 Examples:
 
@@ -252,18 +273,23 @@ Examples:
 # Default: 5 VUs / 30s with all fingerprint checks
 k6 run --insecure-skip-tls-verify benches/load/k6/fingerprints.js
 
-# Higher steady load (TCP SYN check → noConnectionReuse → full TLS handshake per request)
+# Higher steady load — tune TIME_WAIT first (see table above)
 k6 run --env VUS=50 --env DURATION=60s --insecure-skip-tls-verify benches/load/k6/fingerprints.js
 
-# Ramp to saturation: 10 → 50 → 150 → 300 VUs (~3.5 min)
-# Watch http_req_duration and checks_failed to identify where the proxy degrades
+# Ramp to saturation: 10 → 50 → 150 → 300 VUs (~4 min)
+# Tune OS first: sudo sysctl -w net.ipv4.tcp_fin_timeout=10 net.ipv4.ip_local_port_range="10000 65535"
+# Expects ≤ 2% errors at the 300 VU peak (proxy saturation point).
 k6 run --env RAMP=true --insecure-skip-tls-verify benches/load/k6/fingerprints.js
 
 # HTTP/1.1 only (Akamai auto-skipped)
 k6 run --env K6_NO_HTTP2=true --insecure-skip-tls-verify benches/load/k6/fingerprints.js
 
-# Without eBPF agent (also re-enables keep-alive for higher throughput)
+# Without eBPF agent — re-enables keep-alive for maximum throughput
 k6 run --env NO_CHECK_TCP_SYN=true --insecure-skip-tls-verify benches/load/k6/fingerprints.js
+
+# Pure throughput (no fingerprint checks, keep-alive, 50 VUs)
+k6 run --env VUS=50 --env DURATION=60s --env NO_CHECK_TCP_SYN=true \
+  --insecure-skip-tls-verify benches/load/k6/fingerprints.js
 ```
 
 ### CPU / memory (container)

@@ -127,7 +127,7 @@ sum by (backend_address) (rate(huginn_backend_bytes_received_total[5m]))
 **Labels**:
 
 - `protocol`: Connection protocol (`http/1.1`, `h2`, `https`)
-- `reason`: Rejection reason (`connection_limit`)
+- `reason`: Rejection reason — `limit_exceeded` (active connections hit the configured maximum)
 
 **Example queries**:
 
@@ -155,7 +155,7 @@ rate(huginn_connections_rejected_total[5m])
 
 - `method`: HTTP method (`GET`, `POST`, `PUT`, etc.)
 - `status_code`: HTTP status code (`200`, `404`, `500`, etc.)
-- `protocol`: HTTP version (`HTTP/1.1`, `h2`)
+- `protocol`: HTTP version (`HTTP/1.1`, `HTTP/2.0`)
 - `route`: Matched route prefix (e.g., `/api`, `/`)
 
 **Example queries**:
@@ -240,11 +240,13 @@ histogram_quantile(0.95, rate(huginn_tls_handshake_duration_seconds_bucket[5m]))
 
 | Metric                                                 | Type      | Description                            | Labels |
 |--------------------------------------------------------|-----------|----------------------------------------|--------|
-| `huginn_http2_fingerprints_extracted_total`            | Counter   | HTTP/2 (Akamai) fingerprints extracted | -      |
-| `huginn_http2_fingerprint_extraction_duration_seconds` | Histogram | HTTP/2 fingerprint extraction time     | -      |
-| `huginn_http2_fingerprint_failures_total`              | Counter   | HTTP/2 fingerprint failures            | -      |
+| `huginn_http2_fingerprints_extracted_total`            | Counter   | HTTP/2 (Akamai) fingerprints extracted | -        |
+| `huginn_http2_fingerprint_extraction_duration_seconds` | Histogram | HTTP/2 fingerprint extraction time     | -        |
+| `huginn_http2_fingerprint_failures_total`              | Counter   | HTTP/2 fingerprint failures            | `reason` |
 
-**Note**: HTTP/2 fingerprint failures include HTTP/1.1 connections (expected behavior).
+**Labels**:
+
+- `reason`: Failure kind — `extraction_failed` (HTTP/2 connection where fingerprint could not be extracted, e.g. malformed frames or connection closed before SETTINGS), `not_http2` (HTTP/1.1 connection — Akamai fingerprinting does not apply)
 
 #### TCP SYN Fingerprinting (p0f via eBPF)
 
@@ -268,6 +270,12 @@ rate(huginn_tls_fingerprints_extracted_total[5m])
 
 # HTTP/2 fingerprint extraction rate
 rate(huginn_http2_fingerprints_extracted_total[5m])
+
+# HTTP/2 fingerprint failure rate (HTTP/2 connections only)
+rate(huginn_http2_fingerprint_failures_total{reason="extraction_failed"}[5m])
+
+# HTTP/1.1 connections (no HTTP/2 fingerprint applicable)
+rate(huginn_http2_fingerprint_failures_total{reason="not_http2"}[5m])
 
 # TLS fingerprint failure rate
 rate(huginn_tls_fingerprint_failures_total[5m])
@@ -612,3 +620,19 @@ The following metrics will be added when the corresponding features are implemen
 - Trace sampling
 
 See [ROADMAP.md](ROADMAP.md) for complete list of planned features.
+
+---
+
+## Grafana Dashboard
+
+A pre-built Grafana dashboard covering all metrics in this document is available in [`examples/grafana/dashboards/huginn-proxy.json`](examples/grafana/dashboards/huginn-proxy.json).
+
+To run it locally alongside the proxy:
+
+```bash
+docker compose -f examples/docker-compose.observability.yml up -d
+```
+
+Then open `http://localhost:3000` and log in with **admin / huginn**. The dashboard loads automatically.
+
+See [`examples/README.md`](examples/README.md#telemetry) for full setup instructions.

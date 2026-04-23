@@ -139,9 +139,16 @@ pub async fn run(
 
     let (reload_tx, mut reload_rx) = tokio::sync::mpsc::unbounded_channel::<()>();
     if watch_opts.watch {
-        if let Some(ref config_path) = watch_opts.config_path {
-            spawn_config_watcher(config_path.clone(), reload_tx, watch_opts.watch_delay_secs)?;
+        match &watch_opts.config_path {
+            Some(config_path) => {
+                spawn_config_watcher(config_path.clone(), reload_tx, watch_opts.watch_delay_secs)?;
+            }
+            None => {
+                warn!("HUGINN_WATCH=true but no config path provided — hot-reload disabled");
+            }
         }
+    } else {
+        info!("Config hot-reload disabled (set HUGINN_WATCH=true to enable)");
     }
 
     let reload_mutex = Arc::new(tokio::sync::Mutex::new(()));

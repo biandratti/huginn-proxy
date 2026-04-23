@@ -4,6 +4,7 @@ use thiserror::Error;
 use tokio::sync::watch;
 use tracing::warn;
 
+use crate::telemetry::metrics::values;
 use crate::telemetry::Metrics;
 
 use super::guards::ConnectionGuard;
@@ -64,7 +65,7 @@ impl ConnectionManager {
         // Check connection limit (DoS protection)
         let current_connections = self.active_connections.load(Ordering::Relaxed);
         if current_connections >= self.max_connections {
-            metrics.connections_rejected_total.add(1, &[]);
+            metrics.record_connection_rejected(values::REASON_LIMIT_EXCEEDED);
             warn!(
                 current = current_connections,
                 limit = self.max_connections,

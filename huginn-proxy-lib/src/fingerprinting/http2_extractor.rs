@@ -143,9 +143,7 @@ impl<S: AsyncRead + Unpin> AsyncRead for CapturingStream<S> {
                                                 "CapturingStream: malformed HEADERS frame, possible spoofed traffic: {}",
                                                 reason
                                             );
-                                            self.metrics
-                                                .http2_fingerprint_failures_total
-                                                .add(1, &[]);
+                                            self.metrics.record_http2_fingerprint_failure();
                                         }
                                         Err(HuginnNetHttpError::NoSettingsFrame) => {
                                             debug!("CapturingStream: SETTINGS frame not yet received, will retry on next read");
@@ -185,9 +183,6 @@ impl<S: AsyncWrite + Unpin> AsyncWrite for CapturingStream<S> {
     }
 
     fn poll_shutdown(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
-        if !self.fingerprint_extracted.load(Ordering::Relaxed) {
-            self.metrics.http2_fingerprint_failures_total.add(1, &[]);
-        }
         Pin::new(&mut self.inner).poll_shutdown(cx)
     }
 }

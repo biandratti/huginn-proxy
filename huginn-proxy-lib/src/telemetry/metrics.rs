@@ -34,6 +34,10 @@ pub mod values {
     pub const CONTEXT_RESPONSE: &str = "response";
     pub const RELOAD_SUCCESS: &str = "success";
     pub const RELOAD_ERROR: &str = "error";
+    pub const REASON_EXTRACTION_FAILED: &str = "extraction_failed";
+    pub const REASON_NOT_HTTP2: &str = "not_http2";
+    pub const REASON_LIMIT_EXCEEDED: &str = "limit_exceeded";
+    pub const REASON_SHUTDOWN: &str = "shutdown";
 }
 
 #[derive(Clone)]
@@ -561,6 +565,29 @@ impl Metrics {
     pub fn record_reload_error(&self) {
         self.config_reload_total
             .add(1, &[KeyValue::new(labels::RESULT, values::RELOAD_ERROR)]);
+    }
+
+    /// Record a rejected incoming connection.
+    ///
+    /// `reason` is one of:
+    /// - `"limit_exceeded"` — active connection count hit `max_connections`
+    /// - `"shutdown"`       — proxy is shutting down
+    pub fn record_connection_rejected(&self, reason: &'static str) {
+        self.connections_rejected_total
+            .add(1, &[KeyValue::new(labels::REASON, reason)]);
+    }
+
+    /// Record an HTTP/2 fingerprint extraction failure (HTTP/2 connection where
+    /// the Akamai fingerprint could not be extracted, e.g. malformed frames).
+    pub fn record_http2_fingerprint_failure(&self) {
+        self.http2_fingerprint_failures_total
+            .add(1, &[KeyValue::new(labels::REASON, values::REASON_EXTRACTION_FAILED)]);
+    }
+
+    /// Record an HTTP/1.1 connection where HTTP/2 fingerprinting does not apply.
+    pub fn record_http2_fingerprint_not_applicable(&self) {
+        self.http2_fingerprint_failures_total
+            .add(1, &[KeyValue::new(labels::REASON, values::REASON_NOT_HTTP2)]);
     }
 
     /// Record a TCP SYN fingerprint lookup result and its duration.

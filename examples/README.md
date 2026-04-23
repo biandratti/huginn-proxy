@@ -222,6 +222,30 @@ To switch configurations, edit `docker-compose.ebpf.yml` and change the `command
 
 ---
 
+## Telemetry
+
+The observability stack runs **Prometheus** (`prom/prometheus`) and **Grafana** as a separate Docker Compose project alongside the main proxy stack. Prometheus scrapes metrics from the proxy (`port 9090`) and the eBPF agent (`port 9091`) via `host.docker.internal`. Grafana is pre-provisioned with a data source and a dashboard — no manual setup needed.
+
+### Prerequisites
+
+The main proxy stack must already be running and exposing ports `9090` and `9091` on the host before starting the observability stack. Prometheus reaches the proxy via `host.docker.internal` (mapped to `host-gateway` inside the container).
+
+### Start
+
+Run the observability stack from the repo root:
+
+```bash
+docker compose -f examples/docker-compose.observability.yml up -d
+```
+
+### Access Grafana
+
+1. Open `http://localhost:3000` in your browser.
+2. Log in with **admin / huginn**.
+3. The **Huginn Proxy** dashboard loads automatically as the default home dashboard.
+
+---
+
 ## Advanced Examples
 
 ### Rate Limiting

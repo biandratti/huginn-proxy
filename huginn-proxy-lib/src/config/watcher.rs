@@ -12,6 +12,16 @@ use crate::error::ProxyError;
 ///
 /// Activated only when `--watch` is enabled. A single signal is sent per
 /// burst of changes (debounced by `watch_delay_secs`).
+///
+/// ## Watch strategy
+///
+/// Two watches are registered:
+/// - **Parent directory** — catches atomic saves (editor writes a temp file and
+///   renames it into place, generating a `Create`/`Modify` event in the dir).
+/// - **Config file directly** — catches in-place writes through single-file bind
+///   mounts (Docker, Kubernetes `hostPath`/`ConfigMap` subPath, Podman, etc.):
+///   the container sees the host inode directly, but the parent directory is an
+///   overlayfs layer that does not propagate inotify events to the mounted file.
 pub fn spawn_config_watcher(
     config_path: PathBuf,
     reload_tx: UnboundedSender<()>,
@@ -42,6 +52,20 @@ pub fn spawn_config_watcher(
         .watch(parent_dir, RecursiveMode::NonRecursive)
         .map_err(|e| ProxyError::Config(format!("Failed to watch config directory: {e}")))?;
 
+    if let Err(e) = watcher.watch(&config_path, RecursiveMode::NonRecursive) {
+        tracing::error!(
+            path = %config_path.display(),
+            error = %e,
+            "Could not watch config file directly (parent-dir watch still active)"
+        );
+    }
+
+    info!(
+        path = %config_path.display(),
+        debounce_secs = watch_delay_secs,
+        "Config watcher started — watching for file changes"
+    );
+
     tokio::spawn(async move {
         let debounce_duration = Duration::from_secs(watch_delay_secs as u64);
         let mut reload_deadline: Option<Instant> = None;
@@ -50,6 +74,7 @@ pub fn spawn_config_watcher(
         loop {
             tokio::select! {
                 _ = event_rx.recv() => {
+                    info!(path = %config_path.display(), debounce_secs = watch_delay_secs, "Config file change detected — reload scheduled");
                     reload_deadline = Instant::now().checked_add(debounce_duration)
                         .or_else(|| Instant::now().checked_add(Duration::from_secs(60)));
                 }

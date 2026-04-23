@@ -2,10 +2,6 @@
 
 ## Upcoming Features
 
-### Documentation
-
-- [ ] Grafana dashboard templates
-
 ### Operational Features
 
 - [ ] Backend health checks (active polling)
@@ -25,7 +21,3 @@
 - [ ] Circuit breakers
 - [ ] Production hardening and security audit
 
-### Measure
-
-- [ ] Benchmark `force_new_connection` latency overhead vs connection pooling (replace README estimate with measured p50/p99)
-- [ ] Benchmark eBPF SYN map lookup latency impact on request handling

@@ -1,0 +1,50 @@
+# Observability stack: Prometheus + Grafana.
+# Run AFTER the main proxy stack so port 9090/9091 are already published on the host.
+# Prometheus reaches the proxy and eBPF agent via host.docker.internal (host-gateway).
+#
+# Start:
+#   docker compose -f docker-compose.observability.yml up -d
+#
+# Access:
+#   Grafana:    http://localhost:3000  (admin / huginn)
+#   Prometheus: http://localhost:9092
+
+# Explicit project name avoids collision with the main proxy stack (both live in examples/).
+name: huginn-observability
+
+services:
+  prometheus:
+    image: prom/prometheus:v3.11.2
+    volumes:
+      - ./config/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "9092:9090"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.enable-lifecycle"
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:11.6.14
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=huginn
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_LOG_LEVEL=warn
+      - GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH=/var/lib/grafana/dashboards/huginn-proxy.json
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
+volumes:
+  prometheus-data:
+  grafana-data:
