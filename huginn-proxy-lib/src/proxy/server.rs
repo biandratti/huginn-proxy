@@ -144,13 +144,11 @@ pub async fn run(
                 spawn_config_watcher(config_path.clone(), reload_tx, watch_opts.watch_delay_secs)?;
             }
             None => {
-                tracing::warn!(
-                    "HUGINN_WATCH=true but no config path provided — hot-reload disabled"
-                );
+                warn!("HUGINN_WATCH=true but no config path provided — hot-reload disabled");
             }
         }
     } else {
-        tracing::info!("Config hot-reload disabled (set HUGINN_WATCH=true to enable)");
+        info!("Config hot-reload disabled (set HUGINN_WATCH=true to enable)");
     }
 
     let reload_mutex = Arc::new(tokio::sync::Mutex::new(()));

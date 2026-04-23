@@ -266,7 +266,6 @@ the proxy becomes the bottleneck.
 | RAMP to 300 VUs | ~2 000 peak | `tcp_fin_timeout=10` + `ip_local_port_range="10000 65535"` |
 | Any VU count, no TCP SYN | n/a | no tuning needed — keep-alive reuses connections |
 
-Both settings are **temporary** and revert on reboot.
 
 Examples:
 
