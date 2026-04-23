@@ -6,6 +6,7 @@ use std::task::{Context, Poll};
 use huginn_net_http::akamai_extractor::extract_akamai_fingerprint;
 use huginn_net_http::http2_parser::Http2Parser;
 use huginn_net_http::{AkamaiFingerprint, Http2FrameType, HuginnNetHttpError};
+use opentelemetry::KeyValue;
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 use tokio::sync::watch;
 use tokio::time::Instant;
@@ -143,9 +144,10 @@ impl<S: AsyncRead + Unpin> AsyncRead for CapturingStream<S> {
                                                 "CapturingStream: malformed HEADERS frame, possible spoofed traffic: {}",
                                                 reason
                                             );
-                                            self.metrics
-                                                .http2_fingerprint_failures_total
-                                                .add(1, &[]);
+                                            self.metrics.http2_fingerprint_failures_total.add(
+                                                1,
+                                                &[KeyValue::new("reason", "extraction_failed")],
+                                            );
                                         }
                                         Err(HuginnNetHttpError::NoSettingsFrame) => {
                                             debug!("CapturingStream: SETTINGS frame not yet received, will retry on next read");
@@ -185,9 +187,6 @@ impl<S: AsyncWrite + Unpin> AsyncWrite for CapturingStream<S> {
     }
 
     fn poll_shutdown(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
-        if !self.fingerprint_extracted.load(Ordering::Relaxed) {
-            self.metrics.http2_fingerprint_failures_total.add(1, &[]);
-        }
         Pin::new(&mut self.inner).poll_shutdown(cx)
     }
 }

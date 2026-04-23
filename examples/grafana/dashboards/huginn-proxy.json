@@ -560,7 +560,7 @@
       "gridPos": {
         "x": 0,
         "y": 26,
-        "w": 24,
+        "w": 12,
         "h": 8
       },
       "targets": [
@@ -568,6 +568,43 @@
           "expr": "sum by (route) (rate(huginn_requests_total_total[$__rate_interval])) or on() vector(0)",
           "legendFormat": "{{route}}",
           "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        }
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 54,
+      "type": "timeseries",
+      "title": "HTTP/1.1 vs HTTP/2 Request Rate",
+      "gridPos": {
+        "x": 12,
+        "y": 26,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(huginn_requests_total_total{protocol=\"HTTP/1.1\"}[$__rate_interval])) or on() vector(0)",
+          "legendFormat": "HTTP/1.1",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(rate(huginn_requests_total_total{protocol=\"h2\"}[$__rate_interval])) or on() vector(0)",
+          "legendFormat": "HTTP/2",
+          "refId": "B"
         }
       ],
       "fieldConfig": {
@@ -1096,9 +1133,14 @@
           "refId": "A"
         },
         {
-          "expr": "rate(huginn_http2_fingerprint_failures_total_total[$__rate_interval]) or on() vector(0)",
-          "legendFormat": "failures (incl. HTTP/1.1)",
+          "expr": "rate(huginn_http2_fingerprint_failures_total_total{reason=\"extraction_failed\"}[$__rate_interval]) or on() vector(0)",
+          "legendFormat": "failure (HTTP/2)",
           "refId": "B"
+        },
+        {
+          "expr": "rate(huginn_http2_fingerprint_failures_total_total{reason=\"not_http2\"}[$__rate_interval]) or on() vector(0)",
+          "legendFormat": "not HTTP/2 (HTTP/1.1)",
+          "refId": "C"
         }
       ],
       "fieldConfig": {
