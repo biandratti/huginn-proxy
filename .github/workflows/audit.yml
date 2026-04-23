@@ -5,6 +5,7 @@ on:
     branches: [ "master" ]
   schedule:
     - cron: '0 2 * * *'
+  workflow_dispatch:
 
 jobs:
   cargo-deny:
@@ -28,5 +29,31 @@ jobs:
     steps:
     - uses: actions/checkout@v6
     - uses: rustsec/audit-check@v2.0.0
+      id: audit
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
+
+    # Close any open advisory issues that are no longer reported by cargo-audit.
+    # rustsec/audit-check opens issues but does not close them when a fix lands.
+    - name: Close resolved advisory issues
+      if: success()
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        # Find open issues created by github-actions[bot] whose title starts with "RUSTSEC-"
+        gh issue list \
+          --state open \
+          --author "app/github-actions" \
+          --json number,title \
+          --jq '.[] | select(.title | test("^RUSTSEC-")) | .number' \
+        | while read -r issue; do
+            title=$(gh issue view "$issue" --json title --jq '.title')
+            advisory=$(echo "$title" | grep -oE 'RUSTSEC-[0-9]+-[0-9]+')
+            if [ -n "$advisory" ]; then
+              if ! cargo audit 2>&1 | grep -q "$advisory"; then
+                echo "Advisory $advisory no longer present — closing issue #$issue"
+                gh issue close "$issue" \
+                  --comment "Resolved: \`$advisory\` is no longer reported by \`cargo audit\`. Closing automatically."
+              fi
+            fi
+          done
