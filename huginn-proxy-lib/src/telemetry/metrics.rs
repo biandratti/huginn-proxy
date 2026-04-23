@@ -36,6 +36,8 @@ pub mod values {
     pub const RELOAD_ERROR: &str = "error";
     pub const REASON_EXTRACTION_FAILED: &str = "extraction_failed";
     pub const REASON_NOT_HTTP2: &str = "not_http2";
+    pub const REASON_LIMIT_EXCEEDED: &str = "limit_exceeded";
+    pub const REASON_SHUTDOWN: &str = "shutdown";
 }
 
 #[derive(Clone)]
@@ -563,6 +565,16 @@ impl Metrics {
     pub fn record_reload_error(&self) {
         self.config_reload_total
             .add(1, &[KeyValue::new(labels::RESULT, values::RELOAD_ERROR)]);
+    }
+
+    /// Record a rejected incoming connection.
+    ///
+    /// `reason` is one of:
+    /// - `"limit_exceeded"` — active connection count hit `max_connections`
+    /// - `"shutdown"`       — proxy is shutting down
+    pub fn record_connection_rejected(&self, reason: &'static str) {
+        self.connections_rejected_total
+            .add(1, &[KeyValue::new(labels::REASON, reason)]);
     }
 
     /// Record an HTTP/2 fingerprint extraction failure (HTTP/2 connection where

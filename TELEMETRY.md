@@ -127,7 +127,7 @@ sum by (backend_address) (rate(huginn_backend_bytes_received_total[5m]))
 **Labels**:
 
 - `protocol`: Connection protocol (`http/1.1`, `h2`, `https`)
-- `reason`: Rejection reason (`connection_limit`)
+- `reason`: Rejection reason — `limit_exceeded` (active connections hit the configured maximum)
 
 **Example queries**:
 
@@ -155,7 +155,7 @@ rate(huginn_connections_rejected_total[5m])
 
 - `method`: HTTP method (`GET`, `POST`, `PUT`, etc.)
 - `status_code`: HTTP status code (`200`, `404`, `500`, etc.)
-- `protocol`: HTTP version (`HTTP/1.1`, `h2`)
+- `protocol`: HTTP version (`HTTP/1.1`, `HTTP/2.0`)
 - `route`: Matched route prefix (e.g., `/api`, `/`)
 
 **Example queries**:

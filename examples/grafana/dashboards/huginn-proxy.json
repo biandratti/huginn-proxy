@@ -602,7 +602,7 @@
           "refId": "A"
         },
         {
-          "expr": "sum(rate(huginn_requests_total_total{protocol=\"h2\"}[$__rate_interval])) or on() vector(0)",
+          "expr": "sum(rate(huginn_requests_total_total{protocol=\"HTTP/2.0\"}[$__rate_interval])) or on() vector(0)",
           "legendFormat": "HTTP/2",
           "refId": "B"
         }

@@ -37,6 +37,12 @@ const rampStages = [
   { duration: "30s", target: 0   }, // cool-down
 ];
 
+// In ramp mode the proxy is intentionally driven to saturation, so some errors at the
+// high-VU stages are expected. Use a lenient error-rate threshold instead of rate==0.
+const failedRateThreshold = ramp
+  ? `rate<=${__ENV.K6_FAILED_RATE || 0.02}`
+  : `rate==${__ENV.K6_FAILED_RATE || 0}`;
+
 export const options = {
   ...(ramp
     ? { stages: rampStages }
@@ -45,7 +51,7 @@ export const options = {
   noConnectionReuse: checkTcpSyn,
   thresholds: {
     checks: [`rate>=${__ENV.K6_CHECKS_RATE || 0.99}`],
-    http_req_failed: ["rate==0"],
+    http_req_failed: [failedRateThreshold],
   },
 };
 
