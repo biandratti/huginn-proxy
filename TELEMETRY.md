@@ -620,3 +620,19 @@ The following metrics will be added when the corresponding features are implemen
 - Trace sampling
 
 See [ROADMAP.md](ROADMAP.md) for complete list of planned features.
+
+---
+
+## Grafana Dashboard
+
+A pre-built Grafana dashboard covering all metrics in this document is available in [`examples/grafana/dashboards/huginn-proxy.json`](examples/grafana/dashboards/huginn-proxy.json).
+
+To run it locally alongside the proxy:
+
+```bash
+docker compose -f examples/docker-compose.observability.yml up -d
+```
+
+Then open `http://localhost:3000` and log in with **admin / huginn**. The dashboard loads automatically.
+
+See [`examples/README.md`](examples/README.md#telemetry) for full setup instructions.
