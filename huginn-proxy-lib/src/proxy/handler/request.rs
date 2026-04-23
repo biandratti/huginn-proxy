@@ -16,7 +16,6 @@ use http::Version;
 use hyper::body::Incoming;
 use hyper::header::HeaderName;
 use hyper::Request;
-use opentelemetry::KeyValue;
 use std::sync::Arc;
 use tokio::sync::watch;
 use tokio::time::Instant;
@@ -133,16 +132,11 @@ pub async fn handle_proxy_request(
                         .insert(HeaderName::from_static(names::HTTP2_AKAMAI), hv);
                 } else {
                     debug!("Handler: no HTTP fingerprint header to inject (HTTP/2 connection but fingerprint not extracted)");
-                    metrics
-                        .http2_fingerprint_failures_total
-                        .add(1, &[KeyValue::new("reason", "extraction_failed")]);
+                    metrics.record_http2_fingerprint_failure();
                 }
             } else {
-                // HTTP/1.1 connection - Akamai fingerprint not applicable
                 debug!("Handler: HTTP/1.1 connection, Akamai fingerprint not applicable");
-                metrics
-                    .http2_fingerprint_failures_total
-                    .add(1, &[KeyValue::new("reason", "not_http2")]);
+                metrics.record_http2_fingerprint_not_applicable();
             }
         }
         match syn_fingerprint {

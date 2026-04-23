@@ -240,11 +240,13 @@ histogram_quantile(0.95, rate(huginn_tls_handshake_duration_seconds_bucket[5m]))
 
 | Metric                                                 | Type      | Description                            | Labels |
 |--------------------------------------------------------|-----------|----------------------------------------|--------|
-| `huginn_http2_fingerprints_extracted_total`            | Counter   | HTTP/2 (Akamai) fingerprints extracted | -      |
-| `huginn_http2_fingerprint_extraction_duration_seconds` | Histogram | HTTP/2 fingerprint extraction time     | -      |
-| `huginn_http2_fingerprint_failures_total`              | Counter   | HTTP/2 fingerprint failures            | -      |
+| `huginn_http2_fingerprints_extracted_total`            | Counter   | HTTP/2 (Akamai) fingerprints extracted | -        |
+| `huginn_http2_fingerprint_extraction_duration_seconds` | Histogram | HTTP/2 fingerprint extraction time     | -        |
+| `huginn_http2_fingerprint_failures_total`              | Counter   | HTTP/2 fingerprint failures            | `reason` |
 
-**Note**: HTTP/2 fingerprint failures include HTTP/1.1 connections (expected behavior).
+**Labels**:
+
+- `reason`: Failure kind — `extraction_failed` (HTTP/2 connection where fingerprint could not be extracted, e.g. malformed frames or connection closed before SETTINGS), `not_http2` (HTTP/1.1 connection — Akamai fingerprinting does not apply)
 
 #### TCP SYN Fingerprinting (p0f via eBPF)
 
@@ -268,6 +270,12 @@ rate(huginn_tls_fingerprints_extracted_total[5m])
 
 # HTTP/2 fingerprint extraction rate
 rate(huginn_http2_fingerprints_extracted_total[5m])
+
+# HTTP/2 fingerprint failure rate (HTTP/2 connections only)
+rate(huginn_http2_fingerprint_failures_total{reason="extraction_failed"}[5m])
+
+# HTTP/1.1 connections (no HTTP/2 fingerprint applicable)
+rate(huginn_http2_fingerprint_failures_total{reason="not_http2"}[5m])
 
 # TLS fingerprint failure rate
 rate(huginn_tls_fingerprint_failures_total[5m])
