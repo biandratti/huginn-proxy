@@ -14,7 +14,7 @@ name: huginn-observability
 
 services:
   prometheus:
-    image: prom/prometheus:latest
+    image: prom/prometheus:v3.11.2
     volumes:
       - ./config/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus-data:/prometheus
@@ -29,7 +29,7 @@ services:
     restart: unless-stopped
 
   grafana:
-    image: grafana/grafana:latest
+    image: grafana/grafana:11.6.14
     ports:
       - "3000:3000"
     volumes:
@@ -39,6 +39,7 @@ services:
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=huginn
       - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_LOG_LEVEL=warn
       - GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH=/var/lib/grafana/dashboards/huginn-proxy.json
     depends_on:
       - prometheus

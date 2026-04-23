@@ -3,399 +3,2085 @@
   "uid": "huginn-proxy-overview",
   "title": "Huginn Proxy",
   "description": "Connections, requests, TLS, fingerprinting, backends, rate limiting, header manipulation, and eBPF agent.",
-  "tags": ["huginn", "proxy", "fingerprinting"],
+  "tags": [
+    "huginn",
+    "proxy",
+    "fingerprinting"
+  ],
   "timezone": "browser",
   "schemaVersion": 38,
   "version": 1,
   "refresh": "30s",
-  "time": { "from": "now-1h", "to": "now" },
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
   "panels": [
-
-    { "id": 100, "type": "row", "title": "Overview", "collapsed": false, "gridPos": { "x": 0, "y": 0, "w": 24, "h": 1 } },
     {
-      "id": 1, "type": "stat", "title": "Request Rate",
-      "gridPos": { "x": 0, "y": 1, "w": 4, "h": 4 },
-      "targets": [{ "expr": "sum(rate(huginn_requests_total_total[$__rate_interval]) or on() vector(0))", "refId": "A" }],
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "area" },
-      "fieldConfig": { "defaults": { "unit": "reqps", "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] } } }
+      "id": 100,
+      "type": "row",
+      "title": "Overview",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 1
+      }
     },
     {
-      "id": 2, "type": "stat", "title": "Active Connections",
-      "gridPos": { "x": 4, "y": 1, "w": 4, "h": 4 },
-      "targets": [{ "expr": "sum(huginn_connections_active) or on() vector(0)", "refId": "A" }],
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "area" },
-      "fieldConfig": { "defaults": { "unit": "short", "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 100 }, { "color": "red", "value": 400 }] } } }
-    },
-    {
-      "id": 3, "type": "stat", "title": "Error Rate (5xx)",
-      "gridPos": { "x": 8, "y": 1, "w": 4, "h": 4 },
-      "targets": [{ "expr": "sum(rate(huginn_requests_total_total{status_code=~\"5..\"}[$__rate_interval]) or on() vector(0)) / sum(rate(huginn_requests_total_total[$__rate_interval]) or on() vector(1)) * 100", "refId": "A" }],
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "area" },
-      "fieldConfig": { "defaults": { "unit": "percent", "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 1 }, { "color": "red", "value": 5 }] } } }
-    },
-    {
-      "id": 4, "type": "stat", "title": "P95 Latency",
-      "gridPos": { "x": 12, "y": 1, "w": 4, "h": 4 },
-      "targets": [{ "expr": "histogram_quantile(0.95, sum(rate(huginn_requests_duration_seconds_bucket[$__rate_interval])) by (le))", "refId": "A" }],
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "area" },
-      "fieldConfig": { "defaults": { "unit": "s", "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 0.5 }, { "color": "red", "value": 1 }] } } }
-    },
-    {
-      "id": 5, "type": "stat", "title": "Bandwidth In+Out",
-      "gridPos": { "x": 16, "y": 1, "w": 4, "h": 4 },
-      "targets": [{ "expr": "(sum(rate(huginn_bytes_received_total_total[$__rate_interval]) or on() vector(0)) + sum(rate(huginn_bytes_sent_total_total[$__rate_interval]) or on() vector(0))) / 1024 / 1024", "refId": "A" }],
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "area" },
-      "fieldConfig": { "defaults": { "unit": "MBs", "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": null }] } } }
-    },
-    {
-      "id": 6, "type": "stat", "title": "Version",
-      "gridPos": { "x": 20, "y": 1, "w": 4, "h": 4 },
-      "targets": [{ "expr": "huginn_build_info", "legendFormat": "v{{version}} (rust {{rust_version}})", "refId": "A" }],
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "none", "textMode": "name" },
-      "fieldConfig": { "defaults": {} }
-    },
-
-    { "id": 101, "type": "row", "title": "Traffic", "collapsed": false, "gridPos": { "x": 0, "y": 5, "w": 24, "h": 1 } },
-    {
-      "id": 7, "type": "timeseries", "title": "Request Rate by Status Code",
-      "gridPos": { "x": 0, "y": 6, "w": 12, "h": 8 },
-      "targets": [{ "expr": "sum by (status_code) (rate(huginn_requests_total_total[$__rate_interval])) or on() vector(0)", "legendFormat": "{{status_code}}", "refId": "A" }],
-      "fieldConfig": { "defaults": { "unit": "reqps" } },
-      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "list", "placement": "bottom" } }
-    },
-    {
-      "id": 8, "type": "timeseries", "title": "Active Connections by Protocol",
-      "gridPos": { "x": 12, "y": 6, "w": 12, "h": 8 },
+      "id": 1,
+      "type": "stat",
+      "title": "Request Rate",
+      "gridPos": {
+        "x": 0,
+        "y": 1,
+        "w": 6,
+        "h": 4
+      },
       "targets": [
-        { "expr": "huginn_connections_active or on() vector(0)", "legendFormat": "{{protocol}}", "refId": "A" },
-        { "expr": "huginn_tls_connections_active or on() vector(0)", "legendFormat": "TLS (total)", "refId": "B" }
+        {
+          "expr": "sum(rate(huginn_requests_total_total[$__rate_interval]) or on() vector(0))",
+          "refId": "A"
+        }
       ],
-      "fieldConfig": { "defaults": { "unit": "short" } },
-      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "list", "placement": "bottom" } }
-    },
-    {
-      "id": 9, "type": "timeseries", "title": "Request Duration (P50 / P95 / P99)",
-      "gridPos": { "x": 0, "y": 14, "w": 12, "h": 8 },
-      "targets": [
-        { "expr": "histogram_quantile(0.50, sum(rate(huginn_requests_duration_seconds_bucket[$__rate_interval])) by (le))", "legendFormat": "P50", "refId": "A" },
-        { "expr": "histogram_quantile(0.95, sum(rate(huginn_requests_duration_seconds_bucket[$__rate_interval])) by (le))", "legendFormat": "P95", "refId": "B" },
-        { "expr": "histogram_quantile(0.99, sum(rate(huginn_requests_duration_seconds_bucket[$__rate_interval])) by (le))", "legendFormat": "P99", "refId": "C" }
-      ],
-      "fieldConfig": { "defaults": { "unit": "s" } },
-      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "list", "placement": "bottom" } }
-    },
-    {
-      "id": 10, "type": "timeseries", "title": "Throughput — Client (bytes/s)",
-      "gridPos": { "x": 12, "y": 14, "w": 12, "h": 8 },
-      "targets": [
-        { "expr": "sum by (protocol) (rate(huginn_bytes_received_total_total[$__rate_interval])) or on() vector(0)", "legendFormat": "in — {{protocol}}", "refId": "A" },
-        { "expr": "sum by (protocol) (rate(huginn_bytes_sent_total_total[$__rate_interval])) or on() vector(0)", "legendFormat": "out — {{protocol}}", "refId": "B" }
-      ],
-      "fieldConfig": { "defaults": { "unit": "Bps" } },
-      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "list", "placement": "bottom" } },
-      "description": "Only populated when requests/responses include a Content-Length header. GET requests without a body will not contribute to bytes_received."
-    },
-    {
-      "id": 35, "type": "timeseries", "title": "Connection Rate + Rejections",
-      "gridPos": { "x": 0, "y": 22, "w": 12, "h": 8 },
-      "targets": [
-        { "expr": "sum(rate(huginn_connections_total_total[$__rate_interval]) or on() vector(0))", "legendFormat": "established", "refId": "A" },
-        { "expr": "sum by (reason) (rate(huginn_connections_rejected_total_total[$__rate_interval])) or on() vector(0)", "legendFormat": "rejected — {{reason}}", "refId": "B" }
-      ],
-      "fieldConfig": { "defaults": { "unit": "short" } },
-      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "list", "placement": "bottom" } }
-    },
-    {
-      "id": 36, "type": "timeseries", "title": "Timeouts by Type",
-      "gridPos": { "x": 12, "y": 22, "w": 12, "h": 8 },
-      "targets": [
-        { "expr": "sum by (timeout_type) (rate(huginn_timeouts_total_total[$__rate_interval])) or on() vector(0)", "legendFormat": "{{timeout_type}}", "refId": "A" }
-      ],
-      "fieldConfig": { "defaults": { "unit": "short" } },
-      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "list", "placement": "bottom" } }
-    },
-
-    { "id": 102, "type": "row", "title": "TLS", "collapsed": false, "gridPos": { "x": 0, "y": 30, "w": 24, "h": 1 } },
-    {
-      "id": 11, "type": "timeseries", "title": "TLS Handshakes",
-      "gridPos": { "x": 0, "y": 31, "w": 12, "h": 8 },
-      "targets": [
-        { "expr": "sum by (tls_version) (rate(huginn_tls_handshakes_total_total[$__rate_interval])) or on() vector(0)", "legendFormat": "{{tls_version}}", "refId": "A" },
-        { "expr": "sum(rate(huginn_tls_handshake_errors_total_total[$__rate_interval]) or on() vector(0))", "legendFormat": "errors", "refId": "B" }
-      ],
-      "fieldConfig": { "defaults": { "unit": "short" } },
-      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "list", "placement": "bottom" } }
-    },
-    {
-      "id": 12, "type": "timeseries", "title": "TLS Handshake Duration (P95)",
-      "gridPos": { "x": 12, "y": 31, "w": 12, "h": 8 },
-      "targets": [
-        { "expr": "histogram_quantile(0.95, sum(rate(huginn_tls_handshake_duration_seconds_bucket[$__rate_interval])) by (le, tls_version))", "legendFormat": "P95 — {{tls_version}}", "refId": "A" }
-      ],
-      "fieldConfig": { "defaults": { "unit": "s" } },
-      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "list", "placement": "bottom" } }
-    },
-
-    { "id": 103, "type": "row", "title": "Fingerprinting — Extraction Rate", "collapsed": false, "gridPos": { "x": 0, "y": 39, "w": 24, "h": 1 } },
-    {
-      "id": 13, "type": "timeseries", "title": "TLS Fingerprint (JA4)",
-      "gridPos": { "x": 0, "y": 40, "w": 8, "h": 8 },
-      "targets": [
-        { "expr": "rate(huginn_tls_fingerprints_extracted_total_total[$__rate_interval]) or on() vector(0)", "legendFormat": "extracted", "refId": "A" },
-        { "expr": "rate(huginn_tls_fingerprint_failures_total_total[$__rate_interval]) or on() vector(0)", "legendFormat": "failures", "refId": "B" }
-      ],
-      "fieldConfig": { "defaults": { "unit": "short" } },
-      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "list", "placement": "bottom" } }
-    },
-    {
-      "id": 31, "type": "timeseries", "title": "HTTP/2 Fingerprint (Akamai)",
-      "gridPos": { "x": 8, "y": 40, "w": 8, "h": 8 },
-      "targets": [
-        { "expr": "rate(huginn_http2_fingerprints_extracted_total_total[$__rate_interval]) or on() vector(0)", "legendFormat": "extracted", "refId": "A" },
-        { "expr": "rate(huginn_http2_fingerprint_failures_total_total[$__rate_interval]) or on() vector(0)", "legendFormat": "failures (incl. HTTP/1.1)", "refId": "B" }
-      ],
-      "fieldConfig": { "defaults": { "unit": "short" } },
-      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "list", "placement": "bottom" } }
-    },
-    {
-      "id": 14, "type": "timeseries", "title": "TCP SYN Fingerprint (eBPF)",
-      "gridPos": { "x": 16, "y": 40, "w": 8, "h": 8 },
-      "targets": [
-        { "expr": "sum by (reason) (rate(huginn_tcp_syn_fingerprints_total_total[$__rate_interval])) or on() vector(0)", "legendFormat": "{{reason}}", "refId": "A" },
-        { "expr": "rate(huginn_tcp_syn_fingerprint_failures_total_total[$__rate_interval]) or on() vector(0)", "legendFormat": "BPF map failures", "refId": "B" }
-      ],
-      "fieldConfig": { "defaults": { "unit": "short" } },
-      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "list", "placement": "bottom" } }
-    },
-
-    { "id": 111, "type": "row", "title": "Fingerprinting — Extraction Duration", "collapsed": false, "gridPos": { "x": 0, "y": 48, "w": 24, "h": 1 } },
-    {
-      "id": 32, "type": "timeseries", "title": "TLS Fingerprint Duration (JA4)",
-      "gridPos": { "x": 0, "y": 49, "w": 8, "h": 8 },
-      "targets": [
-        { "expr": "histogram_quantile(0.50, sum(rate(huginn_tls_fingerprint_extraction_duration_seconds_bucket[$__rate_interval])) by (le))", "legendFormat": "P50", "refId": "A" },
-        { "expr": "histogram_quantile(0.95, sum(rate(huginn_tls_fingerprint_extraction_duration_seconds_bucket[$__rate_interval])) by (le))", "legendFormat": "P95", "refId": "B" },
-        { "expr": "histogram_quantile(0.99, sum(rate(huginn_tls_fingerprint_extraction_duration_seconds_bucket[$__rate_interval])) by (le))", "legendFormat": "P99", "refId": "C" }
-      ],
-      "fieldConfig": { "defaults": { "unit": "ms" } },
-      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "list", "placement": "bottom" } }
-    },
-    {
-      "id": 33, "type": "timeseries", "title": "HTTP/2 Fingerprint Duration (Akamai)",
-      "gridPos": { "x": 8, "y": 49, "w": 8, "h": 8 },
-      "targets": [
-        { "expr": "histogram_quantile(0.50, sum(rate(huginn_http2_fingerprint_extraction_duration_seconds_bucket[$__rate_interval])) by (le))", "legendFormat": "P50", "refId": "A" },
-        { "expr": "histogram_quantile(0.95, sum(rate(huginn_http2_fingerprint_extraction_duration_seconds_bucket[$__rate_interval])) by (le))", "legendFormat": "P95", "refId": "B" },
-        { "expr": "histogram_quantile(0.99, sum(rate(huginn_http2_fingerprint_extraction_duration_seconds_bucket[$__rate_interval])) by (le))", "legendFormat": "P99", "refId": "C" }
-      ],
-      "fieldConfig": { "defaults": { "unit": "ms" } },
-      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "list", "placement": "bottom" } }
-    },
-    {
-      "id": 34, "type": "timeseries", "title": "TCP SYN Fingerprint Duration (eBPF)",
-      "gridPos": { "x": 16, "y": 49, "w": 8, "h": 8 },
-      "targets": [
-        { "expr": "histogram_quantile(0.50, sum(rate(huginn_tcp_syn_fingerprint_duration_seconds_bucket[$__rate_interval])) by (le))", "legendFormat": "P50", "refId": "A" },
-        { "expr": "histogram_quantile(0.95, sum(rate(huginn_tcp_syn_fingerprint_duration_seconds_bucket[$__rate_interval])) by (le))", "legendFormat": "P95", "refId": "B" },
-        { "expr": "histogram_quantile(0.99, sum(rate(huginn_tcp_syn_fingerprint_duration_seconds_bucket[$__rate_interval])) by (le))", "legendFormat": "P99", "refId": "C" }
-      ],
-      "fieldConfig": { "defaults": { "unit": "ms" } },
-      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "list", "placement": "bottom" } }
-    },
-
-    { "id": 104, "type": "row", "title": "Backends", "collapsed": false, "gridPos": { "x": 0, "y": 57, "w": 24, "h": 1 } },
-    {
-      "id": 15, "type": "timeseries", "title": "Backend Request Rate",
-      "gridPos": { "x": 0, "y": 58, "w": 8, "h": 8 },
-      "targets": [{ "expr": "sum by (backend_address) (rate(huginn_backend_requests_total_total[$__rate_interval])) or on() vector(0)", "legendFormat": "{{backend_address}}", "refId": "A" }],
-      "fieldConfig": { "defaults": { "unit": "reqps" } },
-      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "list", "placement": "bottom" } }
-    },
-    {
-      "id": 16, "type": "timeseries", "title": "Backend Error Rate",
-      "gridPos": { "x": 8, "y": 58, "w": 8, "h": 8 },
-      "targets": [{ "expr": "sum by (backend_address) (rate(huginn_backend_errors_total_total[$__rate_interval])) or on() vector(0)", "legendFormat": "{{backend_address}}", "refId": "A" }],
-      "fieldConfig": { "defaults": { "unit": "short" } },
-      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "list", "placement": "bottom" } }
-    },
-    {
-      "id": 17, "type": "timeseries", "title": "Backend Latency P95",
-      "gridPos": { "x": 16, "y": 58, "w": 8, "h": 8 },
-      "targets": [{ "expr": "histogram_quantile(0.95, sum by (backend_address, le) (rate(huginn_backend_duration_seconds_bucket[$__rate_interval])))", "legendFormat": "P95 — {{backend_address}}", "refId": "A" }],
-      "fieldConfig": { "defaults": { "unit": "s" } },
-      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "list", "placement": "bottom" } }
-    },
-    {
-      "id": 37, "type": "timeseries", "title": "Backend Throughput (bytes/s)",
-      "gridPos": { "x": 0, "y": 66, "w": 12, "h": 8 },
-      "targets": [
-        { "expr": "sum by (backend_address) (rate(huginn_backend_bytes_received_total_total[$__rate_interval])) or on() vector(0)", "legendFormat": "in — {{backend_address}}", "refId": "A" },
-        { "expr": "sum by (backend_address) (rate(huginn_backend_bytes_sent_total_total[$__rate_interval])) or on() vector(0)", "legendFormat": "out — {{backend_address}}", "refId": "B" }
-      ],
-      "fieldConfig": { "defaults": { "unit": "Bps" } },
-      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "list", "placement": "bottom" } }
-    },
-    {
-      "id": 38, "type": "timeseries", "title": "Backend Distribution (round-robin)",
-      "gridPos": { "x": 12, "y": 66, "w": 12, "h": 8 },
-      "targets": [{ "expr": "sum by (backend) (rate(huginn_backend_selections_total_total[$__rate_interval])) or on() vector(0)", "legendFormat": "{{backend}}", "refId": "A" }],
-      "fieldConfig": { "defaults": { "unit": "short" } },
-      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "list", "placement": "bottom" } }
-    },
-
-    { "id": 105, "type": "row", "title": "Rate Limiting", "collapsed": false, "gridPos": { "x": 0, "y": 74, "w": 24, "h": 1 } },
-    {
-      "id": 18, "type": "timeseries", "title": "Rate Limit Evaluation vs Rejections",
-      "gridPos": { "x": 0, "y": 75, "w": 12, "h": 8 },
-      "targets": [
-        { "expr": "sum(rate(huginn_rate_limit_requests_total_total[$__rate_interval]) or on() vector(0))", "legendFormat": "evaluated", "refId": "A" },
-        { "expr": "sum(rate(huginn_rate_limit_allowed_total_total[$__rate_interval]) or on() vector(0))", "legendFormat": "allowed", "refId": "B" },
-        { "expr": "sum(rate(huginn_rate_limit_rejected_total_total[$__rate_interval]) or on() vector(0))", "legendFormat": "rejected (429)", "refId": "C" }
-      ],
-      "fieldConfig": { "defaults": { "unit": "reqps" } },
-      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "list", "placement": "bottom" } }
-    },
-    {
-      "id": 19, "type": "timeseries", "title": "Rejections by Strategy",
-      "gridPos": { "x": 12, "y": 75, "w": 12, "h": 8 },
-      "targets": [{ "expr": "sum by (strategy) (rate(huginn_rate_limit_rejected_total_total[$__rate_interval])) or on() vector(0)", "legendFormat": "{{strategy}}", "refId": "A" }],
-      "fieldConfig": { "defaults": { "unit": "reqps" } },
-      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "list", "placement": "bottom" } }
-    },
-
-    { "id": 106, "type": "row", "title": "eBPF Agent", "collapsed": false, "gridPos": { "x": 0, "y": 83, "w": 24, "h": 1 } },
-    {
-      "id": 20, "type": "stat", "title": "Agent Up",
-      "gridPos": { "x": 0, "y": 84, "w": 4, "h": 4 },
-      "targets": [{ "expr": "agent_up or on() vector(0)", "refId": "A" }],
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background",
+        "graphMode": "area"
+      },
       "fieldConfig": {
         "defaults": {
-          "unit": "short",
-          "mappings": [{ "type": "value", "options": { "0": { "text": "DOWN", "color": "red" }, "1": { "text": "UP", "color": "green" } } }],
-          "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "green", "value": 1 }] }
+          "unit": "reqps",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
         }
       }
     },
     {
-      "id": 39, "type": "stat", "title": "Agent Version",
-      "gridPos": { "x": 4, "y": 84, "w": 4, "h": 4 },
-      "targets": [{ "expr": "huginn_ebpf_agent_build_info", "legendFormat": "v{{version}} (rust {{rust_version}})", "refId": "A" }],
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "none", "textMode": "name" },
-      "fieldConfig": { "defaults": {} }
-    },
-    {
-      "id": 21, "type": "timeseries", "title": "TCP SYN Captured (agent)",
-      "gridPos": { "x": 8, "y": 84, "w": 8, "h": 8 },
-      "targets": [{ "expr": "rate(tcp_syn_captured_total_total[$__rate_interval]) or on() vector(0)", "legendFormat": "captured/s", "refId": "A" }],
-      "fieldConfig": { "defaults": { "unit": "short" } },
-      "options": { "tooltip": { "mode": "single" }, "legend": { "displayMode": "list", "placement": "bottom" } }
-    },
-    {
-      "id": 22, "type": "timeseries", "title": "TCP SYN Failures (agent)",
-      "gridPos": { "x": 16, "y": 84, "w": 8, "h": 8 },
+      "id": 2,
+      "type": "stat",
+      "title": "Active Connections",
+      "gridPos": {
+        "x": 6,
+        "y": 1,
+        "w": 6,
+        "h": 4
+      },
       "targets": [
-        { "expr": "rate(tcp_syn_insert_failures_total_total[$__rate_interval]) or on() vector(0)", "legendFormat": "insert failures/s", "refId": "A" },
-        { "expr": "rate(tcp_syn_malformed_total_total[$__rate_interval]) or on() vector(0)", "legendFormat": "malformed/s", "refId": "B" }
-      ],
-      "fieldConfig": { "defaults": { "unit": "short" } },
-      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "list", "placement": "bottom" } }
-    },
-
-    { "id": 107, "type": "row", "title": "Errors", "collapsed": false, "gridPos": { "x": 0, "y": 92, "w": 24, "h": 1 } },
-    {
-      "id": 23, "type": "timeseries", "title": "Error Rate by Type",
-      "gridPos": { "x": 0, "y": 93, "w": 12, "h": 8 },
-      "targets": [{ "expr": "sum by (error_type) (rate(huginn_errors_total_total[$__rate_interval])) or on() vector(0)", "legendFormat": "{{error_type}}", "refId": "A" }],
-      "fieldConfig": { "defaults": { "unit": "short" } },
-      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "list", "placement": "bottom" } }
-    },
-    {
-      "id": 24, "type": "timeseries", "title": "Error Rate by Component",
-      "gridPos": { "x": 12, "y": 93, "w": 12, "h": 8 },
-      "targets": [{ "expr": "sum by (component) (rate(huginn_errors_total_total[$__rate_interval])) or on() vector(0)", "legendFormat": "{{component}}", "refId": "A" }],
-      "fieldConfig": { "defaults": { "unit": "short" } },
-      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "list", "placement": "bottom" } }
-    },
-
-    { "id": 108, "type": "row", "title": "IP Filtering", "collapsed": false, "gridPos": { "x": 0, "y": 101, "w": 24, "h": 1 } },
-    {
-      "id": 25, "type": "stat", "title": "IP Filter Denial Rate",
-      "gridPos": { "x": 0, "y": 102, "w": 6, "h": 4 },
-      "targets": [{ "expr": "sum(rate(huginn_ip_filter_denied_total_total[$__rate_interval]) or on() vector(0))", "refId": "A" }],
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "area" },
-      "fieldConfig": { "defaults": { "unit": "short", "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 1 }] } } }
-    },
-    {
-      "id": 26, "type": "timeseries", "title": "IP Filter: Allowed vs Denied",
-      "gridPos": { "x": 6, "y": 102, "w": 18, "h": 8 },
-      "targets": [
-        { "expr": "rate(huginn_ip_filter_requests_total_total[$__rate_interval]) or on() vector(0)", "legendFormat": "evaluated", "refId": "A" },
-        { "expr": "rate(huginn_ip_filter_allowed_total_total[$__rate_interval]) or on() vector(0)", "legendFormat": "allowed", "refId": "B" },
-        { "expr": "rate(huginn_ip_filter_denied_total_total[$__rate_interval]) or on() vector(0)", "legendFormat": "denied (403)", "refId": "C" }
-      ],
-      "fieldConfig": { "defaults": { "unit": "reqps" } },
-      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "list", "placement": "bottom" } }
-    },
-
-    { "id": 112, "type": "row", "title": "Header Manipulation", "collapsed": false, "gridPos": { "x": 0, "y": 110, "w": 24, "h": 1 } },
-    {
-      "id": 40, "type": "timeseries", "title": "Headers Added / Removed by Context",
-      "gridPos": { "x": 0, "y": 111, "w": 24, "h": 8 },
-      "targets": [
-        { "expr": "sum by (context) (rate(huginn_headers_added_total_total[$__rate_interval])) or on() vector(0)", "legendFormat": "added — {{context}}", "refId": "A" },
-        { "expr": "sum by (context) (rate(huginn_headers_removed_total_total[$__rate_interval])) or on() vector(0)", "legendFormat": "removed — {{context}}", "refId": "B" }
-      ],
-      "fieldConfig": { "defaults": { "unit": "short" } },
-      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "list", "placement": "bottom" } }
-    },
-
-    { "id": 109, "type": "row", "title": "mTLS", "collapsed": false, "gridPos": { "x": 0, "y": 119, "w": 24, "h": 1 } },
-    {
-      "id": 27, "type": "timeseries", "title": "mTLS Connections by Protocol",
-      "gridPos": { "x": 0, "y": 120, "w": 12, "h": 8 },
-      "targets": [{ "expr": "sum by (protocol) (rate(huginn_mtls_connections_total_total[$__rate_interval])) or on() vector(0)", "legendFormat": "{{protocol}}", "refId": "A" }],
-      "fieldConfig": { "defaults": { "unit": "short" } },
-      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "list", "placement": "bottom" } }
-    },
-    {
-      "id": 28, "type": "timeseries", "title": "mTLS Usage (% of TLS handshakes)",
-      "gridPos": { "x": 12, "y": 120, "w": 12, "h": 8 },
-      "targets": [{ "expr": "(rate(huginn_mtls_connections_total_total[$__rate_interval]) or on() vector(0)) / (rate(huginn_tls_handshakes_total_total[$__rate_interval]) or on() vector(1)) * 100", "legendFormat": "mTLS %", "refId": "A" }],
-      "fieldConfig": { "defaults": { "unit": "percent" } },
-      "options": { "tooltip": { "mode": "single" }, "legend": { "displayMode": "list", "placement": "bottom" } }
-    },
-
-    {
-      "id": 110, "type": "row", "title": "Config Hot Reload", "collapsed": true,
-      "gridPos": { "x": 0, "y": 128, "w": 24, "h": 1 },
-      "panels": [
         {
-          "id": 41, "type": "stat", "title": "Active Config Hash",
-          "gridPos": { "x": 0, "y": 129, "w": 6, "h": 4 },
-          "targets": [{ "expr": "huginn_config_hash", "refId": "A" }],
-          "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "none" },
-          "fieldConfig": { "defaults": { "unit": "short" } }
-        },
-        {
-          "id": 29, "type": "stat", "title": "Time Since Last Successful Reload",
-          "gridPos": { "x": 6, "y": 129, "w": 6, "h": 4 },
-          "targets": [{ "expr": "time() - huginn_config_last_reload_timestamp_seconds", "refId": "A" }],
-          "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "none" },
-          "fieldConfig": { "defaults": { "unit": "s" } }
-        },
-        {
-          "id": 30, "type": "timeseries", "title": "Config Reload Attempts",
-          "gridPos": { "x": 12, "y": 129, "w": 12, "h": 8 },
-          "targets": [
-            { "expr": "rate(huginn_config_reload_total_total{result=\"success\"}[$__rate_interval]) or on() vector(0)", "legendFormat": "success", "refId": "A" },
-            { "expr": "rate(huginn_config_reload_total_total{result=\"error\"}[$__rate_interval]) or on() vector(0)", "legendFormat": "error", "refId": "B" }
-          ],
-          "fieldConfig": { "defaults": { "unit": "short" } },
-          "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "list", "placement": "bottom" } }
+          "expr": "sum(huginn_connections_active) or on() vector(0)",
+          "refId": "A"
         }
-      ]
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background",
+        "graphMode": "area"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 100
+              },
+              {
+                "color": "red",
+                "value": 400
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Bandwidth In+Out",
+      "gridPos": {
+        "x": 12,
+        "y": 1,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "expr": "(sum(rate(huginn_bytes_received_total_total[$__rate_interval]) or on() vector(0)) + sum(rate(huginn_bytes_sent_total_total[$__rate_interval]) or on() vector(0))) / 1024 / 1024",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background",
+        "graphMode": "area"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "MBs",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 20,
+      "type": "stat",
+      "title": "eBPF Agent",
+      "gridPos": {
+        "x": 18,
+        "y": 1,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "expr": "agent_up or on() vector(0)",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "DOWN",
+                  "color": "red"
+                },
+                "1": {
+                  "text": "UP",
+                  "color": "green"
+                }
+              }
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 51,
+      "type": "stat",
+      "title": "TLS Fingerprints/s (JA4)",
+      "gridPos": {
+        "x": 0,
+        "y": 5,
+        "w": 8,
+        "h": 4
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(huginn_tls_fingerprints_extracted_total_total[$__rate_interval])) or on() vector(0)",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": ["lastNotNull"]
+        },
+        "colorMode": "background",
+        "graphMode": "area"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "decimals": 2,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "blue", "value": null }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 52,
+      "type": "stat",
+      "title": "HTTP/2 Fingerprints/s (Akamai)",
+      "gridPos": {
+        "x": 8,
+        "y": 5,
+        "w": 8,
+        "h": 4
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(huginn_http2_fingerprints_extracted_total_total[$__rate_interval])) or on() vector(0)",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": ["lastNotNull"]
+        },
+        "colorMode": "background",
+        "graphMode": "area"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "decimals": 2,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "blue", "value": null }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 53,
+      "type": "stat",
+      "title": "TCP SYN Fingerprints/s (eBPF)",
+      "gridPos": {
+        "x": 16,
+        "y": 5,
+        "w": 8,
+        "h": 4
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(tcp_syn_captured_total_total[$__rate_interval])) or on() vector(0)",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": ["lastNotNull"]
+        },
+        "colorMode": "background",
+        "graphMode": "area"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "decimals": 2,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "purple", "value": null }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 101,
+      "type": "row",
+      "title": "Traffic",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 9,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Request Rate by Status Code",
+      "gridPos": {
+        "x": 0,
+        "y": 10,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "sum by (status_code) (rate(huginn_requests_total_total[$__rate_interval])) or on() vector(0)",
+          "legendFormat": "{{status_code}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        }
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Open Connections by Protocol",
+      "gridPos": {
+        "x": 8,
+        "y": 10,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "huginn_connections_active or on() vector(0)",
+          "legendFormat": "TCP (all)",
+          "refId": "A"
+        },
+        {
+          "expr": "huginn_tls_connections_active or on() vector(0)",
+          "legendFormat": "TLS",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        }
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 9,
+      "type": "timeseries",
+      "title": "Request Duration (P50 / P95 / P99)",
+      "gridPos": {
+        "x": 0,
+        "y": 18,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum(rate(huginn_requests_duration_seconds_bucket[$__rate_interval])) by (le))",
+          "legendFormat": "P50",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(huginn_requests_duration_seconds_bucket[$__rate_interval])) by (le))",
+          "legendFormat": "P95",
+          "refId": "B"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum(rate(huginn_requests_duration_seconds_bucket[$__rate_interval])) by (le))",
+          "legendFormat": "P99",
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        }
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "Throughput \u2014 Client (bytes/s)",
+      "gridPos": {
+        "x": 8,
+        "y": 18,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "sum by (protocol) (rate(huginn_bytes_received_total_total[$__rate_interval])) or on() vector(0)",
+          "legendFormat": "in \u2014 {{protocol}}",
+          "refId": "A"
+        },
+        {
+          "expr": "sum by (protocol) (rate(huginn_bytes_sent_total_total[$__rate_interval])) or on() vector(0)",
+          "legendFormat": "out \u2014 {{protocol}}",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "Bps"
+        }
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "description": "Only populated when requests/responses include a Content-Length header. GET requests without a body will not contribute to bytes_received."
+    },
+    {
+      "id": 35,
+      "type": "timeseries",
+      "title": "Connection Rate + Rejections",
+      "gridPos": {
+        "x": 16,
+        "y": 10,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(huginn_connections_total_total[$__rate_interval]) or on() vector(0))",
+          "legendFormat": "established",
+          "refId": "A"
+        },
+        {
+          "expr": "sum by (reason) (rate(huginn_connections_rejected_total_total[$__rate_interval])) or on() vector(0)",
+          "legendFormat": "rejected \u2014 {{reason}}",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        }
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 36,
+      "type": "timeseries",
+      "title": "Timeouts by Type",
+      "gridPos": {
+        "x": 16,
+        "y": 18,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "sum by (timeout_type) (rate(huginn_timeouts_total_total[$__rate_interval])) or on() vector(0)",
+          "legendFormat": "{{timeout_type}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        }
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 51,
+      "type": "timeseries",
+      "title": "Request/s per Route (Entrypoint)",
+      "gridPos": {
+        "x": 0,
+        "y": 26,
+        "w": 24,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "sum by (route) (rate(huginn_requests_total_total[$__rate_interval])) or on() vector(0)",
+          "legendFormat": "{{route}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        }
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 113,
+      "type": "row",
+      "title": "HTTP Status Codes",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 34,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "id": 43,
+      "type": "stat",
+      "title": "2xx Success",
+      "gridPos": {
+        "x": 0,
+        "y": 35,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(huginn_requests_total_total{status_code=~\"2..\"}[$__rate_interval]) or on() vector(0))",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background",
+        "graphMode": "area"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "color": {
+            "fixedColor": "green",
+            "mode": "fixed"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 44,
+      "type": "stat",
+      "title": "3xx Redirect",
+      "gridPos": {
+        "x": 6,
+        "y": 35,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(huginn_requests_total_total{status_code=~\"3..\"}[$__rate_interval]) or on() vector(0))",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background",
+        "graphMode": "area"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "color": {
+            "fixedColor": "blue",
+            "mode": "fixed"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 45,
+      "type": "stat",
+      "title": "4xx Client Error",
+      "gridPos": {
+        "x": 12,
+        "y": 35,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(huginn_requests_total_total{status_code=~\"4..\"}[$__rate_interval]) or on() vector(0))",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background",
+        "graphMode": "area"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "color": {
+            "fixedColor": "orange",
+            "mode": "fixed"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "orange",
+                "value": null
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 46,
+      "type": "stat",
+      "title": "5xx Server Error",
+      "gridPos": {
+        "x": 18,
+        "y": 35,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(huginn_requests_total_total{status_code=~\"5..\"}[$__rate_interval]) or on() vector(0))",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background",
+        "graphMode": "area"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "color": {
+            "fixedColor": "red",
+            "mode": "fixed"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 47,
+      "type": "timeseries",
+      "title": "2xx over time",
+      "gridPos": {
+        "x": 0,
+        "y": 39,
+        "w": 6,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "sum by (status_code) (rate(huginn_requests_total_total{status_code=~\"2..\"}[$__rate_interval])) or on() vector(0)",
+          "legendFormat": "{{status_code}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 80,
+            "lineWidth": 0,
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            }
+          }
+        }
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 48,
+      "type": "timeseries",
+      "title": "3xx over time",
+      "gridPos": {
+        "x": 6,
+        "y": 39,
+        "w": 6,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "sum by (status_code) (rate(huginn_requests_total_total{status_code=~\"3..\"}[$__rate_interval])) or on() vector(0)",
+          "legendFormat": "{{status_code}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 80,
+            "lineWidth": 0,
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            }
+          }
+        }
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 49,
+      "type": "timeseries",
+      "title": "4xx over time",
+      "gridPos": {
+        "x": 12,
+        "y": 39,
+        "w": 6,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "sum by (status_code) (rate(huginn_requests_total_total{status_code=~\"4..\"}[$__rate_interval])) or on() vector(0)",
+          "legendFormat": "{{status_code}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 80,
+            "lineWidth": 0,
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            }
+          }
+        }
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 50,
+      "type": "timeseries",
+      "title": "5xx over time",
+      "gridPos": {
+        "x": 18,
+        "y": 39,
+        "w": 6,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "sum by (status_code) (rate(huginn_requests_total_total{status_code=~\"5..\"}[$__rate_interval])) or on() vector(0)",
+          "legendFormat": "{{status_code}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 80,
+            "lineWidth": 0,
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            }
+          }
+        }
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 102,
+      "type": "row",
+      "title": "TLS",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 47,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "TLS Handshakes",
+      "gridPos": {
+        "x": 0,
+        "y": 48,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "sum by (tls_version) (rate(huginn_tls_handshakes_total_total[$__rate_interval])) or on() vector(0)",
+          "legendFormat": "{{tls_version}}",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(rate(huginn_tls_handshake_errors_total_total[$__rate_interval]) or on() vector(0))",
+          "legendFormat": "errors",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        }
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 12,
+      "type": "timeseries",
+      "title": "TLS Handshake Duration (P95)",
+      "gridPos": {
+        "x": 12,
+        "y": 48,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(huginn_tls_handshake_duration_seconds_bucket[$__rate_interval])) by (le, tls_version))",
+          "legendFormat": "P95 \u2014 {{tls_version}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        }
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 103,
+      "type": "row",
+      "title": "Fingerprinting \u2014 Extraction Rate",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 56,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "id": 13,
+      "type": "timeseries",
+      "title": "TLS Fingerprint (JA4)",
+      "gridPos": {
+        "x": 0,
+        "y": 57,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "rate(huginn_tls_fingerprints_extracted_total_total[$__rate_interval]) or on() vector(0)",
+          "legendFormat": "extracted",
+          "refId": "A"
+        },
+        {
+          "expr": "rate(huginn_tls_fingerprint_failures_total_total[$__rate_interval]) or on() vector(0)",
+          "legendFormat": "failures",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        }
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 31,
+      "type": "timeseries",
+      "title": "HTTP/2 Fingerprint (Akamai)",
+      "gridPos": {
+        "x": 8,
+        "y": 57,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "rate(huginn_http2_fingerprints_extracted_total_total[$__rate_interval]) or on() vector(0)",
+          "legendFormat": "extracted",
+          "refId": "A"
+        },
+        {
+          "expr": "rate(huginn_http2_fingerprint_failures_total_total[$__rate_interval]) or on() vector(0)",
+          "legendFormat": "failures (incl. HTTP/1.1)",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        }
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 14,
+      "type": "timeseries",
+      "title": "TCP SYN Fingerprint (eBPF)",
+      "gridPos": {
+        "x": 16,
+        "y": 57,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "sum by (reason) (rate(huginn_tcp_syn_fingerprints_total_total[$__rate_interval])) or on() vector(0)",
+          "legendFormat": "{{reason}}",
+          "refId": "A"
+        },
+        {
+          "expr": "rate(huginn_tcp_syn_fingerprint_failures_total_total[$__rate_interval]) or on() vector(0)",
+          "legendFormat": "BPF map failures",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        }
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 111,
+      "type": "row",
+      "title": "Fingerprinting \u2014 Extraction Duration",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 65,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "id": 32,
+      "type": "timeseries",
+      "title": "TLS Fingerprint Duration (JA4)",
+      "gridPos": {
+        "x": 0,
+        "y": 66,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum(rate(huginn_tls_fingerprint_extraction_duration_seconds_bucket[$__rate_interval])) by (le))",
+          "legendFormat": "P50",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(huginn_tls_fingerprint_extraction_duration_seconds_bucket[$__rate_interval])) by (le))",
+          "legendFormat": "P95",
+          "refId": "B"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum(rate(huginn_tls_fingerprint_extraction_duration_seconds_bucket[$__rate_interval])) by (le))",
+          "legendFormat": "P99",
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms"
+        }
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 33,
+      "type": "timeseries",
+      "title": "HTTP/2 Fingerprint Duration (Akamai)",
+      "gridPos": {
+        "x": 8,
+        "y": 66,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum(rate(huginn_http2_fingerprint_extraction_duration_seconds_bucket[$__rate_interval])) by (le))",
+          "legendFormat": "P50",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(huginn_http2_fingerprint_extraction_duration_seconds_bucket[$__rate_interval])) by (le))",
+          "legendFormat": "P95",
+          "refId": "B"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum(rate(huginn_http2_fingerprint_extraction_duration_seconds_bucket[$__rate_interval])) by (le))",
+          "legendFormat": "P99",
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms"
+        }
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 34,
+      "type": "timeseries",
+      "title": "TCP SYN Fingerprint Duration (eBPF)",
+      "gridPos": {
+        "x": 16,
+        "y": 66,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum(rate(huginn_tcp_syn_fingerprint_duration_seconds_bucket[$__rate_interval])) by (le))",
+          "legendFormat": "P50",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(huginn_tcp_syn_fingerprint_duration_seconds_bucket[$__rate_interval])) by (le))",
+          "legendFormat": "P95",
+          "refId": "B"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum(rate(huginn_tcp_syn_fingerprint_duration_seconds_bucket[$__rate_interval])) by (le))",
+          "legendFormat": "P99",
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms"
+        }
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 104,
+      "type": "row",
+      "title": "Backends",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 74,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "id": 15,
+      "type": "timeseries",
+      "title": "Backend Request Rate",
+      "gridPos": {
+        "x": 0,
+        "y": 75,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "sum by (backend_address) (rate(huginn_backend_requests_total_total[$__rate_interval])) or on() vector(0)",
+          "legendFormat": "{{backend_address}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        }
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 16,
+      "type": "timeseries",
+      "title": "Backend Error Rate",
+      "gridPos": {
+        "x": 8,
+        "y": 75,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "sum by (backend_address) (rate(huginn_backend_errors_total_total[$__rate_interval])) or on() vector(0)",
+          "legendFormat": "{{backend_address}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        }
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 17,
+      "type": "timeseries",
+      "title": "Backend Latency P95",
+      "gridPos": {
+        "x": 16,
+        "y": 75,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (backend_address, le) (rate(huginn_backend_duration_seconds_bucket[$__rate_interval])))",
+          "legendFormat": "P95 \u2014 {{backend_address}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        }
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 37,
+      "type": "timeseries",
+      "title": "Backend Throughput (bytes/s)",
+      "gridPos": {
+        "x": 0,
+        "y": 83,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "sum by (backend_address) (rate(huginn_backend_bytes_received_total_total[$__rate_interval])) or on() vector(0)",
+          "legendFormat": "in \u2014 {{backend_address}}",
+          "refId": "A"
+        },
+        {
+          "expr": "sum by (backend_address) (rate(huginn_backend_bytes_sent_total_total[$__rate_interval])) or on() vector(0)",
+          "legendFormat": "out \u2014 {{backend_address}}",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "Bps"
+        }
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 38,
+      "type": "timeseries",
+      "title": "Backend Distribution (round-robin)",
+      "gridPos": {
+        "x": 12,
+        "y": 83,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "sum by (backend) (rate(huginn_backend_selections_total_total[$__rate_interval])) or on() vector(0)",
+          "legendFormat": "{{backend}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        }
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 105,
+      "type": "row",
+      "title": "Rate Limiting",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 91,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "id": 18,
+      "type": "timeseries",
+      "title": "Rate Limit Evaluation vs Rejections",
+      "gridPos": {
+        "x": 0,
+        "y": 92,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(huginn_rate_limit_requests_total_total[$__rate_interval]) or on() vector(0))",
+          "legendFormat": "evaluated",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(rate(huginn_rate_limit_allowed_total_total[$__rate_interval]) or on() vector(0))",
+          "legendFormat": "allowed",
+          "refId": "B"
+        },
+        {
+          "expr": "sum(rate(huginn_rate_limit_rejected_total_total[$__rate_interval]) or on() vector(0))",
+          "legendFormat": "rejected (429)",
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        }
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 19,
+      "type": "timeseries",
+      "title": "Rejections by Strategy",
+      "gridPos": {
+        "x": 12,
+        "y": 92,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "sum by (strategy) (rate(huginn_rate_limit_rejected_total_total[$__rate_interval])) or on() vector(0)",
+          "legendFormat": "{{strategy}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        }
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 106,
+      "type": "row",
+      "title": "eBPF Agent",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 100,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "id": 21,
+      "type": "timeseries",
+      "title": "TCP SYN Captured (agent)",
+      "gridPos": {
+        "x": 0,
+        "y": 101,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "rate(tcp_syn_captured_total_total[$__rate_interval]) or on() vector(0)",
+          "legendFormat": "captured/s",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        }
+      },
+      "options": {
+        "tooltip": {
+          "mode": "single"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 22,
+      "type": "timeseries",
+      "title": "TCP SYN Failures (agent)",
+      "gridPos": {
+        "x": 12,
+        "y": 101,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "rate(tcp_syn_insert_failures_total_total[$__rate_interval]) or on() vector(0)",
+          "legendFormat": "insert failures/s",
+          "refId": "A"
+        },
+        {
+          "expr": "rate(tcp_syn_malformed_total_total[$__rate_interval]) or on() vector(0)",
+          "legendFormat": "malformed/s",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        }
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 107,
+      "type": "row",
+      "title": "Errors",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 109,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "id": 23,
+      "type": "timeseries",
+      "title": "Error Rate by Type",
+      "gridPos": {
+        "x": 0,
+        "y": 110,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "sum by (error_type) (rate(huginn_errors_total_total[$__rate_interval])) or on() vector(0)",
+          "legendFormat": "{{error_type}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        }
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 24,
+      "type": "timeseries",
+      "title": "Error Rate by Component",
+      "gridPos": {
+        "x": 12,
+        "y": 110,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "sum by (component) (rate(huginn_errors_total_total[$__rate_interval])) or on() vector(0)",
+          "legendFormat": "{{component}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        }
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 108,
+      "type": "row",
+      "title": "IP Filtering",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 118,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "id": 25,
+      "type": "stat",
+      "title": "IP Filter Denial Rate",
+      "gridPos": {
+        "x": 0,
+        "y": 119,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(huginn_ip_filter_denied_total_total[$__rate_interval]) or on() vector(0))",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background",
+        "graphMode": "area"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 26,
+      "type": "timeseries",
+      "title": "IP Filter: Allowed vs Denied",
+      "gridPos": {
+        "x": 6,
+        "y": 119,
+        "w": 18,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "rate(huginn_ip_filter_requests_total_total[$__rate_interval]) or on() vector(0)",
+          "legendFormat": "evaluated",
+          "refId": "A"
+        },
+        {
+          "expr": "rate(huginn_ip_filter_allowed_total_total[$__rate_interval]) or on() vector(0)",
+          "legendFormat": "allowed",
+          "refId": "B"
+        },
+        {
+          "expr": "rate(huginn_ip_filter_denied_total_total[$__rate_interval]) or on() vector(0)",
+          "legendFormat": "denied (403)",
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        }
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 112,
+      "type": "row",
+      "title": "Header Manipulation",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 127,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "id": 40,
+      "type": "timeseries",
+      "title": "Headers Added / Removed by Context",
+      "gridPos": {
+        "x": 0,
+        "y": 128,
+        "w": 24,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "sum by (context) (rate(huginn_headers_added_total_total[$__rate_interval])) or on() vector(0)",
+          "legendFormat": "added \u2014 {{context}}",
+          "refId": "A"
+        },
+        {
+          "expr": "sum by (context) (rate(huginn_headers_removed_total_total[$__rate_interval])) or on() vector(0)",
+          "legendFormat": "removed \u2014 {{context}}",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        }
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 109,
+      "type": "row",
+      "title": "mTLS",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 136,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "id": 27,
+      "type": "timeseries",
+      "title": "mTLS Connections by Protocol",
+      "gridPos": {
+        "x": 0,
+        "y": 137,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "sum by (protocol) (rate(huginn_mtls_connections_total_total[$__rate_interval])) or on() vector(0)",
+          "legendFormat": "{{protocol}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        }
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 28,
+      "type": "timeseries",
+      "title": "mTLS Usage (% of TLS handshakes)",
+      "gridPos": {
+        "x": 12,
+        "y": 137,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(huginn_mtls_connections_total_total[$__rate_interval]) or on() vector(0)) / sum(rate(huginn_tls_handshakes_total_total[$__rate_interval]) or on() vector(1)) * 100",
+          "legendFormat": "mTLS %",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent"
+        }
+      },
+      "options": {
+        "tooltip": {
+          "mode": "single"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 110,
+      "type": "row",
+      "title": "Config Hot Reload",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 145,
+        "w": 24,
+        "h": 1
+      },
+      "description": "Metrics only appear after a hot-reload event (config file changed while proxy is running). On initial startup no reload is recorded. To trigger: modify the TOML config while the proxy is live."
+    },
+    {
+      "id": 41,
+      "type": "stat",
+      "title": "Active Config Hash",
+      "gridPos": {
+        "x": 0,
+        "y": 146,
+        "w": 4,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "huginn_config_hash",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "none",
+        "noValue": "\u2014"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 0,
+          "noValue": "\u2014"
+        }
+      },
+      "description": "Metrics only appear after a hot-reload event (config file changed while proxy is running). On initial startup no reload is recorded. To trigger: modify the TOML config while the proxy is live."
+    },
+    {
+      "id": 29,
+      "type": "stat",
+      "title": "Time Since Last Successful Reload",
+      "gridPos": {
+        "x": 4,
+        "y": 146,
+        "w": 4,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "time() - huginn_config_last_reload_timestamp_seconds",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        }
+      },
+      "description": "Metrics only appear after a hot-reload event (config file changed while proxy is running). On initial startup no reload is recorded. To trigger: modify the TOML config while the proxy is live.",
+      "noValue": "No reload yet"
+    },
+    {
+      "id": 50,
+      "type": "stat",
+      "title": "Total Reloads",
+      "gridPos": {
+        "x": 8,
+        "y": 146,
+        "w": 4,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "huginn_config_reload_total_total{result=\"success\"}",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "none",
+        "noValue": "\u2014"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 0,
+          "noValue": "\u2014"
+        }
+      }
+    },
+    {
+      "id": 30,
+      "type": "timeseries",
+      "title": "Config Reload Attempts",
+      "gridPos": {
+        "x": 12,
+        "y": 146,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "rate(huginn_config_reload_total_total{result=\"success\"}[$__rate_interval]) or on() vector(0)",
+          "legendFormat": "success",
+          "refId": "A"
+        },
+        {
+          "expr": "rate(huginn_config_reload_total_total{result=\"error\"}[$__rate_interval]) or on() vector(0)",
+          "legendFormat": "error",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        }
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
     }
-
   ]
 }

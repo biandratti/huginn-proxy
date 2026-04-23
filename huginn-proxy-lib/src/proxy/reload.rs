@@ -4,7 +4,7 @@ use std::path::Path;
 use std::sync::{Arc, RwLock};
 
 use arc_swap::ArcSwap;
-use tracing::{error, info};
+use tracing::{debug, error, info};
 
 use crate::config::{load_from_path, Backend, BackendPoolConfig, DynamicConfig, StaticConfig};
 use crate::proxy::client_pool::ClientPool;
@@ -102,11 +102,23 @@ pub async fn try_reload(
     );
 
     let hash = fnv1a_hash(&new_dynamic);
+    let old_hash = fnv1a_hash(&old_dynamic);
 
     dynamic_cfg.store(Arc::new(new_dynamic));
 
     metrics.record_reload_success(hash);
-    info!(config_hash = hash, "Config reloaded successfully");
+    if hash == old_hash {
+        debug!(
+            config_hash = hash,
+            "Config reloaded successfully (no effective dynamic changes)"
+        );
+    } else {
+        debug!(
+            config_hash = hash,
+            old_config_hash = old_hash,
+            "Config reloaded successfully, dynamic config changed"
+        );
+    }
 }
 
 fn audit_config_changes(old: &DynamicConfig, new: &DynamicConfig) {
