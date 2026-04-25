@@ -4,7 +4,8 @@
 //! [`AtomicBool`] flag accessed concurrently by:
 //!
 //! - **The health checker task** (writer): updates the flag whenever a state
-//!   transition is detected by the [`crate::health_check::ConsecutiveCounter`].
+//!   transition is detected by the `ConsecutiveCounter` helper in the same
+//!   `health_check` module.
 //! - **The forwarding gate** (readers): reads the flag on every request to
 //!   decide whether to short-circuit with a 502 Bad Gateway.
 //!

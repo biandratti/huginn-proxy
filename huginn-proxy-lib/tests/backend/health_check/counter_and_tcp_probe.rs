@@ -1,11 +1,11 @@
+//! Tests for the consecutive-threshold counter and the TCP connect probe.
+//! These exercise the same primitives the health-check supervisor will use (PR3).
+
 use std::time::Duration;
 
-use super::check_tcp::check_tcp;
-use super::counter::ConsecutiveCounter;
+use huginn_proxy_lib::backend::health_check::{check_tcp, ConsecutiveCounter};
 
 type TestError = Box<dyn std::error::Error + Send + Sync>;
-
-// ── ConsecutiveCounter ────────────────────────────────────────────────────────
 
 #[test]
 fn becomes_unhealthy_after_threshold() {
@@ -96,8 +96,6 @@ fn streak_does_not_overflow() {
     assert!(c.is_healthy());
 }
 
-// ── check_tcp ─────────────────────────────────────────────────────────────────
-
 #[tokio::test]
 async fn tcp_returns_true_for_listening_port() -> Result<(), TestError> {
     use tokio::net::TcpListener;
@@ -109,7 +107,6 @@ async fn tcp_returns_true_for_listening_port() -> Result<(), TestError> {
 
 #[tokio::test]
 async fn tcp_returns_false_for_unreachable_port() {
-    // Port 1 is reserved and almost certainly not listening.
     assert!(!check_tcp("127.0.0.1:1", Duration::from_millis(500)).await);
 }
 
@@ -120,7 +117,6 @@ async fn tcp_returns_false_for_invalid_address() {
 
 #[tokio::test]
 async fn tcp_returns_false_when_dns_fails() {
-    // RFC 6761 reserves .invalid for guaranteed-NXDOMAIN names.
     assert!(!check_tcp("nonexistent.invalid:80", Duration::from_secs(1)).await);
 }
 
@@ -129,7 +125,6 @@ async fn tcp_ipv6_listener_is_reachable() -> Result<(), TestError> {
     use tokio::net::TcpListener;
     let listener = match TcpListener::bind("[::1]:0").await {
         Ok(l) => l,
-        // Skip on environments without IPv6 loopback (CI containers, etc.).
         Err(_) => return Ok(()),
     };
     let addr = listener.local_addr()?.to_string();
@@ -139,8 +134,6 @@ async fn tcp_ipv6_listener_is_reachable() -> Result<(), TestError> {
 
 #[tokio::test]
 async fn tcp_timeout_returns_false_quickly() {
-    // 10.255.255.1 is a non-routable address that will hang on connect.
-    // We expect the timeout to fire well before the OS connect timeout (~75s).
     let start = std::time::Instant::now();
     let res = check_tcp("10.255.255.1:1", Duration::from_millis(200)).await;
     let elapsed = start.elapsed();

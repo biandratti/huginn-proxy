@@ -44,7 +44,7 @@ fn unknown_address_is_healthy_even_when_others_are_not() {
 }
 
 #[test]
-fn remove_dropea_la_entrada() {
+fn remove_drops_entry() {
     let r = HealthRegistry::new();
     let h = r.get_or_create("backend:9000");
     h.set(false);

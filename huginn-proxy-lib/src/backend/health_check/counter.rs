@@ -13,13 +13,13 @@
 //!
 //! The counter is **not** thread-safe and is meant to be owned by a single
 //! health-check task per backend. The shared state visible to the rest of the
-//! proxy lives in [`crate::health_check::BackendHealth`].
+//! proxy lives in [`crate::backend::health_check::BackendHealth`].
 
 /// Tracks consecutive success/failure counts to determine health state
 /// transitions. Only triggers a state change when a threshold is crossed.
 ///
 /// See module-level docs for the design rationale.
-pub(crate) struct ConsecutiveCounter {
+pub struct ConsecutiveCounter {
     consecutive_ok: u32,
     consecutive_fail: u32,
     unhealthy_threshold: u32,
@@ -29,7 +29,7 @@ pub(crate) struct ConsecutiveCounter {
 
 impl ConsecutiveCounter {
     /// Create a new counter starting in the healthy state ("optimistic boot",
-    /// matching [`crate::health_check::BackendHealth::new`]).
+    /// matching [`crate::backend::health_check::BackendHealth::new`]).
     ///
     /// Both thresholds are clamped to a minimum of 1 — passing 0 would never
     /// trigger a transition, which is almost certainly a misconfiguration.
@@ -46,7 +46,7 @@ impl ConsecutiveCounter {
     /// Record a check result.
     ///
     /// Returns `Some(new_state)` only when a state transition occurred —
-    /// callers use this to update the shared [`crate::health_check::BackendHealth`]
+    /// callers use this to update the shared [`crate::backend::health_check::BackendHealth`]
     /// flag and emit a metric / log line. Returns `None` for the common case
     /// where the streak grew but no threshold was crossed.
     pub fn record(&mut self, ok: bool) -> Option<bool> {
@@ -72,9 +72,8 @@ impl ConsecutiveCounter {
         None
     }
 
-    /// Current state as tracked by this counter. Exposed for tests; production
-    /// code reads the shared [`crate::health_check::BackendHealth`] flag instead.
-    #[cfg(test)]
+    /// Current state as tracked by this counter (introspection for tests and
+    /// diagnostics). Production forwarding reads [`crate::backend::health_check::BackendHealth`].
     pub fn is_healthy(&self) -> bool {
         self.is_healthy
     }

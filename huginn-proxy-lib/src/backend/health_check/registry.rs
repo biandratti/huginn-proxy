@@ -22,9 +22,9 @@
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
-use crate::health_check::health::BackendHealth;
+use super::health::BackendHealth;
 
-/// Address → health state map shared between the [`crate::health_check::HealthCheckSupervisor`]
+/// Address → health state map shared between the future `HealthCheckSupervisor`
 /// (writer, on hot reload) and the forwarding gate (reader, per request).
 ///
 /// Cheap to clone — internally just an `Arc`.

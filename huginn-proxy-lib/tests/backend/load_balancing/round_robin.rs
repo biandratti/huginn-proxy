@@ -1,4 +1,4 @@
-use huginn_proxy_lib::load_balancing::RoundRobin;
+use huginn_proxy_lib::RoundRobin;
 
 #[test]
 fn test_round_robin_basic() {

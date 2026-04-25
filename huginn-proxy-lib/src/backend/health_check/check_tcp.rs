@@ -21,7 +21,7 @@ use tracing::trace;
 /// that DNS records can change underneath the proxy.
 ///
 /// Returns `true` if the 3-way handshake completed inside `timeout`.
-pub(crate) async fn check_tcp(addr: &str, timeout: Duration) -> bool {
+pub async fn check_tcp(addr: &str, timeout: Duration) -> bool {
     let res = tokio::time::timeout(timeout, TcpStream::connect(addr))
         .await
         .is_ok_and(|r| r.is_ok());

@@ -13,8 +13,8 @@
 //! |---|---|
 //! | [`BackendHealth`] | Per-backend `AtomicBool` shared between the checker task and request handlers. |
 //! | [`HealthRegistry`] | Address → [`BackendHealth`] map; cheap-to-clone read handle for the forwarding gate. |
-//! | `ConsecutiveCounter` (private) | State-transition engine with hysteresis; owned by each checker task. |
-//! | `check_tcp` (private) | TCP 3-way handshake probe. |
+//! | [`ConsecutiveCounter`] | State-transition engine with hysteresis; owned by each checker task. |
+//! | [`check_tcp`] | TCP 3-way handshake probe. |
 //! | `HealthCheckSupervisor` *(coming in PR3)* | Owns the probe `tokio::JoinHandle`s; reacts to hot reload. |
 //! | `check_http` *(coming in PR4)* | HTTP `GET /path` probe with expected-status validation. |
 //!
@@ -26,9 +26,9 @@
 //! strictly opt-in.
 
 // `counter` and `check_tcp` are pure-logic primitives consumed by the
-// `HealthCheckSupervisor` arriving in PR3. They are exercised via integration
-// tests in `huginn-proxy-lib/tests/health_check/`. The `dead_code` allow
-// keeps `cargo build` clean until the supervisor is wired in.
+// `HealthCheckSupervisor` arriving in PR3. They are re-exported below so
+// integration tests can import them normally; the `dead_code` allow keeps
+// `cargo build` clean until the supervisor is wired in.
 #[allow(dead_code)]
 mod check_tcp;
 #[allow(dead_code)]
@@ -36,8 +36,7 @@ mod counter;
 mod health;
 mod registry;
 
+pub use check_tcp::check_tcp;
+pub use counter::ConsecutiveCounter;
 pub use health::BackendHealth;
 pub use registry::HealthRegistry;
-
-#[cfg(test)]
-mod tests;
