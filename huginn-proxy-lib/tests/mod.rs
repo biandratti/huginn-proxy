@@ -1,5 +1,6 @@
 mod config;
 mod fingerprinting;
+mod health_check;
 mod helpers;
 mod hot_reload;
 mod load_balancing;

@@ -3,6 +3,7 @@
 pub mod config;
 pub mod error;
 pub mod fingerprinting;
+pub mod health_check;
 pub mod load_balancing;
 pub mod proxy;
 pub mod security;
@@ -16,6 +17,7 @@ pub use config::{
 pub use error::{ProxyError, Result};
 pub use fingerprinting::SynResult;
 pub use fingerprinting::{forwarded, names, read_client_hello, CapturingStream, Ja4Fingerprints};
+pub use health_check::{BackendHealth, HealthRegistry};
 pub use load_balancing::RoundRobin;
 pub use proxy::reload::{
     initial_client_pool, initial_rate_limiter, try_reload, SharedClientPool, SharedRateLimiter,
