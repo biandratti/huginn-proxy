@@ -2,10 +2,6 @@
 
 ## Upcoming Features
 
-### Operational Features
-
-- [ ] Backend health checks (active polling)
-
 ### Security & TLS
 
 - [ ] OCSP stapling
@@ -18,6 +14,5 @@
 
 - [ ] Advanced load balancing algorithms (least connections, weighted)
 - [ ] Request/response transformation
-- [ ] Circuit breakers
 - [ ] Production hardening and security audit
 

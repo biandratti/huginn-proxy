@@ -1,4 +1,37 @@
+use std::time::Duration;
+
 use tests_e2e::common::{wait_for_service, DEFAULT_HEALTH_CHECK_TIMEOUT_SECS, METRICS_URL};
+
+/// Compose enables HTTP health checks for `backend-a:9000`; the metrics endpoint should eventually
+/// show probe lines for that backend.
+#[tokio::test]
+async fn test_active_http_health_probes_appear_in_metrics(
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    assert!(
+        wait_for_service(&format!("{METRICS_URL}/metrics"), DEFAULT_HEALTH_CHECK_TIMEOUT_SECS)
+            .await?,
+        "Metrics endpoint should be ready"
+    );
+
+    tokio::time::sleep(Duration::from_secs(3)).await;
+
+    let client = reqwest::Client::new();
+    let response = client
+        .get(format!("{METRICS_URL}/metrics"))
+        .send()
+        .await
+        .map_err(|e| format!("GET /metrics: {e}"))?;
+    let body = response
+        .text()
+        .await
+        .map_err(|e| format!("read body: {e}"))?;
+    assert!(
+        body.contains("huginn_health_check_probes_total") && body.contains("backend-a:9000"),
+        "expected active health check metrics for backend-a; got snippet (truncated): {:?}",
+        body.chars().take(400).collect::<String>()
+    );
+    Ok(())
+}
 
 #[tokio::test]
 async fn test_health_endpoint() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {

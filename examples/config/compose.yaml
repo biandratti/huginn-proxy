@@ -10,6 +10,12 @@ listen:
 backends:
   - address: "backend-a:9000"
     http_version: http11
+    health_check:
+      type: http
+      path: /
+      expected_status: 200
+      interval_secs: 2
+      timeout_secs: 2
   - address: "backend-b:9000"
     http_version: http11
 

@@ -15,8 +15,8 @@
 //! | [`HealthRegistry`] | Address → [`UpstreamHealth`] map; cheap-to-clone read handle for the forwarding gate. |
 //! | [`ConsecutiveCounter`] | State-transition engine with hysteresis; owned by each checker task. |
 //! | [`check_tcp`] | TCP 3-way handshake probe. |
+//! | [`check_http`](check_http::check_http) | HTTP `GET` over `http://{address}{path}` with expected status. |
 //! | [`HealthCheckSupervisor`] | Owns the probe `tokio::JoinHandle`s; reconciles on hot reload and shutdown. |
-//! | `check_http` *(coming in PR4)* | HTTP `GET /path` probe with expected-status validation. |
 //!
 //! ## Backwards compatibility
 //!
@@ -25,16 +25,17 @@
 //! Existing configurations therefore behave identically — health checks are
 //! strictly opt-in.
 
-// `counter` and `check_tcp` are pure-logic primitives used by
-// `HealthCheckSupervisor`. They are re-exported for integration tests.
-#[allow(dead_code)] // TODO: WIP
+// `counter`, `check_tcp`, and `check_http` are used by `HealthCheckSupervisor`
+// and re-exported for integration tests.
+mod check_http;
 mod check_tcp;
 mod checker;
-#[allow(dead_code)] // TODO: WIP
 mod counter;
 mod health;
 mod registry;
 
+pub use check_http::check_http;
+pub use check_http::HealthCheckHttpClient;
 pub use check_tcp::check_tcp;
 pub use checker::HealthCheckSupervisor;
 pub use counter::ConsecutiveCounter;

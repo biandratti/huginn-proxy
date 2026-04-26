@@ -1,4 +1,6 @@
-use serde::Deserialize;
+use std::convert::TryFrom;
+
+use serde::{Deserialize, Deserializer};
 
 use crate::error::{ProxyError, Result};
 
@@ -15,28 +17,92 @@ pub enum BackendHttpVersion {
     Preserve,
 }
 
-/// Probing strategy for backend health. Extensible; today only [`HealthCheckType::Tcp`]
-/// (TCP connect) is used.
-#[derive(Debug, Default, Deserialize, Clone, Copy, PartialEq, Eq, Hash)]
-#[serde(rename_all = "lowercase")]
+/// Probing strategy for an upstream health check: TCP connect only, or HTTP `GET` over
+/// **plain** `http://` (no TLS; matches how the proxy already talks to backends for forwarding).
+#[derive(Debug, Default, Clone, PartialEq, Eq, Hash)]
 pub enum HealthCheckType {
+    /// TCP 3-way handshake; no application bytes.
     #[default]
     Tcp,
+    /// `GET` `http://{address}{path}`; success when the response status matches `expected_status`
+    /// (any body is drained and ignored).
+    Http { path: String, expected_status: u16 },
+}
+
+/// Wire shape for a `[backends.health_check]` / `backends.*.health_check` table. Every field
+/// is optional: missing keys merge with defaults; an empty table `{}` yields TCP and the default
+/// intervals/thresholds (same as rust-rpxy).
+#[derive(Deserialize, Default, Clone)]
+struct HealthCheckDe {
+    r#type: Option<String>,
+    path: Option<String>,
+    expected_status: Option<u16>,
+    interval_secs: Option<u64>,
+    timeout_secs: Option<u64>,
+    unhealthy_threshold: Option<u32>,
+    healthy_threshold: Option<u32>,
+}
+
+impl TryFrom<HealthCheckDe> for HealthCheckConfig {
+    type Error = String;
+
+    fn try_from(d: HealthCheckDe) -> std::result::Result<Self, Self::Error> {
+        let t = d.r#type.map(|s| s.to_lowercase());
+        let check_type = match t.as_deref() {
+            None | Some("tcp") => {
+                if d.path.is_some() {
+                    return Err("`path` is only valid for health_check.type = \"http\"".into());
+                }
+                if d.expected_status.is_some() {
+                    return Err(
+                        "`expected_status` is only valid for health_check.type = \"http\"".into()
+                    );
+                }
+                HealthCheckType::Tcp
+            }
+            Some("http") => {
+                let path = d
+                    .path
+                    .clone()
+                    .ok_or("health check type `http` requires `path`")?;
+                let expected_status = d.expected_status.unwrap_or(200);
+                HealthCheckType::Http { path, expected_status }
+            }
+            Some(x) => {
+                return Err(format!(
+                    "invalid health_check.type: \"{x}\" (expected `tcp` or `http`)"
+                ));
+            }
+        };
+
+        Ok(HealthCheckConfig {
+            check_type,
+            interval_secs: d.interval_secs.unwrap_or(10),
+            timeout_secs: d.timeout_secs.unwrap_or(5),
+            unhealthy_threshold: d.unhealthy_threshold.unwrap_or(3),
+            healthy_threshold: d.healthy_threshold.unwrap_or(2),
+        })
+    }
+}
+
+impl<'de> Deserialize<'de> for HealthCheckConfig {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> std::result::Result<Self, D::Error> {
+        let raw = HealthCheckDe::deserialize(deserializer)?;
+        HealthCheckConfig::try_from(raw).map_err(serde::de::Error::custom)
+    }
 }
 
 /// Per-backend active health check settings (opt-in: omit the table to disable).
 ///
 /// `unhealthy_threshold` and `healthy_threshold` match
 /// [`crate::backend::health_check::ConsecutiveCounter`] (consecutive failed/successful probes).
-#[derive(Debug, Deserialize, Clone, PartialEq)]
-#[serde(default)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct HealthCheckConfig {
-    /// `type` in TOML/YAML (`tcp`).
-    #[serde(rename = "type")]
+    /// `type` in TOML/YAML: `tcp` (default) or `http` (add `path` and optional `expected_status`).
     pub check_type: HealthCheckType,
     /// How often the supervisor runs a probe, in wall-clock seconds.
     pub interval_secs: u64,
-    /// How long a single TCP probe may take before it counts as failed, in seconds.
+    /// Max wall-clock time for a single TCP connect or a full HTTP round-trip, in seconds.
     pub timeout_secs: u64,
     /// Consecutive failed probes before marking the backend unhealthy.
     pub unhealthy_threshold: u32,
@@ -84,6 +150,18 @@ impl HealthCheckConfig {
             return Err(ProxyError::Config(
                 "health_check.healthy_threshold must be at least 1".to_string(),
             ));
+        }
+        if let HealthCheckType::Http { path, expected_status } = &self.check_type {
+            if path.is_empty() || !path.starts_with('/') {
+                return Err(ProxyError::Config(
+                    "health_check.path (HTTP) must be non-empty and start with '/'".to_string(),
+                ));
+            }
+            if *expected_status < 100 || *expected_status > 599 {
+                return Err(ProxyError::Config(
+                    "health_check.expected_status must be between 100 and 599".to_string(),
+                ));
+            }
         }
         Ok(())
     }

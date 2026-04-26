@@ -24,7 +24,13 @@ The proxy listens on both IPv4 and IPv6 simultaneously. Configure multiple `list
 
 Basic round-robin distribution across multiple backends. Works well for most use cases where backends have similar capacity.
 
-Limitation: No health checks yet, so if a backend goes down, requests will fail until you remove it from the config. No support for least-connections or weighted algorithms.
+Limitation: no least-connections, no weighted or priority policies beyond this simple round-robin (when load balancing is in use for multiple upstreams).
+
+**Backend health checks (active probes)**
+
+Optional per-backend `health_check` in the config: **TCP** connect, or **HTTP** `GET` to a path (plain `http://` to the backend address, same as normal forwarding). Consecutive-failure thresholds with hysteresis: when a backend is marked unhealthy, the proxy answers with **502** for matching routes instead of waiting on TCP connect timeouts.
+
+Limitation: the HTTP probe does not use TLS to the upstream (use a **TCP** check, or an HTTP path that responds over cleartext on the same `host:port` you already use for backend traffic).
 
 ## Path-based Routing
 

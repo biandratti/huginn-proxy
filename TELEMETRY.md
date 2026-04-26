@@ -328,17 +328,17 @@ sum by (backend_address, route) (rate(huginn_backend_requests_total[5m]))
 sum by (backend_address, route) (rate(huginn_backend_errors_total[5m]))
 ```
 
-**Active health checks** (TCP, opt-in: `health_check` on a `[[backends]]` entry; see config docs). The supervisor probes the backend address; requests are short-circuited with **502** when the upstream is marked unhealthy (`error_type` = `upstream_unhealthy` in `huginn_errors_total`).
+**Active health checks** (TCP or HTTP `GET` over plain `http://`, opt-in: `health_check` on a `[[backends]]` entry; see [SETTINGS.md](SETTINGS.md)). The supervisor probes the backend; requests are short-circuited with **502** when the upstream is marked unhealthy (`error_type` = `upstream_unhealthy` in `huginn_errors_total`).
 
 | Metric                               | Type    | Description                                                                 | Labels                    |
 |--------------------------------------|---------|-----------------------------------------------------------------------------|---------------------------|
-| `huginn_health_check_probes_total`   | Counter | TCP connect probes from the health checker (success and failure)            | `backend`, `result`       |
+| `huginn_health_check_probes_total`   | Counter | Probes: TCP connect or HTTP round-trip (success and failure)                 | `backend`, `result`       |
 | `huginn_health_check_gate_rejects_total` | Counter | Client requests not forwarded because upstream is unhealthy (502)         | `backend_address`         |
 
 **Labels**:
 
 - `backend`: Upstream `host:port` (same as backend key in the registry)
-- `result`: `ok` (TCP connect succeeded) or `fail` (timeout / refused / etc.)
+- `result`: `ok` (probe succeeded) or `fail` (timeout, refused, unexpected HTTP status, etc.)
 - `backend_address`: Same as `backend` (Prometheus `backend_address` key for this counter)
 
 **Example queries**:
@@ -640,8 +640,8 @@ The following telemetry features are planned but not yet implemented:
 The following metrics or dimensions may be added when the corresponding features land:
 
 - **Connection Pooling**: Pool size, active/idle connections, reuse rate
-- **Health checks (extensions)**: HTTP health probes, histogram of probe duration (TCP today exposes probe counts
-  and pass/fail via `huginn_health_check_probes_total` only).
+- **Health checks (extensions)**: Histogram of per-probe duration (wall time for TCP connect or full HTTP `GET`); today
+  only the counter `huginn_health_check_probes_total` (with `result=ok|fail`) is recorded.
 
 ### Tracing (Planned)
 

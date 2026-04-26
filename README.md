@@ -42,6 +42,7 @@ See [`examples/`](examples/).
 - **Connection Pooling** - Automatic connection reuse to backends for reduced latency (bypasses pooling per-route for
   fingerprinting)
 - **Path-based Routing** - Route matching with prefix support, path stripping, and path rewriting
+- **Backend health checks** - Optional TCP or HTTP `GET` probes with 502 fast-fail when an upstream is unhealthy
 - **Rate Limiting** - Token bucket algorithm with multiple strategies (IP, Header, Route, Combined), global and
   per-route limits
 - **Header Manipulation** - Add or remove request/response headers globally or per-route for security and customization

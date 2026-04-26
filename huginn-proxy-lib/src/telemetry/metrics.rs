@@ -307,7 +307,7 @@ impl Metrics {
 
             health_check_probes_total: meter
                 .u64_counter("huginn_health_check_probes_total")
-                .with_description("Active health check TCP probes (result=ok|fail)")
+                .with_description("Active health check probes: TCP connect or HTTP GET (result=ok|fail)")
                 .build(),
             health_check_gate_rejects_total: meter
                 .u64_counter("huginn_health_check_gate_rejects_total")

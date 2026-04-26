@@ -113,6 +113,7 @@ Backend servers for forwarding. Repeat the header for each backend. **Dynamic** 
 |----------------|--------|-------------------|------------------------------------------------------------------------------------------------------------------------------------|
 | `address`      | string | —                 | `host:port` of the backend. Used as the pool key — must match exactly what routes reference.                                       |
 | `http_version` | string | `null` (preserve) | Protocol to use when connecting to this backend. `"http11"`, `"http2"`, or `"preserve"` (negotiate based on what the client used). |
+| `health_check` | table  | `null` (off)     | Optional active health probe. When set, the proxy tracks per-upstream health and returns **502** to clients when the backend is marked unhealthy. If you omit this key (or leave the backend without a `health_check` table), that backend is not probed and the health gate does not apply to it. See [`[backends.health_check]`](#backendshealth_check) below. |
 
 <table>
 <thead>
@@ -144,6 +145,57 @@ backends:
     http_version: preserve
   - address: "backend-b:9000"
     http_version: http11
+```
+
+</td>
+</tr>
+</tbody>
+</table>
+
+### `[backends.health_check]`
+
+Optional. **Dynamic** (hot-reloadable). If absent, the backend is always treated as healthy for the gate (no background task).
+
+| Key                    | Type   | Default  | Description |
+|------------------------|--------|----------|-------------|
+| `type`                 | string | `tcp`    | `tcp` (TCP 3-way handshake to `address`) or `http` (HTTP/1.1 `GET` to `http://{address}{path}`; plain HTTP only, no TLS to upstream). |
+| `path`                 | string | —        | Required when `type = "http"`: must start with `/` (e.g. `/` or `/ready`). Ignored for `tcp`. |
+| `expected_status`      | int    | `200`    | For `http` only: response status must match (e.g. `200`, `204`). |
+| `interval_secs`        | int    | `10`     | Time between probes. |
+| `timeout_secs`         | int    | `5`      | Per-probe budget (must be ≤ `interval_secs`). Encompasses connect, request, and body drain for `http`. |
+| `unhealthy_threshold`  | int    | `3`      | Consecutive failed probes before marking upstream unhealthy. |
+| `healthy_threshold`    | int    | `2`      | Consecutive successful probes before marking upstream healthy again. |
+
+<table>
+<thead>
+<tr>
+<th>TOML</th>
+<th>YAML</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td valign="top">
+
+```toml
+[[backends]]
+address = "app:8080"
+http_version = "http11"
+# HTTP GET http://app:8080/ready must return 200
+health_check = { type = "http", path = "/ready", expected_status = 200 }
+```
+
+</td>
+<td valign="top">
+
+```yaml
+backends:
+  - address: "app:8080"
+    http_version: http11
+    health_check:
+      type: http
+      path: /ready
+      expected_status: 200
 ```
 
 </td>

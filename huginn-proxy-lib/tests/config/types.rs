@@ -278,3 +278,43 @@ fn test_health_check_config_validate_rejects_timeout_gt_interval() {
     assert!(bad.validate().is_err());
     assert!(HealthCheckConfig::default().validate().is_ok());
 }
+
+#[test]
+fn test_backend_health_check_http_toml() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let toml = r#"
+listen = { addrs = ["0.0.0.0:7000"] }
+backends = [
+  { address = "a:1", health_check = { type = "http", path = "/ready", expected_status = 200, interval_secs = 4, timeout_secs = 2 } }
+]
+"#;
+    let config: Config = toml::from_str(toml)?;
+    let Some(hc) = config.backends[0].health_check.as_ref() else {
+        panic!("expected health_check");
+    };
+    assert_eq!(
+        hc.check_type,
+        HealthCheckType::Http { path: "/ready".into(), expected_status: 200 }
+    );
+    assert_eq!(hc.interval_secs, 4);
+    assert_eq!(hc.timeout_secs, 2);
+    config.validate_cross_refs()?;
+    Ok(())
+}
+
+#[test]
+fn test_backend_health_check_http_expected_status_defaults(
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let toml = r#"
+listen = { addrs = ["0.0.0.0:7000"] }
+backends = [
+  { address = "a:1", health_check = { type = "http", path = "/" } }
+]
+"#;
+    let config: Config = toml::from_str(toml)?;
+    let Some(hc) = config.backends[0].health_check.as_ref() else {
+        panic!("expected health_check");
+    };
+    assert_eq!(hc.check_type, HealthCheckType::Http { path: "/".into(), expected_status: 200 });
+    config.validate_cross_refs()?;
+    Ok(())
+}

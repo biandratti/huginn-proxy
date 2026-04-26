@@ -1,0 +1,155 @@
+//! HTTP health probe: `GET` over plain `http://` to the backend `host:port` (no TLS);
+//! same transport as normal upstream forwarding to HTTP backends.
+
+use std::time::Duration;
+
+use bytes::Bytes;
+use http::Request;
+use http_body_util::{BodyExt, Full};
+use hyper_util::client::legacy::connect::HttpConnector;
+use hyper_util::client::legacy::Client;
+use hyper_util::rt::TokioExecutor;
+use tracing::trace;
+
+use crate::config::BackendPoolConfig;
+
+pub type HttpHealthClient = Client<HttpConnector, Full<Bytes>>;
+
+/// Minimal HTTP/1.1 client for probes: one idle connection per host, small pool.
+pub struct HealthCheckHttpClient {
+    inner: HttpHealthClient,
+}
+
+impl HealthCheckHttpClient {
+    /// Creates a client with the given connect timeout (seconds) and a short idle pool.
+    pub fn new(connect_timeout_secs: u64) -> Self {
+        let mut connector = HttpConnector::new();
+        connector
+            .set_connect_timeout(Some(Duration::from_secs(connect_timeout_secs.clamp(1, 300))));
+
+        let pool = BackendPoolConfig { enabled: true, idle_timeout: 60, pool_max_idle_per_host: 1 };
+        let mut builder = Client::builder(TokioExecutor::new());
+        builder.pool_idle_timeout(Duration::from_secs(pool.idle_timeout));
+        builder.pool_max_idle_per_host(pool.pool_max_idle_per_host);
+
+        Self { inner: builder.build(connector) }
+    }
+
+    pub fn inner(&self) -> &HttpHealthClient {
+        &self.inner
+    }
+}
+
+/// `GET http://{address}{path}` with `Host: {address}`; returns `true` if the response status
+/// equals `expected_status` and the body is read to completion within `timeout` (connect + TTFB
+/// + drain).
+pub async fn check_http(
+    client: &HealthCheckHttpClient,
+    address: &str,
+    path: &str,
+    expected_status: u16,
+    timeout: Duration,
+) -> bool {
+    let uri: http::Uri = match format!("http://{address}{path}").parse() {
+        Ok(u) => u,
+        Err(_) => {
+            trace!(%address, %path, "HTTP health check: invalid URI");
+            return false;
+        }
+    };
+
+    let req = match Request::builder()
+        .method(hyper::Method::GET)
+        .uri(&uri)
+        .header("Host", address)
+        .body(Full::new(Bytes::new()))
+    {
+        Ok(r) => r,
+        Err(_) => return false,
+    };
+
+    let res = match tokio::time::timeout(timeout, client.inner().request(req)).await {
+        Ok(Ok(r)) => r,
+        Ok(Err(e)) => {
+            trace!(%address, %path, error = %e, "HTTP health check: request failed");
+            return false;
+        }
+        Err(_) => {
+            trace!(%address, %path, "HTTP health check: request timed out");
+            return false;
+        }
+    };
+
+    let (parts, body) = res.into_parts();
+    let ok = parts.status.as_u16() == expected_status;
+    if let Err(e) = body.collect().await {
+        trace!(%address, %path, error = %e, "HTTP health check: body read failed");
+        return false;
+    }
+
+    trace!(
+        %address,
+        %path,
+        status = parts.status.as_u16(),
+        expected = expected_status,
+        result = if ok { "ok" } else { "mismatch" },
+        "HTTP health check"
+    );
+
+    ok
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    type TestErr = Box<dyn std::error::Error + Send + Sync>;
+
+    #[tokio::test]
+    async fn check_http_matches_status() -> Result<(), TestErr> {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await?;
+        let addr = listener.local_addr()?;
+        let addr_s = format!("{addr}");
+
+        tokio::spawn(async move {
+            let Ok((mut stream, _)) = listener.accept().await else {
+                return;
+            };
+            let mut buf = vec![0u8; 1024];
+            if stream.read(&mut buf).await.is_err() {
+                return;
+            }
+            const RESPONSE: &str =
+                "HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+            let _ = stream.write_all(RESPONSE.as_bytes()).await;
+        });
+
+        let client = HealthCheckHttpClient::new(2);
+        let ok = check_http(&client, &addr_s, "/", 200, Duration::from_secs(2)).await;
+        assert!(ok);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn check_http_rejects_wrong_status() -> Result<(), TestErr> {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await?;
+        let addr = listener.local_addr()?;
+        let addr_s = format!("{addr}");
+
+        tokio::spawn(async move {
+            let Ok((mut stream, _)) = listener.accept().await else {
+                return;
+            };
+            let mut buf = vec![0u8; 1024];
+            let _ = stream.read(&mut buf).await;
+            const RESPONSE: &str = "HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+            let _ = stream.write_all(RESPONSE.as_bytes()).await;
+        });
+
+        let client = HealthCheckHttpClient::new(2);
+        let ok = check_http(&client, &addr_s, "/probe", 200, Duration::from_secs(2)).await;
+        assert!(!ok);
+        Ok(())
+    }
+}
