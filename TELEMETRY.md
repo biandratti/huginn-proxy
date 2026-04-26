@@ -637,16 +637,11 @@ The following telemetry features are planned but not yet implemented:
 
 ### Metrics for Pending Features
 
-The following metrics or dimensions may be added when the corresponding features land:
+The following metrics are **not** implemented yet (the product may already include the related runtime behaviour):
 
-- **Connection Pooling**: Pool size, active/idle connections, reuse rate
-- **Health checks (extensions)**: Histogram of per-probe duration (wall time for TCP connect or full HTTP `GET`); today
-  only the counter `huginn_health_check_probes_total` (with `result=ok|fail`) is recorded.
-
-### Tracing (Planned)
-
-- Request correlation across services
-- Trace sampling
+- **Backend connection pool**: optional future gauges/counters (e.g. pool size, active/idle connections, reuse rate). The
+  **connection pool to upstreams already exists** (see [SETTINGS.md](SETTINGS.md) and [FEATURES.md](FEATURES.md)); only
+  dedicated Prometheus series for it are still missing.
 
 See [ROADMAP.md](ROADMAP.md) for complete list of planned features.
 

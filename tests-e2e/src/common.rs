@@ -116,3 +116,24 @@ pub async fn wait_for_service(
     }
     Ok(false)
 }
+
+/// Returns `true` if Prometheus text at `/metrics` includes a **counter** sample for
+/// `huginn_health_check_probes_total` with the given `backend` label and `result="ok"`.
+///
+/// This matches the OpenTelemetry → Prometheus exposition shape used by the proxy
+/// (`backend="…"`, `result="ok"`).
+pub fn metrics_contain_health_probe_ok(body: &str, backend: &str) -> bool {
+    for line in body.lines() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        if !line.contains("huginn_health_check_probes_total") {
+            continue;
+        }
+        if line.contains(backend) && line.contains("result=\"ok\"") {
+            return true;
+        }
+    }
+    false
+}
