@@ -10,10 +10,12 @@ fn test_find_backend_config() {
         Backend {
             address: "backend-a:9000".to_string(),
             http_version: Some(BackendHttpVersion::Http2),
+            health_check: None,
         },
         Backend {
             address: "backend-b:9000".to_string(),
             http_version: Some(BackendHttpVersion::Http11),
+            health_check: None,
         },
     ];
 
@@ -33,14 +35,17 @@ fn test_determine_http_version_with_config() {
     let backend_http2 = Backend {
         address: "backend:9000".to_string(),
         http_version: Some(BackendHttpVersion::Http2),
+        health_check: None,
     };
     let backend_http11 = Backend {
         address: "backend:9000".to_string(),
         http_version: Some(BackendHttpVersion::Http11),
+        health_check: None,
     };
     let backend_preserve = Backend {
         address: "backend:9000".to_string(),
         http_version: Some(BackendHttpVersion::Preserve),
+        health_check: None,
     };
 
     // Test with explicit http2 config
@@ -81,7 +86,8 @@ fn test_determine_http_version_with_config() {
 
 #[test]
 fn test_determine_http_version_defaults() {
-    let backend_no_config = Backend { address: "backend:9000".to_string(), http_version: None };
+    let backend_no_config =
+        Backend { address: "backend:9000".to_string(), http_version: None, health_check: None };
 
     // Default for HTTP (non-HTTPS): HTTP/1.1
     assert_eq!(

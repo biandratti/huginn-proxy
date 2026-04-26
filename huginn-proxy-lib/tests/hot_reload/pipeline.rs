@@ -28,7 +28,11 @@ fn minimal_config(backend_addr: std::net::SocketAddr, listen_port: u16) -> Confi
                 .unwrap_or_else(|_| std::net::SocketAddr::from(([127, 0, 0, 1], 0)))],
             ..Default::default()
         },
-        backends: vec![Backend { address: backend_addr.to_string(), http_version: None }],
+        backends: vec![Backend {
+            address: backend_addr.to_string(),
+            http_version: None,
+            health_check: None,
+        }],
         routes: vec![Route {
             prefix: "/".to_string(),
             backend: backend_addr.to_string(),

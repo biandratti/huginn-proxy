@@ -94,7 +94,11 @@ fn test_pick_route_longest_prefix() {
 
 #[test]
 fn test_find_backend_config_case_sensitive() {
-    let backends = vec![Backend { address: "Backend-A:9000".to_string(), http_version: None }];
+    let backends = vec![Backend {
+        address: "Backend-A:9000".to_string(),
+        http_version: None,
+        health_check: None,
+    }];
 
     assert_eq!(
         find_backend_config("backend-a:9000", &backends).map(|b| b.address.as_str()),
@@ -111,6 +115,7 @@ fn test_determine_http_version_http3_conversion() {
     let backend_preserve = Backend {
         address: "backend:9000".to_string(),
         http_version: Some(BackendHttpVersion::Preserve),
+        health_check: None,
     };
 
     assert_eq!(
@@ -128,6 +133,7 @@ fn test_determine_http_version_unknown_version() {
     let backend_preserve = Backend {
         address: "backend:9000".to_string(),
         http_version: Some(BackendHttpVersion::Preserve),
+        health_check: None,
     };
 
     let result = determine_http_version(Some(&backend_preserve), Version::HTTP_11, false);
@@ -153,8 +159,8 @@ fn test_pick_route_with_empty_prefix() {
 #[test]
 fn test_find_backend_config_with_port_variations() {
     let backends = vec![
-        Backend { address: "localhost:9000".to_string(), http_version: None },
-        Backend { address: "127.0.0.1:9000".to_string(), http_version: None },
+        Backend { address: "localhost:9000".to_string(), http_version: None, health_check: None },
+        Backend { address: "127.0.0.1:9000".to_string(), http_version: None, health_check: None },
     ];
 
     assert_eq!(

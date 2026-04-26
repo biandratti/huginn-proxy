@@ -1,4 +1,6 @@
-use huginn_proxy_lib::config::{Backend, BackendHttpVersion, ClientAuth, Config, TlsConfig};
+use huginn_proxy_lib::config::{
+    Backend, BackendHttpVersion, ClientAuth, Config, HealthCheckConfig, HealthCheckType, TlsConfig,
+};
 
 #[test]
 fn test_backend_http_version_deserialization(
@@ -209,4 +211,70 @@ tls_handshake_secs = 15
     let config: Config = toml::from_str(toml)?;
     assert_eq!(config.timeout.connection_handling_secs, 300); // default value
     Ok(())
+}
+
+#[test]
+fn test_backend_without_health_check_is_none(
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let toml = r#"
+listen = { addrs = ["0.0.0.0:7000"] }
+backends = [{ address = "backend:9000" }]
+"#;
+    let config: Config = toml::from_str(toml)?;
+    assert!(config.backends[0].health_check.is_none());
+    Ok(())
+}
+
+#[test]
+fn test_backend_health_check_defaults_from_empty_table(
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let toml = r#"
+listen = { addrs = ["0.0.0.0:7000"] }
+backends = [{ address = "backend:9000", health_check = {} }]
+"#;
+    let config: Config = toml::from_str(toml)?;
+    let Some(hc) = config.backends[0].health_check.as_ref() else {
+        panic!("health_check should be present (empty table deserializes to Some(defaults))");
+    };
+    assert_eq!(hc.check_type, HealthCheckType::Tcp);
+    assert_eq!(hc.interval_secs, 5);
+    assert_eq!(hc.timeout_secs, 2);
+    assert_eq!(hc.unhealthy_threshold, 3);
+    assert_eq!(hc.healthy_threshold, 2);
+    config.validate_cross_refs()?;
+    Ok(())
+}
+
+#[test]
+fn test_backend_health_check_explicit() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let toml = r#"
+listen = { addrs = ["0.0.0.0:7000"] }
+backends = [
+  { address = "a:1", health_check = { type = "tcp", interval_secs = 10, timeout_secs = 3, unhealthy_threshold = 5, healthy_threshold = 4 } }
+]
+"#;
+    let config: Config = toml::from_str(toml)?;
+    let Some(hc) = config.backends[0].health_check.as_ref() else {
+        panic!("health_check should be present");
+    };
+    assert_eq!(hc.check_type, HealthCheckType::Tcp);
+    assert_eq!(hc.interval_secs, 10);
+    assert_eq!(hc.timeout_secs, 3);
+    assert_eq!(hc.unhealthy_threshold, 5);
+    assert_eq!(hc.healthy_threshold, 4);
+    config.validate_cross_refs()?;
+    Ok(())
+}
+
+#[test]
+fn test_health_check_config_validate_rejects_timeout_gt_interval() {
+    let bad = HealthCheckConfig {
+        check_type: HealthCheckType::Tcp,
+        interval_secs: 2,
+        timeout_secs: 3,
+        unhealthy_threshold: 1,
+        healthy_threshold: 1,
+    };
+    assert!(bad.validate().is_err());
+    assert!(HealthCheckConfig::default().validate().is_ok());
 }

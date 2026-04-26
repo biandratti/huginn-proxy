@@ -107,7 +107,11 @@ impl BenchFixture {
         //    /bench/nofp → fingerprinting OFF (baseline)
         let config = Config {
             listen: ListenConfig { addrs: vec![proxy_addr], ..Default::default() },
-            backends: vec![Backend { address: backend_address.clone(), http_version: None }],
+            backends: vec![Backend {
+                address: backend_address.clone(),
+                http_version: None,
+                health_check: None,
+            }],
             routes: vec![
                 Route {
                     prefix: "/bench/fp".to_string(),

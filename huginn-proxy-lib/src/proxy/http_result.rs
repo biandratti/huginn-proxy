@@ -57,7 +57,6 @@ impl From<HttpError> for StatusCode {
 }
 
 impl HttpError {
-    /// Returns a string identifier for the error type, useful for metrics and logging
     pub fn error_type(&self) -> &'static str {
         match self {
             HttpError::InvalidHostInRequestHeader => "invalid_host",

@@ -1,5 +1,7 @@
 use serde::Deserialize;
 
+use crate::error::{ProxyError, Result};
+
 use super::headers::HeaderManipulation;
 use super::security::RouteRateLimitConfig;
 
@@ -13,6 +15,80 @@ pub enum BackendHttpVersion {
     Preserve,
 }
 
+/// Probing strategy for backend health. Extensible; today only [`HealthCheckType::Tcp`]
+/// (TCP connect) is used.
+#[derive(Debug, Default, Deserialize, Clone, Copy, PartialEq, Eq, Hash)]
+#[serde(rename_all = "lowercase")]
+pub enum HealthCheckType {
+    #[default]
+    Tcp,
+}
+
+/// Per-backend active health check settings (opt-in: omit the table to disable).
+///
+/// `unhealthy_threshold` and `healthy_threshold` match
+/// [`crate::backend::health_check::ConsecutiveCounter`] (consecutive failed/successful probes).
+#[derive(Debug, Deserialize, Clone, PartialEq)]
+#[serde(default)]
+pub struct HealthCheckConfig {
+    /// `type` in TOML/YAML (`tcp`).
+    #[serde(rename = "type")]
+    pub check_type: HealthCheckType,
+    /// How often the supervisor runs a probe, in wall-clock seconds.
+    pub interval_secs: u64,
+    /// How long a single TCP probe may take before it counts as failed, in seconds.
+    pub timeout_secs: u64,
+    /// Consecutive failed probes before marking the backend unhealthy.
+    pub unhealthy_threshold: u32,
+    /// Consecutive successful probes before marking the backend healthy again.
+    pub healthy_threshold: u32,
+}
+
+impl Default for HealthCheckConfig {
+    fn default() -> Self {
+        Self {
+            check_type: HealthCheckType::default(),
+            interval_secs: 5,
+            timeout_secs: 2,
+            unhealthy_threshold: 3,
+            healthy_threshold: 2,
+        }
+    }
+}
+
+impl HealthCheckConfig {
+    /// Invariants for hot reload and file-based loading.
+    pub fn validate(&self) -> Result<()> {
+        if self.interval_secs == 0 {
+            return Err(ProxyError::Config(
+                "health_check.interval_secs must be greater than 0".to_string(),
+            ));
+        }
+        if self.timeout_secs == 0 {
+            return Err(ProxyError::Config(
+                "health_check.timeout_secs must be greater than 0".to_string(),
+            ));
+        }
+        if self.timeout_secs > self.interval_secs {
+            return Err(ProxyError::Config(format!(
+                "health_check.timeout_secs ({}) must not be greater than interval_secs ({})",
+                self.timeout_secs, self.interval_secs
+            )));
+        }
+        if self.unhealthy_threshold < 1 {
+            return Err(ProxyError::Config(
+                "health_check.unhealthy_threshold must be at least 1".to_string(),
+            ));
+        }
+        if self.healthy_threshold < 1 {
+            return Err(ProxyError::Config(
+                "health_check.healthy_threshold must be at least 1".to_string(),
+            ));
+        }
+        Ok(())
+    }
+}
+
 /// Backend server configuration
 #[derive(Debug, Deserialize, Clone, PartialEq)]
 pub struct Backend {
@@ -23,6 +99,10 @@ pub struct Backend {
     /// Options: "http11", "http2", "preserve" (default: "preserve" for HTTPS, "http11" for HTTP)
     #[serde(default)]
     pub http_version: Option<BackendHttpVersion>,
+    /// Optional health-check configuration; when `None`, no active probe is used for this backend
+    /// (and existing routing/forwarding behavior is unchanged from pre-health-check versions).
+    #[serde(default)]
+    pub health_check: Option<HealthCheckConfig>,
 }
 
 /// Route configuration for path-based routing

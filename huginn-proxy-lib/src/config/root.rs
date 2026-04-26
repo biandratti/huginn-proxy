@@ -88,6 +88,11 @@ impl Config {
                 )));
             }
         }
+        for backend in &self.backends {
+            if let Some(hc) = &backend.health_check {
+                hc.validate()?;
+            }
+        }
         Ok(())
     }
 

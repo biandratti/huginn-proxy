@@ -191,7 +191,11 @@ async fn capture_fingerprint_values() -> Result<(), Box<dyn std::error::Error + 
 
     let config = Config {
         listen: ListenConfig { addrs: vec![proxy_addr], ..Default::default() },
-        backends: vec![Backend { address: backend_addr.to_string(), http_version: None }],
+        backends: vec![Backend {
+            address: backend_addr.to_string(),
+            http_version: None,
+            health_check: None,
+        }],
         routes: vec![Route {
             prefix: "/".to_string(),
             backend: backend_addr.to_string(),
