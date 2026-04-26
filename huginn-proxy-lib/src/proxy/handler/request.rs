@@ -1,3 +1,4 @@
+use crate::backend::health_check::HealthRegistry;
 use crate::config::{Backend, KeepAliveConfig, Route};
 use crate::fingerprinting::names;
 use crate::fingerprinting::TcpObservation;
@@ -57,6 +58,7 @@ pub async fn handle_proxy_request(
     is_https: bool,
     preserve_host: bool,
     client_pool: &Arc<ClientPool>,
+    health_registry: &HealthRegistry,
 ) -> HttpResult<hyper::Response<RespBody>> {
     let start = Instant::now();
     let method = req.method().to_string();
@@ -83,6 +85,11 @@ pub async fn handle_proxy_request(
         metrics.record_error(error.error_type());
         return Err(error);
     };
+
+    if !health_registry.is_healthy(route_match.backend) {
+        metrics.record_health_check_gate_reject(route_match.backend);
+        return Err(HttpError::UpstreamUnhealthy);
+    }
 
     if let Some(rate_limited_response) = check_rate_limit(
         security.rate_limit_manager.as_ref(),

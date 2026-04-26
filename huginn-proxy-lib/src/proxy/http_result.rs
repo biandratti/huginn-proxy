@@ -37,6 +37,9 @@ pub enum HttpError {
 
     #[error("Backend error: {0}")]
     BackendError(String),
+
+    #[error("Upstream unhealthy (active health check)")]
+    UpstreamUnhealthy,
 }
 
 impl From<HttpError> for StatusCode {
@@ -52,6 +55,7 @@ impl From<HttpError> for StatusCode {
             HttpError::FailedToGenerateDownstreamResponse(_) => StatusCode::INTERNAL_SERVER_ERROR,
             HttpError::InvalidUri(_) => StatusCode::BAD_REQUEST,
             HttpError::BackendError(_) => StatusCode::BAD_GATEWAY,
+            HttpError::UpstreamUnhealthy => StatusCode::BAD_GATEWAY,
         }
     }
 }
@@ -69,6 +73,7 @@ impl HttpError {
             HttpError::FailedToGenerateDownstreamResponse(_) => "downstream_response_failed",
             HttpError::InvalidUri(_) => "invalid_uri",
             HttpError::BackendError(_) => "backend_error",
+            HttpError::UpstreamUnhealthy => "upstream_unhealthy",
         }
     }
 }

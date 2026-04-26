@@ -19,6 +19,7 @@ fn test_error_type_mapping() {
     );
     assert_eq!(HttpError::InvalidUri("test".to_string()).error_type(), "invalid_uri");
     assert_eq!(HttpError::BackendError("test".to_string()).error_type(), "backend_error");
+    assert_eq!(HttpError::UpstreamUnhealthy.error_type(), "upstream_unhealthy");
 }
 
 #[test]
@@ -33,4 +34,5 @@ fn test_status_code_conversion() {
         StatusCode::from(HttpError::FailedToGetResponseFromBackend("test".to_string())),
         StatusCode::BAD_GATEWAY
     );
+    assert_eq!(StatusCode::from(HttpError::UpstreamUnhealthy), StatusCode::BAD_GATEWAY);
 }

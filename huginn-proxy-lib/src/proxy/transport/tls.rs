@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use super::timeout_helper::serve_with_timeout;
+use crate::backend::health_check::HealthRegistry;
 use crate::fingerprinting::TcpObservation;
 use crate::fingerprinting::{read_client_hello, CapturingStream};
 use crate::proxy::connection::{PrefixedStream, TlsConnectionGuard};
@@ -32,6 +33,7 @@ pub struct TlsConnectionConfig {
     pub connection_handling_timeout: tokio::time::Duration,
     pub client_pool: Arc<ClientPool>,
     pub syn_fingerprint: Option<TcpObservation>,
+    pub health_registry: Arc<HealthRegistry>,
 }
 
 /// Handle a TLS connection
@@ -107,6 +109,7 @@ pub async fn handle_tls_connection(
             let keep_alive = config.keep_alive.clone();
             let security = config.security.clone();
             let client_pool = config.client_pool.clone();
+            let health_registry = config.health_registry.clone();
 
             let svc =
                 hyper::service::service_fn(move |req: hyper::Request<hyper::body::Incoming>| {
@@ -119,6 +122,7 @@ pub async fn handle_tls_connection(
                     let keep_alive = keep_alive.clone();
                     let security = security.clone();
                     let client_pool_for_request = client_pool.clone();
+                    let health_registry = health_registry.clone();
 
                     async move {
                         let metrics_for_match = metrics.clone();
@@ -137,6 +141,7 @@ pub async fn handle_tls_connection(
                             true,
                             preserve_host,
                             &client_pool_for_request,
+                            health_registry.as_ref(),
                         )
                         .await;
 
@@ -176,6 +181,7 @@ pub async fn handle_tls_connection(
             let keep_alive = config.keep_alive.clone();
             let security = config.security.clone();
             let client_pool = config.client_pool.clone();
+            let health_registry = config.health_registry.clone();
 
             let svc =
                 hyper::service::service_fn(move |req: hyper::Request<hyper::body::Incoming>| {
@@ -187,6 +193,7 @@ pub async fn handle_tls_connection(
                     let keep_alive = keep_alive.clone();
                     let security = security.clone();
                     let client_pool = client_pool.clone();
+                    let health_registry = health_registry.clone();
 
                     async move {
                         let preserve_host = config.preserve_host;
@@ -205,6 +212,7 @@ pub async fn handle_tls_connection(
                             true,
                             preserve_host,
                             &client_pool,
+                            health_registry.as_ref(),
                         )
                         .await;
 

@@ -38,6 +38,8 @@ pub mod values {
     pub const REASON_NOT_HTTP2: &str = "not_http2";
     pub const REASON_LIMIT_EXCEEDED: &str = "limit_exceeded";
     pub const REASON_SHUTDOWN: &str = "shutdown";
+    pub const HEALTH_PROBE_OK: &str = "ok";
+    pub const HEALTH_PROBE_FAIL: &str = "fail";
 }
 
 #[derive(Clone)]
@@ -110,6 +112,10 @@ pub struct Metrics {
 
     // Build info
     pub build_info: Gauge<u64>,
+
+    // Active health checks (TCP; PR3)
+    pub health_check_probes_total: Counter<u64>,
+    pub health_check_gate_rejects_total: Counter<u64>,
 
     // Config reload metrics
     /// `huginn_config_reload_total{result="success|error"}` — total reload attempts.
@@ -299,6 +305,15 @@ impl Metrics {
                 .with_description("Build information (version, rust version)")
                 .build(),
 
+            health_check_probes_total: meter
+                .u64_counter("huginn_health_check_probes_total")
+                .with_description("Active health check TCP probes (result=ok|fail)")
+                .build(),
+            health_check_gate_rejects_total: meter
+                .u64_counter("huginn_health_check_gate_rejects_total")
+                .with_description("Requests short-circuited with 502 because upstream is unhealthy")
+                .build(),
+
             config_reload_total: meter
                 .u64_counter("huginn_config_reload_total")
                 .with_description("Total config reload attempts, labelled result=success|error")
@@ -326,6 +341,28 @@ impl Metrics {
                 KeyValue::new(labels::RUST_VERSION, rust_version),
             ],
         );
+    }
+
+    pub fn record_health_check_probe(&self, backend: &str, success: bool) {
+        let result = if success {
+            values::HEALTH_PROBE_OK
+        } else {
+            values::HEALTH_PROBE_FAIL
+        };
+        self.health_check_probes_total.add(
+            1,
+            &[
+                KeyValue::new(labels::BACKEND, backend.to_string()),
+                KeyValue::new(labels::RESULT, result),
+            ],
+        );
+    }
+
+    /// Dedicated counter for 502s due to the health gate (the generic `errors_total` is still
+    /// updated when the request handler path records `HttpError::UpstreamUnhealthy`).
+    pub fn record_health_check_gate_reject(&self, backend: &str) {
+        self.health_check_gate_rejects_total
+            .add(1, &[KeyValue::new(labels::BACKEND_ADDRESS, backend.to_string())]);
     }
 
     pub fn record_rate_limit_rejection(&self, strategy: &str, route: &str) {

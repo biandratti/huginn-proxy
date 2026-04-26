@@ -4,9 +4,14 @@ use std::sync::Arc;
 use arc_swap::ArcSwap;
 
 use huginn_proxy_lib::{
-    initial_client_pool, initial_rate_limiter, try_reload, Config, DynamicConfig, Metrics,
-    SharedClientPool, SharedRateLimiter, StaticConfig,
+    initial_client_pool, initial_rate_limiter, try_reload, Config, DynamicConfig,
+    HealthCheckSupervisor, HealthRegistry, Metrics, SharedClientPool, SharedRateLimiter,
+    StaticConfig,
 };
+
+fn test_health_supervisor() -> HealthCheckSupervisor {
+    HealthCheckSupervisor::new(Arc::new(HealthRegistry::new()))
+}
 
 use super::helpers::{
     free_port, spawn_mock_backend, toml_single_backend, toml_with_rate_limit, toml_with_routes,
@@ -96,6 +101,7 @@ async fn reload_invalid_toml_keeps_current_config() -> TestResult {
 
     let reload_mutex = tokio::sync::Mutex::new(());
     let metrics = Metrics::new_noop();
+    let health_supervisor = test_health_supervisor();
 
     try_reload(
         tmp.path(),
@@ -105,6 +111,7 @@ async fn reload_invalid_toml_keeps_current_config() -> TestResult {
         &client_pool,
         &reload_mutex,
         &metrics,
+        &health_supervisor,
     )
     .await;
 
@@ -141,6 +148,7 @@ async fn drain_removed_backend_replaces_pool() -> TestResult {
     let reload_mutex = tokio::sync::Mutex::new(());
     let metrics = Metrics::new_noop();
 
+    let health_supervisor = test_health_supervisor();
     try_reload(
         initial_toml_file.path(),
         &static_cfg,
@@ -149,6 +157,7 @@ async fn drain_removed_backend_replaces_pool() -> TestResult {
         &client_pool,
         &reload_mutex,
         &metrics,
+        &health_supervisor,
     )
     .await;
 
@@ -184,6 +193,7 @@ async fn reload_static_change_proceeds_without_crash() -> TestResult {
     let metrics = Metrics::new_noop();
 
     // Must not panic; the static change is logged as an error but otherwise ignored.
+    let health_supervisor = test_health_supervisor();
     try_reload(
         tmp.path(),
         &static_cfg,
@@ -192,6 +202,7 @@ async fn reload_static_change_proceeds_without_crash() -> TestResult {
         &client_pool,
         &reload_mutex,
         &metrics,
+        &health_supervisor,
     )
     .await;
 
@@ -218,6 +229,7 @@ async fn concurrent_reloads_are_serialized() -> TestResult {
     let metrics = Metrics::new_noop();
 
     let config_path = tmp.path().to_path_buf();
+    let health_supervisor = Arc::new(test_health_supervisor());
     let mut tasks = Vec::new();
 
     for _ in 0..5 {
@@ -228,6 +240,7 @@ async fn concurrent_reloads_are_serialized() -> TestResult {
         let client_pool = Arc::clone(&client_pool);
         let reload_mutex = Arc::clone(&reload_mutex);
         let metrics = Arc::clone(&metrics);
+        let health_supervisor = health_supervisor.clone();
 
         tasks.push(tokio::spawn(async move {
             try_reload(
@@ -238,6 +251,7 @@ async fn concurrent_reloads_are_serialized() -> TestResult {
                 &client_pool,
                 &reload_mutex,
                 &metrics,
+                health_supervisor.as_ref(),
             )
             .await;
         }));
@@ -272,6 +286,7 @@ async fn reload_toggles_rate_limiter() -> TestResult {
 
     let reload_mutex = tokio::sync::Mutex::new(());
     let metrics = Metrics::new_noop();
+    let health_supervisor = test_health_supervisor();
 
     // Reload with rate limiting ENABLED.
     write_toml(tmp.path(), &toml_with_rate_limit(listen_port, backend_addr))?;
@@ -283,6 +298,7 @@ async fn reload_toggles_rate_limiter() -> TestResult {
         &client_pool,
         &reload_mutex,
         &metrics,
+        &health_supervisor,
     )
     .await;
 
@@ -301,6 +317,7 @@ async fn reload_toggles_rate_limiter() -> TestResult {
         &client_pool,
         &reload_mutex,
         &metrics,
+        &health_supervisor,
     )
     .await;
 

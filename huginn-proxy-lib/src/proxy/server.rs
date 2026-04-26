@@ -7,11 +7,13 @@ use arc_swap::ArcSwap;
 use hyper_util::rt::{TokioExecutor, TokioTimer};
 use hyper_util::server::conn::auto::Builder as ConnBuilder;
 use tokio::net::TcpListener;
+use tokio::runtime::Handle;
 use tokio::signal;
 use tokio::sync::watch;
 use tokio::time::{Duration, Instant};
 use tracing::{info, warn};
 
+use crate::backend::health_check::{HealthCheckSupervisor, HealthRegistry};
 use crate::config::watcher::spawn_config_watcher;
 use crate::config::{DynamicConfig, StaticConfig};
 use crate::error::Result;
@@ -83,6 +85,10 @@ pub async fn run(
 ) -> Result<()> {
     let rate_limiter = Arc::new(initial_rate_limiter(&dynamic_cfg.load()));
     let client_pool = initial_client_pool(&static_cfg, &dynamic_cfg.load().backend_pool);
+
+    let health_registry = Arc::new(HealthRegistry::new());
+    let health_supervisor = Arc::new(HealthCheckSupervisor::new(health_registry.clone()));
+    health_supervisor.reconcile(&dynamic_cfg.load().backends, &metrics, &Handle::current());
 
     let idle_timeout = Duration::from_millis(static_cfg.timeout.proxy_idle_ms);
 
@@ -191,6 +197,7 @@ pub async fn run(
         let client_pool_clone = Arc::clone(&client_pool);
         let builder_clone = builder.clone();
         let syn_probe_clone = syn_probe.clone();
+        let health_registry_for_conn = health_registry.clone();
 
         accept_tasks.spawn(async move {
             loop {
@@ -262,6 +269,7 @@ pub async fn run(
                 let keep_alive_task = keep_alive_config.clone();
                 let metrics_task = metrics_clone.clone();
                 let client_pool_task = client_pool_clone.load_full();
+                let health_reg_task = health_registry_for_conn.clone();
 
                 tokio::spawn(async move {
                     let _guard = guard;
@@ -284,6 +292,7 @@ pub async fn run(
                                 connection_handling_timeout,
                                 client_pool: client_pool_task.clone(),
                                 syn_fingerprint: syn_fingerprint.clone(),
+                                health_registry: health_reg_task.clone(),
                             },
                         )
                         .await;
@@ -302,6 +311,7 @@ pub async fn run(
                                 connection_handling_timeout,
                                 client_pool: client_pool_task,
                                 syn_fingerprint,
+                                health_registry: health_reg_task,
                             },
                         )
                         .await;
@@ -326,7 +336,9 @@ pub async fn run(
                         &client_pool,
                         &reload_mutex,
                         &metrics,
-                    ).await;
+                        &health_supervisor,
+                    )
+                    .await;
                 } else {
                     warn!("SIGHUP received but no config path configured — reload skipped");
                 }
@@ -342,16 +354,20 @@ pub async fn run(
                         &client_pool,
                         &reload_mutex,
                         &metrics,
-                    ).await;
+                        &health_supervisor,
+                    )
+                    .await;
                 }
             }
             _ = sigterm.recv() => {
                 info!("Received SIGTERM, initiating graceful shutdown");
+                health_supervisor.shutdown();
                 shutdown_signal.store(1, Ordering::Relaxed);
                 break;
             }
             _ = sigint.recv() => {
                 info!("Received SIGINT, initiating graceful shutdown");
+                health_supervisor.shutdown();
                 shutdown_signal.store(1, Ordering::Relaxed);
                 break;
             }

@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use super::timeout_helper::serve_with_timeout;
+use crate::backend::health_check::HealthRegistry;
 use crate::fingerprinting::TcpObservation;
 use crate::proxy::synthetic_response::synthetic_error_response;
 use crate::proxy::ClientPool;
@@ -23,6 +24,7 @@ pub struct PlainConnectionConfig {
     pub connection_handling_timeout: tokio::time::Duration,
     pub client_pool: Arc<ClientPool>,
     pub syn_fingerprint: Option<TcpObservation>,
+    pub health_registry: Arc<HealthRegistry>,
 }
 
 /// Handle a plain HTTP connection
@@ -38,6 +40,7 @@ pub async fn handle_plain_connection(
     let security = config.security.clone();
     let client_pool = config.client_pool.clone();
     let syn_fingerprint = config.syn_fingerprint.clone();
+    let health_registry = config.health_registry.clone();
 
     let svc = hyper::service::service_fn(move |req: hyper::Request<hyper::body::Incoming>| {
         let routes = routes_template.clone();
@@ -47,6 +50,7 @@ pub async fn handle_plain_connection(
         let keep_alive = keep_alive.clone();
         let security = security.clone();
         let client_pool = client_pool.clone();
+        let health_registry = health_registry.clone();
 
         async move {
             let preserve_host = config.preserve_host;
@@ -65,6 +69,7 @@ pub async fn handle_plain_connection(
                 false,
                 preserve_host,
                 &client_pool,
+                health_registry.as_ref(),
             )
             .await;
 

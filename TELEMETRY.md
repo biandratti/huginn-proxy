@@ -9,8 +9,8 @@ agent**.
 
 Huginn Proxy provides comprehensive telemetry through:
 
-- **Prometheus Metrics** - 41 metrics covering connections, requests, TLS, fingerprinting, backends, throughput, rate
-  limiting, IP filtering, header manipulation, mTLS, and config hot reload
+- **Prometheus Metrics** - 43 metrics covering connections, requests, TLS, fingerprinting, backends, active health
+  checks, throughput, rate limiting, IP filtering, header manipulation, mTLS, and config hot reload
 - **Health Check Endpoints** - Kubernetes-ready: `/health`, `/ready`, `/live`, `/metrics`
 
 All proxy telemetry is exposed on a separate observability server (configurable via `telemetry.metrics_port`).
@@ -328,6 +328,33 @@ sum by (backend_address, route) (rate(huginn_backend_requests_total[5m]))
 sum by (backend_address, route) (rate(huginn_backend_errors_total[5m]))
 ```
 
+**Active health checks** (TCP, opt-in: `health_check` on a `[[backends]]` entry; see config docs). The supervisor probes the backend address; requests are short-circuited with **502** when the upstream is marked unhealthy (`error_type` = `upstream_unhealthy` in `huginn_errors_total`).
+
+| Metric                               | Type    | Description                                                                 | Labels                    |
+|--------------------------------------|---------|-----------------------------------------------------------------------------|---------------------------|
+| `huginn_health_check_probes_total`   | Counter | TCP connect probes from the health checker (success and failure)            | `backend`, `result`       |
+| `huginn_health_check_gate_rejects_total` | Counter | Client requests not forwarded because upstream is unhealthy (502)         | `backend_address`         |
+
+**Labels**:
+
+- `backend`: Upstream `host:port` (same as backend key in the registry)
+- `result`: `ok` (TCP connect succeeded) or `fail` (timeout / refused / etc.)
+- `backend_address`: Same as `backend` (Prometheus `backend_address` key for this counter)
+
+**Example queries**:
+
+```promql
+# Probe success ratio per backend
+sum by (backend) (rate(huginn_health_check_probes_total{result="ok"}[5m]))
+  / sum by (backend) (rate(huginn_health_check_probes_total[5m]))
+
+# 502s blocked by the health gate (per upstream)
+rate(huginn_health_check_gate_rejects_total[5m])
+
+# Fail probes per backend
+sum by (backend) (rate(huginn_health_check_probes_total{result="fail"}[5m]))
+```
+
 ---
 
 ### 7. Rate Limiting Metrics
@@ -583,6 +610,9 @@ same health endpoints as the proxy.
 - Backend latency P95: `histogram_quantile(0.95, rate(huginn_backend_duration_seconds_bucket[5m]))`
 - Backend throughput:
   `sum by (backend_address) (rate(huginn_backend_bytes_received_total[5m]) + rate(huginn_backend_bytes_sent_total[5m]))`
+- **Health (opt-in)**: probe rate `sum by (backend) (rate(huginn_health_check_probes_total[5m]))`; fail ratio
+  `rate(huginn_health_check_probes_total{result="fail"}[5m]) / rate(huginn_health_check_probes_total[5m])`;
+  gate 502s `rate(huginn_health_check_gate_rejects_total[5m])`
 
 **Config Hot Reload Panel**:
 
@@ -607,15 +637,14 @@ The following telemetry features are planned but not yet implemented:
 
 ### Metrics for Pending Features
 
-The following metrics will be added when the corresponding features are implemented:
+The following metrics or dimensions may be added when the corresponding features land:
 
 - **Connection Pooling**: Pool size, active/idle connections, reuse rate
-- **Active Health Checks**: Health check status, execution count, duration
-- **Circuit Breaker**: Circuit state, open/close events
+- **Health checks (extensions)**: HTTP health probes, histogram of probe duration (TCP today exposes probe counts
+  and pass/fail via `huginn_health_check_probes_total` only).
 
 ### Tracing (Planned)
 
-- Distributed tracing with Jaeger/Zipkin
 - Request correlation across services
 - Trace sampling
 

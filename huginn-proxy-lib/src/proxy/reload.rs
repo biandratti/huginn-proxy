@@ -4,8 +4,10 @@ use std::path::Path;
 use std::sync::{Arc, RwLock};
 
 use arc_swap::ArcSwap;
+use tokio::runtime::Handle;
 use tracing::{debug, error, info};
 
+use crate::backend::health_check::HealthCheckSupervisor;
 use crate::config::{load_from_path, Backend, BackendPoolConfig, DynamicConfig, StaticConfig};
 use crate::proxy::client_pool::ClientPool;
 use crate::security::RateLimitManager;
@@ -31,6 +33,7 @@ pub type SharedClientPool = Arc<ArcSwap<ClientPool>>;
 /// and atomically swaps in the new `DynamicConfig`. If parsing or validation fails
 /// the current config is kept untouched. Serialised via `reload_mutex` so concurrent
 /// SIGHUP / watcher events queue rather than running in parallel.
+#[allow(clippy::too_many_arguments)]
 pub async fn try_reload(
     config_path: &Path,
     static_cfg: &StaticConfig,
@@ -39,6 +42,7 @@ pub async fn try_reload(
     client_pool: &SharedClientPool,
     reload_mutex: &tokio::sync::Mutex<()>,
     metrics: &Arc<Metrics>,
+    health_supervisor: &HealthCheckSupervisor,
 ) {
     let _guard = reload_mutex.lock().await;
 
@@ -105,6 +109,10 @@ pub async fn try_reload(
     let old_hash = fnv1a_hash(&old_dynamic);
 
     dynamic_cfg.store(Arc::new(new_dynamic));
+    // New dynamic snapshot is already in `load()`; re-sync checker tasks to added/removed backends
+    // and health_check configuration changes.
+    let fresh = dynamic_cfg.load();
+    health_supervisor.reconcile(&fresh.backends, metrics, &Handle::current());
 
     metrics.record_reload_success(hash);
     if hash == old_hash {
