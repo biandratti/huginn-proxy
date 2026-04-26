@@ -22,7 +22,7 @@
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
-use super::health::BackendHealth;
+use super::health::UpstreamHealth;
 
 /// Address → health state map shared between the future `HealthCheckSupervisor`
 /// (writer, on hot reload) and the forwarding gate (reader, per request).
@@ -30,7 +30,7 @@ use super::health::BackendHealth;
 /// Cheap to clone — internally just an `Arc`.
 #[derive(Debug, Default, Clone)]
 pub struct HealthRegistry {
-    inner: Arc<RwLock<HashMap<String, Arc<BackendHealth>>>>,
+    inner: Arc<RwLock<HashMap<String, Arc<UpstreamHealth>>>>,
 }
 
 impl HealthRegistry {
@@ -56,24 +56,24 @@ impl HealthRegistry {
         }
     }
 
-    /// Returns the [`BackendHealth`] handle for `address`, creating it (and
+    /// Returns the [`UpstreamHealth`] handle for `address`, creating it (and
     /// inserting it into the map) if absent. Used by the supervisor when
     /// starting a probe task.
     ///
     /// Not part of the public API — exposed as `pub` only so integration tests
     /// and the upcoming `HealthCheckSupervisor` (PR3) can access it.
     #[allow(dead_code)] // wired in PR3 (HealthCheckSupervisor)
-    pub fn get_or_create(&self, address: &str) -> Arc<BackendHealth> {
+    pub fn get_or_create(&self, address: &str) -> Arc<UpstreamHealth> {
         let mut map = self.inner.write().unwrap_or_else(|e| e.into_inner());
         map.entry(address.to_string())
-            .or_insert_with(|| Arc::new(BackendHealth::new()))
+            .or_insert_with(|| Arc::new(UpstreamHealth::new()))
             .clone()
     }
 
     /// Drop the entry for `address`. Used by the supervisor when a probe is
     /// cancelled (backend removed or health check disabled via hot reload).
     ///
-    /// In-flight handlers that already cloned the `Arc<BackendHealth>` will
+    /// In-flight handlers that already cloned the `Arc<UpstreamHealth>` will
     /// keep observing its last value until they finish; this is harmless
     /// because by that time the backend is being drained from the pool anyway.
     ///

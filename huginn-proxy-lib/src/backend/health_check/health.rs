@@ -1,6 +1,6 @@
-//! Shared health state for a single backend.
+//! Shared health state for a single upstream.
 //!
-//! [`BackendHealth`] is the smallest unit of health tracking: a single
+//! [`UpstreamHealth`] is the smallest unit of health tracking: a single
 //! [`AtomicBool`] flag accessed concurrently by:
 //!
 //! - **The health checker task** (writer): updates the flag whenever a state
@@ -17,14 +17,14 @@
 
 use std::sync::atomic::{AtomicBool, Ordering};
 
-/// Shared health state for a single backend, accessed by both the health
+/// Shared health state for a single upstream, accessed by both the health
 /// checker task (writer) and request handlers (readers) via `Arc`.
 #[derive(Debug)]
-pub struct BackendHealth {
+pub struct UpstreamHealth {
     healthy: AtomicBool,
 }
 
-impl BackendHealth {
+impl UpstreamHealth {
     /// Create a new health state, initialized as healthy ("optimistic boot").
     ///
     /// Starting healthy lets traffic flow as soon as the proxy boots, instead
@@ -47,7 +47,7 @@ impl BackendHealth {
     }
 }
 
-impl Default for BackendHealth {
+impl Default for UpstreamHealth {
     fn default() -> Self {
         Self::new()
     }

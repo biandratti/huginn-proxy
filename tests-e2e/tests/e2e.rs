@@ -14,7 +14,7 @@ mod fingerprint_ja4;
 mod fingerprint_sync_tcp;
 mod header_override;
 mod health_checks;
-mod load_balancing;
+mod load_balance;
 mod path_manipulation;
 mod security_headers;
 mod tls;

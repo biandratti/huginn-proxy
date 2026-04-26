@@ -237,8 +237,8 @@ backends = [{ address = "backend:9000", health_check = {} }]
         panic!("health_check should be present (empty table deserializes to Some(defaults))");
     };
     assert_eq!(hc.check_type, HealthCheckType::Tcp);
-    assert_eq!(hc.interval_secs, 5);
-    assert_eq!(hc.timeout_secs, 2);
+    assert_eq!(hc.interval_secs, 10);
+    assert_eq!(hc.timeout_secs, 5);
     assert_eq!(hc.unhealthy_threshold, 3);
     assert_eq!(hc.healthy_threshold, 2);
     config.validate_cross_refs()?;

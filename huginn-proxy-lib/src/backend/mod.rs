@@ -1,5 +1,5 @@
 pub mod health_check;
-pub mod load_balancing;
+pub mod load_balance;
 
-pub use health_check::{BackendHealth, HealthRegistry};
-pub use load_balancing::RoundRobin;
+pub use health_check::{HealthRegistry, UpstreamHealth};
+pub use load_balance::RoundRobin;

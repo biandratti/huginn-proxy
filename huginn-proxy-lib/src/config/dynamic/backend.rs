@@ -45,11 +45,13 @@ pub struct HealthCheckConfig {
 }
 
 impl Default for HealthCheckConfig {
+    /// Matches [rust-rpxy](https://github.com/junkurihara/rust-rpxy) `config-example.toml`
+    /// (`interval=10`, `timeout=5`, `unhealthy_threshold=3`, `healthy_threshold=2`).
     fn default() -> Self {
         Self {
             check_type: HealthCheckType::default(),
-            interval_secs: 5,
-            timeout_secs: 2,
+            interval_secs: 10,
+            timeout_secs: 5,
             unhealthy_threshold: 3,
             healthy_threshold: 2,
         }

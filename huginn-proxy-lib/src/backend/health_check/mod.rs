@@ -11,8 +11,8 @@
 //!
 //! | Component | Role |
 //! |---|---|
-//! | [`BackendHealth`] | Per-backend `AtomicBool` shared between the checker task and request handlers. |
-//! | [`HealthRegistry`] | Address → [`BackendHealth`] map; cheap-to-clone read handle for the forwarding gate. |
+//! | [`UpstreamHealth`] | Per-upstream `AtomicBool` shared between the checker task and request handlers. |
+//! | [`HealthRegistry`] | Address → [`UpstreamHealth`] map; cheap-to-clone read handle for the forwarding gate. |
 //! | [`ConsecutiveCounter`] | State-transition engine with hysteresis; owned by each checker task. |
 //! | [`check_tcp`] | TCP 3-way handshake probe. |
 //! | `HealthCheckSupervisor` *(coming in PR3)* | Owns the probe `tokio::JoinHandle`s; reacts to hot reload. |
@@ -38,5 +38,5 @@ mod registry;
 
 pub use check_tcp::check_tcp;
 pub use counter::ConsecutiveCounter;
-pub use health::BackendHealth;
+pub use health::UpstreamHealth;
 pub use registry::HealthRegistry;

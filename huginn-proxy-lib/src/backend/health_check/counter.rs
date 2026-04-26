@@ -13,7 +13,7 @@
 //!
 //! The counter is **not** thread-safe and is meant to be owned by a single
 //! health-check task per backend. The shared state visible to the rest of the
-//! proxy lives in [`crate::backend::health_check::BackendHealth`].
+//! proxy lives in [`crate::backend::health_check::UpstreamHealth`].
 
 /// Tracks consecutive success/failure counts to determine health state
 /// transitions. Only triggers a state change when a threshold is crossed.
@@ -29,7 +29,7 @@ pub struct ConsecutiveCounter {
 
 impl ConsecutiveCounter {
     /// Create a new counter starting in the healthy state ("optimistic boot",
-    /// matching [`crate::backend::health_check::BackendHealth::new`]).
+    /// matching [`crate::backend::health_check::UpstreamHealth::new`]).
     ///
     /// Both thresholds are clamped to a minimum of 1 — passing 0 would never
     /// trigger a transition, which is almost certainly a misconfiguration.
@@ -46,7 +46,7 @@ impl ConsecutiveCounter {
     /// Record a check result.
     ///
     /// Returns `Some(new_state)` only when a state transition occurred —
-    /// callers use this to update the shared [`crate::backend::health_check::BackendHealth`]
+    /// callers use this to update the shared [`crate::backend::health_check::UpstreamHealth`]
     /// flag and emit a metric / log line. Returns `None` for the common case
     /// where the streak grew but no threshold was crossed.
     pub fn record(&mut self, ok: bool) -> Option<bool> {
@@ -73,7 +73,7 @@ impl ConsecutiveCounter {
     }
 
     /// Current state as tracked by this counter (introspection for tests and
-    /// diagnostics). Production forwarding reads [`crate::backend::health_check::BackendHealth`].
+    /// diagnostics). Production forwarding reads [`crate::backend::health_check::UpstreamHealth`].
     pub fn is_healthy(&self) -> bool {
         self.is_healthy
     }

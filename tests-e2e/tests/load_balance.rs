@@ -4,7 +4,7 @@ use tests_e2e::common::{
     wait_for_service, DEFAULT_SERVICE_TIMEOUT_SECS, PROXY_HTTPS_URL_IPV4, PROXY_HTTPS_URL_IPV6,
 };
 
-async fn test_round_robin_load_balancing_impl(
+async fn test_round_robin_load_balance_impl(
     url: &str,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     assert!(
@@ -27,12 +27,12 @@ async fn test_round_robin_load_balancing_impl(
 }
 
 #[tokio::test]
-async fn test_round_robin_load_balancing() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    test_round_robin_load_balancing_impl(PROXY_HTTPS_URL_IPV4).await
+async fn test_round_robin_load_balance() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    test_round_robin_load_balance_impl(PROXY_HTTPS_URL_IPV4).await
 }
 
 #[tokio::test]
-async fn test_round_robin_load_balancing_ipv6(
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    test_round_robin_load_balancing_impl(PROXY_HTTPS_URL_IPV6).await
+async fn test_round_robin_load_balance_ipv6() -> Result<(), Box<dyn std::error::Error + Send + Sync>>
+{
+    test_round_robin_load_balance_impl(PROXY_HTTPS_URL_IPV6).await
 }
