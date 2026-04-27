@@ -153,7 +153,7 @@ pub async fn handle_tls_connection(
                         match http_result {
                             Ok(v) => Ok::<_, hyper::Error>(v),
                             Err(e) => {
-                                tracing::error!("{e}");
+                                e.log_with_peer(peer);
                                 let code = StatusCode::from(e.clone());
                                 metrics_for_match.record_error(e.error_type());
                                 match synthetic_error_response(code) {
@@ -227,7 +227,7 @@ pub async fn handle_tls_connection(
                         match http_result {
                             Ok(v) => Ok::<_, hyper::Error>(v),
                             Err(e) => {
-                                tracing::error!("{e}");
+                                e.log_with_peer(peer);
                                 let code = StatusCode::from(e.clone());
                                 metrics_for_match.record_error(e.error_type());
                                 match synthetic_error_response(code) {
