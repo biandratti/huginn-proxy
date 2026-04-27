@@ -22,7 +22,8 @@ Prometheus metrics:
 
 - **Endpoints** - `/health`, `/ready`, `/live`, `/metrics` (same JSON format as proxy; `/ready` returns 503 when BPF map
   pins are missing)
-- **Metrics** - `tcp_syn_captured_total`, `tcp_syn_insert_failures_total`, `tcp_syn_malformed_total`, `agent_up`, `huginn_ebpf_agent_build_info`
+- **Metrics** - `tcp_syn_captured_total`, `tcp_syn_insert_failures_total`, `tcp_syn_malformed_total`, `agent_up`,
+  `huginn_ebpf_agent_build_info`
 
 ---
 
@@ -238,29 +239,34 @@ histogram_quantile(0.95, rate(huginn_tls_handshake_duration_seconds_bucket[5m]))
 
 #### HTTP/2 Fingerprinting (Akamai)
 
-| Metric                                                 | Type      | Description                            | Labels |
-|--------------------------------------------------------|-----------|----------------------------------------|--------|
+| Metric                                                 | Type      | Description                            | Labels   |
+|--------------------------------------------------------|-----------|----------------------------------------|----------|
 | `huginn_http2_fingerprints_extracted_total`            | Counter   | HTTP/2 (Akamai) fingerprints extracted | -        |
 | `huginn_http2_fingerprint_extraction_duration_seconds` | Histogram | HTTP/2 fingerprint extraction time     | -        |
 | `huginn_http2_fingerprint_failures_total`              | Counter   | HTTP/2 fingerprint failures            | `reason` |
 
 **Labels**:
 
-- `reason`: Failure kind — `extraction_failed` (HTTP/2 connection where fingerprint could not be extracted, e.g. malformed frames or connection closed before SETTINGS), `not_http2` (HTTP/1.1 connection — Akamai fingerprinting does not apply)
+- `reason`: Failure kind — `extraction_failed` (HTTP/2 connection where fingerprint could not be extracted, e.g.
+  malformed frames or connection closed before SETTINGS), `not_http2` (HTTP/1.1 connection — Akamai fingerprinting does
+  not apply)
 
 #### TCP SYN Fingerprinting (p0f via eBPF)
 
-| Metric                                          | Type      | Description                                              | Labels   |
-|-------------------------------------------------|-----------|----------------------------------------------------------|----------|
-| `huginn_tcp_syn_fingerprints_total`             | Counter   | TCP SYN fingerprint lookups (`result=hit\|miss\|malformed`) | `reason` |
-| `huginn_tcp_syn_fingerprint_duration_seconds`   | Histogram | BPF map lookup and parse duration                        | `reason` |
-| `huginn_tcp_syn_fingerprint_failures_total`     | Counter   | Malformed BPF map entries (undecodable TCP options)      | -        |
+| Metric                                        | Type      | Description                                                 | Labels   |
+|-----------------------------------------------|-----------|-------------------------------------------------------------|----------|
+| `huginn_tcp_syn_fingerprints_total`           | Counter   | TCP SYN fingerprint lookups (`result=hit\|miss\|malformed`) | `reason` |
+| `huginn_tcp_syn_fingerprint_duration_seconds` | Histogram | BPF map lookup and parse duration                           | `reason` |
+| `huginn_tcp_syn_fingerprint_failures_total`   | Counter   | Malformed BPF map entries (undecodable TCP options)         | -        |
 
 **Labels**:
 
-- `reason`: Lookup result — `hit` (fingerprint found and injected), `miss` (no BPF map entry — keep-alive reuse, IPv6 peer, or stale entry), `malformed` (entry present but TCP options undecodable)
+- `reason`: Lookup result — `hit` (fingerprint found and injected), `miss` (no BPF map entry — keep-alive reuse, IPv6
+  peer, or stale entry), `malformed` (entry present but TCP options undecodable)
 
-**Note**: TCP SYN fingerprinting requires the eBPF agent to be running and pinning BPF maps. The proxy reads from those maps; this metric covers the proxy-side lookup, not the agent-side capture (see eBPF Agent Metrics for capture counters).
+**Note**: TCP SYN fingerprinting requires the eBPF agent to be running and pinning BPF maps. The proxy reads from those
+maps; this metric covers the proxy-side lookup, not the agent-side capture (see eBPF Agent Metrics for capture
+counters).
 
 **Example queries**:
 
@@ -331,12 +337,14 @@ sum by (backend_address, route) (rate(huginn_backend_requests_total[5m]))
 sum by (backend_address, route) (rate(huginn_backend_errors_total[5m]))
 ```
 
-**Active health checks** (TCP or HTTP `GET` over plain `http://`, opt-in: `health_check` on a `[[backends]]` entry; see [SETTINGS.md](SETTINGS.md)). The supervisor probes the backend; requests are short-circuited with **502** when the upstream is marked unhealthy (`error_type` = `upstream_unhealthy` in `huginn_errors_total`).
+**Active health checks** (TCP or HTTP `GET` over plain `http://`, opt-in: `health_check` on a `[[backends]]` entry;
+see [SETTINGS.md](SETTINGS.md)). The supervisor probes the backend; requests are short-circuited with **502** when the
+upstream is marked unhealthy (`error_type` = `upstream_unhealthy` in `huginn_errors_total`).
 
-| Metric                               | Type    | Description                                                                 | Labels                    |
-|--------------------------------------|---------|-----------------------------------------------------------------------------|---------------------------|
-| `huginn_health_check_probes_total`   | Counter | Probes: TCP connect or HTTP round-trip (success and failure)                 | `backend`, `result`       |
-| `huginn_health_check_gate_rejects_total` | Counter | Client requests not forwarded because upstream is unhealthy (502)         | `backend_address`         |
+| Metric                                   | Type    | Description                                                       | Labels              |
+|------------------------------------------|---------|-------------------------------------------------------------------|---------------------|
+| `huginn_health_check_probes_total`       | Counter | Probes: TCP connect or HTTP round-trip (success and failure)      | `backend`, `result` |
+| `huginn_health_check_gate_rejects_total` | Counter | Client requests not forwarded because upstream is unhealthy (502) | `backend_address`   |
 
 **Labels**:
 
@@ -512,11 +520,11 @@ sum by (protocol) (rate(huginn_mtls_connections_total[5m]))
 
 ### 12. Config Hot Reload Metrics
 
-| Metric                                         | Type    | Description                                                   | Labels   |
-|------------------------------------------------|---------|---------------------------------------------------------------|----------|
-| `huginn_config_reload_total`                   | Counter | Config reload attempts                                        | `result` |
-| `huginn_config_last_reload_timestamp_seconds`  | Gauge   | Unix timestamp of the last successful reload                  | -        |
-| `huginn_config_hash`                           | Gauge   | Semantic hash of the active `DynamicConfig`                   | -        |
+| Metric                                        | Type    | Description                                  | Labels   |
+|-----------------------------------------------|---------|----------------------------------------------|----------|
+| `huginn_config_reload_total`                  | Counter | Config reload attempts                       | `result` |
+| `huginn_config_last_reload_timestamp_seconds` | Gauge   | Unix timestamp of the last successful reload | -        |
+| `huginn_config_hash`                          | Gauge   | Semantic hash of the active `DynamicConfig`  | -        |
 
 **Labels**:
 
@@ -565,13 +573,13 @@ same health endpoints as the proxy.
 
 ### Agent metrics
 
-| Metric                          | Type               | Description                                                              | Labels                    |
-|---------------------------------|--------------------|--------------------------------------------------------------------------|---------------------------|
-| `tcp_syn_captured_total`        | Observable counter | Number of TCP SYN signatures successfully captured                       | -                         |
-| `tcp_syn_insert_failures_total` | Observable counter | Number of TCP SYN map insert failures (e.g. LRU full)                    | -                         |
-| `tcp_syn_malformed_total`       | Observable counter | Number of malformed TCP packets (e.g. doff too short) that matched dst   | -                         |
-| `agent_up`                      | Gauge              | 1 if the agent has pinned maps and is running                            | -                         |
-| `huginn_ebpf_agent_build_info`  | Gauge              | Build information (always 1)                                             | `version`, `rust_version` |
+| Metric                          | Type               | Description                                                            | Labels                    |
+|---------------------------------|--------------------|------------------------------------------------------------------------|---------------------------|
+| `tcp_syn_captured_total`        | Observable counter | Number of TCP SYN signatures successfully captured                     | -                         |
+| `tcp_syn_insert_failures_total` | Observable counter | Number of TCP SYN map insert failures (e.g. LRU full)                  | -                         |
+| `tcp_syn_malformed_total`       | Observable counter | Number of malformed TCP packets (e.g. doff too short) that matched dst | -                         |
+| `agent_up`                      | Gauge              | 1 if the agent has pinned maps and is running                          | -                         |
+| `huginn_ebpf_agent_build_info`  | Gauge              | Build information (always 1)                                           | `version`, `rust_version` |
 
 ## Grafana Dashboard Suggestions
 
@@ -638,21 +646,21 @@ same health endpoints as the proxy.
 
 The following telemetry features are planned but not yet implemented:
 
-### Metrics for Pending Features
+### Metrics + Tracing for Pending Features
 
 The following metrics are **not** implemented yet (the product may already include the related runtime behaviour):
 
-- **Backend connection pool**: optional future gauges/counters (e.g. pool size, active/idle connections, reuse rate). The
-  **connection pool to upstreams already exists** (see [SETTINGS.md](SETTINGS.md) and [FEATURES.md](FEATURES.md)); only
-  dedicated Prometheus series for it are still missing.
-
-See [ROADMAP.md](ROADMAP.md) for complete list of planned features.
+- **Backend connection pool**: optional future gauges/counters (e.g. pool size, active/idle connections, reuse rate).
+  The **connection pool to upstreams already exists** (see [SETTINGS.md](SETTINGS.md) and
+  [FEATURES.md](FEATURES.md)); only dedicated Prometheus series for it are still missing.
+- **Tracing**: distributed request tracing and correlation (`traceparent` propagation, proxy spans, and request ID correlation) is planned but not implemented yet.
 
 ---
 
 ## Grafana Dashboard
 
-A pre-built Grafana dashboard covering all metrics in this document is available in [`examples/grafana/dashboards/huginn-proxy.json`](examples/grafana/dashboards/huginn-proxy.json).
+A pre-built Grafana dashboard covering all metrics in this document is available in [
+`examples/grafana/dashboards/huginn-proxy.json`](examples/grafana/dashboards/huginn-proxy.json).
 
 To run it locally alongside the proxy:
 
