@@ -2866,6 +2866,7 @@ version = "0.0.1"
 dependencies = [
  "huginn-proxy-lib",
  "reqwest 0.13.2",
+ "serial_test",
  "tokio",
 ]
 
