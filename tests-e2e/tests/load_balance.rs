@@ -37,8 +37,8 @@ async fn test_round_robin_load_balance_impl(
         observed_hosts.push(host.to_string());
 
         match host {
-            "backend-a:9000" => backend_a_hits += 1,
-            "backend-b:9000" => backend_b_hits += 1,
+            "backend-a:9000" => backend_a_hits = backend_a_hits.saturating_add(1),
+            "backend-b:9000" => backend_b_hits = backend_b_hits.saturating_add(1),
             other => return Err(format!("unexpected backend host observed: {other}").into()),
         }
     }

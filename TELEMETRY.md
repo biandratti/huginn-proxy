@@ -298,7 +298,7 @@ histogram_quantile(0.95, rate(huginn_tls_fingerprint_extraction_duration_seconds
 
 **Labels**:
 
-- `backend`: Backend name from configuration (e.g., `backend-1`)
+- `backend`: Backend address selected at runtime (usually `host:port`, e.g., `backend-a:9000`)
 - `backend_address`: Backend address (e.g., `backend-1:9000`)
 - `status_code`: HTTP status code from backend
 - `error_type`: Error type (`connection_refused`, `timeout`, `dns_error`, etc.)
@@ -311,15 +311,18 @@ histogram_quantile(0.95, rate(huginn_tls_fingerprint_extraction_duration_seconds
 # Backend request rate
 rate(huginn_backend_requests_total[5m])
 
-# Backend error rate
-rate(huginn_backend_errors_total[5m])
-  / rate(huginn_backend_requests_total[5m])
+# Backend error rate (global)
+sum(rate(huginn_backend_errors_total[5m]))
+  / sum(rate(huginn_backend_requests_total[5m]))
 
 # P95 backend latency
 histogram_quantile(0.95, rate(huginn_backend_duration_seconds_bucket[5m]))
 
-# Backend distribution
+# Backend selection distribution
 sum by (backend) (rate(huginn_backend_selections_total[5m]))
+
+# Backend request distribution by route
+sum by (backend_address, route) (rate(huginn_backend_requests_total[5m]))
 
 # Backend requests by route
 sum by (backend_address, route) (rate(huginn_backend_requests_total[5m]))
@@ -349,7 +352,7 @@ sum by (backend) (rate(huginn_health_check_probes_total{result="ok"}[5m]))
   / sum by (backend) (rate(huginn_health_check_probes_total[5m]))
 
 # 502s blocked by the health gate (per upstream)
-rate(huginn_health_check_gate_rejects_total[5m])
+sum by (backend_address) (rate(huginn_health_check_gate_rejects_total[5m]))
 
 # Fail probes per backend
 sum by (backend) (rate(huginn_health_check_probes_total{result="fail"}[5m]))
@@ -605,14 +608,14 @@ same health endpoints as the proxy.
 
 **Backend Panel**:
 
-- Backend request rate: `sum by (backend) (rate(huginn_backend_requests_total[5m]))`
-- Backend error rate: `rate(huginn_backend_errors_total[5m]) / rate(huginn_backend_requests_total[5m])`
+- Backend request rate: `sum by (backend_address) (rate(huginn_backend_requests_total[5m]))`
+- Backend error rate: `sum(rate(huginn_backend_errors_total[5m])) / sum(rate(huginn_backend_requests_total[5m]))`
 - Backend latency P95: `histogram_quantile(0.95, rate(huginn_backend_duration_seconds_bucket[5m]))`
 - Backend throughput:
   `sum by (backend_address) (rate(huginn_backend_bytes_received_total[5m]) + rate(huginn_backend_bytes_sent_total[5m]))`
 - **Health (opt-in)**: probe rate `sum by (backend) (rate(huginn_health_check_probes_total[5m]))`; fail ratio
   `rate(huginn_health_check_probes_total{result="fail"}[5m]) / rate(huginn_health_check_probes_total[5m])`;
-  gate 502s `rate(huginn_health_check_gate_rejects_total[5m])`
+  gate 502s `sum by (backend_address) (rate(huginn_health_check_gate_rejects_total[5m]))`
 
 **Config Hot Reload Panel**:
 

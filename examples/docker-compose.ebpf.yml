@@ -36,9 +36,9 @@ services:
       context: ..
       dockerfile: docker/proxy.Dockerfile
       target: ebpf
-    command: ["/usr/local/bin/huginn-proxy"]
+    command: [ "/usr/local/bin/huginn-proxy" ]
     environment:
-    # - HUGINN_CONFIG_PATH=/config/compose.toml
+      # - HUGINN_CONFIG_PATH=/config/compose.toml
       - HUGINN_CONFIG_PATH=/config/compose.yaml
       - HUGINN_EBPF_PIN_PATH=/sys/fs/bpf/huginn
       - HUGINN_EBPF_SYN_MAP_MAX_ENTRIES=8192
