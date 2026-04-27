@@ -1,9 +1,3 @@
-//! Spawns and reconciles per-upstream health checker tasks.
-//!
-//! Mirrors the structure of `rust-rpxy`’s `spawn_health_checkers` / `run_health_checker`, adapted
-//! to huginn’s flat `backends` list: one background task per `Backend` with an enabled health check
-//! (TCP or HTTP `GET` over plain `http://`).
-
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -125,7 +119,6 @@ fn collect_wanted_checks(backends: &[Backend]) -> HashMap<String, HealthCheckCon
     out
 }
 
-/// Public for integration tests; production uses [`HealthCheckSupervisor`].
 pub async fn run_health_checker(
     address: String,
     health: Arc<UpstreamHealth>,

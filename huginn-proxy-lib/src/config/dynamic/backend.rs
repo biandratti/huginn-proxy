@@ -31,7 +31,6 @@ pub enum HealthCheckType {
 
 /// Wire shape for a `[backends.health_check]` / `backends.*.health_check` table. Every field
 /// is optional: missing keys merge with defaults; an empty table `{}` yields TCP and the default
-/// intervals/thresholds (same as rust-rpxy).
 #[derive(Deserialize, Default, Clone)]
 struct HealthCheckDe {
     r#type: Option<String>,

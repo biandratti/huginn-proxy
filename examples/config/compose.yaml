@@ -61,6 +61,7 @@ routes:
   - prefix: "/lb"
     backend: "backend-a:9000"
     fingerprinting: true
+    
   - prefix: "/lb"
     backend: "backend-b:9000"
     fingerprinting: true

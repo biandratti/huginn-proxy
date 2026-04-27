@@ -1,13 +1,10 @@
-# CodeQL with custom config (query-filters in .github/codeql/codeql-config.yml).
-# Default setup in the repo UI does not load that file unless `config-file` is passed here.
-# If you also use CodeQL "default setup" from Settings, disable one path to avoid duplicate analyses.
 name: CodeQL
 
 on:
   push:
-    branches: ["master"]
+    branches: [ "master" ]
   pull_request:
-    branches: ["master"]
+    branches: [ "master" ]
   schedule:
     - cron: "24 4 * * 3"
 

@@ -3,9 +3,7 @@
 //! This module proactively probes backends and rejects requests targeting
 //! known-unhealthy ones with a 502 Bad Gateway, instead of letting the request
 //! propagate the failure to the client (which usually means a multi-second
-//! TCP connect timeout). The design intentionally mirrors `rust-rpxy` —
-//! consecutive-failure thresholds with hysteresis, no full circuit-breaker
-//! state machine — and is documented in detail in `data/analisys.md` §14–15.
+//! TCP connect timeout).
 //!
 //! ## Anatomy
 //!
