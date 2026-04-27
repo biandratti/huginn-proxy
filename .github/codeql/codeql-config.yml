@@ -1,8 +1,10 @@
 # Loaded via github/codeql-action/init `config-file` (see workflows/codeql.yml).
 #
-# reqwest::Client::builder().danger_accept_invalid_certs(true) is required for e2e/benches
-# against local HTTPS with self-signed certs. CodeQL flags rust/disabled-certificate-check.
-# Exclude only that query; other security and quality rules still run.
-query-filters:
-  - exclude:
-      id: rust/disabled-certificate-check
+# tests-e2e, benches, and huginn-proxy-lib/tests use danger_accept_invalid_certs(true)
+# against local HTTPS with self-signed certs — controlled usage, not production code.
+# Exclude those paths from all CodeQL queries.
+name: huginn-proxy
+paths-ignore:
+  - "tests-e2e/**"
+  - "benches/**"
+  - "huginn-proxy-lib/tests/**"
