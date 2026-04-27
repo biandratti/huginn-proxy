@@ -9,7 +9,9 @@ pub mod security;
 pub mod telemetry;
 pub mod tls;
 
-pub use backend::{HealthCheckSupervisor, HealthRegistry, RoundRobin, UpstreamHealth};
+pub use backend::{
+    BackendSelector, HealthCheckSupervisor, HealthRegistry, RoundRobin, UpstreamHealth,
+};
 pub use config::{
     load_from_path, Backend, BackendHttpVersion, Config, DynamicConfig, Route, StaticConfig,
     TlsConfig,

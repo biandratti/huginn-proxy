@@ -1,4 +1,5 @@
 use crate::backend::health_check::HealthRegistry;
+use crate::backend::BackendSelector;
 use crate::config::{Backend, KeepAliveConfig, Route};
 use crate::fingerprinting::names;
 use crate::fingerprinting::TcpObservation;
@@ -59,6 +60,7 @@ pub async fn handle_proxy_request(
     preserve_host: bool,
     client_pool: &Arc<ClientPool>,
     health_registry: &HealthRegistry,
+    backend_selector: &BackendSelector,
 ) -> HttpResult<hyper::Response<RespBody>> {
     let start = Instant::now();
     let method = req.method().to_string();
@@ -78,7 +80,6 @@ pub async fn handle_proxy_request(
     let route_match = if let Some(route) =
         crate::proxy::forwarding::pick_route_with_fingerprinting(path, &routes)
     {
-        metrics.record_backend_selection(route.backend);
         route
     } else {
         let error = HttpError::NoMatchingRoute;
@@ -86,10 +87,24 @@ pub async fn handle_proxy_request(
         return Err(error);
     };
 
-    if !health_registry.is_healthy(route_match.backend) {
-        metrics.record_health_check_gate_reject(route_match.backend);
-        return Err(HttpError::UpstreamUnhealthy);
-    }
+    let selected_backend = match backend_selector.select(
+        route_match.matched_prefix,
+        &route_match.backend_candidates,
+        health_registry,
+    ) {
+        Some(addr) => addr,
+        None => {
+            // Keep one stable backend label for metrics when all candidates are unhealthy.
+            let label = route_match
+                .backend_candidates
+                .first()
+                .copied()
+                .unwrap_or(route_match.backend);
+            metrics.record_health_check_gate_reject(label);
+            return Err(HttpError::UpstreamUnhealthy);
+        }
+    };
+    metrics.record_backend_selection(&selected_backend);
 
     if let Some(rate_limited_response) = check_rate_limit(
         security.rate_limit_manager.as_ref(),
@@ -175,7 +190,7 @@ pub async fn handle_proxy_request(
 
     let result = forward(
         req,
-        route_match.backend.to_string(),
+        selected_backend,
         crate::proxy::forwarding::ForwardConfig {
             backends: &backends,
             keep_alive,

@@ -14,6 +14,7 @@ use tokio::time::{Duration, Instant};
 use tracing::{info, warn};
 
 use crate::backend::health_check::{HealthCheckSupervisor, HealthRegistry};
+use crate::backend::BackendSelector;
 use crate::config::watcher::spawn_config_watcher;
 use crate::config::{DynamicConfig, StaticConfig};
 use crate::error::Result;
@@ -89,6 +90,7 @@ pub async fn run(
     let health_registry = Arc::new(HealthRegistry::new());
     let health_supervisor = Arc::new(HealthCheckSupervisor::new(health_registry.clone()));
     health_supervisor.reconcile(&dynamic_cfg.load().backends, &metrics, &Handle::current());
+    let backend_selector = Arc::new(BackendSelector::new());
 
     let idle_timeout = Duration::from_millis(static_cfg.timeout.proxy_idle_ms);
 
@@ -198,6 +200,7 @@ pub async fn run(
         let builder_clone = builder.clone();
         let syn_probe_clone = syn_probe.clone();
         let health_registry_for_conn = health_registry.clone();
+        let backend_selector_for_conn = backend_selector.clone();
 
         accept_tasks.spawn(async move {
             loop {
@@ -270,6 +273,7 @@ pub async fn run(
                 let metrics_task = metrics_clone.clone();
                 let client_pool_task = client_pool_clone.load_full();
                 let health_reg_task = health_registry_for_conn.clone();
+                let backend_selector_task = backend_selector_for_conn.clone();
 
                 tokio::spawn(async move {
                     let _guard = guard;
@@ -293,6 +297,7 @@ pub async fn run(
                                 client_pool: client_pool_task.clone(),
                                 syn_fingerprint: syn_fingerprint.clone(),
                                 health_registry: health_reg_task.clone(),
+                                backend_selector: backend_selector_task.clone(),
                             },
                         )
                         .await;
@@ -312,6 +317,7 @@ pub async fn run(
                                 client_pool: client_pool_task,
                                 syn_fingerprint,
                                 health_registry: health_reg_task,
+                                backend_selector: backend_selector_task,
                             },
                         )
                         .await;
