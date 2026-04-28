@@ -13,14 +13,19 @@
 [![GitHub Release](https://img.shields.io/github/v/release/biandratti/huginn-proxy)](https://github.com/biandratti/huginn-proxy/releases)
 [![GHCR packages](https://img.shields.io/badge/GHCR-container%20images-blue?logo=docker)](https://github.com/biandratti?tab=packages&repo_name=huginn-proxy)
 
-**`ghcr.io/biandratti/`** — `huginn-proxy`, `huginn-proxy-plain`, `huginn-proxy-ebpf-agent` ([images & layout](#architecture))
+**`ghcr.io/biandratti/`** — `huginn-proxy`, `huginn-proxy-plain`,
+`huginn-proxy-ebpf-agent` ([images & layout](#architecture))
 
 **High-performance reverse proxy with passive fingerprinting capabilities powered by Huginn Net.**
 </div>
 
 ## Overview
 
-**Huginn Proxy** is a reverse proxy built on [Tokio](https://tokio.rs), [Hyper](https://hyper.rs), and [Rustls](https://github.com/rustls/rustls). It routes incoming connections to backend services while passively extracting TLS (JA4), HTTP/2 (Akamai), and TCP SYN (p0f-style) fingerprints and injecting them as headers. TCP SYN fingerprinting is implemented via an XDP eBPF program using [Aya](https://aya-rs.dev). Fingerprinting libraries are provided by [Huginn Net](https://github.com/biandratti/huginn-net).
+**Huginn Proxy** is a reverse proxy built on [Tokio](https://tokio.rs), [Hyper](https://hyper.rs),
+and [Rustls](https://github.com/rustls/rustls). It routes incoming connections to backend services while passively
+extracting TLS (JA4), HTTP/2 (Akamai), and TCP SYN (p0f-style) fingerprints and injecting them as headers. TCP SYN
+fingerprinting is implemented via an XDP eBPF program using [Aya](https://aya-rs.dev). Fingerprinting libraries are
+provided by [Huginn Net](https://github.com/biandratti/huginn-net).
 
 Inspired by production-grade proxies
 like [Pingora](https://github.com/cloudflare/pingora), [Sozu](https://github.com/sozu-proxy/sozu),
@@ -32,7 +37,8 @@ See [`examples/`](examples/).
 
 ## Features
 
-- **Configuration** - One file, **[TOML or YAML](SETTINGS.md)** (picked from the extension). **Dynamic** sections (routes,
+- **Configuration** - One file, **[TOML or YAML](SETTINGS.md)** (picked from the extension). **Dynamic** sections (
+  routes,
   backends, pools, headers, security filters, rate limits, …) **hot-reload** on SIGHUP or `--watch`; **static** sections
   (listen, TLS, fingerprint flags, logging, telemetry, timeouts, …) need a **restart** (reload ignores them). See
   [DEPLOYMENT.md](DEPLOYMENT.md).
@@ -42,6 +48,7 @@ See [`examples/`](examples/).
 - **Connection Pooling** - Automatic connection reuse to backends for reduced latency (bypasses pooling per-route for
   fingerprinting)
 - **Path-based Routing** - Route matching with prefix support, path stripping, and path rewriting
+- **Backend health checks** - Optional TCP or HTTP `GET` probes with 502 fast-fail when an upstream is unhealthy
 - **Rate Limiting** - Token bucket algorithm with multiple strategies (IP, Header, Route, Combined), global and
   per-route limits
 - **Header Manipulation** - Add or remove request/response headers globally or per-route for security and customization
@@ -52,7 +59,8 @@ See [`examples/`](examples/).
 - **mTLS (Mutual TLS)** - Client certificate authentication for secure service-to-service communication
 - **Granular Timeouts** - TLS handshake and connection handling timeouts for resource protection
 - **Host Header Preservation** - Configurable forwarding of original Host header for virtual hosting
-- **Passive Fingerprinting** - Automatic TLS (JA4), HTTP/2 (Akamai), and TCP SYN (p0f-style via eBPF) fingerprint extraction
+- **Passive Fingerprinting** - Automatic TLS (JA4), HTTP/2 (Akamai), and TCP SYN (p0f-style via eBPF) fingerprint
+  extraction
 - **X-Forwarded-* Headers** - Automatic injection of proxy forwarding headers
 - **[Comprehensive Telemetry](TELEMETRY.md)** - Prometheus metrics covering requests, throughput, rate limiting, TLS,
   backends, and security features
@@ -73,7 +81,8 @@ Fingerprints are automatically extracted and injected as headers:
 - **TLS (JA4_r)**: `x-huginn-net-ja4_r`: original ClientHello order, SHA-256 hashed (FoxIO JA4_r)
 - **TLS (JA4_o)**: `x-huginn-net-ja4_o`: sorted, raw hex values without hashing (FoxIO JA4_o, useful for debugging)
 - **TLS (JA4_or)**: `x-huginn-net-ja4_or`: original order, raw hex values without hashing (FoxIO JA4_or)
-- **HTTP/2 (Akamai)**: `x-huginn-net-akamai`: Extracted from HTTP/2 connections only using [huginn-net-http](https://crates.io/crates/huginn-net-http)
+- **HTTP/2 (Akamai)**: `x-huginn-net-akamai`: Extracted from HTTP/2 connections only
+  using [huginn-net-http](https://crates.io/crates/huginn-net-http)
 - **TCP SYN (p0f-style)**: `x-huginn-net-tcp` - Raw TCP SYN signature extracted via eBPF/XDP
   using [huginn-net-tcp](https://crates.io/crates/huginn-net-tcp). Requires `tcp_enabled = true`
   and the `ebpf-tcp` feature. Present on all requests of a connection (the fingerprint is
@@ -108,27 +117,30 @@ These headers always override any client-provided values to prevent spoofing.
 
 See [`benches/README.md`](benches/README.md) for detailed benchmark results from development environment.
 
-## Roadmap
-
-See [ROADMAP.md](ROADMAP.md) for a detailed list of planned features and upcoming phases.
-
 ## Deployment matrix
 
-Published images (`linux/amd64`, `linux/arm64`), release binaries, and capabilities: **[DEPLOYMENT-MATRIX.md](DEPLOYMENT-MATRIX.md)**. See also [DEPLOYMENT.md](DEPLOYMENT.md) and [EBPF-SETUP.md](EBPF-SETUP.md); local Compose under [`examples/`](examples/).
+Published images (`linux/amd64`, `linux/arm64`), release binaries, and capabilities: *
+*[DEPLOYMENT-MATRIX.md](DEPLOYMENT-MATRIX.md)**. See also [DEPLOYMENT.md](DEPLOYMENT.md)
+and [EBPF-SETUP.md](EBPF-SETUP.md); local Compose under [`examples/`](examples/).
 
 ## Architecture
 
 For module structure and design decisions, see [ARCHITECTURE.md](ARCHITECTURE.md).
 
-| Fingerprint | Header | eBPF agent required                 |
-|---|---|-------------------------------------|
-| TLS (JA4) | `x-huginn-net-ja4` | No                                  |
+| Fingerprint     | Header                | eBPF agent required                 |
+|-----------------|-----------------------|-------------------------------------|
+| TLS (JA4)       | `x-huginn-net-ja4`    | No                                  |
 | HTTP/2 (Akamai) | `x-huginn-net-akamai` | No                                  |
-| TCP SYN (p0f) | `x-huginn-net-tcp` | **Yes** - Linux only, kernel ≥ 5.11 |
+| TCP SYN (p0f)   | `x-huginn-net-tcp`    | **Yes** - Linux only, kernel ≥ 5.11 |
 
-**GHCR:** three container packages ([`huginn-proxy`](https://github.com/biandratti/huginn-proxy/pkgs/container/huginn-proxy), [`huginn-proxy-plain`](https://github.com/biandratti/huginn-proxy/pkgs/container/huginn-proxy-plain), [`huginn-proxy-ebpf-agent`](https://github.com/biandratti/huginn-proxy-ebpf-agent/pkgs/container/huginn-proxy-ebpf-agent)). How many you run depends on the setup:
+**GHCR:** three container packages ([
+`huginn-proxy`](https://github.com/biandratti/huginn-proxy/pkgs/container/huginn-proxy), [
+`huginn-proxy-plain`](https://github.com/biandratti/huginn-proxy/pkgs/container/huginn-proxy-plain), [
+`huginn-proxy-ebpf-agent`](https://github.com/biandratti/huginn-proxy-ebpf-agent/pkgs/container/huginn-proxy-ebpf-agent)).
+How many you run depends on the setup:
 
-- **Proxy + eBPF agent (TCP SYN):** **`huginn-proxy`** + **`huginn-proxy-ebpf-agent`** two containers; JA4, Akamai, and `x-huginn-net-tcp`.
+- **Proxy + eBPF agent (TCP SYN):** **`huginn-proxy`** + **`huginn-proxy-ebpf-agent`** two containers; JA4, Akamai, and
+  `x-huginn-net-tcp`.
 - **Proxy only (no TCP SYN):** **`huginn-proxy-plain`** one container; JA4 and Akamai, no kernel SYN path.
 
 ## License
@@ -142,7 +154,8 @@ Huginn Proxy uses the [Huginn Net](https://github.com/biandratti/huginn-net) fin
 - **JA4**: TLS fingerprinting follows the [JA4 specification by FoxIO, LLC](https://github.com/FoxIO-LLC/ja4)
 - **Akamai HTTP/2**: HTTP/2 fingerprinting follows
   the [Blackhat EU 2017 specification](https://www.blackhat.com/docs/eu-17/materials/eu-17-Shuster-Passive-Fingerprinting-Of-HTTP2-Clients-wp.pdf)
-- **p0f v3**: TCP SYN fingerprinting follows the [p0f v3 specification by Michal Zalewski](https://lcamtuf.coredump.cx/p0f3/README)
+- **p0f v3**: TCP SYN fingerprinting follows
+  the [p0f v3 specification by Michal Zalewski](https://lcamtuf.coredump.cx/p0f3/README)
 
 ## Contributing
 

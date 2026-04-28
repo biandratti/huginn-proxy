@@ -36,17 +36,7 @@ fn validate_config(cfg: &Config) -> Result<()> {
         }
     }
 
-    let backend_addresses: std::collections::HashSet<_> =
-        cfg.backends.iter().map(|b| b.address.as_str()).collect();
-
-    for route in &cfg.routes {
-        if !backend_addresses.contains(route.backend.as_str()) {
-            return Err(ProxyError::Config(format!(
-                "Route references unknown backend: {}",
-                route.backend
-            )));
-        }
-    }
+    cfg.validate_cross_refs()?;
 
     Ok(())
 }

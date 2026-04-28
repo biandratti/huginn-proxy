@@ -73,3 +73,27 @@ alpn = ["h2"]
     let _ = fs::remove_file(&key_path);
     Ok(())
 }
+
+#[test]
+fn rejects_invalid_health_check_timeout_greater_than_interval(
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let path = tmp_path("bad-hc");
+    let toml = r#"
+listen = { addrs = ["127.0.0.1:0"] }
+backends = [
+  { address = "localhost:9000", health_check = { interval_secs = 1, timeout_secs = 5 } }
+]
+"#;
+    fs::write(&path, toml)?;
+    let err = match load_from_path(&path) {
+        Ok(_) => panic!("load_from_path should reject invalid health_check invariants"),
+        Err(e) => e,
+    };
+    let msg = err.to_string();
+    assert!(
+        msg.contains("timeout_secs") && msg.contains("interval_secs"),
+        "expected timeout/interval error, got: {msg}"
+    );
+    let _ = fs::remove_file(&path);
+    Ok(())
+}

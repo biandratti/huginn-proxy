@@ -116,3 +116,19 @@ pub async fn wait_for_service(
     }
     Ok(false)
 }
+
+pub fn metrics_contain_health_probe_ok(body: &str, backend: &str) -> bool {
+    for line in body.lines() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        if !line.contains("huginn_health_check_probes_total") {
+            continue;
+        }
+        if line.contains(backend) && line.contains("result=\"ok\"") {
+            return true;
+        }
+    }
+    false
+}

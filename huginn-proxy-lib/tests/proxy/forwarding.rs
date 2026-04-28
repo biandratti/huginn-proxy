@@ -10,10 +10,12 @@ fn test_find_backend_config() {
         Backend {
             address: "backend-a:9000".to_string(),
             http_version: Some(BackendHttpVersion::Http2),
+            health_check: None,
         },
         Backend {
             address: "backend-b:9000".to_string(),
             http_version: Some(BackendHttpVersion::Http11),
+            health_check: None,
         },
     ];
 
@@ -33,14 +35,17 @@ fn test_determine_http_version_with_config() {
     let backend_http2 = Backend {
         address: "backend:9000".to_string(),
         http_version: Some(BackendHttpVersion::Http2),
+        health_check: None,
     };
     let backend_http11 = Backend {
         address: "backend:9000".to_string(),
         http_version: Some(BackendHttpVersion::Http11),
+        health_check: None,
     };
     let backend_preserve = Backend {
         address: "backend:9000".to_string(),
         http_version: Some(BackendHttpVersion::Preserve),
+        health_check: None,
     };
 
     // Test with explicit http2 config
@@ -81,7 +86,8 @@ fn test_determine_http_version_with_config() {
 
 #[test]
 fn test_determine_http_version_defaults() {
-    let backend_no_config = Backend { address: "backend:9000".to_string(), http_version: None };
+    let backend_no_config =
+        Backend { address: "backend:9000".to_string(), http_version: None, health_check: None };
 
     // Default for HTTP (non-HTTPS): HTTP/1.1
     assert_eq!(
@@ -173,6 +179,7 @@ fn test_pick_route_with_fingerprinting_basic() {
     assert!(result.is_some());
     if let Some(route) = result {
         assert_eq!(route.backend, "backend-a:9000");
+        assert_eq!(route.backend_candidates, vec!["backend-a:9000"]);
         assert!(route.fingerprinting);
         assert_eq!(route.matched_prefix, "/api");
         assert!(route.replace_path.is_none());
@@ -197,6 +204,7 @@ fn test_pick_route_with_fingerprinting_with_replace_path() {
     assert!(result.is_some());
     if let Some(route) = result {
         assert_eq!(route.backend, "backend-a:9000");
+        assert_eq!(route.backend_candidates, vec!["backend-a:9000"]);
         assert!(route.fingerprinting);
         assert_eq!(route.matched_prefix, "/api");
         assert_eq!(route.replace_path, Some("/v1"));
@@ -222,8 +230,52 @@ fn test_pick_route_with_fingerprinting_path_stripping() {
     assert!(result.is_some());
     if let Some(route) = result {
         assert_eq!(route.backend, "backend-a:9000");
+        assert_eq!(route.backend_candidates, vec!["backend-a:9000"]);
         assert!(!route.fingerprinting);
         assert_eq!(route.matched_prefix, "/api");
         assert_eq!(route.replace_path, Some(""));
+    }
+}
+
+#[test]
+fn test_pick_route_with_fingerprinting_collects_same_prefix_candidates() {
+    use huginn_proxy_lib::proxy::forwarding::pick_route_with_fingerprinting;
+
+    let routes = vec![
+        Route {
+            prefix: "/api".to_string(),
+            backend: "backend-a:9000".to_string(),
+            fingerprinting: true,
+            replace_path: None,
+            rate_limit: None,
+            headers: None,
+            force_new_connection: false,
+        },
+        Route {
+            prefix: "/api".to_string(),
+            backend: "backend-b:9000".to_string(),
+            fingerprinting: true,
+            replace_path: None,
+            rate_limit: None,
+            headers: None,
+            force_new_connection: false,
+        },
+        Route {
+            prefix: "/".to_string(),
+            backend: "backend-c:9000".to_string(),
+            fingerprinting: true,
+            replace_path: None,
+            rate_limit: None,
+            headers: None,
+            force_new_connection: false,
+        },
+    ];
+
+    let result = pick_route_with_fingerprinting("/api/users", &routes);
+    assert!(result.is_some());
+    if let Some(route) = result {
+        assert_eq!(route.matched_prefix, "/api");
+        assert_eq!(route.backend, "backend-a:9000");
+        assert_eq!(route.backend_candidates, vec!["backend-a:9000", "backend-b:9000"]);
     }
 }

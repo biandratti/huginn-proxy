@@ -2,7 +2,9 @@ pub mod backend;
 pub mod headers;
 pub mod security;
 
-pub use backend::{Backend, BackendHttpVersion, BackendPoolConfig, Route};
+pub use backend::{
+    Backend, BackendHttpVersion, BackendPoolConfig, HealthCheckConfig, HealthCheckType, Route,
+};
 pub use headers::{CustomHeader, HeaderManipulation, HeaderManipulationGroup};
 pub use security::{
     CspConfig, HstsConfig, IpFilterConfig, IpFilterMode, LimitBy, RateLimitConfig,

@@ -3,7 +3,7 @@ use thiserror::Error;
 
 /// HTTP result type, T is typically a hyper::Response
 /// HttpError is used to generate a synthetic error response
-pub(crate) type HttpResult<T> = std::result::Result<T, HttpError>;
+pub(crate) type HttpResult<T> = Result<T, HttpError>;
 
 /// Describes things that can go wrong in the forwarder
 #[derive(Debug, Error, Clone)]
@@ -35,8 +35,8 @@ pub enum HttpError {
     #[error("Invalid URI: {0}")]
     InvalidUri(String),
 
-    #[error("Backend error: {0}")]
-    BackendError(String),
+    #[error("Upstream unhealthy (active health check)")]
+    UpstreamUnhealthy,
 }
 
 impl From<HttpError> for StatusCode {
@@ -51,13 +51,12 @@ impl From<HttpError> for StatusCode {
             HttpError::FailedToGetResponseFromBackend(_) => StatusCode::BAD_GATEWAY,
             HttpError::FailedToGenerateDownstreamResponse(_) => StatusCode::INTERNAL_SERVER_ERROR,
             HttpError::InvalidUri(_) => StatusCode::BAD_REQUEST,
-            HttpError::BackendError(_) => StatusCode::BAD_GATEWAY,
+            HttpError::UpstreamUnhealthy => StatusCode::BAD_GATEWAY,
         }
     }
 }
 
 impl HttpError {
-    /// Returns a string identifier for the error type, useful for metrics and logging
     pub fn error_type(&self) -> &'static str {
         match self {
             HttpError::InvalidHostInRequestHeader => "invalid_host",
@@ -69,7 +68,30 @@ impl HttpError {
             HttpError::FailedToGetResponseFromBackend(_) => "backend_error",
             HttpError::FailedToGenerateDownstreamResponse(_) => "downstream_response_failed",
             HttpError::InvalidUri(_) => "invalid_uri",
-            HttpError::BackendError(_) => "backend_error",
+            HttpError::UpstreamUnhealthy => "upstream_unhealthy",
+        }
+    }
+
+    fn log_level(&self) -> tracing::Level {
+        match self {
+            HttpError::NoMatchingRoute
+            | HttpError::Forbidden
+            | HttpError::UpstreamUnhealthy
+            | HttpError::InvalidHostInRequestHeader
+            | HttpError::InvalidUri(_) => tracing::Level::DEBUG,
+            HttpError::NoMatchingBackend
+            | HttpError::NoUpstreamCandidates
+            | HttpError::FailedToGetResponseFromBackend(_) => tracing::Level::WARN,
+            HttpError::FailedToGenerateUpstreamRequest(_)
+            | HttpError::FailedToGenerateDownstreamResponse(_) => tracing::Level::ERROR,
+        }
+    }
+
+    pub fn log_with_peer(&self, peer: std::net::SocketAddr) {
+        match self.log_level() {
+            tracing::Level::DEBUG => tracing::debug!(?peer, error = %self, "request handling"),
+            tracing::Level::WARN => tracing::warn!(?peer, error = %self, "request handling"),
+            _ => tracing::error!(?peer, error = %self, "request handling"),
         }
     }
 }

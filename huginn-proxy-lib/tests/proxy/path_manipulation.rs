@@ -4,7 +4,6 @@ use huginn_proxy_lib::proxy::forwarding::pick_route_with_fingerprinting;
 
 #[test]
 fn test_path_stripping_basic() {
-    // Test case copied from rust-rpxy example:
     // Request: /api/users → Backend: /users (strip /api prefix)
     let routes = vec![Route {
         prefix: "/api".to_string(),
@@ -51,7 +50,6 @@ fn test_path_stripping_with_query_params() {
 
 #[test]
 fn test_path_rewriting_basic() {
-    // Test case from rust-rpxy config-example.toml:
     // path = '/maps', replace_path = "/replacing/path1"
     // Request: /maps/org/any.ext → Backend: /replacing/path1/org/any.ext
     let routes = vec![Route {
@@ -166,7 +164,6 @@ fn test_path_manipulation_root_path() {
 #[test]
 fn test_multiple_routes_matching_priority() {
     // Test that the first matching route wins
-    // Copied from rust-rpxy's PathManager::get() logic
     let routes = vec![
         Route {
             prefix: "/api/v1".to_string(),

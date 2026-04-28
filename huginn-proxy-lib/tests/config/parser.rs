@@ -95,7 +95,7 @@ fn toml_and_yaml_produce_equivalent_backends() -> TestResult {
         listen = { addrs = ["0.0.0.0:7000"] }
         backends = [
           { address = "backend-a:9000", http_version = "http11" },
-          { address = "backend-b:9000" },
+          { address = "backend-b:9000", health_check = { interval_secs = 7, timeout_secs = 2 } },
         ]
     "#;
     let yaml_input = r#"
@@ -106,6 +106,9 @@ backends:
   - address: "backend-a:9000"
     http_version: http11
   - address: "backend-b:9000"
+    health_check:
+      interval_secs: 7
+      timeout_secs: 2
 "#;
     let toml_cfg = TomlParser.parse(toml_input)?;
     let yaml_cfg = YamlParser.parse(yaml_input)?;
@@ -114,6 +117,7 @@ backends:
     for (t, y) in toml_cfg.backends.iter().zip(yaml_cfg.backends.iter()) {
         assert_eq!(t.address, y.address);
         assert_eq!(t.http_version, y.http_version);
+        assert_eq!(t.health_check, y.health_check);
     }
     Ok(())
 }

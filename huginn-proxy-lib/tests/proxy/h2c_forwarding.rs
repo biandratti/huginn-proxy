@@ -123,6 +123,7 @@ fn test_preserve_forwards_http2_as_h2c() {
     let backend = Backend {
         address: "backend:9000".to_string(),
         http_version: Some(BackendHttpVersion::Preserve),
+        health_check: None,
     };
 
     assert_eq!(
@@ -137,6 +138,7 @@ fn test_preserve_forwards_http11_as_http11() {
     let backend = Backend {
         address: "backend:9000".to_string(),
         http_version: Some(BackendHttpVersion::Preserve),
+        health_check: None,
     };
 
     assert_eq!(
@@ -151,6 +153,7 @@ fn test_forced_http2_config_always_uses_h2c() {
     let backend = Backend {
         address: "backend:9000".to_string(),
         http_version: Some(BackendHttpVersion::Http2),
+        health_check: None,
     };
 
     assert_eq!(
@@ -170,6 +173,7 @@ fn test_forced_http11_config_always_uses_http11() {
     let backend = Backend {
         address: "backend:9000".to_string(),
         http_version: Some(BackendHttpVersion::Http11),
+        health_check: None,
     };
 
     assert_eq!(

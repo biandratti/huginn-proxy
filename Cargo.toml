@@ -57,6 +57,7 @@ thirtyfour = "0.36.1"
 thiserror = "2.0.18"
 tokio = { version = "1.52.1", features = ["net", "time", "io-util", "macros", "rt-multi-thread", "sync", "signal", "fs"] }
 tokio-rustls = "0.26.4"
+tokio-util = { version = "0.7.18", features = ["rt"] }
 toml = "1.1.2"
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["fmt", "env-filter"] }

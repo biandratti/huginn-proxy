@@ -1,9 +1,11 @@
 use std::sync::Arc;
 
 use super::timeout_helper::serve_with_timeout;
+use crate::backend::UpstreamGateway;
 use crate::fingerprinting::TcpObservation;
 use crate::fingerprinting::{read_client_hello, CapturingStream};
 use crate::proxy::connection::{PrefixedStream, TlsConnectionGuard};
+use crate::proxy::handler::request::handle_proxy_request;
 use crate::proxy::synthetic_response::synthetic_error_response;
 use crate::proxy::ClientPool;
 use crate::telemetry::Metrics;
@@ -32,6 +34,7 @@ pub struct TlsConnectionConfig {
     pub connection_handling_timeout: tokio::time::Duration,
     pub client_pool: Arc<ClientPool>,
     pub syn_fingerprint: Option<TcpObservation>,
+    pub upstream: UpstreamGateway,
 }
 
 /// Handle a TLS connection
@@ -107,6 +110,7 @@ pub async fn handle_tls_connection(
             let keep_alive = config.keep_alive.clone();
             let security = config.security.clone();
             let client_pool = config.client_pool.clone();
+            let upstream = config.upstream.clone();
 
             let svc =
                 hyper::service::service_fn(move |req: hyper::Request<hyper::body::Incoming>| {
@@ -119,11 +123,12 @@ pub async fn handle_tls_connection(
                     let keep_alive = keep_alive.clone();
                     let security = security.clone();
                     let client_pool_for_request = client_pool.clone();
+                    let upstream = upstream.clone();
 
                     async move {
                         let metrics_for_match = metrics.clone();
                         let preserve_host = config.preserve_host;
-                        let http_result = crate::proxy::handler::request::handle_proxy_request(
+                        let http_result = handle_proxy_request(
                             req,
                             routes,
                             backends,
@@ -137,13 +142,14 @@ pub async fn handle_tls_connection(
                             true,
                             preserve_host,
                             &client_pool_for_request,
+                            &upstream,
                         )
                         .await;
 
                         match http_result {
                             Ok(v) => Ok::<_, hyper::Error>(v),
                             Err(e) => {
-                                tracing::error!("{e}");
+                                e.log_with_peer(peer);
                                 let code = StatusCode::from(e.clone());
                                 metrics_for_match.record_error(e.error_type());
                                 match synthetic_error_response(code) {
@@ -176,6 +182,7 @@ pub async fn handle_tls_connection(
             let keep_alive = config.keep_alive.clone();
             let security = config.security.clone();
             let client_pool = config.client_pool.clone();
+            let upstream = config.upstream.clone();
 
             let svc =
                 hyper::service::service_fn(move |req: hyper::Request<hyper::body::Incoming>| {
@@ -187,11 +194,12 @@ pub async fn handle_tls_connection(
                     let keep_alive = keep_alive.clone();
                     let security = security.clone();
                     let client_pool = client_pool.clone();
+                    let upstream = upstream.clone();
 
                     async move {
                         let preserve_host = config.preserve_host;
                         let metrics_for_match = metrics.clone();
-                        let http_result = crate::proxy::handler::request::handle_proxy_request(
+                        let http_result = handle_proxy_request(
                             req,
                             routes,
                             backends,
@@ -205,13 +213,14 @@ pub async fn handle_tls_connection(
                             true,
                             preserve_host,
                             &client_pool,
+                            &upstream,
                         )
                         .await;
 
                         match http_result {
                             Ok(v) => Ok::<_, hyper::Error>(v),
                             Err(e) => {
-                                tracing::error!("{e}");
+                                e.log_with_peer(peer);
                                 let code = StatusCode::from(e.clone());
                                 metrics_for_match.record_error(e.error_type());
                                 match synthetic_error_response(code) {

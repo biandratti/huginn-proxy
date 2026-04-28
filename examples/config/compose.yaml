@@ -10,6 +10,12 @@ listen:
 backends:
   - address: "backend-a:9000"
     http_version: http11
+    health_check:
+      type: http
+      path: /
+      expected_status: 200
+      interval_secs: 2
+      timeout_secs: 2
   - address: "backend-b:9000"
     http_version: http11
 
@@ -49,6 +55,16 @@ routes:
     backend: "backend-a:9000"
     fingerprinting: true
     replace_path: "/api/v1"
+
+  # Load-balance probe route: same prefix mapped to two backends.
+  # Used by E2E tests to verify real backend distribution.
+  - prefix: "/lb"
+    backend: "backend-a:9000"
+    fingerprinting: true
+    
+  - prefix: "/lb"
+    backend: "backend-b:9000"
+    fingerprinting: true
 
   # Default catch-all
   - prefix: "/"

@@ -1,3 +1,4 @@
+use crate::backend::UpstreamGateway;
 use crate::config::{Backend, KeepAliveConfig, Route};
 use crate::fingerprinting::names;
 use crate::fingerprinting::TcpObservation;
@@ -57,6 +58,7 @@ pub async fn handle_proxy_request(
     is_https: bool,
     preserve_host: bool,
     client_pool: &Arc<ClientPool>,
+    upstream: &UpstreamGateway,
 ) -> HttpResult<hyper::Response<RespBody>> {
     let start = Instant::now();
     let method = req.method().to_string();
@@ -76,13 +78,25 @@ pub async fn handle_proxy_request(
     let route_match = if let Some(route) =
         crate::proxy::forwarding::pick_route_with_fingerprinting(path, &routes)
     {
-        metrics.record_backend_selection(route.backend);
         route
     } else {
         let error = HttpError::NoMatchingRoute;
         metrics.record_error(error.error_type());
         return Err(error);
     };
+
+    let selected_upstream = match upstream.selector.select(
+        route_match.matched_prefix,
+        &route_match.backend_candidates,
+        &upstream.health,
+    ) {
+        Some(addr) => addr,
+        None => {
+            metrics.record_health_check_gate_reject(route_match.backend);
+            return Err(HttpError::UpstreamUnhealthy);
+        }
+    };
+    metrics.record_backend_selection(&selected_upstream);
 
     if let Some(rate_limited_response) = check_rate_limit(
         security.rate_limit_manager.as_ref(),
@@ -168,7 +182,7 @@ pub async fn handle_proxy_request(
 
     let result = forward(
         req,
-        route_match.backend.to_string(),
+        selected_upstream,
         crate::proxy::forwarding::ForwardConfig {
             backends: &backends,
             keep_alive,

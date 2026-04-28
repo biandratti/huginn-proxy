@@ -1,14 +1,17 @@
 #![forbid(unsafe_code)]
 
+pub mod backend;
 pub mod config;
 pub mod error;
 pub mod fingerprinting;
-pub mod load_balancing;
 pub mod proxy;
 pub mod security;
 pub mod telemetry;
 pub mod tls;
 
+pub use backend::{
+    BackendSelector, HealthCheckSupervisor, HealthRegistry, RoundRobin, UpstreamHealth,
+};
 pub use config::{
     load_from_path, Backend, BackendHttpVersion, Config, DynamicConfig, Route, StaticConfig,
     TlsConfig,
@@ -16,7 +19,6 @@ pub use config::{
 pub use error::{ProxyError, Result};
 pub use fingerprinting::SynResult;
 pub use fingerprinting::{forwarded, names, read_client_hello, CapturingStream, Ja4Fingerprints};
-pub use load_balancing::RoundRobin;
 pub use proxy::reload::{
     initial_client_pool, initial_rate_limiter, try_reload, SharedClientPool, SharedRateLimiter,
 };

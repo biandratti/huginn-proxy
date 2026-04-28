@@ -289,7 +289,7 @@ curl -sk https://127.0.0.1:7000/premium/test    # Header-based
 Verify that TLS and HTTP/2 fingerprints are injected:
 
 ```bash
-curl -sk https://127.0.0.1:7000/api/test | jq '.headers | with_entries(select(.key | startswith("x-")))'
+curl -sk https://127.0.0.1:7000/api/test
 ```
 
 Expected headers:

@@ -10,6 +10,9 @@ huginn-proxy-lib = { path = "../huginn-proxy-lib", version = "0.0.1" }
 reqwest.workspace = true
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "net"] }
 
+[dev-dependencies]
+serial_test.workspace = true
+
 [[test]]
 name = "e2e"
 path = "tests/e2e.rs"

@@ -1380,7 +1380,7 @@
     {
       "id": 16,
       "type": "timeseries",
-      "title": "Backend Error Rate",
+      "title": "Backend Errors & Health-Gate Rejects (errors/s)",
       "gridPos": {
         "x": 8,
         "y": 75,
@@ -1390,13 +1390,30 @@
       "targets": [
         {
           "expr": "sum by (backend_address) (rate(huginn_backend_errors_total_total[$__rate_interval])) or on() vector(0)",
-          "legendFormat": "{{backend_address}}",
+          "legendFormat": "backend errors/s — {{backend_address}}",
           "refId": "A"
+        },
+        {
+          "expr": "sum by (backend_address) (rate(huginn_health_check_gate_rejects_total_total[$__rate_interval])) or on() vector(0)",
+          "legendFormat": "health-gate rejects/s — {{backend_address}}",
+          "refId": "B"
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "short"
+          "unit": "ops",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 80,
+            "lineWidth": 0,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          }
         }
       },
       "options": {
@@ -1481,7 +1498,7 @@
     {
       "id": 38,
       "type": "timeseries",
-      "title": "Backend Distribution (round-robin)",
+      "title": "Backend Selection Distribution",
       "gridPos": {
         "x": 12,
         "y": 83,
@@ -1491,7 +1508,7 @@
       "targets": [
         {
           "expr": "sum by (backend) (rate(huginn_backend_selections_total_total[$__rate_interval])) or on() vector(0)",
-          "legendFormat": "{{backend}}",
+          "legendFormat": "selections — {{backend}}",
           "refId": "A"
         }
       ],
