@@ -3,8 +3,8 @@ pub mod headers;
 pub mod security;
 
 pub use backend::{
-    Backend, BackendHttpVersion, BackendPoolConfig, HealthCheckConfig, HealthCheckType, Route,
-    sort_routes,
+    sort_routes, Backend, BackendHttpVersion, BackendPoolConfig, HealthCheckConfig,
+    HealthCheckType, Route,
 };
 pub use headers::{CustomHeader, HeaderManipulation, HeaderManipulationGroup};
 pub use security::{

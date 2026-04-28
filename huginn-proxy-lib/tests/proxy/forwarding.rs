@@ -340,7 +340,8 @@ fn no_match_without_catch_all_returns_none() {
 #[test]
 fn false_positive_guard_api_vs_api2() {
     // /api must NOT match /api2 — boundary check ensures the segment ends at '/'.
-    let routes = sorted_routes(vec![route("/api", "backend-a:9000"), route("/api2", "backend-b:9000")]);
+    let routes =
+        sorted_routes(vec![route("/api", "backend-a:9000"), route("/api2", "backend-b:9000")]);
     assert_eq!(pick_route("/api2/resource", &routes), Some("backend-b:9000"));
     assert_eq!(pick_route("/api/resource", &routes), Some("backend-a:9000"));
 }
