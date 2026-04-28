@@ -1,5 +1,4 @@
-use crate::backend::health_check::HealthRegistry;
-use crate::backend::BackendSelector;
+use crate::backend::UpstreamGateway;
 use crate::config::{Backend, KeepAliveConfig, Route};
 use crate::fingerprinting::names;
 use crate::fingerprinting::TcpObservation;
@@ -59,8 +58,7 @@ pub async fn handle_proxy_request(
     is_https: bool,
     preserve_host: bool,
     client_pool: &Arc<ClientPool>,
-    health_registry: &HealthRegistry,
-    backend_selector: &BackendSelector,
+    upstream: &UpstreamGateway,
 ) -> HttpResult<hyper::Response<RespBody>> {
     let start = Instant::now();
     let method = req.method().to_string();
@@ -87,10 +85,10 @@ pub async fn handle_proxy_request(
         return Err(error);
     };
 
-    let selected_backend = match backend_selector.select(
+    let selected_upstream = match upstream.selector.select(
         route_match.matched_prefix,
         &route_match.backend_candidates,
-        health_registry,
+        &upstream.health,
     ) {
         Some(addr) => addr,
         None => {
@@ -103,7 +101,7 @@ pub async fn handle_proxy_request(
             return Err(HttpError::UpstreamUnhealthy);
         }
     };
-    metrics.record_backend_selection(&selected_backend);
+    metrics.record_backend_selection(&selected_upstream);
 
     if let Some(rate_limited_response) = check_rate_limit(
         security.rate_limit_manager.as_ref(),
@@ -189,7 +187,7 @@ pub async fn handle_proxy_request(
 
     let result = forward(
         req,
-        selected_backend,
+        selected_upstream,
         crate::proxy::forwarding::ForwardConfig {
             backends: &backends,
             keep_alive,

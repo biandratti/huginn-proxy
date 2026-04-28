@@ -1,8 +1,7 @@
 use std::sync::Arc;
 
 use super::timeout_helper::serve_with_timeout;
-use crate::backend::health_check::HealthRegistry;
-use crate::backend::BackendSelector;
+use crate::backend::UpstreamGateway;
 use crate::fingerprinting::TcpObservation;
 use crate::proxy::handler::request::handle_proxy_request;
 use crate::proxy::synthetic_response::synthetic_error_response;
@@ -26,8 +25,7 @@ pub struct PlainConnectionConfig {
     pub connection_handling_timeout: tokio::time::Duration,
     pub client_pool: Arc<ClientPool>,
     pub syn_fingerprint: Option<TcpObservation>,
-    pub health_registry: Arc<HealthRegistry>,
-    pub backend_selector: Arc<BackendSelector>,
+    pub upstream: UpstreamGateway,
 }
 
 /// Handle a plain HTTP connection
@@ -43,8 +41,7 @@ pub async fn handle_plain_connection(
     let security = config.security.clone();
     let client_pool = config.client_pool.clone();
     let syn_fingerprint = config.syn_fingerprint.clone();
-    let health_registry = config.health_registry.clone();
-    let backend_selector = config.backend_selector.clone();
+    let upstream = config.upstream.clone();
 
     let svc = hyper::service::service_fn(move |req: hyper::Request<hyper::body::Incoming>| {
         let routes = routes_template.clone();
@@ -54,8 +51,7 @@ pub async fn handle_plain_connection(
         let keep_alive = keep_alive.clone();
         let security = security.clone();
         let client_pool = client_pool.clone();
-        let health_registry = health_registry.clone();
-        let backend_selector = backend_selector.clone();
+        let upstream = upstream.clone();
 
         async move {
             let preserve_host = config.preserve_host;
@@ -74,8 +70,7 @@ pub async fn handle_plain_connection(
                 false,
                 preserve_host,
                 &client_pool,
-                health_registry.as_ref(),
-                backend_selector.as_ref(),
+                &upstream,
             )
             .await;
 

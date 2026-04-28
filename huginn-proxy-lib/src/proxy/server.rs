@@ -14,7 +14,7 @@ use tokio::time::{Duration, Instant};
 use tracing::{info, warn};
 
 use crate::backend::health_check::{HealthCheckSupervisor, HealthRegistry};
-use crate::backend::BackendSelector;
+use crate::backend::{BackendSelector, UpstreamGateway};
 use crate::config::watcher::spawn_config_watcher;
 use crate::config::{DynamicConfig, StaticConfig};
 use crate::error::Result;
@@ -272,8 +272,10 @@ pub async fn run(
                 let keep_alive_task = keep_alive_config.clone();
                 let metrics_task = metrics_clone.clone();
                 let client_pool_task = client_pool_clone.load_full();
-                let health_reg_task = health_registry_for_conn.clone();
-                let backend_selector_task = backend_selector_for_conn.clone();
+                let upstream_task = UpstreamGateway::new(
+                    health_registry_for_conn.clone(),
+                    backend_selector_for_conn.clone(),
+                );
 
                 tokio::spawn(async move {
                     let _guard = guard;
@@ -296,8 +298,7 @@ pub async fn run(
                                 connection_handling_timeout,
                                 client_pool: client_pool_task.clone(),
                                 syn_fingerprint: syn_fingerprint.clone(),
-                                health_registry: health_reg_task.clone(),
-                                backend_selector: backend_selector_task.clone(),
+                                upstream: upstream_task.clone(),
                             },
                         )
                         .await;
@@ -316,8 +317,7 @@ pub async fn run(
                                 connection_handling_timeout,
                                 client_pool: client_pool_task,
                                 syn_fingerprint,
-                                health_registry: health_reg_task,
-                                backend_selector: backend_selector_task,
+                                upstream: upstream_task,
                             },
                         )
                         .await;

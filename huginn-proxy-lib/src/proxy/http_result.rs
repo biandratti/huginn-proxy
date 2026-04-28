@@ -72,8 +72,7 @@ impl HttpError {
         }
     }
 
-    /// Classify per-request logging severity
-    pub fn log_level(&self) -> tracing::Level {
+    fn log_level(&self) -> tracing::Level {
         match self {
             HttpError::NoMatchingRoute
             | HttpError::Forbidden
