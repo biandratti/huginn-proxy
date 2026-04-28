@@ -94,7 +94,6 @@ pub async fn handle_proxy_request(
     ) {
         Some(addr) => addr,
         None => {
-            // Keep one stable backend label for metrics when all candidates are unhealthy.
             let label = route_match
                 .backend_candidates
                 .first()

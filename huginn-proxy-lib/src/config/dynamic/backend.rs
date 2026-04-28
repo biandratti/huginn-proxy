@@ -1,11 +1,9 @@
 use std::convert::TryFrom;
 
-use serde::{Deserialize, Deserializer};
-
-use crate::error::{ProxyError, Result};
-
 use super::headers::HeaderManipulation;
 use super::security::RouteRateLimitConfig;
+use crate::error::{ProxyError, Result};
+use serde::{Deserialize, Deserializer};
 
 /// HTTP version preference for backend connections
 #[derive(Debug, Deserialize, Clone, Copy, PartialEq, Eq)]

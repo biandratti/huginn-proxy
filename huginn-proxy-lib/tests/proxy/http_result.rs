@@ -18,7 +18,6 @@ fn test_error_type_mapping() {
         "downstream_response_failed"
     );
     assert_eq!(HttpError::InvalidUri("test".to_string()).error_type(), "invalid_uri");
-    assert_eq!(HttpError::BackendError("test".to_string()).error_type(), "backend_error");
     assert_eq!(HttpError::UpstreamUnhealthy.error_type(), "upstream_unhealthy");
 }
 

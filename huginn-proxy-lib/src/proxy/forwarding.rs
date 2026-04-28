@@ -211,9 +211,9 @@ pub fn pick_route_with_fingerprinting<'a>(
         .iter()
         .find(|r| path.starts_with(&r.prefix))
         .map(|first| {
-            // Backward-compatible multi-upstream wiring:
-            // all routes that share the same prefix are treated as candidates for
-            // round-robin selection, while behavior flags come from the first match.
+            // Multi-upstream wiring:
+            // all routes sharing the matched prefix are candidates for round-robin
+            // selection, while behavior flags come from the first matching route.
             let backend_candidates = routes
                 .iter()
                 .filter(|r| r.prefix == first.prefix)

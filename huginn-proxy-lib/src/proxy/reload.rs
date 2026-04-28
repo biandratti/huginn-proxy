@@ -109,8 +109,8 @@ pub async fn try_reload(
     let old_hash = fnv1a_hash(&old_dynamic);
 
     dynamic_cfg.store(Arc::new(new_dynamic));
-    // New dynamic snapshot is already in `load()`; re-sync checker tasks to added/removed backends
-    // and health_check configuration changes.
+    // The new snapshot was just stored in `dynamic_cfg`; load it back and reconcile checker tasks
+    // for backend additions/removals and health_check configuration changes.
     let fresh = dynamic_cfg.load();
     health_supervisor.reconcile(&fresh.backends, metrics, &Handle::current());
 

@@ -63,10 +63,6 @@ impl HealthRegistry {
 
     /// Drop the entry for `address`. Used by the supervisor when a probe is
     /// canceled (backend removed or health check disabled via hot reload).
-    ///
-    /// In-flight handlers that already cloned the `Arc<UpstreamHealth>` will
-    /// keep observing its last value until they finish; this is harmless
-    /// because by that time the backend is being drained from the pool anyway.
     pub fn remove(&self, address: &str) {
         let mut map = self.inner.write().unwrap_or_else(|e| e.into_inner());
         map.remove(address);

@@ -7,8 +7,8 @@ use super::round_robin::RoundRobin;
 
 /// Selects one healthy backend among route candidates using the currently configured strategy.
 ///
-/// The selector is intentionally lightweight and lock contention is negligible in
-/// practice: one read lock per request and a write lock only on first use of a prefix.
+/// The selector is intentionally lightweight, and lock contention is negligible in
+/// practice: one read lock per request and a write lock only on the first use of a prefix.
 #[derive(Default)]
 pub struct BackendSelector {
     rr_by_prefix: RwLock<HashMap<String, RoundRobin>>,

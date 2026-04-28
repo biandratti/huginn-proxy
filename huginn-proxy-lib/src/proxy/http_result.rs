@@ -35,9 +35,6 @@ pub enum HttpError {
     #[error("Invalid URI: {0}")]
     InvalidUri(String),
 
-    #[error("Backend error: {0}")]
-    BackendError(String),
-
     #[error("Upstream unhealthy (active health check)")]
     UpstreamUnhealthy,
 }
@@ -54,7 +51,6 @@ impl From<HttpError> for StatusCode {
             HttpError::FailedToGetResponseFromBackend(_) => StatusCode::BAD_GATEWAY,
             HttpError::FailedToGenerateDownstreamResponse(_) => StatusCode::INTERNAL_SERVER_ERROR,
             HttpError::InvalidUri(_) => StatusCode::BAD_REQUEST,
-            HttpError::BackendError(_) => StatusCode::BAD_GATEWAY,
             HttpError::UpstreamUnhealthy => StatusCode::BAD_GATEWAY,
         }
     }
@@ -72,7 +68,6 @@ impl HttpError {
             HttpError::FailedToGetResponseFromBackend(_) => "backend_error",
             HttpError::FailedToGenerateDownstreamResponse(_) => "downstream_response_failed",
             HttpError::InvalidUri(_) => "invalid_uri",
-            HttpError::BackendError(_) => "backend_error",
             HttpError::UpstreamUnhealthy => "upstream_unhealthy",
         }
     }
@@ -87,8 +82,7 @@ impl HttpError {
             | HttpError::InvalidUri(_) => tracing::Level::DEBUG,
             HttpError::NoMatchingBackend
             | HttpError::NoUpstreamCandidates
-            | HttpError::FailedToGetResponseFromBackend(_)
-            | HttpError::BackendError(_) => tracing::Level::WARN,
+            | HttpError::FailedToGetResponseFromBackend(_) => tracing::Level::WARN,
             HttpError::FailedToGenerateUpstreamRequest(_)
             | HttpError::FailedToGenerateDownstreamResponse(_) => tracing::Level::ERROR,
         }
