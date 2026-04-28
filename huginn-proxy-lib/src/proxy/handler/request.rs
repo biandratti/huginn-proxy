@@ -92,12 +92,7 @@ pub async fn handle_proxy_request(
     ) {
         Some(addr) => addr,
         None => {
-            let label = route_match
-                .backend_candidates
-                .first()
-                .copied()
-                .unwrap_or(route_match.backend);
-            metrics.record_health_check_gate_reject(label);
+            metrics.record_health_check_gate_reject(route_match.backend);
             return Err(HttpError::UpstreamUnhealthy);
         }
     };
