@@ -2,8 +2,8 @@ use std::time::Duration;
 
 use tests_e2e::common::{
     metrics_contain_gate_reject, metrics_contain_health_probe_ok, parse_backend_echo,
-    wait_for_service, DEFAULT_HEALTH_CHECK_TIMEOUT_SECS, DEFAULT_SERVICE_TIMEOUT_SECS,
-    METRICS_URL, PROXY_HTTPS_URL_IPV4, PROXY_HTTPS_URL_IPV6,
+    wait_for_service, DEFAULT_HEALTH_CHECK_TIMEOUT_SECS, DEFAULT_SERVICE_TIMEOUT_SECS, METRICS_URL,
+    PROXY_HTTPS_URL_IPV4, PROXY_HTTPS_URL_IPV6,
 };
 
 const HTTP_HEALTH_BACKEND: &str = "backend-a:9000";
@@ -95,7 +95,7 @@ async fn test_proxy_returns_502_when_backend_is_unhealthy(
     tokio::time::sleep(Duration::from_secs(5)).await;
 
     let client = reqwest::Client::builder()
-        .danger_accept_invalid_certs(true) // codeql[rust/disabled-certificate-check]
+        .danger_accept_invalid_certs(true)
         .build()
         .map_err(|e| format!("build client: {e}"))?;
 

@@ -196,10 +196,23 @@ pub async fn forward(
     }
 }
 
+/// Returns true when `prefix` is a valid match for `path`.
+///
+/// A prefix matches if `path` starts with it AND the character immediately after is `/`
+/// (sub-path) or the strings are equal (exact match). The root prefix `/` always matches.
+/// This prevents `/api` from inadvertently matching `/api2`.
+fn prefix_matches(path: &str, prefix: &str) -> bool {
+    if !path.starts_with(prefix) {
+        return false;
+    }
+    prefix == "/" || path.len() == prefix.len() || path.as_bytes()[prefix.len()] == b'/'
+}
+
 pub fn pick_route<'a>(path: &str, routes: &'a [crate::config::Route]) -> Option<&'a str> {
     routes
         .iter()
-        .find(|r| path.starts_with(&r.prefix))
+        .filter(|r| prefix_matches(path, &r.prefix))
+        .max_by_key(|r| r.prefix.len())
         .map(|r| r.backend.as_str())
 }
 
@@ -209,7 +222,8 @@ pub fn pick_route_with_fingerprinting<'a>(
 ) -> Option<RouteMatch<'a>> {
     routes
         .iter()
-        .find(|r| path.starts_with(&r.prefix))
+        .filter(|r| prefix_matches(path, &r.prefix))
+        .max_by_key(|r| r.prefix.len())
         .map(|first| {
             // Multi-upstream wiring:
             // all routes sharing the matched prefix are candidates for round-robin

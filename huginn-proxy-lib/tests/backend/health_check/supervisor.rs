@@ -91,7 +91,10 @@ async fn supervisor_restarts_task_on_config_change() {
     let slow = tcp_backend("127.0.0.1:1", 5, 10);
     sup.reconcile(std::slice::from_ref(&slow), &Metrics::new_noop(), &Handle::current());
     tokio::time::sleep(Duration::from_millis(500)).await;
-    assert!(registry.is_healthy("127.0.0.1:1"), "should still be healthy with high threshold");
+    assert!(
+        registry.is_healthy("127.0.0.1:1"),
+        "should still be healthy with high threshold"
+    );
 
     // Replace with fast threshold: 1 failure → unhealthy, 1s interval.
     let fast = tcp_backend("127.0.0.1:1", 1, 1);
