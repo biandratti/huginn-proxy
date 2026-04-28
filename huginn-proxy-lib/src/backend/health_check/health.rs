@@ -17,8 +17,6 @@
 
 use std::sync::atomic::{AtomicBool, Ordering};
 
-/// Shared health state for a single upstream, accessed by both the health
-/// checker task (writer) and request handlers (readers) via `Arc`.
 #[derive(Debug)]
 pub struct UpstreamHealth {
     healthy: AtomicBool,

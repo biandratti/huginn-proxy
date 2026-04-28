@@ -23,9 +23,10 @@
 //!
 //! - Use them when Huginn Proxy is the main resiliency layer (VM/bare metal,
 //!   Docker Compose, or direct upstream addresses).
-//! - They are usually less useful when routing only through an orchestrator
-//!   service VIP (e.g. Kubernetes `Service`), where pod readiness is already
-//!   managed by the platform.
+//! - In orchestrators routing through a service VIP (e.g. Kubernetes
+//!   `Service`), they are optional: readiness already filters many failures,
+//!   but proxy-side probes can still improve failover speed and enforce
+//!   app-level health criteria.
 //!
 //! Backends without a `[backends.health_check]` block are treated as healthy
 //! by default.

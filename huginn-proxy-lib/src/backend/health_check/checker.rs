@@ -24,7 +24,6 @@ struct ActiveChecker {
     _join: JoinHandle<()>,
 }
 
-/// Owns the Tokio tasks that probe upstreams and update [`super::HealthRegistry`].
 pub struct HealthCheckSupervisor {
     registry: Arc<HealthRegistry>,
     active: Mutex<HashMap<String, ActiveChecker>>,

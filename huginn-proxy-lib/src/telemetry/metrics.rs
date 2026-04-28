@@ -113,7 +113,7 @@ pub struct Metrics {
     // Build info
     pub build_info: Gauge<u64>,
 
-    // Active health checks (TCP; PR3)
+    // Active health checks (TCP)
     pub health_check_probes_total: Counter<u64>,
     pub health_check_gate_rejects_total: Counter<u64>,
 

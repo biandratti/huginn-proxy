@@ -122,7 +122,6 @@ impl Default for HealthCheckConfig {
 }
 
 impl HealthCheckConfig {
-    /// Invariants for hot reload and file-based loading.
     pub fn validate(&self) -> Result<()> {
         if self.interval_secs == 0 {
             return Err(ProxyError::Config(
@@ -182,8 +181,9 @@ pub struct Backend {
     /// default.
     ///
     /// Typical use: Huginn is the primary resiliency layer (bare metal/VMs/Compose/direct
-    /// upstreams). Often redundant when routing only to an orchestrator service VIP that already
-    /// filters readiness.
+    /// upstreams). In orchestrators routing to a service VIP, this is optional: it may overlap
+    /// with platform readiness, but can still provide faster proxy-side failover and stricter
+    /// app-level checks.
     #[serde(default)]
     pub health_check: Option<HealthCheckConfig>,
 }

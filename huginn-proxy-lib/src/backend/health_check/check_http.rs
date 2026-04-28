@@ -16,7 +16,6 @@ use crate::config::BackendPoolConfig;
 
 pub type HttpHealthClient = Client<HttpConnector, Full<Bytes>>;
 
-/// Minimal HTTP/1.1 client for probes: one idle connection per host, small pool.
 pub struct HealthCheckHttpClient {
     inner: HttpHealthClient,
 }
@@ -66,7 +65,10 @@ pub async fn check_http(
         .body(Full::new(Bytes::new()))
     {
         Ok(r) => r,
-        Err(_) => return false,
+        Err(e) => {
+            trace!(%address, %path, error = %e, "HTTP health check: request build failed");
+            return false;
+        }
     };
 
     let res = match time::timeout(timeout, client.inner().request(req)).await {

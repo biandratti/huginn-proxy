@@ -1,6 +1,3 @@
-//! Tests for the consecutive-threshold counter and the TCP connect probe.
-//! These exercise the same primitives the health-check supervisor will use (PR3).
-
 use std::time::Duration;
 
 use huginn_proxy_lib::backend::health_check::{check_tcp, ConsecutiveCounter};
