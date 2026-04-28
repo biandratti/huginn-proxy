@@ -18,6 +18,16 @@ backends:
       timeout_secs: 2
   - address: "backend-b:9000"
     http_version: http11
+  # No Docker service with this name — TCP probes fail immediately.
+  # Used by E2E to verify the proxy returns 502 when all candidates are unhealthy.
+  - address: "unreachable-backend:9000"
+    http_version: http11
+    health_check:
+      type: tcp
+      interval_secs: 1
+      timeout_secs: 1
+      unhealthy_threshold: 2
+      healthy_threshold: 2
 
 routes:
   # Basic route with fingerprinting and connection pooling
@@ -65,6 +75,11 @@ routes:
   - prefix: "/lb"
     backend: "backend-b:9000"
     fingerprinting: true
+
+  # Route to unreachable backend — health checks will fail and proxy returns 502.
+  # Used by E2E test `test_proxy_returns_502_when_backend_is_unhealthy`.
+  - prefix: "/api/e2e-unhealthy"
+    backend: "unreachable-backend:9000"
 
   # Default catch-all
   - prefix: "/"

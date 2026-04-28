@@ -362,7 +362,7 @@ impl Metrics {
     /// updated when the request handler path records `HttpError::UpstreamUnhealthy`).
     pub fn record_health_check_gate_reject(&self, backend: &str) {
         self.health_check_gate_rejects_total
-            .add(1, &[KeyValue::new(labels::BACKEND_ADDRESS, backend.to_string())]);
+            .add(1, &[KeyValue::new(labels::BACKEND, backend.to_string())]);
     }
 
     pub fn record_rate_limit_rejection(&self, strategy: &str, route: &str) {

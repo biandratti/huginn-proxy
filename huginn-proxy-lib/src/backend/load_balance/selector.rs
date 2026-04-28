@@ -48,13 +48,19 @@ impl BackendSelector {
     }
 
     fn get_or_create_rr(&self, route_prefix: &str) -> RoundRobin {
-        if let Ok(map) = self.rr_by_prefix.read() {
-            if let Some(rr) = map.get(route_prefix) {
-                return rr.clone();
-            }
+        if let Some(rr) = self
+            .rr_by_prefix
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(route_prefix)
+        {
+            return rr.clone();
         }
-
-        let mut map = self.rr_by_prefix.write().unwrap_or_else(|e| e.into_inner());
-        map.entry(route_prefix.to_string()).or_default().clone()
+        self.rr_by_prefix
+            .write()
+            .unwrap_or_else(|e| e.into_inner())
+            .entry(route_prefix.to_string())
+            .or_default()
+            .clone()
     }
 }
