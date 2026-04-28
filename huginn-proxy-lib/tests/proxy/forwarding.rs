@@ -1,8 +1,20 @@
 use http::Version;
 use huginn_proxy_lib::config::{Backend, BackendHttpVersion, Route};
 use huginn_proxy_lib::proxy::forwarding::{
-    determine_http_version, find_backend_config, pick_route,
+    determine_http_version, find_backend_config, pick_route, prefix_matches,
 };
+
+fn route(prefix: &str, backend: &str) -> Route {
+    Route {
+        prefix: prefix.to_string(),
+        backend: backend.to_string(),
+        fingerprinting: true,
+        force_new_connection: false,
+        replace_path: None,
+        rate_limit: None,
+        headers: None,
+    }
+}
 
 #[test]
 fn test_find_backend_config() {
@@ -278,4 +290,90 @@ fn test_pick_route_with_fingerprinting_collects_same_prefix_candidates() {
         assert_eq!(route.backend, "backend-a:9000");
         assert_eq!(route.backend_candidates, vec!["backend-a:9000", "backend-b:9000"]);
     }
+}
+
+#[test]
+fn longest_prefix_wins_over_declaration_order() {
+    let routes =
+        vec![route("/api", "backend-a:9000"), route("/api/e2e-unhealthy", "unreachable:9000")];
+    assert_eq!(pick_route("/api/e2e-unhealthy", &routes), Some("unreachable:9000"));
+}
+
+#[test]
+fn longer_prefix_wins_regardless_of_order() {
+    let routes =
+        vec![route("/api/e2e-unhealthy", "unreachable:9000"), route("/api", "backend-a:9000")];
+    assert_eq!(pick_route("/api/e2e-unhealthy", &routes), Some("unreachable:9000"));
+}
+
+#[test]
+fn no_match_without_catch_all_returns_none() {
+    let routes = vec![route("/api", "backend-a:9000")];
+    assert_eq!(pick_route("/static/file.js", &routes), None);
+}
+
+#[test]
+fn false_positive_guard_api_vs_api2() {
+    let routes = vec![route("/api", "backend-a:9000"), route("/api2", "backend-b:9000")];
+    assert_eq!(pick_route("/api2/resource", &routes), Some("backend-b:9000"));
+    assert_eq!(pick_route("/api/resource", &routes), Some("backend-a:9000"));
+}
+
+#[test]
+fn three_level_nesting_picks_deepest() {
+    let routes = vec![
+        route("/", "root:9000"),
+        route("/api", "api:9000"),
+        route("/api/v1", "apiv1:9000"),
+    ];
+    assert_eq!(pick_route("/api/v1/users", &routes), Some("apiv1:9000"));
+    assert_eq!(pick_route("/api/v2/users", &routes), Some("api:9000"));
+    assert_eq!(pick_route("/other", &routes), Some("root:9000"));
+}
+
+#[test]
+fn root_matches_any_path() {
+    assert!(prefix_matches("/api/users", "/"));
+    assert!(prefix_matches("/", "/"));
+    assert!(prefix_matches("/anything", "/"));
+}
+
+#[test]
+fn exact_match() {
+    assert!(prefix_matches("/api", "/api"));
+    assert!(prefix_matches("/static", "/static"));
+}
+
+#[test]
+fn sub_path_match() {
+    assert!(prefix_matches("/api/users", "/api"));
+    assert!(prefix_matches("/api/v1/resource", "/api"));
+}
+
+#[test]
+fn no_match_different_prefix() {
+    assert!(!prefix_matches("/static/file.js", "/api"));
+}
+
+#[test]
+fn no_false_positive_shared_prefix_no_slash_boundary() {
+    assert!(!prefix_matches("/api2", "/api"));
+    assert!(!prefix_matches("/api2/sub", "/api"));
+    assert!(!prefix_matches("/apiv2", "/api"));
+}
+
+#[test]
+fn longer_segment_does_not_match_shorter_prefix_without_slash() {
+    assert!(!prefix_matches("/static2", "/static"));
+    assert!(!prefix_matches("/staticfiles", "/static"));
+}
+
+#[test]
+fn empty_path_does_not_match_non_root() {
+    assert!(!prefix_matches("", "/api"));
+}
+
+#[test]
+fn root_prefix_does_not_match_empty_path() {
+    assert!(!prefix_matches("", "/"));
 }

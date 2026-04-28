@@ -201,48 +201,56 @@ pub async fn forward(
 /// A prefix matches if `path` starts with it AND the character immediately after is `/`
 /// (sub-path) or the strings are equal (exact match). The root prefix `/` always matches.
 /// This prevents `/api` from inadvertently matching `/api2`.
-fn prefix_matches(path: &str, prefix: &str) -> bool {
+pub fn prefix_matches(path: &str, prefix: &str) -> bool {
     if !path.starts_with(prefix) {
         return false;
     }
     prefix == "/" || path.len() == prefix.len() || path.as_bytes()[prefix.len()] == b'/'
 }
 
-pub fn pick_route<'a>(path: &str, routes: &'a [crate::config::Route]) -> Option<&'a str> {
+/// Returns the first route with the longest matching prefix.
+/// When two routes share the same prefix length, declaration order is preserved.
+fn longest_match<'a>(
+    path: &str,
+    routes: &'a [crate::config::Route],
+) -> Option<&'a crate::config::Route> {
     routes
         .iter()
         .filter(|r| prefix_matches(path, &r.prefix))
-        .max_by_key(|r| r.prefix.len())
-        .map(|r| r.backend.as_str())
+        .fold(None, |best, r| match best {
+            None => Some(r),
+            Some(b) if r.prefix.len() > b.prefix.len() => Some(r),
+            Some(b) => Some(b),
+        })
+}
+
+pub fn pick_route<'a>(path: &str, routes: &'a [crate::config::Route]) -> Option<&'a str> {
+    longest_match(path, routes).map(|r| r.backend.as_str())
 }
 
 pub fn pick_route_with_fingerprinting<'a>(
     path: &str,
     routes: &'a [crate::config::Route],
 ) -> Option<RouteMatch<'a>> {
-    routes
-        .iter()
-        .filter(|r| prefix_matches(path, &r.prefix))
-        .max_by_key(|r| r.prefix.len())
-        .map(|first| {
-            // Multi-upstream wiring:
-            // all routes sharing the matched prefix are candidates for round-robin
-            // selection, while behavior flags come from the first matching route.
-            let backend_candidates = routes
-                .iter()
-                .filter(|r| r.prefix == first.prefix)
-                .map(|r| r.backend.as_str())
-                .collect::<Vec<_>>();
+    longest_match(path, routes).map(|first| {
+        // Multi-upstream wiring:
+        // all routes sharing the matched prefix are candidates for round-robin
+        // selection, while behavior flags come from the first matching route.
+        let backend_candidates = routes
+            .iter()
+            .filter(|r| r.prefix == first.prefix)
+            .map(|r| r.backend.as_str())
+            .collect::<Vec<_>>();
 
-            RouteMatch {
-                backend: first.backend.as_str(),
-                backend_candidates,
-                fingerprinting: first.fingerprinting,
-                matched_prefix: first.prefix.as_str(),
-                replace_path: first.replace_path.as_deref(),
-                rate_limit: first.rate_limit.as_ref(),
-                headers: first.headers.as_ref(),
-                force_new_connection: first.force_new_connection,
-            }
-        })
+        RouteMatch {
+            backend: first.backend.as_str(),
+            backend_candidates,
+            fingerprinting: first.fingerprinting,
+            matched_prefix: first.prefix.as_str(),
+            replace_path: first.replace_path.as_deref(),
+            rate_limit: first.rate_limit.as_ref(),
+            headers: first.headers.as_ref(),
+            force_new_connection: first.force_new_connection,
+        }
+    })
 }

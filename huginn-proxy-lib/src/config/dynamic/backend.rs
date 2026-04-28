@@ -184,7 +184,7 @@ pub struct Backend {
 #[derive(Debug, Deserialize, Clone, PartialEq)]
 pub struct Route {
     /// URL path prefix to match (e.g., "/api", "/static")
-    /// Routes are matched in order, first match wins
+    /// The most specific (longest) matching prefix wins; declaration order does not matter
     pub prefix: String,
     /// Backend address to route matching requests to
     /// Must match one of the backend addresses defined in `backends`
