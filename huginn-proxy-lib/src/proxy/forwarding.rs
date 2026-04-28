@@ -209,19 +209,14 @@ pub fn prefix_matches(path: &str, prefix: &str) -> bool {
 }
 
 /// Returns the first route with the longest matching prefix.
-/// When two routes share the same prefix length, declaration order is preserved.
+///
+/// Relies on routes being pre-sorted by prefix length descending (done in `Config::into_parts`),
+/// so the first match is by definition the most specific one.
 fn longest_match<'a>(
     path: &str,
     routes: &'a [crate::config::Route],
 ) -> Option<&'a crate::config::Route> {
-    routes
-        .iter()
-        .filter(|r| prefix_matches(path, &r.prefix))
-        .fold(None, |best, r| match best {
-            None => Some(r),
-            Some(b) if r.prefix.len() > b.prefix.len() => Some(r),
-            Some(b) => Some(b),
-        })
+    routes.iter().find(|r| prefix_matches(path, &r.prefix))
 }
 
 pub fn pick_route<'a>(path: &str, routes: &'a [crate::config::Route]) -> Option<&'a str> {

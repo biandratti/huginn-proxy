@@ -4,6 +4,7 @@ pub mod security;
 
 pub use backend::{
     Backend, BackendHttpVersion, BackendPoolConfig, HealthCheckConfig, HealthCheckType, Route,
+    sort_routes,
 };
 pub use headers::{CustomHeader, HeaderManipulation, HeaderManipulationGroup};
 pub use security::{

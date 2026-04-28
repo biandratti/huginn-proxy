@@ -13,6 +13,7 @@ pub use dynamic::security::{
 pub use dynamic::{
     Backend, BackendHttpVersion, BackendPoolConfig, CustomHeader, DynamicConfig,
     HeaderManipulation, HeaderManipulationGroup, HealthCheckConfig, HealthCheckType, Route,
+    sort_routes,
 };
 pub use loader::load_from_path;
 pub use parser::{ConfigFormat, ConfigParser, TomlParser, YamlParser};

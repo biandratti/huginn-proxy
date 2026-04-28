@@ -1,5 +1,5 @@
 use http::Version;
-use huginn_proxy_lib::config::{Backend, BackendHttpVersion, Route};
+use huginn_proxy_lib::config::{sort_routes, Backend, BackendHttpVersion, Route};
 use huginn_proxy_lib::proxy::forwarding::{
     determine_http_version, find_backend_config, pick_route, prefix_matches,
 };
@@ -14,6 +14,14 @@ fn route(prefix: &str, backend: &str) -> Route {
         rate_limit: None,
         headers: None,
     }
+}
+
+/// Mirrors what `Config::into_parts` does at startup.
+/// Tests that exercise overlapping prefixes must call this, otherwise `pick_route`
+/// (which uses `find` on a sorted slice) may return the wrong route.
+fn sorted_routes(mut routes: Vec<Route>) -> Vec<Route> {
+    sort_routes(&mut routes);
+    routes
 }
 
 #[test]
@@ -294,16 +302,33 @@ fn test_pick_route_with_fingerprinting_collects_same_prefix_candidates() {
 
 #[test]
 fn longest_prefix_wins_over_declaration_order() {
-    let routes =
-        vec![route("/api", "backend-a:9000"), route("/api/e2e-unhealthy", "unreachable:9000")];
+    // Bug regression: first-match would send /api/e2e-unhealthy to backend-a instead of unreachable.
+    let routes = sorted_routes(vec![
+        route("/api", "backend-a:9000"),
+        route("/api/e2e-unhealthy", "unreachable:9000"),
+    ]);
     assert_eq!(pick_route("/api/e2e-unhealthy", &routes), Some("unreachable:9000"));
 }
 
 #[test]
 fn longer_prefix_wins_regardless_of_order() {
-    let routes =
-        vec![route("/api/e2e-unhealthy", "unreachable:9000"), route("/api", "backend-a:9000")];
+    let routes = sorted_routes(vec![
+        route("/api/e2e-unhealthy", "unreachable:9000"),
+        route("/api", "backend-a:9000"),
+    ]);
     assert_eq!(pick_route("/api/e2e-unhealthy", &routes), Some("unreachable:9000"));
+}
+
+#[test]
+fn catch_all_root_matches_when_nothing_else_does() {
+    let routes = sorted_routes(vec![route("/api", "backend-a:9000"), route("/", "catch-all:9000")]);
+    assert_eq!(pick_route("/unknown/path", &routes), Some("catch-all:9000"));
+}
+
+#[test]
+fn exact_match_preferred_over_root() {
+    let routes = sorted_routes(vec![route("/", "catch-all:9000"), route("/api", "backend-a:9000")]);
+    assert_eq!(pick_route("/api/users", &routes), Some("backend-a:9000"));
 }
 
 #[test]
@@ -314,18 +339,19 @@ fn no_match_without_catch_all_returns_none() {
 
 #[test]
 fn false_positive_guard_api_vs_api2() {
-    let routes = vec![route("/api", "backend-a:9000"), route("/api2", "backend-b:9000")];
+    // /api must NOT match /api2 — boundary check ensures the segment ends at '/'.
+    let routes = sorted_routes(vec![route("/api", "backend-a:9000"), route("/api2", "backend-b:9000")]);
     assert_eq!(pick_route("/api2/resource", &routes), Some("backend-b:9000"));
     assert_eq!(pick_route("/api/resource", &routes), Some("backend-a:9000"));
 }
 
 #[test]
 fn three_level_nesting_picks_deepest() {
-    let routes = vec![
+    let routes = sorted_routes(vec![
         route("/", "root:9000"),
         route("/api", "api:9000"),
         route("/api/v1", "apiv1:9000"),
-    ];
+    ]);
     assert_eq!(pick_route("/api/v1/users", &routes), Some("apiv1:9000"));
     assert_eq!(pick_route("/api/v2/users", &routes), Some("api:9000"));
     assert_eq!(pick_route("/other", &routes), Some("root:9000"));

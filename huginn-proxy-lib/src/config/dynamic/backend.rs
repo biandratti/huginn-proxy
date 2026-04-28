@@ -218,6 +218,15 @@ pub struct Route {
     pub headers: Option<HeaderManipulation>,
 }
 
+/// Sort routes longest-prefix first so `pick_route` can use an early-terminating `find`.
+///
+/// Stable sort preserves declaration order within same-length prefixes, which matters
+/// for load-balance groups that share the same prefix (round-robin candidates).
+/// Call this once at config load time via `Config::into_parts`; do not call per-request.
+pub fn sort_routes(routes: &mut [Route]) {
+    routes.sort_by_key(|r| std::cmp::Reverse(r.prefix.len()));
+}
+
 /// Configuration for backend connection pool
 ///
 /// Controls how the proxy manages connections to backend servers.

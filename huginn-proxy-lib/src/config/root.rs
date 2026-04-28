@@ -116,7 +116,11 @@ impl Config {
             },
             dynamic_cfg: DynamicConfig {
                 backends: self.backends,
-                routes: self.routes,
+                routes: {
+                    let mut routes = self.routes;
+                    super::sort_routes(&mut routes);
+                    routes
+                },
                 preserve_host: self.preserve_host,
                 headers: self.headers,
                 security: SecurityDynamicConfig {
