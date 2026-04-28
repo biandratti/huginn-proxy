@@ -175,13 +175,7 @@ pub struct Backend {
     pub http_version: Option<BackendHttpVersion>,
     /// Optional per-backend active probe (opt-in).
     ///
-    /// When `None`, this backend is not health-gated at proxy level and is treated as healthy by
-    /// default.
-    ///
-    /// Typical use: Huginn is the primary resiliency layer (bare metal/VMs/Compose/direct
-    /// upstreams). In orchestrators routing to a service VIP, this is optional: it may overlap
-    /// with platform readiness, but can still provide faster proxy-side failover and stricter
-    /// app-level checks.
+    /// When `None`, this backend is not health-gated at proxy level and is treated as healthy by default.
     #[serde(default)]
     pub health_check: Option<HealthCheckConfig>,
 }

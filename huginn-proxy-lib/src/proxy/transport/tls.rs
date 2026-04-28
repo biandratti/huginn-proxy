@@ -6,6 +6,7 @@ use crate::backend::BackendSelector;
 use crate::fingerprinting::TcpObservation;
 use crate::fingerprinting::{read_client_hello, CapturingStream};
 use crate::proxy::connection::{PrefixedStream, TlsConnectionGuard};
+use crate::proxy::handler::request::handle_proxy_request;
 use crate::proxy::synthetic_response::synthetic_error_response;
 use crate::proxy::ClientPool;
 use crate::telemetry::Metrics;
@@ -131,7 +132,7 @@ pub async fn handle_tls_connection(
                     async move {
                         let metrics_for_match = metrics.clone();
                         let preserve_host = config.preserve_host;
-                        let http_result = crate::proxy::handler::request::handle_proxy_request(
+                        let http_result = handle_proxy_request(
                             req,
                             routes,
                             backends,
@@ -205,7 +206,7 @@ pub async fn handle_tls_connection(
                     async move {
                         let preserve_host = config.preserve_host;
                         let metrics_for_match = metrics.clone();
-                        let http_result = crate::proxy::handler::request::handle_proxy_request(
+                        let http_result = handle_proxy_request(
                             req,
                             routes,
                             backends,

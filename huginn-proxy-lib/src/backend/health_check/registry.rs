@@ -18,10 +18,9 @@
 //! for any unknown address — health checks are per-backend opt-in; traffic is
 //! not gated until a backend registers a probe.
 
+use super::health::UpstreamHealth;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
-
-use super::health::UpstreamHealth;
 
 /// Address → health state map shared between the future `HealthCheckSupervisor`
 /// (writer, on hot reload) and the forwarding gate (reader, per request).

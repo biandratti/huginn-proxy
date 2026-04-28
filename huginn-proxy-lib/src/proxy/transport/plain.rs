@@ -4,6 +4,7 @@ use super::timeout_helper::serve_with_timeout;
 use crate::backend::health_check::HealthRegistry;
 use crate::backend::BackendSelector;
 use crate::fingerprinting::TcpObservation;
+use crate::proxy::handler::request::handle_proxy_request;
 use crate::proxy::synthetic_response::synthetic_error_response;
 use crate::proxy::ClientPool;
 use crate::telemetry::Metrics;
@@ -59,7 +60,7 @@ pub async fn handle_plain_connection(
         async move {
             let preserve_host = config.preserve_host;
             let metrics_for_match = metrics.clone();
-            let http_result = crate::proxy::handler::request::handle_proxy_request(
+            let http_result = handle_proxy_request(
                 req,
                 routes,
                 backends,
