@@ -72,8 +72,7 @@ impl ConsecutiveCounter {
         None
     }
 
-    /// Current state as tracked by this counter (introspection for tests and
-    /// diagnostics). Production forwarding reads [`crate::backend::health_check::UpstreamHealth`].
+    /// Current state as tracked by this counter.
     pub fn is_healthy(&self) -> bool {
         self.is_healthy
     }

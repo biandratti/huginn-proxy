@@ -11,13 +11,12 @@
 //! (every request reads, mutations only happen on hot reload), so the
 //! `RwLock` contention is negligible in practice.
 //!
-//! ## Backwards compatibility
+//! ## Opt-in behaviour
 //!
 //! Backends without a `[backends.health_check]` configuration are **not**
 //! inserted into the registry. [`HealthRegistry::is_healthy`] returns `true`
-//! for any unknown address, so the existing behaviour ("backend always
-//! receives traffic") is preserved unless health checks are explicitly
-//! configured.
+//! for any unknown address — health checks are per-backend opt-in; traffic is
+//! not gated until a backend registers a probe.
 
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
@@ -34,16 +33,15 @@ pub struct HealthRegistry {
 }
 
 impl HealthRegistry {
-    /// Create an empty registry.
     pub fn new() -> Self {
         Self::default()
     }
 
     /// Returns `true` if the backend is healthy **or** has no health check
-    /// configured (unknown address).
+    /// configured (address absent from the registry).
     ///
-    /// Backwards-compatible default: a backend that opts out of health checks
-    /// behaves as it always has — every request goes through.
+    /// Opt-in: only backends with an active health-check configuration are
+    /// registered; unknown addresses are treated as healthy (no gate).
     pub fn is_healthy(&self, address: &str) -> bool {
         match self.inner.read() {
             Ok(map) => map.get(address).is_none_or(|h| h.is_healthy()),

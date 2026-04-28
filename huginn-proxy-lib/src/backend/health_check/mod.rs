@@ -16,15 +16,20 @@
 //! | [`check_http`](check_http::check_http) | HTTP `GET` over `http://{address}{path}` with expected status. |
 //! | [`HealthCheckSupervisor`] | Owns the probe `tokio::JoinHandle`s; reconciles on hot reload and shutdown. |
 //!
-//! ## Backwards compatibility
+//! ## Recommended usage
 //!
-//! Backends without a `[backends.health_check]` block are not registered,
-//! and [`HealthRegistry::is_healthy`] returns `true` for any unknown address.
-//! Existing configurations therefore behave identically — health checks are
-//! strictly opt-in.
+//! Health checks are configured per backend via `[backends.health_check]` and
+//! are strictly opt-in.
+//!
+//! - Use them when Huginn Proxy is the main resiliency layer (VM/bare metal,
+//!   Docker Compose, or direct upstream addresses).
+//! - They are usually less useful when routing only through an orchestrator
+//!   service VIP (e.g. Kubernetes `Service`), where pod readiness is already
+//!   managed by the platform.
+//!
+//! Backends without a `[backends.health_check]` block are treated as healthy
+//! by default.
 
-// `counter`, `check_tcp`, and `check_http` are used by `HealthCheckSupervisor`
-// and re-exported for integration tests.
 mod check_http;
 mod check_tcp;
 mod checker;

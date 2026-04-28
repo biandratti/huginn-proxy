@@ -9,6 +9,7 @@ use http_body_util::{BodyExt, Full};
 use hyper_util::client::legacy::connect::HttpConnector;
 use hyper_util::client::legacy::Client;
 use hyper_util::rt::TokioExecutor;
+use tokio::time;
 use tracing::trace;
 
 use crate::config::BackendPoolConfig;
@@ -68,7 +69,7 @@ pub async fn check_http(
         Err(_) => return false,
     };
 
-    let res = match tokio::time::timeout(timeout, client.inner().request(req)).await {
+    let res = match time::timeout(timeout, client.inner().request(req)).await {
         Ok(Ok(r)) => r,
         Ok(Err(e)) => {
             trace!(%address, %path, error = %e, "HTTP health check: request failed");

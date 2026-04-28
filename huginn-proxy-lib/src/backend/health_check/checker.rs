@@ -135,7 +135,6 @@ pub async fn run_health_checker(
     };
     let mut ticker = interval(Duration::from_secs(config.interval_secs));
     ticker.set_missed_tick_behavior(MissedTickBehavior::Skip);
-    // First `tick` completes immediately — same effect as an immediate first probe in rpxy.
     loop {
         tokio::select! {
             _ = cancel.cancelled() => {

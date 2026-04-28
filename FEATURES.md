@@ -30,6 +30,8 @@ Limitation: no least-connections, no weighted or priority policies beyond this s
 
 Optional per-backend `health_check` in the config: **TCP** connect, or **HTTP** `GET` to a path (plain `http://` to the backend address, same as normal forwarding). Consecutive-failure thresholds with hysteresis: when a backend is marked unhealthy, the proxy answers with **502** for matching routes instead of waiting on TCP connect timeouts.
 
+Recommended usage: this is most useful when Huginn Proxy is the main resiliency layer (VM/bare-metal/Docker Compose, or direct upstream addresses). When routing only through an orchestrator service VIP (for example Kubernetes `Service`), health checks at the proxy layer can be redundant with platform-level readiness filtering.
+
 Limitation: the HTTP probe does not use TLS to the upstream (use a **TCP** check, or an HTTP path that responds over cleartext on the same `host:port` you already use for backend traffic).
 
 ## Path-based Routing
