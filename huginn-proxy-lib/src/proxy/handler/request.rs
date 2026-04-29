@@ -72,18 +72,23 @@ pub async fn handle_proxy_request(
         }
     }
 
-    check_ip_access(peer, &security.ip_filter, &metrics)?;
+    if let Err(e) = check_ip_access(peer, &security.ip_filter, &metrics) {
+        let status_code = StatusCode::from(e.clone()).as_u16();
+        metrics.record_entrypoint_request(&method, status_code, &protocol);
+        return Err(e);
+    }
 
     let path = req.uri().path();
-    let route_match = if let Some(route) =
-        crate::proxy::forwarding::pick_route_with_fingerprinting(path, &routes)
-    {
-        route
-    } else {
-        let error = HttpError::NoMatchingRoute;
-        metrics.record_error(error.error_type());
-        return Err(error);
-    };
+    let route_match =
+        if let Some(route) = crate::proxy::router::pick_route_with_fingerprinting(path, &routes) {
+            route
+        } else {
+            let error = HttpError::NoMatchingRoute;
+            metrics.record_error(error.error_type());
+            let status_code = StatusCode::from(error.clone()).as_u16();
+            metrics.record_entrypoint_request(&method, status_code, &protocol);
+            return Err(error);
+        };
 
     let selected_upstream = match upstream.selector.select(
         route_match.matched_prefix,
@@ -93,7 +98,18 @@ pub async fn handle_proxy_request(
         Some(addr) => addr,
         None => {
             metrics.record_health_check_gate_reject(route_match.backend);
-            return Err(HttpError::UpstreamUnhealthy);
+            let error = HttpError::UpstreamUnhealthy;
+            let status_code = StatusCode::from(error.clone()).as_u16();
+            metrics.record_entrypoint_request(&method, status_code, &protocol);
+            metrics.record_request(&method, status_code, &protocol, route_match.matched_prefix);
+            metrics.record_request_duration(
+                start.elapsed().as_secs_f64(),
+                &method,
+                status_code,
+                &protocol,
+                route_match.matched_prefix,
+            );
+            return Err(error);
         }
     };
     metrics.record_backend_selection(&selected_upstream);
@@ -106,6 +122,16 @@ pub async fn handle_proxy_request(
         req.headers(),
         &metrics,
     ) {
+        let status_code = rate_limited_response.status().as_u16();
+        metrics.record_entrypoint_request(&method, status_code, &protocol);
+        metrics.record_request(&method, status_code, &protocol, route_match.matched_prefix);
+        metrics.record_request_duration(
+            start.elapsed().as_secs_f64(),
+            &method,
+            status_code,
+            &protocol,
+            route_match.matched_prefix,
+        );
         return Ok(rate_limited_response);
     }
 
@@ -226,6 +252,7 @@ pub async fn handle_proxy_request(
         }
     };
 
+    metrics.record_entrypoint_request(&method, status_code, &protocol);
     metrics.record_request(&method, status_code, &protocol, route_match.matched_prefix);
     metrics.record_request_duration(
         duration,

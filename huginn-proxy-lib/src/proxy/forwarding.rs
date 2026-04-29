@@ -10,18 +10,6 @@ use tokio::time::Instant;
 
 type RespBody = BoxBody<bytes::Bytes, hyper::Error>;
 
-#[derive(Debug, Clone)]
-pub struct RouteMatch<'a> {
-    pub backend: &'a str,
-    pub backend_candidates: Vec<&'a str>,
-    pub fingerprinting: bool,
-    pub matched_prefix: &'a str,
-    pub replace_path: Option<&'a str>,
-    pub rate_limit: Option<&'a crate::config::RouteRateLimitConfig>,
-    pub headers: Option<&'a crate::config::HeaderManipulation>,
-    pub force_new_connection: bool,
-}
-
 pub struct ForwardConfig<'a> {
     pub backends: &'a [crate::config::Backend],
     pub keep_alive: &'a KeepAliveConfig,
@@ -194,41 +182,4 @@ pub async fn forward(
             Err(error)
         }
     }
-}
-
-pub fn pick_route<'a>(path: &str, routes: &'a [crate::config::Route]) -> Option<&'a str> {
-    routes
-        .iter()
-        .find(|r| path.starts_with(&r.prefix))
-        .map(|r| r.backend.as_str())
-}
-
-pub fn pick_route_with_fingerprinting<'a>(
-    path: &str,
-    routes: &'a [crate::config::Route],
-) -> Option<RouteMatch<'a>> {
-    routes
-        .iter()
-        .find(|r| path.starts_with(&r.prefix))
-        .map(|first| {
-            // Multi-upstream wiring:
-            // all routes sharing the matched prefix are candidates for round-robin
-            // selection, while behavior flags come from the first matching route.
-            let backend_candidates = routes
-                .iter()
-                .filter(|r| r.prefix == first.prefix)
-                .map(|r| r.backend.as_str())
-                .collect::<Vec<_>>();
-
-            RouteMatch {
-                backend: first.backend.as_str(),
-                backend_candidates,
-                fingerprinting: first.fingerprinting,
-                matched_prefix: first.prefix.as_str(),
-                replace_path: first.replace_path.as_deref(),
-                rate_limit: first.rate_limit.as_ref(),
-                headers: first.headers.as_ref(),
-                force_new_connection: first.force_new_connection,
-            }
-        })
 }

@@ -184,7 +184,7 @@ pub struct Backend {
 #[derive(Debug, Deserialize, Clone, PartialEq)]
 pub struct Route {
     /// URL path prefix to match (e.g., "/api", "/static")
-    /// Routes are matched in order, first match wins
+    /// The most specific (longest) matching prefix wins; declaration order does not matter
     pub prefix: String,
     /// Backend address to route matching requests to
     /// Must match one of the backend addresses defined in `backends`
@@ -216,6 +216,15 @@ pub struct Route {
     /// Allows adding or removing headers for specific routes
     #[serde(default)]
     pub headers: Option<HeaderManipulation>,
+}
+
+/// Sort routes longest-prefix first so `pick_route` can use an early-terminating `find`.
+///
+/// Stable sort preserves declaration order within same-length prefixes, which matters
+/// for load-balance groups that share the same prefix (round-robin candidates).
+/// Call this once at config load time via `Config::into_parts`; do not call per-request.
+pub fn sort_routes(routes: &mut [Route]) {
+    routes.sort_by_key(|r| std::cmp::Reverse(r.prefix.len()));
 }
 
 /// Configuration for backend connection pool

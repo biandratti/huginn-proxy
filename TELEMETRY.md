@@ -9,7 +9,7 @@ agent**.
 
 Huginn Proxy provides comprehensive telemetry through:
 
-- **Prometheus Metrics** - 43 metrics covering connections, requests, TLS, fingerprinting, backends, active health
+- **Prometheus Metrics** - 44 metrics covering connections, requests, TLS, fingerprinting, backends, active health
   checks, throughput, rate limiting, IP filtering, header manipulation, mTLS, and config hot reload
 - **Health Check Endpoints** - Kubernetes-ready: `/health`, `/ready`, `/live`, `/metrics`
 
@@ -147,29 +147,44 @@ rate(huginn_connections_rejected_total[5m])
 
 ### 3. Request Metrics
 
-| Metric                             | Type      | Description                   | Labels                                       |
-|------------------------------------|-----------|-------------------------------|----------------------------------------------|
-| `huginn_requests_total`            | Counter   | Total HTTP requests processed | `method`, `status_code`, `protocol`, `route` |
-| `huginn_requests_duration_seconds` | Histogram | Request duration in seconds   | `method`, `status_code`, `protocol`, `route` |
+| Metric                                | Type      | Description                                                       | Labels                                       |
+|---------------------------------------|-----------|-------------------------------------------------------------------|----------------------------------------------|
+| `huginn_entrypoint_requests_total`    | Counter   | All requests arriving at the proxy, regardless of routing outcome | `method`, `status_code`, `protocol`          |
+| `huginn_requests_total`               | Counter   | Requests matched to a route and dispatched                        | `method`, `status_code`, `protocol`, `route` |
+| `huginn_requests_duration_seconds`    | Histogram | Duration of routed requests                                       | `method`, `status_code`, `protocol`, `route` |
+
+The two request counters model the same two layers as Traefik's `entrypoint` / `router` metrics:
+
+- **`huginn_entrypoint_requests_total`** — incremented for every HTTP request the proxy receives, including those
+  rejected before routing (IP block → 403, no matching route → 404). Use this for total load and overall status-code
+  distribution visible to clients.
+- **`huginn_requests_total`** — incremented only when a route matched. Carries the `route` label so you can break down
+  traffic, latency, and error rates per route. Unrouted requests (403, 404) are not counted here.
 
 **Labels**:
 
 - `method`: HTTP method (`GET`, `POST`, `PUT`, etc.)
 - `status_code`: HTTP status code (`200`, `404`, `500`, etc.)
 - `protocol`: HTTP version (`HTTP/1.1`, `HTTP/2.0`)
-- `route`: Matched route prefix (e.g., `/api`, `/`)
+- `route`: Matched route prefix — only on `huginn_requests_total` (e.g., `/api`, `/`)
 
 **Example queries**:
 
 ```promql
-# Request rate
+# Total request rate (all traffic arriving at the proxy)
+rate(huginn_entrypoint_requests_total[5m])
+
+# Routed request rate (matched a route)
 rate(huginn_requests_total[5m])
 
-# Error rate (5xx responses)
-rate(huginn_requests_total{status_code=~"5.."}[5m]) 
-  / rate(huginn_requests_total[5m])
+# Unrouted request rate (404 no-match + 403 blocked)
+rate(huginn_entrypoint_requests_total[5m]) - rate(huginn_requests_total[5m])
 
-# P95 latency
+# Error rate (5xx) as seen by clients
+rate(huginn_entrypoint_requests_total{status_code=~"5.."}[5m])
+  / rate(huginn_entrypoint_requests_total[5m])
+
+# P95 latency (routed requests only)
 histogram_quantile(0.95, rate(huginn_requests_duration_seconds_bucket[5m]))
 
 # P99 latency
@@ -179,11 +194,11 @@ histogram_quantile(0.99, rate(huginn_requests_duration_seconds_bucket[5m]))
 sum by (route) (rate(huginn_requests_total[5m]))
 
 # Latency by route (P95)
-histogram_quantile(0.95, 
+histogram_quantile(0.95,
   sum by (route, le) (rate(huginn_requests_duration_seconds_bucket[5m]))
 )
 
-# Error rate by route
+# Error rate by route (5xx from backends)
 sum by (route) (rate(huginn_requests_total{status_code=~"5.."}[5m]))
   / sum by (route) (rate(huginn_requests_total[5m]))
 ```
@@ -587,9 +602,9 @@ same health endpoints as the proxy.
 
 **Overview Panel**:
 
-- Request rate: `rate(huginn_requests_total[5m])`
+- Request rate (all traffic): `rate(huginn_entrypoint_requests_total[5m])`
 - Active connections: `huginn_connections_active`
-- Error rate: `rate(huginn_requests_total{status_code=~"5.."}[5m]) / rate(huginn_requests_total[5m])`
+- Error rate (client view): `rate(huginn_entrypoint_requests_total{status_code=~"5.."}[5m]) / rate(huginn_entrypoint_requests_total[5m])`
 - P95 latency: `histogram_quantile(0.95, rate(huginn_requests_duration_seconds_bucket[5m]))`
 - Bandwidth (MB/s): `(rate(huginn_bytes_received_total[5m]) + rate(huginn_bytes_sent_total[5m])) / 1024 / 1024`
 

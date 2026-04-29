@@ -11,7 +11,7 @@ pub use dynamic::security::{
     RouteRateLimitConfig, SecurityConfig, SecurityDynamicConfig, SecurityHeaders,
 };
 pub use dynamic::{
-    Backend, BackendHttpVersion, BackendPoolConfig, CustomHeader, DynamicConfig,
+    sort_routes, Backend, BackendHttpVersion, BackendPoolConfig, CustomHeader, DynamicConfig,
     HeaderManipulation, HeaderManipulationGroup, HealthCheckConfig, HealthCheckType, Route,
 };
 pub use loader::load_from_path;

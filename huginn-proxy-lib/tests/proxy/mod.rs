@@ -6,3 +6,4 @@ mod h2c_forwarding;
 mod header_manipulation;
 mod http_result;
 mod path_manipulation;
+mod router;

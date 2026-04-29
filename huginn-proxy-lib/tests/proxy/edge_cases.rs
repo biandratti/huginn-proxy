@@ -1,8 +1,7 @@
 use http::Version;
 use huginn_proxy_lib::config::{Backend, BackendHttpVersion, Route};
-use huginn_proxy_lib::proxy::forwarding::{
-    determine_http_version, find_backend_config, pick_route,
-};
+use huginn_proxy_lib::proxy::forwarding::{determine_http_version, find_backend_config};
+use huginn_proxy_lib::proxy::router::pick_route;
 
 #[test]
 fn test_pick_route_no_match() {

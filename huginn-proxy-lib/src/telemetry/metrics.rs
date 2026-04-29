@@ -47,6 +47,8 @@ pub struct Metrics {
     pub connections_total: Counter<u64>,
     pub connections_active: UpDownCounter<i64>,
 
+    pub entrypoint_requests_total: Counter<u64>,
+
     pub requests_total: Counter<u64>,
     pub requests_duration_seconds: Histogram<f64>,
 
@@ -144,9 +146,14 @@ impl Metrics {
                 .with_description("Number of active connections")
                 .build(),
 
+            entrypoint_requests_total: meter
+                .u64_counter("huginn_entrypoint_requests_total")
+                .with_description("Total number of requests received at the entrypoint, regardless of routing outcome")
+                .build(),
+
             requests_total: meter
                 .u64_counter("huginn_requests_total")
-                .with_description("Total number of requests processed")
+                .with_description("Total number of requests matched to a route")
                 .build(),
             requests_duration_seconds: meter
                 .f64_histogram("huginn_requests_duration_seconds")
@@ -362,7 +369,7 @@ impl Metrics {
     /// updated when the request handler path records `HttpError::UpstreamUnhealthy`).
     pub fn record_health_check_gate_reject(&self, backend: &str) {
         self.health_check_gate_rejects_total
-            .add(1, &[KeyValue::new(labels::BACKEND_ADDRESS, backend.to_string())]);
+            .add(1, &[KeyValue::new(labels::BACKEND, backend.to_string())]);
     }
 
     pub fn record_rate_limit_rejection(&self, strategy: &str, route: &str) {
@@ -503,6 +510,17 @@ impl Metrics {
                 KeyValue::new(labels::BACKEND_ADDRESS, backend.to_string()),
                 KeyValue::new(labels::ERROR_TYPE, error_type.to_string()),
                 KeyValue::new(labels::ROUTE, route.to_string()),
+            ],
+        );
+    }
+
+    pub fn record_entrypoint_request(&self, method: &str, status_code: u16, protocol: &str) {
+        self.entrypoint_requests_total.add(
+            1,
+            &[
+                KeyValue::new(labels::METHOD, method.to_string()),
+                KeyValue::new(labels::STATUS_CODE, status_code.to_string()),
+                KeyValue::new(labels::PROTOCOL, protocol.to_string()),
             ],
         );
     }

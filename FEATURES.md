@@ -38,9 +38,11 @@ Limitation: the HTTP probe does not use TLS to the upstream (use a **TCP** check
 
 **Prefix matching with path manipulation**
 
-Routes are matched by URL prefix. You can strip the prefix, replace it with a different path, or leave it unchanged. First match wins, so order matters in the config.
+Routes are matched by URL prefix. You can strip the prefix, replace it with a different path, or leave it unchanged. The **most specific (longest) prefix wins** — routes are sorted by prefix length at config load time, so declaration order does not affect which route matches.
 
-Examples: `/api` can be forwarded as-is, stripped to `/`, or rewritten to `/v1`. Query parameters are preserved.
+Examples: `/api/v2` beats `/api` beats `/` for a request to `/api/v2/users`. `/api` can be forwarded as-is, stripped to `/`, or rewritten to `/v1`. Query parameters are preserved.
+
+Declaration order only matters for routes with identical prefixes, which are treated as load-balance candidates for round-robin selection (multi-upstream groups).
 
 Limitation: No regex support. Only simple prefix matching.
 
