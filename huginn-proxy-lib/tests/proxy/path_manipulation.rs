@@ -1,6 +1,6 @@
 // Tests for path stripping and rewriting functionality
 use huginn_proxy_lib::config::Route;
-use huginn_proxy_lib::proxy::forwarding::pick_route_with_fingerprinting;
+use huginn_proxy_lib::proxy::router::pick_route_with_fingerprinting;
 
 #[test]
 fn test_path_stripping_basic() {

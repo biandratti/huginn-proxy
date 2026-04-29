@@ -79,17 +79,16 @@ pub async fn handle_proxy_request(
     }
 
     let path = req.uri().path();
-    let route_match = if let Some(route) =
-        crate::proxy::forwarding::pick_route_with_fingerprinting(path, &routes)
-    {
-        route
-    } else {
-        let error = HttpError::NoMatchingRoute;
-        metrics.record_error(error.error_type());
-        let status_code = StatusCode::from(error.clone()).as_u16();
-        metrics.record_entrypoint_request(&method, status_code, &protocol);
-        return Err(error);
-    };
+    let route_match =
+        if let Some(route) = crate::proxy::router::pick_route_with_fingerprinting(path, &routes) {
+            route
+        } else {
+            let error = HttpError::NoMatchingRoute;
+            metrics.record_error(error.error_type());
+            let status_code = StatusCode::from(error.clone()).as_u16();
+            metrics.record_entrypoint_request(&method, status_code, &protocol);
+            return Err(error);
+        };
 
     let selected_upstream = match upstream.selector.select(
         route_match.matched_prefix,

@@ -5,7 +5,7 @@ use std::sync::Arc;
 use tracing::debug;
 
 use crate::config::RateLimitConfig;
-use crate::proxy::forwarding::RouteMatch;
+use crate::proxy::router::RouteMatch;
 use crate::security::{extract_rate_limit_key, RateLimitManager, RateLimitResult};
 use crate::telemetry::Metrics;
 
