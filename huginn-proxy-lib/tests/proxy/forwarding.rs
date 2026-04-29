@@ -16,9 +16,6 @@ fn route(prefix: &str, backend: &str) -> Route {
     }
 }
 
-/// Mirrors what `Config::into_parts` does at startup.
-/// Tests that exercise overlapping prefixes must call this, otherwise `pick_route`
-/// (which uses `find` on a sorted slice) may return the wrong route.
 fn sorted_routes(mut routes: Vec<Route>) -> Vec<Route> {
     sort_routes(&mut routes);
     routes
@@ -302,7 +299,6 @@ fn test_pick_route_with_fingerprinting_collects_same_prefix_candidates() {
 
 #[test]
 fn longest_prefix_wins_over_declaration_order() {
-    // Bug regression: first-match would send /api/e2e-unhealthy to backend-a instead of unreachable.
     let routes = sorted_routes(vec![
         route("/api", "backend-a:9000"),
         route("/api/e2e-unhealthy", "unreachable:9000"),
@@ -339,7 +335,6 @@ fn no_match_without_catch_all_returns_none() {
 
 #[test]
 fn false_positive_guard_api_vs_api2() {
-    // /api must NOT match /api2 — boundary check ensures the segment ends at '/'.
     let routes =
         sorted_routes(vec![route("/api", "backend-a:9000"), route("/api2", "backend-b:9000")]);
     assert_eq!(pick_route("/api2/resource", &routes), Some("backend-b:9000"));

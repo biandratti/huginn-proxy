@@ -72,7 +72,18 @@ pub async fn handle_proxy_request(
         }
     }
 
-    check_ip_access(peer, &security.ip_filter, &metrics)?;
+    if let Err(e) = check_ip_access(peer, &security.ip_filter, &metrics) {
+        let status_code = StatusCode::from(e.clone()).as_u16();
+        metrics.record_request(&method, status_code, &protocol, "");
+        metrics.record_request_duration(
+            start.elapsed().as_secs_f64(),
+            &method,
+            status_code,
+            &protocol,
+            "",
+        );
+        return Err(e);
+    }
 
     let path = req.uri().path();
     let route_match = if let Some(route) =
@@ -82,6 +93,15 @@ pub async fn handle_proxy_request(
     } else {
         let error = HttpError::NoMatchingRoute;
         metrics.record_error(error.error_type());
+        let status_code = StatusCode::from(error.clone()).as_u16();
+        metrics.record_request(&method, status_code, &protocol, "");
+        metrics.record_request_duration(
+            start.elapsed().as_secs_f64(),
+            &method,
+            status_code,
+            &protocol,
+            "",
+        );
         return Err(error);
     };
 
@@ -93,7 +113,17 @@ pub async fn handle_proxy_request(
         Some(addr) => addr,
         None => {
             metrics.record_health_check_gate_reject(route_match.backend);
-            return Err(HttpError::UpstreamUnhealthy);
+            let error = HttpError::UpstreamUnhealthy;
+            let status_code = StatusCode::from(error.clone()).as_u16();
+            metrics.record_request(&method, status_code, &protocol, route_match.matched_prefix);
+            metrics.record_request_duration(
+                start.elapsed().as_secs_f64(),
+                &method,
+                status_code,
+                &protocol,
+                route_match.matched_prefix,
+            );
+            return Err(error);
         }
     };
     metrics.record_backend_selection(&selected_upstream);
@@ -106,6 +136,15 @@ pub async fn handle_proxy_request(
         req.headers(),
         &metrics,
     ) {
+        let status_code = rate_limited_response.status().as_u16();
+        metrics.record_request(&method, status_code, &protocol, route_match.matched_prefix);
+        metrics.record_request_duration(
+            start.elapsed().as_secs_f64(),
+            &method,
+            status_code,
+            &protocol,
+            route_match.matched_prefix,
+        );
         return Ok(rate_limited_response);
     }
 
