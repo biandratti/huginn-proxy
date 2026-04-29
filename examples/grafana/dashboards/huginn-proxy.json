@@ -41,7 +41,7 @@
       },
       "targets": [
         {
-          "expr": "sum(rate(huginn_requests_total_total[$__rate_interval]) or on() vector(0))",
+          "expr": "sum(rate(huginn_entrypoint_requests_total_total[$__rate_interval]) or on() vector(0))",
           "refId": "A"
         }
       ],
@@ -347,7 +347,7 @@
       },
       "targets": [
         {
-          "expr": "sum by (status_code) (rate(huginn_requests_total_total[$__rate_interval])) or on() vector(0)",
+          "expr": "sum by (status_code) (rate(huginn_entrypoint_requests_total_total[$__rate_interval])) or on() vector(0)",
           "legendFormat": "{{status_code}}",
           "refId": "A"
         }
@@ -556,7 +556,7 @@
     {
       "id": 51,
       "type": "timeseries",
-      "title": "Request/s per Route (Entrypoint)",
+      "title": "Request/s per Route",
       "gridPos": {
         "x": 0,
         "y": 26,
@@ -597,13 +597,51 @@
       },
       "targets": [
         {
-          "expr": "sum(rate(huginn_requests_total_total{protocol=\"HTTP/1.1\"}[$__rate_interval])) or on() vector(0)",
+          "expr": "sum(rate(huginn_entrypoint_requests_total_total{protocol=\"HTTP/1.1\"}[$__rate_interval])) or on() vector(0)",
           "legendFormat": "HTTP/1.1",
           "refId": "A"
         },
         {
-          "expr": "sum(rate(huginn_requests_total_total{protocol=\"HTTP/2.0\"}[$__rate_interval])) or on() vector(0)",
+          "expr": "sum(rate(huginn_entrypoint_requests_total_total{protocol=\"HTTP/2.0\"}[$__rate_interval])) or on() vector(0)",
           "legendFormat": "HTTP/2",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        }
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 115,
+      "type": "timeseries",
+      "title": "Entrypoint vs Routed Requests",
+      "description": "Entrypoint = all requests arriving at the proxy. Routed = requests that matched a route. The gap represents unrouted traffic (404 no match, 403 blocked).",
+      "gridPos": {
+        "x": 0,
+        "y": 34,
+        "w": 24,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(huginn_entrypoint_requests_total_total[$__rate_interval])) or on() vector(0)",
+          "legendFormat": "entrypoint (all)",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(rate(huginn_requests_total_total[$__rate_interval])) or on() vector(0)",
+          "legendFormat": "routed",
           "refId": "B"
         }
       ],
@@ -646,7 +684,7 @@
       },
       "targets": [
         {
-          "expr": "sum(rate(huginn_requests_total_total{status_code=~\"2..\"}[$__rate_interval]) or on() vector(0))",
+          "expr": "sum(rate(huginn_entrypoint_requests_total_total{status_code=~\"2..\"}[$__rate_interval]) or on() vector(0))",
           "refId": "A"
         }
       ],
@@ -690,7 +728,7 @@
       },
       "targets": [
         {
-          "expr": "sum(rate(huginn_requests_total_total{status_code=~\"3..\"}[$__rate_interval]) or on() vector(0))",
+          "expr": "sum(rate(huginn_entrypoint_requests_total_total{status_code=~\"3..\"}[$__rate_interval]) or on() vector(0))",
           "refId": "A"
         }
       ],
@@ -734,7 +772,7 @@
       },
       "targets": [
         {
-          "expr": "sum(rate(huginn_requests_total_total{status_code=~\"4..\"}[$__rate_interval]) or on() vector(0))",
+          "expr": "sum(rate(huginn_entrypoint_requests_total_total{status_code=~\"4..\"}[$__rate_interval]) or on() vector(0))",
           "refId": "A"
         }
       ],
@@ -778,7 +816,7 @@
       },
       "targets": [
         {
-          "expr": "sum(rate(huginn_requests_total_total{status_code=~\"5..\"}[$__rate_interval]) or on() vector(0))",
+          "expr": "sum(rate(huginn_entrypoint_requests_total_total{status_code=~\"5..\"}[$__rate_interval]) or on() vector(0))",
           "refId": "A"
         }
       ],
@@ -822,7 +860,7 @@
       },
       "targets": [
         {
-          "expr": "sum by (status_code) (rate(huginn_requests_total_total{status_code=~\"2..\"}[$__rate_interval])) or on() vector(0)",
+          "expr": "sum by (status_code) (rate(huginn_entrypoint_requests_total_total{status_code=~\"2..\"}[$__rate_interval])) or on() vector(0)",
           "legendFormat": "{{status_code}}",
           "refId": "A"
         }
@@ -866,7 +904,7 @@
       },
       "targets": [
         {
-          "expr": "sum by (status_code) (rate(huginn_requests_total_total{status_code=~\"3..\"}[$__rate_interval])) or on() vector(0)",
+          "expr": "sum by (status_code) (rate(huginn_entrypoint_requests_total_total{status_code=~\"3..\"}[$__rate_interval])) or on() vector(0)",
           "legendFormat": "{{status_code}}",
           "refId": "A"
         }
@@ -910,7 +948,7 @@
       },
       "targets": [
         {
-          "expr": "sum by (status_code) (rate(huginn_requests_total_total{status_code=~\"4..\"}[$__rate_interval])) or on() vector(0)",
+          "expr": "sum by (status_code) (rate(huginn_entrypoint_requests_total_total{status_code=~\"4..\"}[$__rate_interval])) or on() vector(0)",
           "legendFormat": "{{status_code}}",
           "refId": "A"
         }
@@ -954,7 +992,7 @@
       },
       "targets": [
         {
-          "expr": "sum by (status_code) (rate(huginn_requests_total_total{status_code=~\"5..\"}[$__rate_interval])) or on() vector(0)",
+          "expr": "sum by (status_code) (rate(huginn_entrypoint_requests_total_total{status_code=~\"5..\"}[$__rate_interval])) or on() vector(0)",
           "legendFormat": "{{status_code}}",
           "refId": "A"
         }

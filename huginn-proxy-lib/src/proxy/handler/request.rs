@@ -74,14 +74,7 @@ pub async fn handle_proxy_request(
 
     if let Err(e) = check_ip_access(peer, &security.ip_filter, &metrics) {
         let status_code = StatusCode::from(e.clone()).as_u16();
-        metrics.record_request(&method, status_code, &protocol, "");
-        metrics.record_request_duration(
-            start.elapsed().as_secs_f64(),
-            &method,
-            status_code,
-            &protocol,
-            "",
-        );
+        metrics.record_entrypoint_request(&method, status_code, &protocol);
         return Err(e);
     }
 
@@ -94,14 +87,7 @@ pub async fn handle_proxy_request(
         let error = HttpError::NoMatchingRoute;
         metrics.record_error(error.error_type());
         let status_code = StatusCode::from(error.clone()).as_u16();
-        metrics.record_request(&method, status_code, &protocol, "");
-        metrics.record_request_duration(
-            start.elapsed().as_secs_f64(),
-            &method,
-            status_code,
-            &protocol,
-            "",
-        );
+        metrics.record_entrypoint_request(&method, status_code, &protocol);
         return Err(error);
     };
 
@@ -115,6 +101,7 @@ pub async fn handle_proxy_request(
             metrics.record_health_check_gate_reject(route_match.backend);
             let error = HttpError::UpstreamUnhealthy;
             let status_code = StatusCode::from(error.clone()).as_u16();
+            metrics.record_entrypoint_request(&method, status_code, &protocol);
             metrics.record_request(&method, status_code, &protocol, route_match.matched_prefix);
             metrics.record_request_duration(
                 start.elapsed().as_secs_f64(),
@@ -137,6 +124,7 @@ pub async fn handle_proxy_request(
         &metrics,
     ) {
         let status_code = rate_limited_response.status().as_u16();
+        metrics.record_entrypoint_request(&method, status_code, &protocol);
         metrics.record_request(&method, status_code, &protocol, route_match.matched_prefix);
         metrics.record_request_duration(
             start.elapsed().as_secs_f64(),
@@ -265,6 +253,7 @@ pub async fn handle_proxy_request(
         }
     };
 
+    metrics.record_entrypoint_request(&method, status_code, &protocol);
     metrics.record_request(&method, status_code, &protocol, route_match.matched_prefix);
     metrics.record_request_duration(
         duration,
