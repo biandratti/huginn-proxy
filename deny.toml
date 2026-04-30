@@ -21,6 +21,11 @@ allow = [
 ]
 confidence-threshold = 1.0
 
+# option-ext is a transitive test-only dep: tests-browsers -> thirtyfour -> dirs -> dirs-sys -> option-ext
+[[licenses.exceptions]]
+allow = ["MPL-2.0"]
+name = "option-ext"
+
 [bans]
 wildcards = "deny"
 skip = [
