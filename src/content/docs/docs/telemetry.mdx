@@ -58,7 +58,7 @@ Health responses are JSON; `/metrics` is Prometheus exposition format.
 
 ### Metric families (proxy, summary)
 
-Roughly **40+** `huginn_*` metrics: connections, requests, throughput, TLS, JA4 / HTTP/2 fingerprinting, backend timings, rate limits, IP filter, headers, mTLS, config reload, build info. TCP SYN **lookup** metrics on the proxy reflect map reads; **capture** counters are on the agent — see [TELEMETRY.md](https://github.com/biandratti/huginn-proxy/blob/master/TELEMETRY.md).
+**44** `huginn_*` metrics: connections, requests, throughput, TLS, JA4 / HTTP/2 fingerprinting, backend timings, active health checks, rate limits, IP filter, headers, mTLS, config reload, build info. TCP SYN **lookup** metrics on the proxy reflect map reads; **capture** counters are on the agent — see [TELEMETRY.md](https://github.com/biandratti/huginn-proxy/blob/master/TELEMETRY.md).
 
 ---
 
@@ -98,5 +98,6 @@ Adjust hosts to your Docker/Kubernetes networking. With eBPF Compose, ports are 
 
 ## Related
 
+- [Observability](/huginn-proxy/docs/observability/): Prometheus + Grafana setup and dashboard walkthrough
 - [Containers](/huginn-proxy/docs/containers/): which stack exposes which listeners
 - [Configuration overview](/huginn-proxy/docs/configuration/): `telemetry` vs env vars

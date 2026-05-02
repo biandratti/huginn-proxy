@@ -120,6 +120,7 @@ export default defineConfig({
 						{ label: 'Containers', slug: 'docs/containers' },
 						{ label: 'Kubernetes', slug: 'docs/kubernetes' },
 						{ label: 'eBPF TCP setup', slug: 'docs/ebpf-setup' },
+						{ label: 'Observability', slug: 'docs/observability' },
 					],
 				},
 				{

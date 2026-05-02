@@ -32,9 +32,11 @@ preserve_host = false
 
 ## Prefix matching
 
-Routes are matched by **URL prefix**. **First match wins:** declare more specific prefixes before general ones (for example `/api` and `/api/v2` before `/`).
+Routes are matched by **URL prefix**. The **most specific (longest) prefix wins** — routes are sorted by prefix length at config load time, so **declaration order does not affect which route matches**.
 
-**Example (order matters):**
+`/api/v2` beats `/api` beats `/` for a request to `/api/v2/users`. Declaration order only matters for routes with **identical prefixes**, which are treated as load-balance candidates for round-robin selection.
+
+**Example:**
 
 <Tabs syncKey="huginn-config">
   <TabItem label="YAML">
