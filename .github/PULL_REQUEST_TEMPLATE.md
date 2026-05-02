@@ -1,26 +1,14 @@
-# Pull Request Template
+## What does this PR do?
 
-## Description
+<!-- Summary of the change and why it's needed. Reference related issues with #number. -->
 
-Please include a summary of the change and which issue is fixed.
-Please also include relevant motivation and context. List any dependencies that are required for this change.
+## How has this been tested?
 
-## Type of change:
+<!-- Describe what you ran to verify the change: unit tests, e2e, manual curl, k6, etc. Include OS and build features used. -->
 
-Please select the appropriate tags in the PR if necessary.
+## Checklist
 
-# Motivation
-
-Keeping thing up-to-date
-
-# How has this been tested?
-
-Please describe the tests that you ran to verify your changes. Provide instructions so we can reproduce, and the Operative System used.
-
-## Checklist:
-
-- [ ] My code follows the style guidelines of this project.
-- [ ] I have performed a self-review of my own code.
-- [ ] I have commented my code, particularly in hard-to-understand areas.
-- [ ] I have added tests that prove my fix is effective or that my feature works.
-- [ ] Select the appropriate tags in the PR if necessary.
+- [ ] `cargo fmt --all` passes
+- [ ] `cargo clippy --workspace --all-features --all-targets` passes
+- [ ] Tests added or updated for new behavior
+- [ ] Config or metric changes reflected in `SETTINGS.md` / `TELEMETRY.md`
