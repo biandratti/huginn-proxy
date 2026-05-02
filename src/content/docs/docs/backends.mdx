@@ -11,8 +11,11 @@ The **`[[backends]]`** entries define upstream targets. Each route references a 
 
 ## Fields (per backend)
 
-- **`address`:** `host:port` (or bracketed IPv6). In orchestrated setups this is usually a **service name** (Docker Compose, Kubernetes DNS, etc.).
-- **`http_version`:** optional. Values: `http11`, `http2`, or **`preserve`** (negotiate from the client; default when omitted / null).
+| Key | Default | Description |
+| --- | --- | --- |
+| `address` | — | `host:port` (or bracketed IPv6). In orchestrated setups this is usually a **service name** (Docker Compose, Kubernetes DNS, etc.). Used as the pool key — must match exactly what routes reference. |
+| `http_version` | `null` (preserve) | Protocol to use when connecting to this backend. `"http11"`, `"http2"`, or `"preserve"` (negotiate based on what the client used). |
+| `health_check` | `null` (off) | Optional active health probe. When set, the proxy tracks per-upstream health and returns **502** to clients when the backend is marked unhealthy. See [Health checks](#health-checks) below. |
 
 ## Example
 
@@ -42,6 +45,55 @@ http_version = "http11"
 
   </TabItem>
 </Tabs>
+
+## Health checks
+
+Optional active probes via **`health_check`** on a `[[backends]]` entry. When configured, a background task probes the backend on an interval. If consecutive failures exceed `unhealthy_threshold`, the backend is marked unhealthy and the proxy returns **502** for matching routes instead of waiting on TCP timeouts. Once consecutive successes reach `healthy_threshold`, the backend is marked healthy again. **Dynamic** — hot-reloadable.
+
+If you omit `health_check`, the backend is always treated as healthy (no background probing).
+
+| Key | Default | Description |
+| --- | --- | --- |
+| `type` | `tcp` | `tcp` (TCP 3-way handshake) or `http` (HTTP/1.1 `GET` to `http://{address}{path}`; plain HTTP only, no TLS to upstream). |
+| `path` | — | Required when `type = "http"`: must start with `/` (e.g. `/` or `/ready`). Ignored for `tcp`. |
+| `expected_status` | `200` | For `http` only: response status must match (e.g. `200`, `204`). |
+| `interval_secs` | `10` | Time between probes. |
+| `timeout_secs` | `5` | Per-probe budget (must be ≤ `interval_secs`). Encompasses connect, request, and body drain for `http`. |
+| `unhealthy_threshold` | `3` | Consecutive failed probes before marking upstream unhealthy. |
+| `healthy_threshold` | `2` | Consecutive successful probes before marking upstream healthy again. |
+
+**Example (HTTP probe):**
+
+<Tabs syncKey="huginn-config">
+  <TabItem label="YAML">
+
+```yaml
+backends:
+  - address: "app:8080"
+    http_version: http11
+    health_check:
+      type: http
+      path: /ready
+      expected_status: 200
+```
+
+  </TabItem>
+  <TabItem label="TOML">
+
+```toml
+[[backends]]
+address = "app:8080"
+http_version = "http11"
+# HTTP GET http://app:8080/ready must return 200
+health_check = { type = "http", path = "/ready", expected_status = 200 }
+```
+
+  </TabItem>
+</Tabs>
+
+**Recommended usage:** most useful when Huginn Proxy is the main resiliency layer (VM/bare-metal/Docker Compose, or direct upstream addresses). In orchestrators (e.g. Kubernetes `Service`), health checks are optional — they can overlap with readiness filtering, but can still be valuable for faster failover at the proxy level.
+
+**Limitation:** the HTTP probe does not use TLS to the upstream — use a **TCP** check, or an HTTP path that responds over cleartext.
 
 ## Backend pool
 
@@ -80,4 +132,4 @@ pool_max_idle_per_host = 0
 
 Define one or more backends, then reference a backend address on each route. When a route lists **several** backend addresses, traffic is spread with **round-robin**. In practice, replicas and health are often handled **outside** the proxy (scheduler, Service endpoints).
 
-**Scope:** In-proxy health probes, least-connections, and weighted routing are **not on the roadmap** for now. See [Routes](/huginn-proxy/docs/routes/) for prefix matching and [Configuration overview](/huginn-proxy/docs/configuration/) for the full file layout.
+Active health probes are available via `health_check` — see [Health checks](#health-checks) above. Least-connections and weighted routing are not implemented.
