@@ -10,9 +10,9 @@
     "fileMatch": ["(^|/)docker/[^/]*\\.Dockerfile$"]
   },
   "pinDigests": true,
+  "schedule": ["at any time"],
   "labels": ["dependencies", "docker"],
   "assignees": ["biandratti"],
-  "schedule": ["every saturday"],
   "packageRules": [
     {
       "matchManagers": ["dockerfile"],
