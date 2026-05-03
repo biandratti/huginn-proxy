@@ -12,7 +12,6 @@
   "pinDigests": true,
   "labels": ["dependencies", "docker"],
   "assignees": ["biandratti"],
-  "schedule": ["every saturday"],
   "packageRules": [
     {
       "matchManagers": ["dockerfile"],
