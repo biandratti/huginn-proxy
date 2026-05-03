@@ -1,0 +1,41 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    ":semanticCommits",
+    ":dependencyDashboard"
+  ],
+  "enabledManagers": ["dockerfile"],
+  "dockerfile": {
+    "fileMatch": ["(^|/)docker/[^/]*\\.Dockerfile$"]
+  },
+  "pinDigests": true,
+  "labels": ["dependencies", "docker"],
+  "assignees": ["biandratti"],
+  "schedule": ["every saturday"],
+  "packageRules": [
+    {
+      "matchManagers": ["dockerfile"],
+      "matchPackageNames": ["rust"],
+      "groupName": "rust base image",
+      "commitMessageTopic": "rust docker base image"
+    },
+    {
+      "matchManagers": ["dockerfile"],
+      "matchPackageNames": ["debian"],
+      "groupName": "debian base image",
+      "commitMessageTopic": "debian docker base image"
+    },
+    {
+      "matchManagers": ["dockerfile"],
+      "matchUpdateTypes": ["digest"],
+      "commitMessagePrefix": "docker",
+      "commitMessageAction": "update digest"
+    },
+    {
+      "matchManagers": ["dockerfile"],
+      "matchUpdateTypes": ["major"],
+      "dependencyDashboardApproval": true
+    }
+  ]
+}
