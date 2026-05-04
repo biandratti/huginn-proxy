@@ -58,6 +58,14 @@ impl Default for WatchOptions {
 /// IPv6 connections. This prevents the dual-stack ambiguity where an IPv4 client
 /// arrives as `::ffff:x.y.z.w` (`SocketAddr::V6`), which would cause the SYN
 /// fingerprint lookup to hit the wrong eBPF map.
+fn register_signal(kind: signal::unix::SignalKind, name: &str) -> Result<signal::unix::Signal> {
+    signal::unix::signal(kind).map_err(|e| {
+        crate::error::ProxyError::Io(std::io::Error::other(format!(
+            "Failed to setup {name} handler: {e}"
+        )))
+    })
+}
+
 fn bind_listener(addr: SocketAddr, backlog: i32) -> std::io::Result<TcpListener> {
     use socket2::{Domain, Protocol, Socket, Type};
 
@@ -128,22 +136,9 @@ pub async fn run(
     ));
     let active_connections = connection_manager.active_connections();
 
-    let mut sigterm = signal::unix::signal(signal::unix::SignalKind::terminate()).map_err(|e| {
-        crate::error::ProxyError::Io(std::io::Error::other(format!(
-            "Failed to setup SIGTERM handler: {e}"
-        )))
-    })?;
-    let mut sigint = signal::unix::signal(signal::unix::SignalKind::interrupt()).map_err(|e| {
-        crate::error::ProxyError::Io(std::io::Error::other(format!(
-            "Failed to setup SIGINT handler: {e}"
-        )))
-    })?;
-    // SIGHUP handler — always active, triggers config hot reload.
-    let mut sighup = signal::unix::signal(signal::unix::SignalKind::hangup()).map_err(|e| {
-        crate::error::ProxyError::Io(std::io::Error::other(format!(
-            "Failed to setup SIGHUP handler: {e}"
-        )))
-    })?;
+    let mut sigterm = register_signal(signal::unix::SignalKind::terminate(), "SIGTERM")?;
+    let mut sigint = register_signal(signal::unix::SignalKind::interrupt(), "SIGINT")?;
+    let mut sighup = register_signal(signal::unix::SignalKind::hangup(), "SIGHUP")?;
 
     let (reload_tx, mut reload_rx) = tokio::sync::mpsc::unbounded_channel::<()>();
     if watch_opts.watch {
@@ -233,23 +228,17 @@ pub async fn run(
                 let syn_result = syn_probe_clone.as_ref().map(|probe| probe(peer));
                 let syn_duration = syn_start.elapsed().as_secs_f64();
 
-                let syn_fingerprint: Option<TcpObservation> = match syn_result {
-                    Some(ref r) => {
-                        let label = match r {
-                            SynResult::Hit(_) => "hit",
-                            SynResult::Miss => "miss",
-                            SynResult::Malformed => "malformed",
-                        };
-                        metrics_clone.record_tcp_syn_fingerprint(label, syn_duration);
-                        match r {
-                            SynResult::Hit(obs) => Some(obs.clone()),
-                            _ => None,
-                        }
-                    }
-                    None => None,
-                };
+                let syn_fingerprint: Option<TcpObservation> = syn_result.as_ref().and_then(|r| {
+                    let label = match r {
+                        SynResult::Hit(_) => "hit",
+                        SynResult::Miss => "miss",
+                        SynResult::Malformed => "malformed",
+                    };
+                    metrics_clone.record_tcp_syn_fingerprint(label, syn_duration);
+                    if let SynResult::Hit(obs) = r { Some(obs.clone()) } else { None }
+                });
 
-                // Load fresh config snapshot for this connection (lock-free ArcSwap load).
+                // Load a fresh config snapshot for this connection (lock-free ArcSwap load).
                 let dynamic = dynamic_cfg_clone.load();
                 let rate_mgr = rate_limiter_clone
                     .read()
@@ -387,36 +376,22 @@ pub async fn run(
         "Waiting for active connections to finish (timeout: {}s)",
         static_cfg.timeout.shutdown_secs
     );
-    let shutdown_timeout = Duration::from_secs(static_cfg.timeout.shutdown_secs);
     let start = Instant::now();
-
+    let shutdown_timeout = Duration::from_secs(static_cfg.timeout.shutdown_secs);
     let deadline = start
         .checked_add(shutdown_timeout)
         .unwrap_or_else(|| start.checked_add(Duration::from_secs(60)).unwrap_or(start));
-    tokio::select! {
-        _ = connections_closed_rx.changed() => {
-            let active = active_connections.load(Ordering::Relaxed);
-            if active == 0 {
-                info!("All connections closed, shutdown complete");
-            } else {
-                warn!(
-                    active_connections = active,
-                    "Connection closed notification received but {} connections still active",
-                    active
-                );
-            }
-        }
-        _ = tokio::time::sleep_until(deadline) => {
-            let active = active_connections.load(Ordering::Relaxed);
-            if active > 0 {
-                warn!(
-                    active_connections = active,
-                    "Shutdown timeout reached, {} connections still active", active
-                );
-            } else {
-                info!("All connections closed, shutdown complete");
-            }
-        }
+    let timed_out = tokio::select! {
+        _ = connections_closed_rx.changed() => false,
+        _ = tokio::time::sleep_until(deadline) => true,
+    };
+    let active = active_connections.load(Ordering::Relaxed);
+    if active == 0 {
+        info!("All connections closed, shutdown complete");
+    } else if timed_out {
+        warn!(active_connections = active, "Shutdown timeout reached, {} connections still active", active);
+    } else {
+        warn!(active_connections = active, "Connection closed notification received but {} connections still active", active);
     }
 
     info!("Proxy server stopped");
