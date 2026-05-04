@@ -29,6 +29,6 @@ pub struct StaticConfig {
     pub timeout: TimeoutConfig,
     /// Telemetry / metrics configuration
     pub telemetry: TelemetryConfig,
-    /// Maximum concurrent connections (from [security] in TOML)
+    /// Maximum concurrent connections (from \[security\] in TOML)
     pub max_connections: usize,
 }

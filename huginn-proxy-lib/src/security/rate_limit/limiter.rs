@@ -119,10 +119,6 @@ impl RateLimiter {
     /// # Returns
     /// `RateLimitResult` indicating whether the request is allowed or limited
     pub fn check<T: Hash + ?Sized>(&self, key: &T) -> RateLimitResult {
-        // Pass `&key` (double-ref) so the upstream `Rate::observe` signature
-        // (`<U: Hash>(&U, isize)`, implicitly `Sized`) can accept a possibly
-        // unsized `T` like `str`. `&T` is always `Sized` and `&T: Hash` is
-        // implemented whenever `T: Hash + ?Sized`.
         let current = self.rate_tracker.observe(&key, 1);
 
         if current > self.max_requests {
@@ -147,10 +143,9 @@ impl RateLimiter {
     /// # Parameters
     /// - `key`: Identifier for the entity being rate limited
     ///
-    /// # Returns
+    /// # Rethe turns
     /// `RateLimitResult` indicating whether a request would be allowed
     pub fn check_only<T: Hash + ?Sized>(&self, key: &T) -> RateLimitResult {
-        // See note in `check` about the `&key` double-ref.
         let current = self.rate_tracker.observe(&key, 0); // Observe with 0 to not increment
 
         if current >= self.max_requests {
@@ -171,7 +166,6 @@ impl RateLimiter {
     ///
     /// This returns the rate from the previous completed window.
     pub fn current_rate<T: Hash + ?Sized>(&self, key: &T) -> f64 {
-        // See note in `check` about the `&key` double-ref.
         self.rate_tracker.rate(&key)
     }
 
