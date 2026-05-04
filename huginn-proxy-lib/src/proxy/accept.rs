@@ -6,7 +6,6 @@ use arc_swap::ArcSwap;
 use hyper_util::rt::TokioExecutor;
 use hyper_util::server::conn::auto::Builder as ConnBuilder;
 use tokio::net::TcpListener;
-use tokio::sync::RwLock;
 use tokio::time::{Duration, Instant};
 use tokio_rustls::TlsAcceptor;
 use tracing::warn;
@@ -33,7 +32,7 @@ pub type SynProbe = Arc<dyn Fn(SocketAddr) -> SynResult + Send + Sync>;
 pub struct AcceptContext {
     pub dynamic_cfg: Arc<ArcSwap<DynamicConfig>>,
     pub rate_limiter: SharedRateLimiter,
-    pub tls_acceptor: Option<Arc<RwLock<Option<TlsAcceptor>>>>,
+    pub tls_acceptor: Option<Arc<ArcSwap<TlsAcceptor>>>,
     pub fingerprint_config: FingerprintConfig,
     pub keep_alive_config: KeepAliveConfig,
     pub metrics: Arc<Metrics>,

@@ -1,15 +1,16 @@
-use crate::config::TlsConfig;
-use crate::error::Result;
 use std::sync::Arc;
-use tokio::sync::RwLock;
+
+use arc_swap::ArcSwap;
 use tokio_rustls::TlsAcceptor;
 use tracing::{error, info, warn};
+
+use crate::config::TlsConfig;
+use crate::error::Result;
 
 use super::{build_cert_reloader, build_tls_acceptor};
 
 pub struct TlsSetup {
-    /// TLS acceptor wrapped in `Arc<RwLock<Option<TlsAcceptor>>>` for thread-safe hot reload
-    pub acceptor: Arc<RwLock<Option<TlsAcceptor>>>,
+    pub acceptor: Arc<ArcSwap<TlsAcceptor>>,
 }
 
 /// Setup TLS with hot reload support
@@ -27,9 +28,9 @@ pub async fn setup_tls_with_hot_reload(
     watch_delay_secs: u32,
 ) -> Result<TlsSetup> {
     let initial_acceptor = build_tls_acceptor(tls_config)?;
-    let tls_acceptor = Arc::new(RwLock::new(Some(initial_acceptor)));
+    let tls_acceptor = Arc::new(ArcSwap::new(Arc::new(initial_acceptor)));
 
-    // Setup certificate reloader (async - initializes filesystem watcher)
+    // Set up certificate reloader (async - initializes filesystem watcher)
     let mut reloader_rx = build_cert_reloader(tls_config, watch, watch_delay_secs).await?;
     let alpn = tls_config.alpn.clone();
     let tls_options = tls_config.options.clone();
@@ -44,7 +45,7 @@ pub async fn setup_tls_with_hot_reload(
                 match certs_keys.build_tls_acceptor(&alpn, &tls_options, &session_resumption) {
                     Ok(new_acceptor) => {
                         info!("Certificate reloaded successfully");
-                        *tls_acceptor_for_update.write().await = Some(new_acceptor);
+                        tls_acceptor_for_update.store(Arc::new(new_acceptor));
                     }
                     Err(e) => {
                         error!(error = %e, "Failed to build TLS acceptor from reloaded certificates");

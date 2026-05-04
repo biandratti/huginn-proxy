@@ -1,5 +1,7 @@
 use std::sync::Arc;
 
+use arc_swap::ArcSwap;
+
 use super::timeout_helper::serve_with_timeout;
 use crate::backend::UpstreamGateway;
 use crate::fingerprinting::TcpObservation;
@@ -21,7 +23,7 @@ use tracing::warn;
 
 /// Configuration for handling TLS connections
 pub struct TlsConnectionConfig {
-    pub tls_acceptor: Arc<tokio::sync::RwLock<Option<TlsAcceptor>>>,
+    pub tls_acceptor: Arc<ArcSwap<TlsAcceptor>>,
     pub fingerprint_config: crate::config::FingerprintConfig,
     pub routes: Vec<crate::config::Route>,
     pub backends: Arc<Vec<crate::config::Backend>>,
@@ -44,8 +46,8 @@ pub async fn handle_tls_connection(
     config: TlsConnectionConfig,
 ) {
     let metrics = config.metrics.clone();
-    let acc_opt = config.tls_acceptor.read().await.clone();
-    if let Some(acc) = acc_opt {
+    let acc = config.tls_acceptor.load_full();
+    {
         let handshake_start = Instant::now();
         let (prefix, ja4_fingerprints) =
             match read_client_hello(&mut stream, Arc::clone(&metrics)).await {
@@ -246,7 +248,5 @@ pub async fn handle_tls_connection(
             serve_with_timeout(serve_fut, config.connection_handling_timeout, config.metrics, peer)
                 .await;
         }
-    } else {
-        warn!(?peer, "TLS acceptor not initialized");
     }
 }
