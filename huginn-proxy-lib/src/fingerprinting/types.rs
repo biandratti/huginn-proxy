@@ -13,3 +13,21 @@ pub enum SynResult {
     /// BPF map entry found but TCP options bytes were malformed.
     Malformed,
 }
+
+impl SynResult {
+    pub fn label(&self) -> &'static str {
+        match self {
+            Self::Hit(_) => "hit",
+            Self::Miss => "miss",
+            Self::Malformed => "malformed",
+        }
+    }
+
+    pub fn observation(&self) -> Option<&TcpObservation> {
+        if let Self::Hit(obs) = self {
+            Some(obs)
+        } else {
+            None
+        }
+    }
+}

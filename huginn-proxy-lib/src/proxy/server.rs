@@ -229,13 +229,8 @@ pub async fn run(
                 let syn_duration = syn_start.elapsed().as_secs_f64();
 
                 let syn_fingerprint: Option<TcpObservation> = syn_result.as_ref().and_then(|r| {
-                    let label = match r {
-                        SynResult::Hit(_) => "hit",
-                        SynResult::Miss => "miss",
-                        SynResult::Malformed => "malformed",
-                    };
-                    metrics_clone.record_tcp_syn_fingerprint(label, syn_duration);
-                    if let SynResult::Hit(obs) = r { Some(obs.clone()) } else { None }
+                    metrics_clone.record_tcp_syn_fingerprint(r.label(), syn_duration);
+                    r.observation().cloned()
                 });
 
                 // Load a fresh config snapshot for this connection (lock-free ArcSwap load).
@@ -389,9 +384,15 @@ pub async fn run(
     if active == 0 {
         info!("All connections closed, shutdown complete");
     } else if timed_out {
-        warn!(active_connections = active, "Shutdown timeout reached, {} connections still active", active);
+        warn!(
+            active_connections = active,
+            "Shutdown timeout reached, {} connections still active", active
+        );
     } else {
-        warn!(active_connections = active, "Connection closed notification received but {} connections still active", active);
+        warn!(
+            active_connections = active,
+            "Connection closed notification received but {} connections still active", active
+        );
     }
 
     info!("Proxy server stopped");
