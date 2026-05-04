@@ -1,24 +1,14 @@
 //! Rate limiting implementation for Huginn Proxy.
 //!
-//! This module provides efficient, lock-free rate limiting using algorithms
-//! adapted from Cloudflare's Pingora proxy. It uses:
+//! The low-level Count-Min Sketch ([`Estimator`]) and the dual-buffer sliding
+//! window ([`Rate`]) come from Cloudflare's [`pingora_limits`] crate. This
+//! module provides a thin, opinionated wrapper:
 //!
-//! - **Count-Min Sketch**: Probabilistic data structure for frequency estimation
-//! - **Sliding Window**: Dual-buffer approach for smooth rate tracking
-//! - **Atomic Operations**: Lock-free implementation for high concurrency
-//!
-//! # Architecture
-//!
-//! The rate limiting system consists of three main components:
-//!
-//! 1. **Estimator** (`estimator.rs`): Count-Min Sketch implementation for
-//!    tracking event frequencies.
-//!
-//! 2. **Rate** (`rate.rs`): Sliding window rate tracker using dual buffers
-//!    (red/blue slots) that swap atomically at interval boundaries.
-//!
-//! 3. **RateLimiter** (`limiter.rs`): High-level rate limiter that combines
-//!    the rate tracker with limit enforcement logic.
+//! - [`RateLimiter`] (`limiter.rs`): high-level limiter that combines a
+//!   [`Rate`] tracker with limit enforcement and the result type
+//!   [`RateLimitResult`].
+//! - [`RateLimitManager`] (`manager.rs`): registry of global and per-route
+//!   limiters plus key extraction (IP, header, route, combined).
 //!
 //! # Example Usage
 //!
@@ -33,11 +23,9 @@
 //! match limiter.check(&"192.168.1.1") {
 //!     RateLimitResult::Allowed { limit, remaining } => {
 //!         println!("Request allowed. {}/{} remaining", remaining, limit);
-//!         // Process request...
 //!     }
 //!     RateLimitResult::Limited { limit, reset_after, .. } => {
 //!         println!("Rate limited. Try again in {:?}", reset_after);
-//!         // Return 429 Too Many Requests
 //!     }
 //! }
 //! ```
@@ -58,20 +46,11 @@
 //! rate_limit = { requests_per_second = 50, burst = 100 }
 //! ```
 
-mod estimator;
 mod limiter;
 mod manager;
-mod rate;
 
 pub use limiter::{RateLimitResult, RateLimiter};
 pub use manager::{extract_rate_limit_key, RateLimitManager};
 
-pub use rate::Rate;
-
-use ahash::RandomState;
-use std::hash::Hash;
-
-#[inline]
-fn hash<T: Hash>(key: T, hasher: &RandomState) -> u64 {
-    hasher.hash_one(key)
-}
+pub use pingora_limits::estimator::Estimator;
+pub use pingora_limits::rate::Rate;
