@@ -1,21 +1,22 @@
 use ahash::AHashMap;
-use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
 use super::{RateLimitResult, RateLimiter};
 use crate::config::{LimitBy, RateLimitConfig, Route};
 
-/// Manager for rate limiters (global and per-route)
+/// Manager for rate limiters (global and per-route).
 ///
 /// This struct holds rate limiters for:
-/// - Global rate limiting (applies to all routes unless overridden)
-/// - Per-route rate limiting (specific limits for individual routes)
+/// - Global rate limiting (applies to all routes unless overridden).
+/// - Per-route rate limiting (specific limits for individual routes).
 ///
+/// The manager is immutable after construction. Hot reload swaps the entire
+/// manager atomically via `proxy::reload::SharedRateLimiter`
 pub struct RateLimitManager {
     /// Global rate limiter (optional)
-    global: Option<Arc<RateLimiter>>,
+    global: Option<RateLimiter>,
     /// Per-route rate limiters
-    route_limiters: Arc<RwLock<AHashMap<String, Arc<RateLimiter>>>>,
+    route_limiters: AHashMap<String, RateLimiter>,
 }
 
 impl RateLimitManager {
@@ -27,11 +28,7 @@ impl RateLimitManager {
     pub fn new(global_config: &RateLimitConfig, routes: &[Route]) -> Self {
         let global = if global_config.enabled {
             let window = Duration::from_secs(global_config.window_seconds);
-            Some(Arc::new(RateLimiter::new(
-                global_config.requests_per_second,
-                global_config.burst,
-                window,
-            )))
+            Some(RateLimiter::new(global_config.requests_per_second, global_config.burst, window))
         } else {
             None
         };
@@ -47,13 +44,13 @@ impl RateLimitManager {
                     let burst = route_rate_limit.burst.unwrap_or(global_config.burst);
                     let window = Duration::from_secs(global_config.window_seconds);
 
-                    let limiter = Arc::new(RateLimiter::new(rps, burst, window));
-                    route_limiters.insert(route.prefix.clone(), limiter);
+                    route_limiters
+                        .insert(route.prefix.clone(), RateLimiter::new(rps, burst, window));
                 }
             }
         }
 
-        Self { global, route_limiters: Arc::new(RwLock::new(route_limiters)) }
+        Self { global, route_limiters }
     }
 
     /// Check if a request is allowed (not rate limited)
@@ -66,35 +63,20 @@ impl RateLimitManager {
     /// * `RateLimitResult::Allowed` if request is permitted
     /// * `RateLimitResult::Limited` if request exceeds rate limit
     pub fn check(&self, key: &str, route_prefix: Option<&str>) -> RateLimitResult {
-        // Check per-route limiter first (if exists)
         if let Some(prefix) = route_prefix {
-            let limiters = match self.route_limiters.read() {
-                Ok(guard) => guard,
-                Err(_) => {
-                    tracing::warn!("Rate limit manager lock poisoned");
-                    return RateLimitResult::Allowed { remaining: 0, limit: 0 };
-                }
-            };
-
-            if let Some(limiter) = limiters.get(prefix) {
+            if let Some(limiter) = self.route_limiters.get(prefix) {
                 return limiter.check(key);
             }
         }
 
-        if let Some(ref global_limiter) = self.global {
-            return global_limiter.check(key);
+        match &self.global {
+            Some(global_limiter) => global_limiter.check(key),
+            None => RateLimitResult::Allowed { remaining: isize::MAX, limit: isize::MAX },
         }
-
-        RateLimitResult::Allowed { remaining: isize::MAX, limit: isize::MAX }
     }
 
     pub fn is_enabled(&self) -> bool {
-        self.global.is_some() || {
-            match self.route_limiters.read() {
-                Ok(guard) => !guard.is_empty(),
-                Err(_) => false,
-            }
-        }
+        self.global.is_some() || !self.route_limiters.is_empty()
     }
 }
 

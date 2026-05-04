@@ -65,7 +65,7 @@ pub struct SecurityHeaders {
 
 /// HSTS (HTTP Strict Transport Security) configuration
 ///
-/// Reference: RFC 6797 - https://tools.ietf.org/html/rfc6797
+/// Reference: RFC 6797 - <https://tools.ietf.org/html/rfc6797>
 #[derive(Debug, Deserialize, Clone, PartialEq)]
 pub struct HstsConfig {
     /// Enable HSTS (only applies to HTTPS connections)
@@ -87,7 +87,7 @@ pub struct HstsConfig {
     pub include_subdomains: bool,
     /// Add preload directive for HSTS preload list submission
     ///
-    /// Warning: Only enable if you plan to submit to https://hstspreload.org/
+    /// Warning: Only enable if you plan to submit to <https://hstspreload.org/>
     /// This is a permanent commitment and cannot be easily undone.
     #[serde(default)]
     pub preload: bool,

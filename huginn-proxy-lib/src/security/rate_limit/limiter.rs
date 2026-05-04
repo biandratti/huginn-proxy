@@ -3,7 +3,7 @@
 //! This module provides a convenient wrapper around the low-level Rate tracker
 //! with rate limiting logic and result types.
 
-use crate::security::rate_limit::rate::Rate;
+use pingora_limits::rate::Rate;
 use std::hash::Hash;
 use std::time::Duration;
 
@@ -119,7 +119,7 @@ impl RateLimiter {
     /// # Returns
     /// `RateLimitResult` indicating whether the request is allowed or limited
     pub fn check<T: Hash + ?Sized>(&self, key: &T) -> RateLimitResult {
-        let current = self.rate_tracker.observe(key, 1);
+        let current = self.rate_tracker.observe(&key, 1);
 
         if current > self.max_requests {
             RateLimitResult::Limited {
@@ -146,7 +146,7 @@ impl RateLimiter {
     /// # Returns
     /// `RateLimitResult` indicating whether a request would be allowed
     pub fn check_only<T: Hash + ?Sized>(&self, key: &T) -> RateLimitResult {
-        let current = self.rate_tracker.observe(key, 0); // Observe with 0 to not increment
+        let current = self.rate_tracker.observe(&key, 0); // Observe with 0 to not increment
 
         if current >= self.max_requests {
             RateLimitResult::Limited {
@@ -166,7 +166,7 @@ impl RateLimiter {
     ///
     /// This returns the rate from the previous completed window.
     pub fn current_rate<T: Hash + ?Sized>(&self, key: &T) -> f64 {
-        self.rate_tracker.rate(key)
+        self.rate_tracker.rate(&key)
     }
 
     /// Get the configured maximum requests (burst limit).

@@ -12,7 +12,7 @@ pub struct TelemetryConfig {
     pub metrics_port: Option<u16>,
     /// OpenTelemetry internal log level
     /// Controls verbosity of OpenTelemetry SDK internal logs (not application logs)
-    /// This is separate from the main application log level in [logging]
+    /// This is separate from the main application log level in the \[logging\] TOML table
     /// Options: "trace", "debug", "info", "warn", "error"
     /// Default: "warn" (suppress informational logs from OpenTelemetry SDK)
     #[serde(default = "default_otel_log_level")]

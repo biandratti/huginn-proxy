@@ -8,7 +8,7 @@ use tracing::{error, info, warn};
 use super::{build_cert_reloader, build_tls_acceptor};
 
 pub struct TlsSetup {
-    /// TLS acceptor wrapped in Arc<RwLock> for thread-safe hot reload
+    /// TLS acceptor wrapped in `Arc<RwLock<Option<TlsAcceptor>>>` for thread-safe hot reload
     pub acceptor: Arc<RwLock<Option<TlsAcceptor>>>,
 }
 

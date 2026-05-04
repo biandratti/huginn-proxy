@@ -5,9 +5,18 @@ use std::net::SocketAddr;
 #[derive(Debug, Deserialize, Clone, PartialEq)]
 pub struct ListenConfig {
     /// Addresses and ports to listen on. One or more entries, one per IP family.
-    /// Example IPv4 only: ["0.0.0.0:7000"]
-    /// Example IPv6 only: ["[::]:7000"]
-    /// Example both:      ["0.0.0.0:7000", "[::]:7000"]
+    /// Example IPv4 only:
+    /// ```text
+    /// ["0.0.0.0:7000"]
+    /// ```
+    /// Example IPv6 only:
+    /// ```text
+    /// ["[::]:7000"]
+    /// ```
+    /// Example both:
+    /// ```text
+    /// ["0.0.0.0:7000", "[::]:7000"]
+    /// ```
     pub addrs: Vec<SocketAddr>,
     /// `listen(2)` backlog — length of the pending-connection queue per listener socket.
     /// Raise this under high connection rates to avoid the kernel silently dropping SYNs before

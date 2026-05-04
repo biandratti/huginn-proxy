@@ -3,15 +3,6 @@ use std::thread::sleep;
 use std::time::Duration;
 
 #[test]
-fn test_interval_getter() {
-    let rate = Rate::new(Duration::from_secs(1));
-    assert_eq!(rate.interval(), Duration::from_secs(1));
-
-    let rate2 = Rate::new(Duration::from_millis(500));
-    assert_eq!(rate2.interval(), Duration::from_millis(500));
-}
-
-#[test]
 fn test_observe_rate() {
     let r = Rate::new(Duration::from_secs(1));
     let key = 1;
