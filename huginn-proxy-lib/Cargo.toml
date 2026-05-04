@@ -39,6 +39,8 @@ tracing-subscriber.workspace = true
 
 [dev-dependencies]
 criterion = { workspace = true }
+http.workspace = true
+ipnet.workspace = true
 rcgen.workspace = true
 reqwest = { workspace = true, features = ["json", "http2"] }
 serial_test.workspace = true
