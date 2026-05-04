@@ -1,6 +1,7 @@
-# Observability stack: Prometheus + Grafana.
+# Observability stack: Prometheus + Grafana + cAdvisor (container CPU / memory).
 # Run AFTER the main proxy stack so port 9090/9091 are already published on the host.
 # Prometheus reaches the proxy and eBPF agent via host.docker.internal (host-gateway).
+# cAdvisor reads host cgroups and exposes /metrics on the compose network (Prometheus scrapes it).
 #
 # Start:
 #   docker compose -f docker-compose.observability.yml up -d
@@ -13,6 +14,22 @@
 name: huginn-observability
 
 services:
+  # Volumes match the upstream quick start: https://github.com/google/cadvisor#quick-start-running-cadvisor-in-a-docker-container
+  cadvisor:
+    image: ghcr.io/google/cadvisor:0.55.1
+    privileged: true
+    devices:
+      - /dev/kmsg:/dev/kmsg
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    ports:
+      - "8099:8080"
+    restart: unless-stopped
+
   prometheus:
     image: prom/prometheus:v3.11.2
     volumes:
@@ -26,6 +43,8 @@ services:
       - "--config.file=/etc/prometheus/prometheus.yml"
       - "--storage.tsdb.path=/prometheus"
       - "--web.enable-lifecycle"
+    depends_on:
+      - cadvisor
     restart: unless-stopped
 
   grafana:

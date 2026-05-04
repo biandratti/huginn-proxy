@@ -2,7 +2,7 @@
   "id": null,
   "uid": "huginn-proxy-overview",
   "title": "Huginn Proxy",
-  "description": "Connections, requests, TLS, fingerprinting, backends, rate limiting, header manipulation, and eBPF agent.",
+  "description": "Connections, requests, TLS, fingerprinting, backends, rate limiting, header manipulation, eBPF agent, and Docker container resources (cAdvisor).",
   "tags": [
     "huginn",
     "proxy",
@@ -2168,6 +2168,85 @@
       "fieldConfig": {
         "defaults": {
           "unit": "short"
+        }
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 200,
+      "type": "row",
+      "title": "Docker resources (cAdvisor)",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 154,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "id": 201,
+      "type": "timeseries",
+      "title": "Container CPU (compose: proxy / ebpf-agent)",
+      "description": "CPU usage from cAdvisor. Series are summed by Compose project and service (expects services named `proxy` and `ebpf-agent`, e.g. examples/docker-compose.ebpf.yml). Values are approximate cores (rate of cgroup CPU seconds). Requires docker-compose.observability.yml with cAdvisor.",
+      "gridPos": {
+        "x": 0,
+        "y": 155,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "sum by (container_label_com_docker_compose_project, container_label_com_docker_compose_service) (rate(container_cpu_usage_seconds_total{container_label_com_docker_compose_service=~\"proxy|ebpf-agent\", id!=\"/\"}[$__rate_interval]))",
+          "legendFormat": "{{container_label_com_docker_compose_project}} / {{container_label_com_docker_compose_service}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 3
+        }
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 202,
+      "type": "timeseries",
+      "title": "Container memory working set",
+      "description": "container_memory_working_set_bytes for the same Compose services as the CPU panel.",
+      "gridPos": {
+        "x": 12,
+        "y": 155,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "sum by (container_label_com_docker_compose_project, container_label_com_docker_compose_service) (container_memory_working_set_bytes{container_label_com_docker_compose_service=~\"proxy|ebpf-agent\", id!=\"/\"})",
+          "legendFormat": "{{container_label_com_docker_compose_project}} / {{container_label_com_docker_compose_service}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes"
         }
       },
       "options": {
