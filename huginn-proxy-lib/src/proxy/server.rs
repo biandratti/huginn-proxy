@@ -1,5 +1,4 @@
 use std::net::SocketAddr;
-use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
@@ -10,80 +9,24 @@ use tokio::net::TcpListener;
 use tokio::runtime::Handle;
 use tokio::signal;
 use tokio::sync::watch;
-use tokio::time::{Duration, Instant};
+use tokio::time::Duration;
 use tracing::{info, warn};
 
 use crate::backend::health_check::{HealthCheckSupervisor, HealthRegistry};
-use crate::backend::{BackendSelector, UpstreamGateway};
+use crate::backend::BackendSelector;
 use crate::config::watcher::spawn_config_watcher;
 use crate::config::{DynamicConfig, StaticConfig};
 use crate::error::Result;
-use crate::fingerprinting::{SynResult, TcpObservation};
-use crate::proxy::connection::{ConnectionError, ConnectionManager};
-use crate::proxy::context::SecurityContext;
+use crate::proxy::accept::{accept_loop, AcceptContext};
+use crate::proxy::connection::ConnectionManager;
+use crate::proxy::listener::{bind_listener, register_signal};
 use crate::proxy::reload::{initial_client_pool, initial_rate_limiter, try_reload};
-use crate::proxy::transport::{
-    handle_plain_connection, handle_tls_connection, PlainConnectionConfig, TlsConnectionConfig,
-};
+use crate::proxy::shutdown::wait_for_drain;
 use crate::telemetry::Metrics;
 use crate::tls::setup_tls_with_hot_reload;
 
-/// Callback type for TCP SYN fingerprint lookup.
-///
-/// Returns a [`SynResult`] so the server can record a precise metric label.
-/// Implemented by `huginn-proxy` when the `ebpf-tcp` feature is enabled.
-pub type SynProbe = Arc<dyn Fn(SocketAddr) -> SynResult + Send + Sync>;
-
-/// Options controlling filesystem watching and hot reload.
-#[derive(Debug, Clone)]
-pub struct WatchOptions {
-    /// Path to the TOML config file, required for SIGHUP reload and `--watch` TOML watching.
-    /// `None` disables config hot-reload (reload attempts are silently skipped).
-    pub config_path: Option<PathBuf>,
-    /// Enable filesystem watching for TLS certificate and config hot reload.
-    pub watch: bool,
-    /// Debounce delay in seconds before applying a reload after a file-change event.
-    pub watch_delay_secs: u32,
-}
-
-impl Default for WatchOptions {
-    fn default() -> Self {
-        Self { config_path: None, watch: false, watch_delay_secs: 60 }
-    }
-}
-
-/// Bind a TCP listener to `addr` with the given `listen(2)` backlog.
-///
-/// IPv6 sockets are created with `IPV6_V6ONLY = 1` so they accept only native
-/// IPv6 connections. This prevents the dual-stack ambiguity where an IPv4 client
-/// arrives as `::ffff:x.y.z.w` (`SocketAddr::V6`), which would cause the SYN
-/// fingerprint lookup to hit the wrong eBPF map.
-fn register_signal(kind: signal::unix::SignalKind, name: &str) -> Result<signal::unix::Signal> {
-    signal::unix::signal(kind).map_err(|e| {
-        crate::error::ProxyError::Io(std::io::Error::other(format!(
-            "Failed to setup {name} handler: {e}"
-        )))
-    })
-}
-
-fn bind_listener(addr: SocketAddr, backlog: i32) -> std::io::Result<TcpListener> {
-    use socket2::{Domain, Protocol, Socket, Type};
-
-    let domain = if addr.is_ipv6() {
-        Domain::IPV6
-    } else {
-        Domain::IPV4
-    };
-    let socket = Socket::new(domain, Type::STREAM, Some(Protocol::TCP))?;
-    socket.set_reuse_address(true)?;
-    if addr.is_ipv6() {
-        socket.set_only_v6(true)?;
-    }
-    socket.bind(&addr.into())?;
-    socket.listen(backlog)?;
-    socket.set_nonblocking(true)?;
-    TcpListener::from_std(socket.into())
-}
+pub use crate::proxy::accept::SynProbe;
+pub use crate::proxy::watch::WatchOptions;
 
 pub async fn run(
     static_cfg: Arc<StaticConfig>,
@@ -127,20 +70,20 @@ pub async fn run(
         None => None,
     };
 
-    let shutdown_signal = Arc::new(AtomicUsize::new(0)); // 0 = running, 1 = shutdown requested
-    let (connections_closed_tx, mut connections_closed_rx) = watch::channel(());
+    let shutdown_signal = Arc::new(AtomicUsize::new(0));
+    let (connections_closed_tx, connections_closed_rx) = watch::channel(());
     let connection_manager = Arc::new(ConnectionManager::new(
         static_cfg.max_connections,
         shutdown_signal.clone(),
         connections_closed_tx.clone(),
     ));
-    let active_connections = connection_manager.active_connections();
 
     let mut sigterm = register_signal(signal::unix::SignalKind::terminate(), "SIGTERM")?;
     let mut sigint = register_signal(signal::unix::SignalKind::interrupt(), "SIGINT")?;
     let mut sighup = register_signal(signal::unix::SignalKind::hangup(), "SIGHUP")?;
 
     let (reload_tx, mut reload_rx) = tokio::sync::mpsc::unbounded_channel::<()>();
+    let sighup_tx = reload_tx.clone();
     if watch_opts.watch {
         match &watch_opts.config_path {
             Some(config_path) => {
@@ -172,168 +115,49 @@ pub async fn run(
         info!(?addr, "starting proxy");
     }
 
-    let fingerprint_config = static_cfg.fingerprint.clone();
-    let keep_alive_config = static_cfg.timeout.keep_alive.clone();
-    let tls_handshake_timeout = Duration::from_secs(static_cfg.timeout.tls_handshake_secs);
-    let connection_handling_timeout =
-        Duration::from_secs(static_cfg.timeout.connection_handling_secs);
+    let ctx = Arc::new(AcceptContext {
+        dynamic_cfg: Arc::clone(&dynamic_cfg),
+        rate_limiter: Arc::clone(&rate_limiter),
+        tls_acceptor,
+        fingerprint_config: static_cfg.fingerprint.clone(),
+        keep_alive_config: static_cfg.timeout.keep_alive.clone(),
+        metrics: Arc::clone(&metrics),
+        client_pool: Arc::clone(&client_pool),
+        builder,
+        syn_probe,
+        health_registry: Arc::clone(&health_registry),
+        backend_selector: Arc::clone(&backend_selector),
+        tls_handshake_timeout: Duration::from_secs(static_cfg.timeout.tls_handshake_secs),
+        connection_handling_timeout: Duration::from_secs(
+            static_cfg.timeout.connection_handling_secs,
+        ),
+    });
 
     // Spawn one accept task per listener.
     // Each new connection loads a fresh snapshot of DynamicConfig + rate-limiter so it
     // automatically picks up any hot-reloaded configuration.
     let mut accept_tasks = tokio::task::JoinSet::new();
     for (addr, listener) in listeners {
-        let shutdown_signal_clone = shutdown_signal.clone();
-        let connection_manager_clone = connection_manager.clone();
-        let dynamic_cfg_clone = Arc::clone(&dynamic_cfg);
-        let rate_limiter_clone = Arc::clone(&rate_limiter);
-        let tls_acceptor_clone = tls_acceptor.clone();
-        let fingerprint_config = fingerprint_config.clone();
-        let keep_alive_config = keep_alive_config.clone();
-        let metrics_clone = metrics.clone();
-        let client_pool_clone = Arc::clone(&client_pool);
-        let builder_clone = builder.clone();
-        let syn_probe_clone = syn_probe.clone();
-        let health_registry_for_conn = health_registry.clone();
-        let backend_selector_for_conn = backend_selector.clone();
-
-        accept_tasks.spawn(async move {
-            loop {
-                if shutdown_signal_clone.load(Ordering::Relaxed) != 0 {
-                    break;
-                }
-
-                let (stream, peer) = match listener.accept().await {
-                    Ok(pair) => pair,
-                    Err(e) => {
-                        warn!(error = %e, ?addr, "accept error");
-                        continue;
-                    }
-                };
-
-                // Try to accept connection (checks limits and shutdown)
-                let guard = match connection_manager_clone.try_accept(peer, &metrics_clone) {
-                    Ok(g) => g,
-                    Err(ConnectionError::Shutdown) => {
-                        drop(stream);
-                        break;
-                    }
-                    Err(ConnectionError::LimitExceeded { .. }) => {
-                        drop(stream);
-                        continue;
-                    }
-                };
-
-                let syn_start = Instant::now();
-                let syn_result = syn_probe_clone.as_ref().map(|probe| probe(peer));
-                let syn_duration = syn_start.elapsed().as_secs_f64();
-
-                let syn_fingerprint: Option<TcpObservation> = syn_result.as_ref().and_then(|r| {
-                    metrics_clone.record_tcp_syn_fingerprint(r.label(), syn_duration);
-                    r.observation().cloned()
-                });
-
-                // Load a fresh config snapshot for this connection (lock-free ArcSwap load).
-                let dynamic = dynamic_cfg_clone.load();
-                let rate_mgr = rate_limiter_clone
-                    .read()
-                    .unwrap_or_else(|e| e.into_inner())
-                    .clone();
-                let security = SecurityContext::new(
-                    dynamic.security.headers.clone(),
-                    dynamic.security.ip_filter.clone(),
-                    dynamic.security.rate_limit.clone(),
-                    rate_mgr,
-                    dynamic.headers.clone(),
-                );
-                let backends = Arc::new(dynamic.backends.clone());
-                let routes = dynamic.routes.clone();
-                let preserve_host = dynamic.preserve_host;
-
-                let builder_task = builder_clone.clone();
-                let tls_acceptor_task = tls_acceptor_clone.clone();
-                let fingerprint_config_task = fingerprint_config.clone();
-                let keep_alive_task = keep_alive_config.clone();
-                let metrics_task = metrics_clone.clone();
-                let client_pool_task = client_pool_clone.load_full();
-                let upstream_task = UpstreamGateway::new(
-                    health_registry_for_conn.clone(),
-                    backend_selector_for_conn.clone(),
-                );
-
-                tokio::spawn(async move {
-                    let _guard = guard;
-
-                    if let Some(ref tls_acceptor_lock) = tls_acceptor_task {
-                        handle_tls_connection(
-                            stream,
-                            peer,
-                            TlsConnectionConfig {
-                                tls_acceptor: tls_acceptor_lock.clone(),
-                                fingerprint_config: fingerprint_config_task,
-                                routes,
-                                backends,
-                                keep_alive: keep_alive_task.clone(),
-                                security: security.clone(),
-                                metrics: metrics_task.clone(),
-                                builder: builder_task.clone(),
-                                preserve_host,
-                                tls_handshake_timeout,
-                                connection_handling_timeout,
-                                client_pool: client_pool_task.clone(),
-                                syn_fingerprint: syn_fingerprint.clone(),
-                                upstream: upstream_task.clone(),
-                            },
-                        )
-                        .await;
-                    } else {
-                        handle_plain_connection(
-                            stream,
-                            peer,
-                            PlainConnectionConfig {
-                                routes,
-                                backends,
-                                keep_alive: keep_alive_task,
-                                security,
-                                metrics: metrics_task,
-                                builder: builder_task,
-                                preserve_host,
-                                connection_handling_timeout,
-                                client_pool: client_pool_task,
-                                syn_fingerprint,
-                                upstream: upstream_task,
-                            },
-                        )
-                        .await;
-                    }
-                });
-            }
-        });
+        accept_tasks.spawn(accept_loop(
+            addr,
+            listener,
+            Arc::clone(&shutdown_signal),
+            Arc::clone(&connection_manager),
+            Arc::clone(&ctx),
+        ));
     }
 
-    // Signal loop: handle SIGHUP (reload) in a loop; exit on SIGTERM / SIGINT.
+    // Signal loop: SIGHUP forwards to the reload channel; SIGTERM/SIGINT trigger shutdown.
     loop {
         tokio::select! {
-            // SIGHUP triggers an immediate config reload attempt.
             _ = sighup.recv() => {
                 info!("Received SIGHUP, triggering config reload");
-                if let Some(ref config_path) = watch_opts.config_path {
-                    try_reload(
-                        config_path,
-                        &static_cfg,
-                        &dynamic_cfg,
-                        &rate_limiter,
-                        &client_pool,
-                        &reload_mutex,
-                        &metrics,
-                        &health_supervisor,
-                    )
-                    .await;
+                if watch_opts.config_path.is_some() {
+                    let _ = sighup_tx.send(());
                 } else {
                     warn!("SIGHUP received but no config path configured — reload skipped");
                 }
             }
-            // filesystem watcher sends here when TOML changes (--watch only).
             Some(_) = reload_rx.recv() => {
                 if let Some(ref config_path) = watch_opts.config_path {
                     try_reload(
@@ -371,29 +195,12 @@ pub async fn run(
         "Waiting for active connections to finish (timeout: {}s)",
         static_cfg.timeout.shutdown_secs
     );
-    let start = Instant::now();
-    let shutdown_timeout = Duration::from_secs(static_cfg.timeout.shutdown_secs);
-    let deadline = start
-        .checked_add(shutdown_timeout)
-        .unwrap_or_else(|| start.checked_add(Duration::from_secs(60)).unwrap_or(start));
-    let timed_out = tokio::select! {
-        _ = connections_closed_rx.changed() => false,
-        _ = tokio::time::sleep_until(deadline) => true,
-    };
-    let active = active_connections.load(Ordering::Relaxed);
-    if active == 0 {
-        info!("All connections closed, shutdown complete");
-    } else if timed_out {
-        warn!(
-            active_connections = active,
-            "Shutdown timeout reached, {} connections still active", active
-        );
-    } else {
-        warn!(
-            active_connections = active,
-            "Connection closed notification received but {} connections still active", active
-        );
-    }
+    wait_for_drain(
+        connections_closed_rx,
+        connection_manager.active_connections(),
+        static_cfg.timeout.shutdown_secs,
+    )
+    .await;
 
     info!("Proxy server stopped");
     Ok(())
