@@ -143,7 +143,7 @@ impl RateLimiter {
     /// # Parameters
     /// - `key`: Identifier for the entity being rate limited
     ///
-    /// # Rethe turns
+    /// # Returns
     /// `RateLimitResult` indicating whether a request would be allowed
     pub fn check_only<T: Hash + ?Sized>(&self, key: &T) -> RateLimitResult {
         let current = self.rate_tracker.observe(&key, 0); // Observe with 0 to not increment
