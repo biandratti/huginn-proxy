@@ -17,13 +17,11 @@ async fn test_build_cert_reloader() -> Result<(), Box<dyn std::error::Error + Se
         session_resumption: Default::default(),
     };
 
-    // This should succeed in creating the reloader service with valid certificates
     let result = build_cert_reloader(&config, true, 60).await;
 
     let _ = std::fs::remove_file(&cert_path);
     let _ = std::fs::remove_file(&key_path);
 
-    // Should succeed - reloader service is created with valid certificates
     let rx = match result {
         Ok(rx) => rx,
         Err(e) => panic!("build_cert_reloader should succeed with valid certificates: {e}"),
@@ -36,7 +34,6 @@ async fn test_build_cert_reloader() -> Result<(), Box<dyn std::error::Error + Se
 
     let alpn = vec!["h2".to_string()];
     let options = TlsOptions::default();
-    // With valid certs, this should also succeed
     let acceptor_result =
         certs_keys.build_tls_acceptor(&alpn, &options, &config.session_resumption);
     assert!(
@@ -59,7 +56,6 @@ async fn test_build_cert_reloader_missing_files(
         session_resumption: Default::default(),
     };
 
-    // Should fail because certificates must exist at startup
     let result = build_cert_reloader(&config, true, 60).await;
     assert!(result.is_err());
     Ok(())
@@ -82,13 +78,11 @@ async fn watcher_updates_receiver_when_cert_files_change(
     let mut rx = build_cert_reloader(&config, true, 1).await?;
     let initial = rx.borrow().clone().ok_or("initial cert value was None")?;
 
-    // Overwrite the files with a fresh cert — rcgen generates unique keys each time.
     let rcgen::CertifiedKey { cert, signing_key } =
         rcgen::generate_simple_self_signed(vec!["localhost".to_string()])?;
     std::fs::write(&cert_path, cert.pem())?;
     std::fs::write(&key_path, signing_key.serialize_pem())?;
 
-    // Wait up to 5 s for the watcher to pick up the change (debounce = 1 s).
     match tokio::time::timeout(Duration::from_secs(5), async {
         loop {
             match rx.changed().await {
@@ -126,7 +120,6 @@ fn test_server_certs_keys_build_tls_acceptor(
     let alpn = vec!["h2".to_string()];
     let options = TlsOptions::default();
 
-    // This will fail because certs/key are invalid, but we test the function exists
     let result = server_certs_keys.build_tls_acceptor(&alpn, &options, &Default::default());
     assert!(result.is_err());
     Ok(())

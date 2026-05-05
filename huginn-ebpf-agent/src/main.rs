@@ -81,12 +81,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         dst_ip_v6 = %cfg.dst_ip_v6,
         dst_port = %cfg.dst_port,
         xdp_mode = xdp_mode_str,
-        "eBPF agent ready — waiting for SIGTERM"
+        "eBPF agent ready, waiting for SIGTERM"
     );
 
     wait_for_shutdown_signal().await?;
 
-    tracing::info!("Shutting down — unpinning maps and detaching XDP");
+    tracing::info!("Shutting down, unpinning maps and detaching XDP");
     EbpfProbe::unpin_maps(&cfg.pin_path);
     drop(probe);
 

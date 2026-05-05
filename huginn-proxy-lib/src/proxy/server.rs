@@ -88,7 +88,7 @@ pub async fn run(
                 spawn_config_watcher(config_path.clone(), reload_tx, watch_opts.watch_delay_secs)?;
             }
             None => {
-                warn!("HUGINN_WATCH=true but no config path provided — hot-reload disabled");
+                warn!("HUGINN_WATCH=true but no config path provided hot-reload disabled");
             }
         }
     } else {
@@ -153,7 +153,7 @@ pub async fn run(
                 if watch_opts.config_path.is_some() {
                     let _ = sighup_tx.send(());
                 } else {
-                    warn!("SIGHUP received but no config path configured — reload skipped");
+                    warn!("SIGHUP received but no config path configured reload skipped");
                 }
             }
             Some(_) = reload_rx.recv() => {

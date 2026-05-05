@@ -103,7 +103,7 @@ pub async fn read_certs_and_keys(
     Ok(ServerCertsKeys { certs, key })
 }
 
-/// Load certificates once and return a static receiver — no filesystem watching.
+/// Load certificates once and return a static receiver, no filesystem watching.
 async fn load_certs_static(
     cert_path: &Path,
     key_path: &Path,

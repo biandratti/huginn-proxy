@@ -53,7 +53,7 @@ impl BackendEcho {
                     )
                     && parts[2].starts_with("HTTP/")
                 {
-                    // Strip query string — whoami includes it in the request line
+                    // Strip query string whoami includes it in the request line
                     // but the proxy path tests only care about the path component.
                     let raw = parts[1];
                     path = Some(

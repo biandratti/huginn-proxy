@@ -80,7 +80,7 @@ async fn test_fingerprint_isolation_from_added_headers(
         .ok_or("Custom header should be present")?;
     assert_eq!(custom_header1, "test-value-1", "Custom header value should match what we sent");
 
-    // Second request: with DIFFERENT custom headers — fingerprints must be identical
+    // Second request: with DIFFERENT custom headers fingerprints must be identical
     let response2 = client
         .get(PROXY_HTTPS_URL_IPV4)
         .header("X-Custom-Header", "test-value-2")

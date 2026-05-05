@@ -27,7 +27,7 @@ pub fn make_key_v4(src_ip: u32, src_port: u16) -> u64 {
 /// followed by 2 bytes of port in native-endian order, which on a LE CPU recovers
 /// the original big-endian wire bytes stored in `tcp->source`.
 ///
-/// `src_addr` is `ip6->saddr` as a byte array — no endianness conversion needed.
+/// `src_addr` is `ip6->saddr` as a byte array, no endianness conversion needed.
 /// `src_port` is `tcp->source` as a u16 NBO-as-NE value (raw LE read of BE bytes).
 ///
 /// Userspace (`huginn-ebpf`) uses `make_bpf_key_v6` which reconstructs the same bytes

@@ -13,7 +13,7 @@ use super::startup::timeout::TimeoutConfig;
 use super::startup::tls::TlsConfig;
 use super::startup::StaticConfig;
 
-/// Main configuration structure — the TOML deserialization target.
+/// Main configuration structure, the TOML deserialization target.
 #[derive(Debug, Deserialize, Clone)]
 pub struct Config {
     /// Listener configuration (addresses and socket options)

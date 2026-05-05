@@ -1,6 +1,3 @@
-//! T2.4 — Tests for pin path construction.
-//! Ensures path helpers produce the expected filenames so agent and proxy agree on map locations.
-
 use std::path::Path;
 
 use huginn_ebpf::pin;

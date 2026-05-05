@@ -6,7 +6,7 @@ use super::headers::CustomHeader;
 /// Security configuration (used for TOML deserialization via Config)
 #[derive(Debug, Deserialize, Clone)]
 pub struct SecurityConfig {
-    /// Maximum number of concurrent connections allowed (static — requires restart to change)
+    /// Maximum number of concurrent connections allowed (static requires restart to change)
     #[serde(default = "default_max_connections")]
     pub max_connections: usize,
     /// Security headers configuration

@@ -34,7 +34,7 @@ impl Drop for ConnectionGuard {
 }
 
 /// Guard to decrement TLS connection metrics counter when dropped.
-/// Does NOT touch the main `active_connections` counter — that is handled by `ConnectionGuard`.
+/// Does NOT touch the main `active_connections` counter that is handled by `ConnectionGuard`.
 pub struct TlsConnectionGuard {
     tls_active: Option<opentelemetry::metrics::UpDownCounter<i64>>,
 }

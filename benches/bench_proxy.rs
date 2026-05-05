@@ -63,7 +63,7 @@ const EXPECTED_JA4: &str = "t13i1010h2_61a7ad8aa9b6_3a8073edd8ef";
 const EXPECTED_AKAMAI: &str = "2:0;4:2097152;5:16384;6:16384|5177345|0|m,s,a,p";
 
 // ---------------------------------------------------------------------------
-// Rustls crypto provider — must be installed once per process before any
+// Rustls crypto provider must be installed once per process before any
 // TLS handshake. Criterion runs multiple benchmark fns in the same process.
 // ---------------------------------------------------------------------------
 fn ensure_crypto_provider() {

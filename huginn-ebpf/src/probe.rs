@@ -146,7 +146,7 @@ impl EbpfProbe {
     ///
     /// `syn_map_max_entries` must match the value the agent used when loading the program
     /// (e.g. `HUGINN_EBPF_SYN_MAP_MAX_ENTRIES`); it is used for stale entry detection.
-    /// This constructor does not load or attach any XDP program — the agent owns that lifecycle.
+    /// This constructor does not load or attach any XDP program, the agent owns that lifecycle.
     pub fn from_pinned(base_path: &str, syn_map_max_entries: u32) -> Result<Self, EbpfError> {
         let syn_map_path = pin::syn_map_v4_path(base_path);
         let syn_map_v6_path = pin::syn_map_v6_path(base_path);
@@ -305,7 +305,7 @@ impl EbpfProbe {
             })?;
 
         // BPF_OBJ_GET checks inode permissions (MAY_READ | MAY_WRITE).
-        // Pin files are created as 0600 root:root — make them accessible
+        // Pin files are created as 0600 root:root, make them accessible
         // to the non-root proxy process.
         let open_mode = std::fs::Permissions::from_mode(0o666);
         let _ = std::fs::set_permissions(&syn_path_v4, open_mode.clone());

@@ -5,7 +5,7 @@ use super::{BackendSelector, HealthRegistry};
 /// Combines selection and health-gate into a single forwarding context.
 ///
 /// [`BackendSelector`] (round-robin algorithm) and the [`HealthRegistry`]
-/// (per-backend health state). Cheap to clone — both fields are `Arc`.
+/// (per-backend health state). Cheap to clone both fields are `Arc`.
 #[derive(Clone)]
 pub struct UpstreamGateway {
     pub health: Arc<HealthRegistry>,

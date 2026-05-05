@@ -42,9 +42,9 @@ pub trait ConfigParser: Send + Sync {
 /// [`ConfigFormat::parser`] to obtain the matching [`ConfigParser`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConfigFormat {
-    /// TOML — used for `.toml` files.
+    /// TOML used for `.toml` files.
     Toml,
-    /// YAML — used for `.yaml` and `.yml` files.
+    /// YAML used for `.yaml` and `.yml` files.
     Yaml,
 }
 
