@@ -1,7 +1,5 @@
 use std::sync::Arc;
 
-use arc_swap::ArcSwap;
-
 use super::timeout_helper::serve_with_timeout;
 use crate::backend::UpstreamGateway;
 use crate::fingerprinting::TcpObservation;
@@ -12,18 +10,18 @@ use crate::proxy::synthetic_response::synthetic_error_response;
 use crate::proxy::ClientPool;
 use crate::telemetry::Metrics;
 use crate::tls::record_tls_handshake_metrics;
+use crate::tls::setup::SharedTlsAcceptor;
 use http::StatusCode;
 use http_body_util::BodyExt;
 use hyper_util::rt::{TokioExecutor, TokioIo};
 use hyper_util::server::conn::auto::Builder as ConnBuilder;
 use tokio::net::TcpStream;
 use tokio::time::Instant;
-use tokio_rustls::TlsAcceptor;
 use tracing::warn;
 
 /// Configuration for handling TLS connections
 pub struct TlsConnectionConfig {
-    pub tls_acceptor: Arc<ArcSwap<TlsAcceptor>>,
+    pub tls_acceptor: SharedTlsAcceptor,
     pub fingerprint_config: crate::config::FingerprintConfig,
     pub routes: Vec<crate::config::Route>,
     pub backends: Arc<Vec<crate::config::Backend>>,

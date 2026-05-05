@@ -1,7 +1,6 @@
+use arc_swap::ArcSwap;
 use std::io::Write as _;
 use std::sync::Arc;
-
-use arc_swap::ArcSwap;
 
 use huginn_proxy_lib::{
     initial_client_pool, initial_rate_limiter, try_reload, Config, DynamicConfig,
@@ -280,8 +279,8 @@ async fn reload_toggles_rate_limiter() -> TestResult {
     let (static_cfg, shared_dyn, rate_limiter, client_pool) = into_shared(config);
 
     {
-        let guard = rate_limiter.read().unwrap_or_else(|e| e.into_inner());
-        assert!(guard.is_none(), "rate limiter should start as None");
+        let mgr = (**rate_limiter.load()).clone();
+        assert!(mgr.is_none(), "rate limiter should start as None");
     }
 
     let reload_mutex = tokio::sync::Mutex::new(());
@@ -303,8 +302,8 @@ async fn reload_toggles_rate_limiter() -> TestResult {
     .await;
 
     {
-        let guard = rate_limiter.read().unwrap_or_else(|e| e.into_inner());
-        assert!(guard.is_some(), "rate limiter should be Some after enabling it");
+        let mgr = (**rate_limiter.load()).clone();
+        assert!(mgr.is_some(), "rate limiter should be Some after enabling it");
     }
 
     // Reload with rate limiting DISABLED again.
@@ -322,8 +321,8 @@ async fn reload_toggles_rate_limiter() -> TestResult {
     .await;
 
     {
-        let guard = rate_limiter.read().unwrap_or_else(|e| e.into_inner());
-        assert!(guard.is_none(), "rate limiter should be None after disabling it");
+        let mgr = (**rate_limiter.load()).clone();
+        assert!(mgr.is_none(), "rate limiter should be None after disabling it");
     }
 
     Ok(())

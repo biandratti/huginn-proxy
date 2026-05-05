@@ -1,16 +1,19 @@
 use crate::backend::health_check::{HealthCheckSupervisor, HealthRegistry};
 use crate::backend::BackendSelector;
 use crate::config::watcher::spawn_config_watcher;
-use crate::config::{DynamicConfig, StaticConfig};
+use crate::config::StaticConfig;
 use crate::error::Result;
+pub use crate::proxy::accept::SynProbe;
 use crate::proxy::accept::{accept_loop, AcceptContext};
 use crate::proxy::connection::ConnectionManager;
 use crate::proxy::listener::{bind_listener, register_signal};
-use crate::proxy::reload::{initial_client_pool, initial_rate_limiter, try_reload};
+use crate::proxy::reload::{
+    initial_client_pool, initial_rate_limiter, try_reload, SharedDynamicConfig,
+};
 use crate::proxy::shutdown::wait_for_drain;
+pub use crate::proxy::watch::WatchOptions;
 use crate::telemetry::Metrics;
 use crate::tls::setup_tls_with_hot_reload;
-use arc_swap::ArcSwap;
 use hyper_util::rt::{TokioExecutor, TokioTimer};
 use hyper_util::server::conn::auto::Builder as ConnBuilder;
 use std::net::SocketAddr;
@@ -23,12 +26,9 @@ use tokio::sync::watch;
 use tokio::time::Duration;
 use tracing::{info, warn};
 
-pub use crate::proxy::accept::SynProbe;
-pub use crate::proxy::watch::WatchOptions;
-
 pub async fn run(
     static_cfg: Arc<StaticConfig>,
-    dynamic_cfg: Arc<ArcSwap<DynamicConfig>>,
+    dynamic_cfg: SharedDynamicConfig,
     metrics: Arc<Metrics>,
     syn_probe: Option<SynProbe>,
     watch_opts: WatchOptions,

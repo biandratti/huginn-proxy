@@ -1,26 +1,23 @@
-use std::net::SocketAddr;
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Arc;
-
-use arc_swap::ArcSwap;
-use hyper_util::rt::TokioExecutor;
-use hyper_util::server::conn::auto::Builder as ConnBuilder;
-use tokio::net::TcpListener;
-use tokio::time::{Duration, Instant};
-use tokio_rustls::TlsAcceptor;
-use tracing::warn;
-
 use crate::backend::health_check::HealthRegistry;
 use crate::backend::{BackendSelector, UpstreamGateway};
-use crate::config::{DynamicConfig, FingerprintConfig, KeepAliveConfig};
+use crate::config::{FingerprintConfig, KeepAliveConfig};
 use crate::fingerprinting::{SynResult, TcpObservation};
 use crate::proxy::connection::{ConnectionError, ConnectionManager};
-use crate::proxy::reload::{SharedClientPool, SharedRateLimiter};
+use crate::proxy::reload::{SharedClientPool, SharedDynamicConfig, SharedRateLimiter};
 use crate::proxy::security_context::SecurityContext;
 use crate::proxy::transport::{
     handle_plain_connection, handle_tls_connection, PlainConnectionConfig, TlsConnectionConfig,
 };
 use crate::telemetry::Metrics;
+use crate::tls::setup::SharedTlsAcceptor;
+use hyper_util::rt::TokioExecutor;
+use hyper_util::server::conn::auto::Builder as ConnBuilder;
+use std::net::SocketAddr;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
+use tokio::net::TcpListener;
+use tokio::time::{Duration, Instant};
+use tracing::warn;
 
 /// Callback type for TCP SYN fingerprint lookup.
 ///
@@ -30,9 +27,9 @@ pub type SynProbe = Arc<dyn Fn(SocketAddr) -> SynResult + Send + Sync>;
 
 /// Shared state for accept loops, built once in `run()` and cloned per listener.
 pub struct AcceptContext {
-    pub dynamic_cfg: Arc<ArcSwap<DynamicConfig>>,
+    pub dynamic_cfg: SharedDynamicConfig,
     pub rate_limiter: SharedRateLimiter,
-    pub tls_acceptor: Option<Arc<ArcSwap<TlsAcceptor>>>,
+    pub tls_acceptor: Option<SharedTlsAcceptor>,
     pub fingerprint_config: FingerprintConfig,
     pub keep_alive_config: KeepAliveConfig,
     pub metrics: Arc<Metrics>,
@@ -87,11 +84,7 @@ pub async fn accept_loop(
         });
 
         let dynamic = ctx.dynamic_cfg.load();
-        let rate_mgr = ctx
-            .rate_limiter
-            .read()
-            .unwrap_or_else(|e| e.into_inner())
-            .clone();
+        let rate_mgr = (**ctx.rate_limiter.load()).clone();
         let security = SecurityContext::new(
             dynamic.security.headers.clone(),
             dynamic.security.ip_filter.clone(),

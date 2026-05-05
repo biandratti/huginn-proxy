@@ -1,23 +1,21 @@
-use std::collections::HashSet;
-use std::hash::{Hash, Hasher};
-use std::path::Path;
-use std::sync::{Arc, RwLock};
-
-use arc_swap::ArcSwap;
-use tokio::runtime::Handle;
-use tracing::{debug, error, info};
-
 use crate::backend::health_check::HealthCheckSupervisor;
 use crate::config::{load_from_path, Backend, BackendPoolConfig, DynamicConfig, StaticConfig};
 use crate::proxy::client_pool::ClientPool;
 use crate::security::RateLimitManager;
 use crate::telemetry::Metrics;
+use arc_swap::ArcSwap;
+use std::collections::HashSet;
+use std::hash::{Hash, Hasher};
+use std::path::Path;
+use std::sync::Arc;
+use tokio::runtime::Handle;
+use tracing::{debug, error, info};
 
 /// Shared, hot-swappable rate-limit manager.
 ///
 /// - On reload with **no rate-limit change** → old manager is reused as-is (counters preserved).
 /// - On reload **with** rate-limit change → manager is rebuilt (counters reset).
-pub type SharedRateLimiter = Arc<RwLock<Option<Arc<RateLimitManager>>>>;
+pub type SharedRateLimiter = Arc<ArcSwap<Option<Arc<RateLimitManager>>>>;
 
 /// Shared, hot-swappable HTTP client pool.
 ///
@@ -26,6 +24,9 @@ pub type SharedRateLimiter = Arc<RwLock<Option<Arc<RateLimitManager>>>>;
 /// they finish, the old pool is dropped and its idle connections are closed.
 /// New backends are served on-demand by the fresh pool.
 pub type SharedClientPool = Arc<ArcSwap<ClientPool>>;
+
+/// Shared, hot-swappable dynamic configuration.
+pub type SharedDynamicConfig = Arc<ArcSwap<DynamicConfig>>;
 
 /// Attempt a hot config reload.
 ///
@@ -37,7 +38,7 @@ pub type SharedClientPool = Arc<ArcSwap<ClientPool>>;
 pub async fn try_reload(
     config_path: &Path,
     static_cfg: &StaticConfig,
-    dynamic_cfg: &Arc<ArcSwap<DynamicConfig>>,
+    dynamic_cfg: &SharedDynamicConfig,
     rate_limiter: &SharedRateLimiter,
     client_pool: &SharedClientPool,
     reload_mutex: &tokio::sync::Mutex<()>,
@@ -88,7 +89,7 @@ pub async fn try_reload(
         } else {
             None
         };
-        *rate_limiter.write().unwrap_or_else(|e| e.into_inner()) = new_mgr;
+        rate_limiter.store(Arc::new(new_mgr));
         info!("Rate-limit config changed — counters reset");
     }
 
@@ -241,7 +242,7 @@ pub fn initial_rate_limiter(dynamic: &DynamicConfig) -> SharedRateLimiter {
     } else {
         None
     };
-    Arc::new(RwLock::new(mgr))
+    Arc::new(ArcSwap::new(Arc::new(mgr)))
 }
 
 pub fn initial_client_pool(
