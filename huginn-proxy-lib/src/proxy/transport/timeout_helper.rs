@@ -1,14 +1,8 @@
+use crate::telemetry::metrics::values;
+use crate::telemetry::Metrics;
 use std::sync::Arc;
 use tracing::warn;
 
-use crate::telemetry::metrics::values;
-use crate::telemetry::Metrics;
-
-/// Helper function to handle connection serving with timeout
-///
-/// This function wraps a connection serving future and applies a timeout.
-/// If the timeout is exceeded, it logs a warning and records a metric.
-/// If the connection fails, it logs the error.
 pub async fn serve_with_timeout<F, E>(
     serve_fut: F,
     timeout_duration: tokio::time::Duration,
@@ -18,7 +12,7 @@ pub async fn serve_with_timeout<F, E>(
     F: std::future::Future<Output = Result<(), E>>,
     E: std::fmt::Display,
 {
-    match tokio::time::timeout(timeout_duration, serve_fut).await {
+    match pingora_timeout::timeout(timeout_duration, serve_fut).await {
         Ok(Ok(())) => {}
         Ok(Err(e)) => {
             warn!(?peer, error = %e, "serve_connection error");
