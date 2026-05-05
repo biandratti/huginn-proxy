@@ -1,9 +1,10 @@
-use crate::healthchecks;
 use http_body_util::{combinators::BoxBody, BodyExt, Full};
 use hyper::body::Bytes;
 use hyper::Response;
 use hyper::StatusCode;
 use serde_json::json;
+
+use crate::healthchecks;
 
 type RespBody = BoxBody<Bytes, hyper::Error>;
 

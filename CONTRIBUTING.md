@@ -11,7 +11,7 @@ cargo build --workspace
 cargo test --workspace --all-features --exclude tests-e2e --exclude tests-browsers
 ```
 
-Requires Rust stable. Install from [rustup.rs](https://rustup.rs/).
+Requires Rust stable. Install from [rustup.rs](https://rustup.rs/). Nightly (`nightly-2026-04-23`) is only needed for `cargo fmt` (import grouping).
 
 ## Codebase layout
 
@@ -41,8 +41,9 @@ cargo build --workspace --features ebpf-tcp
 ## Before opening a PR
 
 ```bash
-# format
-cargo fmt --all
+# format (requires nightly rustfmt for import grouping)
+rustup toolchain install nightly-2026-04-23 --component rustfmt
+cargo +nightly-2026-04-23 fmt --all
 
 # lint (workspace)
 cargo clippy --workspace --all-features --all-targets -- \

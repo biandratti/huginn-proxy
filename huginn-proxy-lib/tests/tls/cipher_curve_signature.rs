@@ -1,8 +1,9 @@
-use crate::helpers::create_valid_test_cert;
 use huginn_proxy_lib::config::{ClientAuth, TlsConfig, TlsOptions};
 use huginn_proxy_lib::tls::acceptor::build_tls_acceptor;
 use huginn_proxy_lib::tls::cipher_suites::supported_cipher_suites;
 use huginn_proxy_lib::tls::curves::supported_curves;
+
+use crate::helpers::create_valid_test_cert;
 
 #[test]
 fn test_different_cipher_suites_produce_different_configs(

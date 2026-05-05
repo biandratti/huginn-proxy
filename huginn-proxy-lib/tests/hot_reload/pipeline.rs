@@ -1,7 +1,7 @@
-use arc_swap::ArcSwap;
 use std::io::Write as _;
 use std::sync::Arc;
 
+use arc_swap::ArcSwap;
 use huginn_proxy_lib::{
     initial_client_pool, initial_rate_limiter, try_reload, Config, DynamicConfig,
     HealthCheckSupervisor, HealthRegistry, Metrics, SharedClientPool, SharedRateLimiter,

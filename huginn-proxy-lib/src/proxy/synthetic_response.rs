@@ -1,8 +1,9 @@
-use crate::error::{ProxyError, ProxyResult};
 use http::StatusCode;
 use http_body_util::{combinators::BoxBody, BodyExt, Full};
 use hyper::body::Bytes;
 use hyper::Response;
+
+use crate::error::{ProxyError, ProxyResult};
 
 type RespBody = BoxBody<Bytes, hyper::Error>;
 

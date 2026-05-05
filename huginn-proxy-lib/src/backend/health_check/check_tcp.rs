@@ -8,6 +8,7 @@
 //! Suitable as a default check for any backend that listens for TCP.
 
 use std::time::Duration;
+
 use tokio::net::TcpStream;
 use tracing::trace;
 

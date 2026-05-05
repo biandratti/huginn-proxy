@@ -1,7 +1,8 @@
+use std::sync::Arc;
+
 use http::StatusCode;
 use http_body_util::{combinators::BoxBody, BodyExt, Full};
 use hyper::Response;
-use std::sync::Arc;
 use tracing::debug;
 
 use crate::config::RateLimitConfig;

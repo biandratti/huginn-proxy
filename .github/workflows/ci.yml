@@ -59,13 +59,13 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-
-      - name: Install Rust ${{ env.rust_stable }}
-        uses: dtolnay/rust-toolchain@stable
+      - name: Install Rust nightly (rustfmt only)
+        uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: ${{ env.rust_stable }}
+          toolchain: nightly-2026-04-23
           components: rustfmt
       - name: Check code formatting
-        run: cargo fmt --all -- --check
+        run: cargo +nightly-2026-04-23 fmt --all -- --check
 
   cargo-sort:
     runs-on: ubuntu-latest

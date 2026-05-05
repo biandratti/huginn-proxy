@@ -1,5 +1,6 @@
-use crate::config::{IpFilterConfig, IpFilterMode};
 use std::net::IpAddr;
+
+use crate::config::{IpFilterConfig, IpFilterMode};
 
 /// Check if an IP address is allowed based on the filter configuration
 ///

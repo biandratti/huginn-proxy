@@ -14,11 +14,11 @@
 mod toml;
 mod yaml;
 
-pub use toml::TomlParser;
-pub use yaml::YamlParser;
-
 use std::fmt;
 use std::path::Path;
+
+pub use toml::TomlParser;
+pub use yaml::YamlParser;
 
 use crate::config::Config;
 use crate::error::Result;

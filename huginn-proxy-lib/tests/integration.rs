@@ -1,8 +1,9 @@
+use std::io::Write;
+
 use huginn_proxy_lib::config::{
     load_from_path, Backend, Config, FingerprintConfig, KeepAliveConfig, ListenConfig,
     LoggingConfig, SecurityConfig, TelemetryConfig, TimeoutConfig,
 };
-use std::io::Write;
 
 fn create_test_config(listen: &str, backends: Vec<Backend>) -> Config {
     Config {

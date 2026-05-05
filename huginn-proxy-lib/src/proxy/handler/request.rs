@@ -1,3 +1,14 @@
+use std::sync::Arc;
+
+use http::StatusCode;
+use http::Version;
+use hyper::body::Incoming;
+use hyper::header::HeaderName;
+use hyper::Request;
+use tokio::sync::watch;
+use tokio::time::Instant;
+use tracing::debug;
+
 use crate::backend::UpstreamGateway;
 use crate::config::{Backend, KeepAliveConfig, Route};
 use crate::fingerprinting::names;
@@ -12,15 +23,6 @@ use crate::proxy::http_result::{HttpError, HttpResult};
 use crate::proxy::ClientPool;
 use crate::telemetry::metrics::values;
 use crate::telemetry::Metrics;
-use http::StatusCode;
-use http::Version;
-use hyper::body::Incoming;
-use hyper::header::HeaderName;
-use hyper::Request;
-use std::sync::Arc;
-use tokio::sync::watch;
-use tokio::time::Instant;
-use tracing::debug;
 
 type RespBody = http_body_util::combinators::BoxBody<bytes::Bytes, hyper::Error>;
 

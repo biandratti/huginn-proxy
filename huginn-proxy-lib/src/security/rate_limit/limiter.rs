@@ -3,9 +3,10 @@
 //! This module provides a convenient wrapper around the low-level Rate tracker
 //! with rate limiting logic and result types.
 
-use pingora_limits::rate::Rate;
 use std::hash::Hash;
 use std::time::Duration;
+
+use pingora_limits::rate::Rate;
 
 /// Result of a rate limit check.
 #[derive(Debug, Clone, PartialEq, Eq)]

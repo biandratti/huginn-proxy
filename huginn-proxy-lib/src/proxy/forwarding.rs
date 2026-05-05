@@ -1,12 +1,14 @@
+use std::sync::Arc;
+
+use http::{Request, Response, Version};
+use http_body_util::{combinators::BoxBody, BodyExt};
+use hyper::body::Incoming;
+use tokio::time::Instant;
+
 use crate::config::{BackendHttpVersion, KeepAliveConfig};
 use crate::proxy::http_result::{HttpError, HttpResult};
 use crate::proxy::ClientPool;
 use crate::telemetry::Metrics;
-use http::{Request, Response, Version};
-use http_body_util::{combinators::BoxBody, BodyExt};
-use hyper::body::Incoming;
-use std::sync::Arc;
-use tokio::time::Instant;
 
 type RespBody = BoxBody<bytes::Bytes, hyper::Error>;
 

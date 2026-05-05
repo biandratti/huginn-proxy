@@ -90,9 +90,10 @@ async fn main() -> Result<(), BoxError> {
     // The agent may start after the proxy, so we retry with backoff until the maps appear.
     #[cfg(feature = "ebpf-tcp")]
     let syn_probe: Option<huginn_proxy_lib::SynProbe> = {
+        use std::net::SocketAddr;
+
         use huginn_ebpf::{parse_syn_v4, parse_syn_v6, EbpfProbe};
         use huginn_proxy_lib::fingerprinting::SynResult;
-        use std::net::SocketAddr;
 
         if !static_cfg.fingerprint.tcp_enabled {
             tracing::info!("TCP SYN fingerprinting disabled (`fingerprint.tcp_enabled = false`)");

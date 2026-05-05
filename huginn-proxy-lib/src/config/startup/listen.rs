@@ -1,5 +1,6 @@
-use serde::Deserialize;
 use std::net::SocketAddr;
+
+use serde::Deserialize;
 
 /// Listener configuration — addresses and kernel socket options.
 #[derive(Debug, Deserialize, Clone, PartialEq)]

@@ -1,7 +1,9 @@
-use crate::helpers::{create_dummy_test_cert, create_valid_test_cert, tmp_path};
+use std::fs;
+
 use huginn_proxy_lib::config::{ClientAuth, TlsConfig};
 use huginn_proxy_lib::tls::build_tls_acceptor;
-use std::fs;
+
+use crate::helpers::{create_dummy_test_cert, create_valid_test_cert, tmp_path};
 
 #[test]
 fn test_build_tls_acceptor_success() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {

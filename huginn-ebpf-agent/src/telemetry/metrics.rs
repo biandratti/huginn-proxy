@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use huginn_ebpf::{
     syn_captured_count_from_path, syn_insert_failures_count_from_path,
     syn_malformed_count_from_path,
@@ -7,7 +9,6 @@ use opentelemetry::metrics::{Gauge, Meter};
 use opentelemetry::KeyValue;
 use opentelemetry_sdk::metrics::SdkMeterProvider;
 use prometheus::Registry;
-use std::sync::Arc;
 
 pub mod labels {
     pub const VERSION: &str = "version";

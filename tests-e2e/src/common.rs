@@ -1,7 +1,8 @@
 //! E2E test helpers and common utilities
 
-use reqwest::Client;
 use std::collections::HashMap;
+
+use reqwest::Client;
 
 pub const PROXY_HTTPS_URL_IPV4: &str = "https://127.0.0.1:7000";
 

@@ -1,6 +1,7 @@
-use crate::helpers::{create_valid_test_cert, generate_dummy_test_cert_der};
 use huginn_proxy_lib::config::{ClientAuth, TlsConfig, TlsOptions};
 use huginn_proxy_lib::tls::build_cert_reloader;
+
+use crate::helpers::{create_valid_test_cert, generate_dummy_test_cert_der};
 
 #[tokio::test]
 async fn test_build_cert_reloader() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {

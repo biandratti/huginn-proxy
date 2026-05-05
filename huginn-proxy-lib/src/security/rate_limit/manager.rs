@@ -1,5 +1,6 @@
-use ahash::AHashMap;
 use std::time::Duration;
+
+use ahash::AHashMap;
 
 use super::{RateLimitResult, RateLimiter};
 use crate::config::{LimitBy, RateLimitConfig, Route};

@@ -1,18 +1,20 @@
-use crate::config::Backend;
-use crate::telemetry::{
-    handle_metrics, health_check_response, live_check_response, ready_check_response,
-};
+use std::net::SocketAddr;
+use std::sync::Arc;
+
 use http_body_util::{BodyExt, Full};
 use hyper::body::{Bytes, Incoming};
 use hyper::Request;
 use hyper_util::rt::{TokioExecutor, TokioIo};
 use hyper_util::server::conn::auto::Builder as ConnBuilder;
 use prometheus::Registry;
-use std::net::SocketAddr;
-use std::sync::Arc;
 use tokio::net::TcpListener;
 use tokio::signal;
 use tracing::{info, warn};
+
+use crate::config::Backend;
+use crate::telemetry::{
+    handle_metrics, health_check_response, live_check_response, ready_check_response,
+};
 
 /// Start the observability server that handles metrics and health checks
 /// This server runs on a dedicated port and serves:

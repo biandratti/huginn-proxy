@@ -1,8 +1,9 @@
+use std::net::IpAddr;
+use std::str::FromStr;
+
 use huginn_proxy_lib::config::{IpFilterConfig, IpFilterMode};
 use huginn_proxy_lib::security::is_ip_allowed;
 use ipnet::IpNet;
-use std::net::IpAddr;
-use std::str::FromStr;
 
 fn parse_networks(addrs: &[&str]) -> Vec<IpNet> {
     addrs
