@@ -67,7 +67,7 @@ async fn main() -> Result<(), BoxError> {
 
         let handle = if let Some(metrics_port) = static_cfg.telemetry.metrics_port {
             info!(port = metrics_port, "Metrics initialized, starting observability server");
-            let backends_for_observability = Arc::new(dynamic_cfg.load().backends.clone());
+            let backends_for_observability = dynamic_cfg.load().backends.clone();
             Some(tokio::spawn(async move {
                 if let Err(e) =
                     start_observability_server(metrics_port, registry, backends_for_observability)

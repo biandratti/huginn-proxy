@@ -46,7 +46,7 @@ fn check_ip_access(
 #[allow(clippy::too_many_arguments)]
 pub async fn handle_proxy_request(
     mut req: Request<Incoming>,
-    routes: Vec<Route>,
+    routes: Arc<Vec<Route>>,
     backends: Arc<Vec<Backend>>,
     ja4_fingerprints: Option<crate::fingerprinting::Ja4Fingerprints>,
     fingerprint_rx: Option<watch::Receiver<Option<huginn_net_http::AkamaiFingerprint>>>,

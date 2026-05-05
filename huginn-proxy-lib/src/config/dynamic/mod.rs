@@ -1,7 +1,6 @@
 pub mod backend;
 pub mod headers;
 pub mod security;
-
 pub use backend::{
     sort_routes, Backend, BackendHttpVersion, BackendPoolConfig, HealthCheckConfig,
     HealthCheckType, Route,
@@ -11,6 +10,7 @@ pub use security::{
     CspConfig, HstsConfig, IpFilterConfig, IpFilterMode, LimitBy, RateLimitConfig,
     RouteRateLimitConfig, SecurityConfig, SecurityDynamicConfig, SecurityHeaders,
 };
+use std::sync::Arc;
 
 /// Runtime configuration that can be hot-reloaded atomically via ArcSwap.
 ///
@@ -20,10 +20,8 @@ pub use security::{
 /// deserialized directly from TOML.
 #[derive(Debug, Clone, PartialEq)]
 pub struct DynamicConfig {
-    /// List of backend servers
-    pub backends: Vec<Backend>,
-    /// Path-based routing rules
-    pub routes: Vec<Route>,
+    pub backends: Arc<Vec<Backend>>,
+    pub routes: Arc<Vec<Route>>,
     /// Preserve the original Host header from clients when forwarding
     pub preserve_host: bool,
     /// Global header manipulation applied to all requests/responses

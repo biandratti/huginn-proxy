@@ -153,7 +153,7 @@ fn audit_config_changes(old: &DynamicConfig, new: &DynamicConfig) {
     for prefix in new_routes.difference(&old_routes) {
         info!(prefix = prefix, "Config diff: route added");
     }
-    for route in &new.routes {
+    for route in new.routes.iter() {
         if let Some(old_route) = old.routes.iter().find(|r| r.prefix == route.prefix) {
             if old_route != route {
                 info!(prefix = route.prefix, "Config diff: route changed");

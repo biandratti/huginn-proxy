@@ -92,8 +92,8 @@ pub async fn accept_loop(
             rate_mgr,
             dynamic.headers.clone(),
         );
-        let backends = Arc::new(dynamic.backends.clone());
-        let routes = dynamic.routes.clone();
+        let backends = Arc::clone(&dynamic.backends);
+        let routes = Arc::clone(&dynamic.routes);
         let preserve_host = dynamic.preserve_host;
         let upstream =
             UpstreamGateway::new(ctx.health_registry.clone(), ctx.backend_selector.clone());
