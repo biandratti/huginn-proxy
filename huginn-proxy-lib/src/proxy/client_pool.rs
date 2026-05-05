@@ -1,11 +1,13 @@
-use crate::config::{BackendPoolConfig, KeepAliveConfig};
+use std::sync::Arc;
+use std::time::Duration;
+
 use http::Version;
 use hyper::body::Incoming;
 use hyper_util::client::legacy::connect::HttpConnector;
 use hyper_util::client::legacy::Client;
 use hyper_util::rt::TokioExecutor;
-use std::sync::Arc;
-use std::time::Duration;
+
+use crate::config::{BackendPoolConfig, KeepAliveConfig};
 
 pub type HttpClient = Client<HttpConnector, Incoming>;
 

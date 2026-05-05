@@ -1,9 +1,8 @@
 use std::collections::HashMap;
 use std::sync::RwLock;
 
-use crate::backend::health_check::HealthRegistry;
-
 use super::round_robin::RoundRobin;
+use crate::backend::health_check::HealthRegistry;
 
 /// Selects one healthy backend among route candidates using the currently configured strategy.
 ///

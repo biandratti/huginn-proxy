@@ -1,6 +1,7 @@
 //! Common utilities for browser integration tests
 
 use std::collections::HashMap;
+
 use thirtyfour::prelude::*;
 
 pub const PROXY_URL: &str = "https://localhost:7000";

@@ -1,5 +1,6 @@
-use huginn_proxy_lib::security::rate_limit::{RateLimitResult, RateLimiter};
 use std::time::Duration;
+
+use huginn_proxy_lib::security::rate_limit::{RateLimitResult, RateLimiter};
 
 #[test]
 fn test_rate_limiter_creation() {

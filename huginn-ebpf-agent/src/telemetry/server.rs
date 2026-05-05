@@ -1,5 +1,5 @@
-use crate::telemetry::health;
-use crate::telemetry::metrics_handler;
+use std::sync::Arc;
+
 use http_body_util::{BodyExt, Full};
 use hyper::body::{Bytes, Incoming};
 use hyper::Request;
@@ -8,9 +8,11 @@ use hyper::StatusCode;
 use hyper_util::rt::{TokioExecutor, TokioIo};
 use hyper_util::server::conn::auto::Builder as ConnBuilder;
 use prometheus::Registry;
-use std::sync::Arc;
 use tokio::net::TcpListener;
 use tracing::{info, warn};
+
+use crate::telemetry::health;
+use crate::telemetry::metrics_handler;
 
 pub async fn start_observability_server(
     listen_addr: &str,

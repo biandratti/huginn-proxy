@@ -1,4 +1,5 @@
 use std::time::Instant;
+
 use tests_e2e::common::{wait_for_service, DEFAULT_SERVICE_TIMEOUT_SECS, PROXY_HTTPS_URL_IPV4};
 
 /// Test the /fingerprint route with force_new_connection enabled

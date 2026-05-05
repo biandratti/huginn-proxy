@@ -1,13 +1,13 @@
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+
 use thiserror::Error;
 use tokio::sync::watch;
 use tracing::warn;
 
+use super::guards::ConnectionGuard;
 use crate::telemetry::metrics::values;
 use crate::telemetry::Metrics;
-
-use super::guards::ConnectionGuard;
 
 /// Errors that can occur when trying to accept a connection
 #[derive(Debug, Error)]

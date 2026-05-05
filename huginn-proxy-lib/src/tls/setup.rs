@@ -1,10 +1,12 @@
+use std::sync::Arc;
+
+use arc_swap::ArcSwap;
+use tokio_rustls::TlsAcceptor;
+use tracing::{error, info, warn};
+
 use super::{build_cert_reloader, build_tls_acceptor};
 use crate::config::TlsConfig;
 use crate::error::Result;
-use arc_swap::ArcSwap;
-use std::sync::Arc;
-use tokio_rustls::TlsAcceptor;
-use tracing::{error, info, warn};
 pub type SharedTlsAcceptor = Arc<ArcSwap<TlsAcceptor>>;
 
 pub struct TlsSetup {

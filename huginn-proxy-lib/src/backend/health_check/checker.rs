@@ -2,6 +2,12 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use tokio::runtime::Handle;
+use tokio::task::JoinHandle;
+use tokio::time::{interval, MissedTickBehavior};
+use tokio_util::sync::CancellationToken;
+use tracing::info;
+
 use super::check_http::check_http;
 use super::check_http::HealthCheckHttpClient;
 use super::check_tcp::check_tcp;
@@ -10,11 +16,6 @@ use super::health::UpstreamHealth;
 use super::HealthRegistry;
 use crate::config::{Backend, HealthCheckConfig, HealthCheckType};
 use crate::telemetry::Metrics;
-use tokio::runtime::Handle;
-use tokio::task::JoinHandle;
-use tokio::time::{interval, MissedTickBehavior};
-use tokio_util::sync::CancellationToken;
-use tracing::info;
 
 struct ActiveChecker {
     config: HealthCheckConfig,

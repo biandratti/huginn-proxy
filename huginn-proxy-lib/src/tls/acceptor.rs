@@ -1,6 +1,7 @@
+use std::sync::Arc;
+
 use rustls_pki_types::pem::PemObject;
 use rustls_pki_types::{CertificateDer, PrivateKeyDer};
-use std::sync::Arc;
 use tokio_rustls::rustls::crypto::aws_lc_rs as aws_lc_provider;
 use tokio_rustls::rustls::crypto::CryptoProvider;
 use tokio_rustls::rustls::server::WebPkiClientVerifier;

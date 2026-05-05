@@ -1,6 +1,7 @@
-use crate::helpers::{create_dummy_test_cert, generate_valid_test_cert_der};
 use huginn_proxy_lib::config::{ClientAuth, SessionResumptionConfig, TlsConfig};
 use huginn_proxy_lib::tls::build_tls_acceptor;
+
+use crate::helpers::{create_dummy_test_cert, generate_valid_test_cert_der};
 
 #[test]
 fn test_session_resumption_enabled_default() -> Result<(), Box<dyn std::error::Error + Send + Sync>>

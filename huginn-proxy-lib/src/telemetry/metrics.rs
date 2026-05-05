@@ -1,9 +1,10 @@
+use std::sync::Arc;
+
 use opentelemetry::global;
 use opentelemetry::metrics::{Counter, Gauge, Histogram, Meter, UpDownCounter};
 use opentelemetry::KeyValue;
 use opentelemetry_sdk::metrics::SdkMeterProvider;
 use prometheus::Registry;
-use std::sync::Arc;
 
 pub mod labels {
     pub const ERROR_TYPE: &str = "error_type";

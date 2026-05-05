@@ -7,6 +7,12 @@
 //!       → TCP cleartext →
 //!   [in-process hyper h2 server]
 
+use std::convert::Infallible;
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
+};
+
 use bytes::Bytes;
 use http::{Request, Response, StatusCode, Uri, Version};
 use http_body_util::Empty;
@@ -17,11 +23,6 @@ use hyper::service::service_fn;
 use hyper_util::client::legacy::connect::HttpConnector;
 use hyper_util::client::legacy::Client;
 use hyper_util::rt::{TokioExecutor, TokioIo};
-use std::convert::Infallible;
-use std::sync::{
-    atomic::{AtomicBool, Ordering},
-    Arc,
-};
 use tokio::net::TcpListener;
 
 type BoxError = Box<dyn std::error::Error + Send + Sync>;

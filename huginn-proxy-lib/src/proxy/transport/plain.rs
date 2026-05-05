@@ -1,5 +1,11 @@
 use std::sync::Arc;
 
+use http::StatusCode;
+use http_body_util::BodyExt;
+use hyper_util::rt::{TokioExecutor, TokioIo};
+use hyper_util::server::conn::auto::Builder as ConnBuilder;
+use tokio::net::TcpStream;
+
 use super::timeout_helper::serve_with_timeout;
 use crate::backend::UpstreamGateway;
 use crate::fingerprinting::TcpObservation;
@@ -7,11 +13,6 @@ use crate::proxy::handler::request::handle_proxy_request;
 use crate::proxy::synthetic_response::synthetic_error_response;
 use crate::proxy::ClientPool;
 use crate::telemetry::Metrics;
-use http::StatusCode;
-use http_body_util::BodyExt;
-use hyper_util::rt::{TokioExecutor, TokioIo};
-use hyper_util::server::conn::auto::Builder as ConnBuilder;
-use tokio::net::TcpStream;
 
 /// Configuration for handling plain HTTP connections
 pub struct PlainConnectionConfig {

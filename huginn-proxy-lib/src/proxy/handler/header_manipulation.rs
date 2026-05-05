@@ -1,8 +1,10 @@
+use std::sync::Arc;
+
+use http::{HeaderMap, HeaderName, HeaderValue};
+
 use crate::config::{HeaderManipulation, HeaderManipulationGroup};
 use crate::telemetry::metrics::values;
 use crate::telemetry::Metrics;
-use http::{HeaderMap, HeaderName, HeaderValue};
-use std::sync::Arc;
 
 /// Apply header manipulation group (add and remove headers)
 ///

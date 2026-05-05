@@ -1,4 +1,5 @@
 use std::sync::Arc;
+
 use tokio::time::Instant;
 
 use super::ja4::Ja4Fingerprints;

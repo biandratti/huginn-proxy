@@ -1,3 +1,13 @@
+use std::net::SocketAddr;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
+
+use hyper_util::rt::TokioExecutor;
+use hyper_util::server::conn::auto::Builder as ConnBuilder;
+use tokio::net::TcpListener;
+use tokio::time::{Duration, Instant};
+use tracing::warn;
+
 use crate::backend::health_check::HealthRegistry;
 use crate::backend::{BackendSelector, UpstreamGateway};
 use crate::config::{FingerprintConfig, KeepAliveConfig};
@@ -10,14 +20,6 @@ use crate::proxy::transport::{
 };
 use crate::telemetry::Metrics;
 use crate::tls::setup::SharedTlsAcceptor;
-use hyper_util::rt::TokioExecutor;
-use hyper_util::server::conn::auto::Builder as ConnBuilder;
-use std::net::SocketAddr;
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Arc;
-use tokio::net::TcpListener;
-use tokio::time::{Duration, Instant};
-use tracing::warn;
 
 /// Callback type for TCP SYN fingerprint lookup.
 ///

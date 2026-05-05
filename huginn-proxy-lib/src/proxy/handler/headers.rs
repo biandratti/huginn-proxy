@@ -1,8 +1,9 @@
+use std::net::SocketAddr;
+
 use huginn_net_http::AkamaiFingerprint;
 use hyper::body::Incoming;
 use hyper::header::HeaderValue;
 use hyper::Request;
-use std::net::SocketAddr;
 
 use crate::fingerprinting::headers::forwarded;
 

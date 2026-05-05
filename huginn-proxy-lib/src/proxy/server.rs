@@ -1,3 +1,16 @@
+use std::net::SocketAddr;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
+
+use hyper_util::rt::{TokioExecutor, TokioTimer};
+use hyper_util::server::conn::auto::Builder as ConnBuilder;
+use tokio::net::TcpListener;
+use tokio::runtime::Handle;
+use tokio::signal;
+use tokio::sync::watch;
+use tokio::time::Duration;
+use tracing::{info, warn};
+
 use crate::backend::health_check::{HealthCheckSupervisor, HealthRegistry};
 use crate::backend::BackendSelector;
 use crate::config::watcher::spawn_config_watcher;
@@ -14,17 +27,6 @@ use crate::proxy::shutdown::wait_for_drain;
 pub use crate::proxy::watch::WatchOptions;
 use crate::telemetry::Metrics;
 use crate::tls::setup_tls_with_hot_reload;
-use hyper_util::rt::{TokioExecutor, TokioTimer};
-use hyper_util::server::conn::auto::Builder as ConnBuilder;
-use std::net::SocketAddr;
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Arc;
-use tokio::net::TcpListener;
-use tokio::runtime::Handle;
-use tokio::signal;
-use tokio::sync::watch;
-use tokio::time::Duration;
-use tracing::{info, warn};
 
 pub async fn run(
     static_cfg: Arc<StaticConfig>,

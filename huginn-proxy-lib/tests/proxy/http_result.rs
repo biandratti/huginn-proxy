@@ -23,8 +23,9 @@ fn test_error_type_mapping() {
 
 #[test]
 fn test_status_code_conversion() {
-    use http::StatusCode;
     use std::convert::From;
+
+    use http::StatusCode;
 
     assert_eq!(StatusCode::from(HttpError::InvalidHostInRequestHeader), StatusCode::BAD_REQUEST);
     assert_eq!(StatusCode::from(HttpError::NoMatchingBackend), StatusCode::SERVICE_UNAVAILABLE);

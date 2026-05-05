@@ -1,11 +1,10 @@
+pub use huginn_ebpf_common::{quirk_bits, SynRawDataV4, SynRawDataV6};
 use huginn_net_db::observable_signals::TcpObservation;
 use huginn_net_db::tcp::{Quirk, Ttl, WindowSize};
 use huginn_net_tcp::syn_options::{parse_options_raw, ParsedTcpOptions};
 use huginn_net_tcp::tcp::{IpVersion, PayloadSize, TcpOption};
 use huginn_net_tcp::{ttl, window_size};
 use tracing::warn;
-
-pub use huginn_ebpf_common::{quirk_bits, SynRawDataV4, SynRawDataV6};
 
 struct OptionQuirks {
     ts_val: Option<u32>,

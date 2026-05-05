@@ -1,6 +1,7 @@
-use huginn_proxy_lib::security::rate_limit::Rate;
 use std::thread::sleep;
 use std::time::Duration;
+
+use huginn_proxy_lib::security::rate_limit::Rate;
 
 #[test]
 fn test_observe_rate() {

@@ -1,18 +1,20 @@
-use crate::config::{SessionResumptionConfig, TlsConfig, TlsOptions};
-use crate::error::ProxyError;
-use crate::tls::acceptor::validate_tls_options;
-use crate::tls::session_resumption::configure_session_resumption;
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
+
 use notify::{Config, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use rustls_pki_types::pem::PemObject;
 use rustls_pki_types::{CertificateDer, PrivateKeyDer};
-use std::path::{Path, PathBuf};
-use std::sync::Arc;
 use tokio::fs;
 use tokio::sync::watch;
 use tokio::time::{sleep, sleep_until, Duration, Instant};
 use tokio_rustls::rustls::ServerConfig;
 use tokio_rustls::TlsAcceptor;
 use tracing::{debug, error, info, warn};
+
+use crate::config::{SessionResumptionConfig, TlsConfig, TlsOptions};
+use crate::error::ProxyError;
+use crate::tls::acceptor::validate_tls_options;
+use crate::tls::session_resumption::configure_session_resumption;
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct ServerCertsKeys {

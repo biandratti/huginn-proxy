@@ -1,5 +1,6 @@
-use crate::config::SecurityHeaders;
 use http::{HeaderName, HeaderValue, Response};
+
+use crate::config::SecurityHeaders;
 
 /// Apply security headers to an HTTP response
 ///

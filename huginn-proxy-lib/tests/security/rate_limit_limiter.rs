@@ -1,6 +1,7 @@
-use huginn_proxy_lib::security::rate_limit::{RateLimitResult, RateLimiter};
 use std::thread::sleep;
 use std::time::Duration;
+
+use huginn_proxy_lib::security::rate_limit::{RateLimitResult, RateLimiter};
 
 #[test]
 fn test_basic_rate_limiting() {

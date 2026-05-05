@@ -1,5 +1,6 @@
-use huginn_ebpf::pin;
 use std::net::{Ipv4Addr, Ipv6Addr};
+
+use huginn_ebpf::pin;
 
 pub const DEFAULT_PIN_PATH: &str = pin::DEFAULT_PIN_BASE;
 pub use huginn_ebpf::XdpMode;

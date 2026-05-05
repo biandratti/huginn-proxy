@@ -51,6 +51,5 @@ mod manager;
 
 pub use limiter::{RateLimitResult, RateLimiter};
 pub use manager::{extract_rate_limit_key, RateLimitManager};
-
 pub use pingora_limits::estimator::Estimator;
 pub use pingora_limits::rate::Rate;

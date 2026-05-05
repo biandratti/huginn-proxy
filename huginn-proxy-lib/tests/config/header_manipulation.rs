@@ -1,5 +1,6 @@
-use huginn_proxy_lib::config::{load_from_path, HeaderManipulation, HeaderManipulationGroup};
 use std::io::Write;
+
+use huginn_proxy_lib::config::{load_from_path, HeaderManipulation, HeaderManipulationGroup};
 
 #[test]
 fn test_header_manipulation_defaults() {
