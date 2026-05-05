@@ -120,11 +120,11 @@ pub struct Metrics {
     pub health_check_gate_rejects_total: Counter<u64>,
 
     // Config reload metrics
-    /// `huginn_config_reload_total{result="success|error"}` — total reload attempts.
+    /// `huginn_config_reload_total{result="success|error"}` total reload attempts.
     pub config_reload_total: Counter<u64>,
     /// Unix timestamp (seconds) of the last successful reload.
     pub config_last_reload_timestamp_seconds: Gauge<f64>,
-    /// FNV-1a hash of the active `DynamicConfig` — changes on every successful reload.
+    /// FNV-1a hash of the active `DynamicConfig` changes on every successful reload.
     pub config_hash: Gauge<u64>,
 }
 
@@ -625,8 +625,8 @@ impl Metrics {
     /// Record a rejected incoming connection.
     ///
     /// `reason` is one of:
-    /// - `"limit_exceeded"` — active connection count hit `max_connections`
-    /// - `"shutdown"`       — proxy is shutting down
+    /// - `"limit_exceeded"` active connection count hit `max_connections`
+    /// - `"shutdown"`       proxy is shutting down
     pub fn record_connection_rejected(&self, reason: &'static str) {
         self.connections_rejected_total
             .add(1, &[KeyValue::new(labels::REASON, reason)]);

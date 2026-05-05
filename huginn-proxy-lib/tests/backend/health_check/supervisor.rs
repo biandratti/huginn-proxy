@@ -25,7 +25,7 @@ async fn supervisor_marks_unhealthy_on_unreachable_port() {
     let sup = HealthCheckSupervisor::new(registry.clone());
     let backend = tcp_backend("127.0.0.1:1", 1, 2);
     sup.reconcile(std::slice::from_ref(&backend), &Metrics::new_noop(), &Handle::current());
-    // First tick is immediate, then one per second — allow time for 2 failed probes.
+    // First tick is immediate, then one per second allow time for 2 failed probes.
     tokio::time::sleep(Duration::from_secs(3)).await;
     assert!(
         !registry.is_healthy("127.0.0.1:1"),

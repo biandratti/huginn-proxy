@@ -77,7 +77,7 @@ async fn main() -> Result<(), BoxError> {
                 }
             }))
         } else {
-            info!("Metrics initialized (no metrics_port — Prometheus endpoint disabled)");
+            info!("Metrics initialized (no metrics_port, Prometheus endpoint disabled)");
             drop(registry);
             None
         };

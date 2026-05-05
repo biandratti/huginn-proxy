@@ -52,7 +52,7 @@ pub async fn try_reload(
     let new_config = match load_from_path(config_path) {
         Ok(c) => c,
         Err(e) => {
-            error!(error = %e, "Config reload failed: parse error — keeping current config");
+            error!(error = %e, "Config reload failed: parse error, keeping current config");
             metrics.record_reload_error();
             return;
         }
@@ -60,7 +60,7 @@ pub async fn try_reload(
 
     // cross-reference validation
     if let Err(e) = new_config.validate_cross_refs() {
-        error!(error = %e, "Config reload failed: validation error — keeping current config");
+        error!(error = %e, "Config reload failed: validation error, keeping current config");
         metrics.record_reload_error();
         return;
     }
@@ -71,7 +71,7 @@ pub async fn try_reload(
     if new_static != *static_cfg {
         error!(
             "Config reload: static sections changed (listen, tls, fingerprint, timeout, …) \
-             — these changes have NO effect until restart"
+             these changes have NO effect until restart"
         );
     }
 
@@ -90,7 +90,7 @@ pub async fn try_reload(
             None
         };
         rate_limiter.store(Arc::new(new_mgr));
-        info!("Rate-limit config changed — counters reset");
+        info!("Rate-limit config changed counters reset");
     }
 
     // Refresh the connection pool when backends are removed or pool config changes.
@@ -226,7 +226,7 @@ fn drain_removed_backends(
 
 /// Compute a fast FNV-1a hash of a `DynamicConfig` via its `Debug` representation.
 ///
-/// Used exclusively for the `huginn_config_hash` Prometheus gauge — must be
+/// Used exclusively for the `huginn_config_hash` Prometheus gauge must be
 /// deterministic within a process run and change whenever the config changes.
 /// Cross-run or cross-version stability is not required.
 fn fnv1a_hash(dynamic: &DynamicConfig) -> u64 {

@@ -26,7 +26,7 @@ use tokio::net::TcpListener;
 
 type BoxError = Box<dyn std::error::Error + Send + Sync>;
 
-/// Build an h2c-only client — identical settings to `ClientPool::create_http2_client`.
+/// Build an h2c-only client identical settings to `ClientPool::create_http2_client`.
 fn make_h2c_client() -> Client<HttpConnector, Empty<Bytes>> {
     let connector = HttpConnector::new();
     let mut builder = Client::builder(TokioExecutor::new());

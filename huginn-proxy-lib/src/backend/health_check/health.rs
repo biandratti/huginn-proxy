@@ -13,7 +13,7 @@
 //! for health checks: a stale read for a few microseconds during a transition
 //! does not change the observable behaviour (one extra request to a backend
 //! about to be marked unhealthy, or one fewer request to a backend about to
-//! recover — both are inside the noise floor of the probe interval).
+//! recover both are inside the noise floor of the probe interval).
 
 use std::sync::atomic::{AtomicBool, Ordering};
 

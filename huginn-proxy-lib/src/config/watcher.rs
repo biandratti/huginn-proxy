@@ -16,9 +16,9 @@ use crate::error::ProxyError;
 /// ## Watch strategy
 ///
 /// Two watches are registered:
-/// - **Parent directory** — catches atomic saves (editor writes a temp file and
+/// - **Parent directory** catches atomic saves (editor writes a temp file and
 ///   renames it into place, generating a `Create`/`Modify` event in the dir).
-/// - **Config file directly** — catches in-place writes through single-file bind
+/// - **Config file directly** catches in-place writes through single-file bind
 ///   mounts (Docker, Kubernetes `hostPath`/`ConfigMap` subPath, Podman, etc.):
 ///   the container sees the host inode directly, but the parent directory is an
 ///   overlayfs layer that does not propagate inotify events to the mounted file.
@@ -63,7 +63,7 @@ pub fn spawn_config_watcher(
     info!(
         path = %config_path.display(),
         debounce_secs = watch_delay_secs,
-        "Config watcher started — watching for file changes"
+        "Config watcher started, watching for file changes"
     );
 
     tokio::spawn(async move {
@@ -74,7 +74,7 @@ pub fn spawn_config_watcher(
         loop {
             tokio::select! {
                 _ = event_rx.recv() => {
-                    info!(path = %config_path.display(), debounce_secs = watch_delay_secs, "Config file change detected — reload scheduled");
+                    info!(path = %config_path.display(), debounce_secs = watch_delay_secs, "Config file change detected, reload scheduled");
                     reload_deadline = Instant::now().checked_add(debounce_duration)
                         .or_else(|| Instant::now().checked_add(Duration::from_secs(60)));
                 }

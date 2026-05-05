@@ -57,7 +57,7 @@ pub fn create_valid_test_cert(
 
 /// Generate dummy (invalid) test certificates as DER (for direct use with rustls)
 ///
-/// The bytes are syntactically arbitrary — rustls will reject them.
+/// The bytes are syntactically arbitrary rustls will reject them.
 /// Use for tests that exercise the error path of `build_tls_acceptor` or
 /// similar functions without needing cryptographically valid material.
 pub fn generate_dummy_test_cert_der() -> (

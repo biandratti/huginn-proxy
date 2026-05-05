@@ -69,12 +69,12 @@ pub async fn read_certs_and_keys(
         ProxyError::Tls(format!("Unable to load the certificates [{}]: {e}", cert_path.display()))
     })?;
 
-    // Parse certificates and convert to 'static lifetime by leaking the bytes (the bytes will live for the lifetime of the program)
-    let cert_bytes_leaked: &'static [u8] = Box::leak(cert_bytes.into_boxed_slice());
-    let certs: Vec<CertificateDer<'static>> = CertificateDer::pem_slice_iter(cert_bytes_leaked)
-        .collect::<std::result::Result<Vec<CertificateDer<'static>>, rustls_pki_types::pem::Error>>(
-        )
-        .map_err(|e| ProxyError::Tls(format!("Unable to parse the certificates: {e}")))?;
+    let certs: Vec<CertificateDer<'static>> = CertificateDer::pem_slice_iter(&cert_bytes)
+        .collect::<Result<Vec<_>, rustls_pki_types::pem::Error>>()
+        .map_err(|e| ProxyError::Tls(format!("Unable to parse the certificates: {e}")))?
+        .into_iter()
+        .map(|c| c.into_owned())
+        .collect();
 
     if certs.is_empty() {
         return Err(ProxyError::Tls("No certificates found".to_string()));
@@ -87,11 +87,12 @@ pub async fn read_certs_and_keys(
         ))
     })?;
 
-    // Parse keys and convert to 'static lifetime by leaking the bytes (the bytes will live for the lifetime of the program)
-    let key_bytes_leaked: &'static [u8] = Box::leak(key_bytes.into_boxed_slice());
-    let mut keys: Vec<PrivateKeyDer<'static>> = PrivateKeyDer::pem_slice_iter(key_bytes_leaked)
-        .collect::<std::result::Result<Vec<PrivateKeyDer<'static>>, rustls_pki_types::pem::Error>>()
-        .map_err(|e| ProxyError::Tls(format!("Unable to parse the private keys: {e}")))?;
+    let mut keys: Vec<PrivateKeyDer<'static>> = PrivateKeyDer::pem_slice_iter(&key_bytes)
+        .collect::<Result<Vec<_>, rustls_pki_types::pem::Error>>()
+        .map_err(|e| ProxyError::Tls(format!("Unable to parse the private keys: {e}")))?
+        .into_iter()
+        .map(|k| k.clone_key())
+        .collect();
 
     let key = keys.pop().ok_or_else(|| {
         ProxyError::Tls(
@@ -102,7 +103,7 @@ pub async fn read_certs_and_keys(
     Ok(ServerCertsKeys { certs, key })
 }
 
-/// Load certificates once and return a static receiver — no filesystem watching.
+/// Load certificates once and return a static receiver, no filesystem watching.
 async fn load_certs_static(
     cert_path: &Path,
     key_path: &Path,

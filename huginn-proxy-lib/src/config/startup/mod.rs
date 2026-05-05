@@ -10,7 +10,7 @@ pub use telemetry::{LoggingConfig, TelemetryConfig};
 pub use timeout::{KeepAliveConfig, TimeoutConfig};
 pub use tls::{ClientAuth, SessionResumptionConfig, TlsConfig, TlsOptions, TlsVersion};
 
-/// Static configuration — read once at startup, requires restart to change.
+/// Static configuration read once at startup, requires restart to change.
 ///
 /// Contains all fields that require OS-level resources (socket binding, TLS
 /// stack initialization, logging setup) or are too fundamental to change

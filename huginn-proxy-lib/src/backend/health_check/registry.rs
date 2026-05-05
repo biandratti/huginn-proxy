@@ -15,7 +15,7 @@
 //!
 //! Backends without a `[backends.health_check]` configuration are **not**
 //! inserted into the registry. [`HealthRegistry::is_healthy`] returns `true`
-//! for any unknown address — health checks are per-backend opt-in; traffic is
+//! for any unknown address, health checks are per-backend opt-in; traffic is
 //! not gated until a backend registers a probe.
 
 use super::health::UpstreamHealth;

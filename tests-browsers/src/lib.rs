@@ -72,7 +72,7 @@ pub fn parse_backend_echo(
         Ok(headers)
     } else {
         Err(
-            format!("Failed to parse backend echo — no HTTP request line found. Content: {text}")
+            format!("Failed to parse backend echo no HTTP request line found. Content: {text}")
                 .into(),
         )
     }
@@ -101,7 +101,7 @@ pub fn get_http2_fingerprint(headers: &HashMap<String, String>) -> Option<&str> 
 
 // ── browser helpers ───────────────────────────────────────────────────────────
 
-/// Verify Chrome version (informational — does not fail).
+/// Verify Chrome version (informational does not fail).
 pub async fn verify_chrome_version(driver: &WebDriver) -> Result<(), Box<dyn std::error::Error>> {
     let user_agent: String = driver
         .execute("return navigator.userAgent;", vec![])

@@ -29,7 +29,7 @@ impl ConsecutiveCounter {
     /// Create a new counter starting in the healthy state ("optimistic boot",
     /// matching [`crate::backend::health_check::UpstreamHealth::new`]).
     ///
-    /// Both thresholds are clamped to a minimum of 1 — passing 0 would never
+    /// Both thresholds are clamped to a minimum of 1, passing 0 would never
     /// trigger a transition, which is almost certainly a misconfiguration.
     pub fn new(unhealthy_threshold: u32, healthy_threshold: u32) -> Self {
         Self {
@@ -43,7 +43,7 @@ impl ConsecutiveCounter {
 
     /// Record a check result.
     ///
-    /// Returns `Some(new_state)` only when a state transition occurred —
+    /// Returns `Some(new_state)` only when a state transition occurred
     /// callers use this to update the shared [`crate::backend::health_check::UpstreamHealth`]
     /// flag and emit a metric / log line. Returns `None` for the common case
     /// where the streak grew but no threshold was crossed.

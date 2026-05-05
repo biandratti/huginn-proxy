@@ -27,8 +27,7 @@ extracting TLS (JA4), HTTP/2 (Akamai), and TCP SYN (p0f-style) fingerprints and 
 fingerprinting is implemented via an XDP eBPF program using [Aya](https://aya-rs.dev). Fingerprinting libraries are
 provided by [Huginn Net](https://github.com/biandratti/huginn-net).
 
-Inspired by production-grade proxies
-like [Pingora](https://github.com/cloudflare/pingora), [Sozu](https://github.com/sozu-proxy/sozu),
+Inspired by production-grade proxies like [Pingora](https://github.com/cloudflare/pingora)
 and [rust-rpxy](https://github.com/junkurihara/rust-rpxy).
 
 ## Quick Start
