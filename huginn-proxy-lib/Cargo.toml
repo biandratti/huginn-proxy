@@ -23,6 +23,7 @@ opentelemetry.workspace = true
 opentelemetry-prometheus.workspace = true
 opentelemetry_sdk = { workspace = true, features = ["metrics", "trace"] }
 pingora-limits.workspace = true
+pingora-timeout.workspace = true
 prometheus.workspace = true
 rustls-pki-types.workspace = true
 serde.workspace = true
