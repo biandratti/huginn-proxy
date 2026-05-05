@@ -10,18 +10,18 @@ use crate::proxy::synthetic_response::synthetic_error_response;
 use crate::proxy::ClientPool;
 use crate::telemetry::Metrics;
 use crate::tls::record_tls_handshake_metrics;
+use crate::tls::setup::SharedTlsAcceptor;
 use http::StatusCode;
 use http_body_util::BodyExt;
 use hyper_util::rt::{TokioExecutor, TokioIo};
 use hyper_util::server::conn::auto::Builder as ConnBuilder;
 use tokio::net::TcpStream;
 use tokio::time::Instant;
-use tokio_rustls::TlsAcceptor;
 use tracing::warn;
 
 /// Configuration for handling TLS connections
 pub struct TlsConnectionConfig {
-    pub tls_acceptor: Arc<tokio::sync::RwLock<Option<TlsAcceptor>>>,
+    pub tls_acceptor: SharedTlsAcceptor,
     pub fingerprint_config: crate::config::FingerprintConfig,
     pub routes: Vec<crate::config::Route>,
     pub backends: Arc<Vec<crate::config::Backend>>,
@@ -44,8 +44,8 @@ pub async fn handle_tls_connection(
     config: TlsConnectionConfig,
 ) {
     let metrics = config.metrics.clone();
-    let acc_opt = config.tls_acceptor.read().await.clone();
-    if let Some(acc) = acc_opt {
+    let acc = config.tls_acceptor.load_full();
+    {
         let handshake_start = Instant::now();
         let (prefix, ja4_fingerprints) =
             match read_client_hello(&mut stream, Arc::clone(&metrics)).await {
@@ -246,7 +246,5 @@ pub async fn handle_tls_connection(
             serve_with_timeout(serve_fut, config.connection_handling_timeout, config.metrics, peer)
                 .await;
         }
-    } else {
-        warn!(?peer, "TLS acceptor not initialized");
     }
 }

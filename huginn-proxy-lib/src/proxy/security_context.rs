@@ -1,13 +1,7 @@
 use std::sync::Arc;
-use tokio::sync::watch;
 
-use crate::config::{
-    Backend, HeaderManipulation, IpFilterConfig, KeepAliveConfig, RateLimitConfig, Route,
-    SecurityHeaders,
-};
-use crate::fingerprinting::Ja4Fingerprints;
+use crate::config::{HeaderManipulation, IpFilterConfig, RateLimitConfig, SecurityHeaders};
 use crate::security::RateLimitManager;
-use crate::telemetry::Metrics;
 
 /// Security-related context for request handling
 #[derive(Clone)]
@@ -35,17 +29,4 @@ impl SecurityContext {
             global_header_manipulation,
         }
     }
-}
-
-/// Request handling context
-pub struct RequestContext {
-    pub routes: Vec<Route>,
-    pub backends: Arc<Vec<Backend>>,
-    pub ja4_fingerprints: Option<Ja4Fingerprints>,
-    pub fingerprint_rx: Option<watch::Receiver<Option<huginn_net_http::AkamaiFingerprint>>>,
-    pub keep_alive: KeepAliveConfig,
-    pub security: SecurityContext,
-    pub metrics: Arc<Metrics>,
-    pub peer: std::net::SocketAddr,
-    pub is_https: bool,
 }

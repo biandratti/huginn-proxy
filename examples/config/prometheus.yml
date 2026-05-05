@@ -14,3 +14,9 @@ scrape_configs:
     static_configs:
       - targets: ["host.docker.internal:9091"]
     scrape_interval: 15s
+
+  # cAdvisor from docker-compose.observability.yml (same Docker network as Prometheus).
+  - job_name: "cadvisor"
+    static_configs:
+      - targets: ["cadvisor:8080"]
+    scrape_interval: 15s
