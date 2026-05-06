@@ -214,3 +214,50 @@ fn empty_path_does_not_match_non_root() {
 fn root_prefix_does_not_match_empty_path() {
     assert!(!prefix_matches("", "/"));
 }
+
+#[test]
+fn fingerprinting_no_match_returns_none() {
+    let routes = vec![route("/api", "backend-a:9000")];
+    assert!(pick_route_with_fingerprinting("/static/file.js", &routes).is_none());
+}
+
+#[test]
+fn fingerprinting_root_catch_all_candidates() {
+    let routes = sorted_routes(vec![
+        route("/api", "api:9000"),
+        route("/", "root-a:9000"),
+        route("/", "root-b:9000"),
+    ]);
+    let Some(r) = pick_route_with_fingerprinting("/unknown", &routes) else {
+        panic!("Expected a route match for /unknown");
+    };
+    assert_eq!(r.matched_prefix, "/");
+    assert_eq!(r.backend_candidates, vec!["root-a:9000", "root-b:9000"]);
+}
+
+#[test]
+fn fingerprinting_candidates_stops_at_shorter_prefix() {
+    let routes = sorted_routes(vec![
+        route("/api", "api-a:9000"),
+        route("/api", "api-b:9000"),
+        route("/", "root:9000"),
+    ]);
+    let Some(r) = pick_route_with_fingerprinting("/api/users", &routes) else {
+        panic!("Expected a route match for /api/users");
+    };
+    assert_eq!(r.backend_candidates, vec!["api-a:9000", "api-b:9000"]);
+}
+
+#[test]
+fn fingerprinting_same_depth_different_prefix_not_included_in_candidates() {
+    let routes = sorted_routes(vec![
+        route("/api", "api-a:9000"),
+        route("/web", "web:9000"),
+        route("/api", "api-b:9000"),
+    ]);
+    let Some(r) = pick_route_with_fingerprinting("/api/users", &routes) else {
+        panic!("Expected a route match for /api/users");
+    };
+    assert_eq!(r.matched_prefix, "/api");
+    assert_eq!(r.backend_candidates, vec!["api-a:9000", "api-b:9000"]);
+}

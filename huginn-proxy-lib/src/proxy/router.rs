@@ -40,24 +40,26 @@ pub fn pick_route_with_fingerprinting<'a>(
     path: &str,
     routes: &'a [Route],
 ) -> Option<RouteMatch<'a>> {
-    longest_match(path, routes).map(|first| {
-        // All routes sharing the matched prefix are candidates for round-robin selection;
-        // behavior flags come from the first matching route.
-        let backend_candidates = routes
-            .iter()
-            .filter(|r| r.prefix == first.prefix)
-            .map(|r| r.backend.as_str())
-            .collect::<Vec<_>>();
+    let pos = routes
+        .iter()
+        .position(|r| prefix_matches(path, &r.prefix))?;
+    let first = &routes[pos];
 
-        RouteMatch {
-            backend: first.backend.as_str(),
-            backend_candidates,
-            fingerprinting: first.fingerprinting,
-            matched_prefix: first.prefix.as_str(),
-            replace_path: first.replace_path.as_deref(),
-            rate_limit: first.rate_limit.as_ref(),
-            headers: first.headers.as_ref(),
-            force_new_connection: first.force_new_connection,
-        }
+    let backend_candidates = routes[pos..]
+        .iter()
+        .take_while(|r| r.prefix.len() == first.prefix.len())
+        .filter(|r| r.prefix == first.prefix)
+        .map(|r| r.backend.as_str())
+        .collect::<Vec<_>>();
+
+    Some(RouteMatch {
+        backend: first.backend.as_str(),
+        backend_candidates,
+        fingerprinting: first.fingerprinting,
+        matched_prefix: first.prefix.as_str(),
+        replace_path: first.replace_path.as_deref(),
+        rate_limit: first.rate_limit.as_ref(),
+        headers: first.headers.as_ref(),
+        force_new_connection: first.force_new_connection,
     })
 }

@@ -1,4 +1,5 @@
 use std::collections::HashSet;
+use std::sync::Arc;
 
 use serde::Deserialize;
 
@@ -115,11 +116,11 @@ impl Config {
                 max_connections: self.security.max_connections,
             },
             dynamic_cfg: DynamicConfig {
-                backends: self.backends,
+                backends: Arc::new(self.backends),
                 routes: {
                     let mut routes = self.routes;
                     super::sort_routes(&mut routes);
-                    routes
+                    Arc::new(routes)
                 },
                 preserve_host: self.preserve_host,
                 headers: self.headers,
