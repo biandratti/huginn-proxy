@@ -20,7 +20,9 @@ use std::sync::Arc;
 /// deserialized directly from TOML.
 #[derive(Debug, Clone, PartialEq)]
 pub struct DynamicConfig {
+    /// List of backend servers
     pub backends: Arc<Vec<Backend>>,
+    /// Path-based routing rules
     pub routes: Arc<Vec<Route>>,
     /// Preserve the original Host header from clients when forwarding
     pub preserve_host: bool,
