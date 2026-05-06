@@ -150,16 +150,28 @@ pub async fn handle_proxy_request(
                     .insert(HeaderName::from_static(names::TLS_JA4_R), hv);
             }
             if let Ok(hv) =
-                hyper::header::HeaderValue::from_str(&fingerprints.ja4_raw.full.to_string())
+                hyper::header::HeaderValue::from_str(&fingerprints.ja4_original.full.to_string())
             {
                 req.headers_mut()
                     .insert(HeaderName::from_static(names::TLS_JA4_O), hv);
             }
             if let Ok(hv) =
-                hyper::header::HeaderValue::from_str(&fingerprints.ja4_raw.raw.to_string())
+                hyper::header::HeaderValue::from_str(&fingerprints.ja4_original.raw.to_string())
             {
                 req.headers_mut()
                     .insert(HeaderName::from_static(names::TLS_JA4_OR), hv);
+            }
+            if let Ok(hv) =
+                hyper::header::HeaderValue::from_str(&fingerprints.ja4_stable_v1.full.to_string())
+            {
+                req.headers_mut()
+                    .insert(HeaderName::from_static(names::TLS_JA4_S_V1), hv);
+            }
+            if let Ok(hv) =
+                hyper::header::HeaderValue::from_str(&fingerprints.ja4_stable_v1.raw.to_string())
+            {
+                req.headers_mut()
+                    .insert(HeaderName::from_static(names::TLS_JA4_SR_V2), hv);
             }
         }
         if let Some(ref rx) = fingerprint_rx {

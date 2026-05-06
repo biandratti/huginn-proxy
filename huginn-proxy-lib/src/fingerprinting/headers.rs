@@ -10,7 +10,7 @@ pub mod names {
 
     /// Header name for TLS JA4_r fingerprint injection (FoxIO naming)
     ///
-    /// JA4_r: cipher suites and extensions in original ClientHello order, SHA-256 hashed.
+    /// JA4_r: cipher suites and extensions in original ClientHello, SHA-256 hashed.
     /// Differs from JA4 only in sort order of the B and C components.
     /// It is injected for all TLS connections when fingerprinting is enabled.
     pub const TLS_JA4_R: &str = "x-huginn-net-ja4_r";
@@ -24,10 +24,27 @@ pub mod names {
 
     /// Header name for TLS JA4_or fingerprint injection (FoxIO naming)
     ///
-    /// JA4_or: cipher suites and extensions in original ClientHello order, raw (not hashed) hex values.
+    /// JA4_or: cipher suites and extensions in original ClientHello, raw (not hashed) hex values.
     /// Combines original order and raw values - maximum detail for analysis.
     /// It is injected for all TLS connections when fingerprinting is enabled.
     pub const TLS_JA4_OR: &str = "x-huginn-net-ja4_or";
+
+    /// Header name for TLS JA4_s1 stable fingerprint injection
+    ///
+    /// JA4_s1: JA4 computed after dropping ephemeral extensions that legitimately vary
+    /// per connection (session ticket 0x0023, pre-shared key 0x0029, padding 0x0015).
+    /// Yields more consistent fingerprints across resumptions and TLS 1.3 flows from
+    /// the same client than plain JA4, at the cost of omitting signal from those extensions.
+    /// It is injected for all TLS connections when fingerprinting is enabled.
+    pub const TLS_JA4_S_V1: &str = "x-huginn-net-ja4_s_v1";
+
+    /// Header name for TLS JA4_s1r stable fingerprint injection (raw variant)
+    ///
+    /// JA4_s1r: same ephemeral-extension filtering as JA4_s1, but preserves the original
+    /// ClientHello extension order and emits raw (not hashed) hex values — equivalent to
+    /// the relationship between JA4_r and JA4.
+    /// It is injected for all TLS connections when fingerprinting is enabled.
+    pub const TLS_JA4_SR_V2: &str = "x-huginn-net-ja4_sr_v2";
 
     /// Header name for HTTP/2 (Akamai) fingerprint injection
     ///

@@ -6,13 +6,20 @@ pub struct Ja4Fingerprints {
     /// Normalized JA4 payload
     pub ja4: Ja4Payload,
     /// Not normalized JA4 payload
-    pub ja4_raw: Ja4Payload,
+    pub ja4_original: Ja4Payload,
+    /// Normalized and stable JA4 payload
+    pub ja4_stable_v1: Ja4Payload,
     /// Server Name Indication from ClientHello (SNI extension)
     pub sni: Option<String>,
 }
 
 impl Ja4Fingerprints {
-    pub fn new(ja4: Ja4Payload, ja4_raw: Ja4Payload, sni: Option<String>) -> Self {
-        Self { ja4, ja4_raw, sni }
+    pub fn new(
+        ja4: Ja4Payload,
+        ja4_original: Ja4Payload,
+        ja4_stable_v1: Ja4Payload,
+        sni: Option<String>,
+    ) -> Self {
+        Self { ja4, ja4_original, ja4_stable_v1, sni }
     }
 }
