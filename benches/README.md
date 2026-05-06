@@ -1,17 +1,36 @@
 # Huginn Proxy - Benchmarks
 
-This document collects **Criterion** runs (micro + integration), optional **external** load tests (`oha`, `k6` with fingerprint checks), and notes on reading CPU/memory from Docker. All published figures are **indicative**: they track regressions and capacity **for this proxy and feature set** (TLS + fingerprinting, etc.) on a **specific machine**. They are **not** a substitute for a fair shootout against nginx, Envoy, or Caddy unless workload, TLS settings, and functionality are aligned — those tools optimize for different defaults and rarely include the same fingerprinting path.
+This document collects **Criterion** runs (micro + integration), optional **external** load tests (`oha`, `k6` with
+fingerprint checks), and notes on reading CPU/memory from Docker. All published figures are **indicative**: they track
+regressions and capacity **for this proxy and feature set** (TLS + fingerprinting, etc.) on a **specific machine**. They
+are **not** a substitute for a fair shootout against nginx, Envoy, or Caddy unless workload, TLS settings, and
+functionality are aligned — those tools optimize for different defaults and rarely include the same fingerprinting path.
 
 Two benchmark suites with different scopes:
 
-| Suite | File | Scope |
-|---|---|---|
-| `bench_fingerprinting` | `benches/bench_fingerprinting.rs` | Micro - pure parsing, no network |
-| `bench_proxy` | `benches/bench_proxy.rs` | Integration - full proxy round-trip |
+| Suite                  | File                              | Scope                               |
+|------------------------|-----------------------------------|-------------------------------------|
+| `bench_fingerprinting` | `benches/bench_fingerprinting.rs` | Micro - pure parsing, no network    |
+| `bench_proxy`          | `benches/bench_proxy.rs`          | Integration - full proxy round-trip |
+
+## Table of contents
+
+- [Environment](#environment)
+- [Quick start](#quick-start)
+- [bench\_fingerprinting — micro benchmarks](#bench_fingerprinting---micro-benchmarks)
+- [bench\_proxy — integration benchmarks](#bench_proxy---integration-benchmarks)
+- [Sustained load testing — oha](#sustained-load-testing-external)
+- [Throughput comparison — rewrk](#throughput-comparison-with-rewrk)
+- [Load with k6](#load-with-k6)
+- [Interpreting results](#interpreting-results)
+- [CI / regression detection](#ci--regression-detection)
 
 ## Environment
 
-**Load tests** (oha, k6) target a **minimal Docker Compose** stack: **one** proxy, **one** eBPF agent, and **one** backend — a simplified layout on purpose; **more replicas and stronger hardware** usually improve throughput and latency. **Criterion** runs (`cargo bench`, release) execute on the host without Compose. All figures are **indicative** (~**±5–15%** between runs).
+**Load tests** (oha, k6) target a **minimal Docker Compose** stack: **one** proxy, **one** eBPF agent, and **one**
+backend — a simplified layout on purpose; **more replicas and stronger hardware** usually improve throughput and
+latency. **Criterion** runs (`cargo bench`, release) execute on the host without Compose. All figures are **indicative
+** (~**±5–15%** between runs).
 
 ---
 
@@ -43,19 +62,20 @@ No network, no IO - pure CPU work on hardcoded byte fixtures.
 
 ### Benchmarks
 
-| Name | What it measures |
-|---|---|
+| Name                                                 | What it measures                                                                                                                                        |
+|------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `akamai_parse_http2_preface_settings_window_headers` | `extract_akamai_fingerprint_from_bytes()` on preface + SETTINGS + WINDOW_UPDATE + HEADERS (HPACK pseudo-headers, same tail as `fingerprint_values.txt`) |
-| `ja4_parse_tls_client_hello` | `parse_tls_client_hello()` on a TLS 1.3 ClientHello |
+| `ja4_parse_tls_client_hello`                         | `parse_tls_client_hello()` on a TLS 1.3 ClientHello                                                                                                     |
 
 ### Sample numbers (`cargo bench --bench bench_fingerprinting`)
 
-Criterion **estimate** (middle value). Three consecutive runs; table uses the **last** run. See **Environment** at the top of this document.
+Criterion **estimate** (middle value). Three consecutive runs; table uses the **last** run. See **Environment** at the
+top of this document.
 
-| Benchmark | Estimate |
-|---|---|
-| `akamai_parse_http2_preface_settings_window_headers` | ~970 ns |
-| `ja4_parse_tls_client_hello` | ~930 ns |
+| Benchmark                                            | Estimate |
+|------------------------------------------------------|----------|
+| `akamai_parse_http2_preface_settings_window_headers` | ~970 ns  |
+| `ja4_parse_tls_client_hello`                         | ~930 ns  |
 
 ### Fixtures
 
@@ -74,6 +94,7 @@ cargo test -p huginn-proxy-lib --test capture_fixtures -- --nocapture
 ```
 
 This re-captures real bytes from a live `reqwest` connection and writes:
+
 - `benches/fixtures/clienthello_reqwest.bin` - new TLS ClientHello bytes
 - `benches/fixtures/fingerprint_values.txt` - new `EXPECTED_JA4` / `EXPECTED_AKAMAI` strings
 
@@ -107,18 +128,18 @@ Everything runs in-process on localhost. No Docker, no external services.
 
 ### Benchmarks
 
-| Name | Protocol | Concurrency | Fingerprinting |
-|---|---|---|---|
-| `http1_latency/single_request_fingerprinting_on` | HTTP/1.1 | 1 | ON |
-| `http2_latency/single_request_fingerprinting_on` | HTTP/2 | 1 | ON |
-| `fingerprinting_overhead/http1_with_fingerprinting` | HTTP/1.1 | 1 | ON |
-| `fingerprinting_overhead/http1_without_fingerprinting` | HTTP/1.1 | 1 | OFF |
-| `fingerprinting_overhead/http2_with_fingerprinting` | HTTP/2 | 1 | ON |
-| `fingerprinting_overhead/http2_without_fingerprinting` | HTTP/2 | 1 | OFF |
-| `concurrency_scaling/http1_c/10` | HTTP/1.1 | 10 | ON |
-| `concurrency_scaling/http1_c/50` | HTTP/1.1 | 50 | ON |
-| `concurrency_scaling/http2_c/10` | HTTP/2 | 10 | ON |
-| `concurrency_scaling/http2_c/50` | HTTP/2 | 50 | ON |
+| Name                                                   | Protocol | Concurrency | Fingerprinting |
+|--------------------------------------------------------|----------|-------------|----------------|
+| `http1_latency/single_request_fingerprinting_on`       | HTTP/1.1 | 1           | ON             |
+| `http2_latency/single_request_fingerprinting_on`       | HTTP/2   | 1           | ON             |
+| `fingerprinting_overhead/http1_with_fingerprinting`    | HTTP/1.1 | 1           | ON             |
+| `fingerprinting_overhead/http1_without_fingerprinting` | HTTP/1.1 | 1           | OFF            |
+| `fingerprinting_overhead/http2_with_fingerprinting`    | HTTP/2   | 1           | ON             |
+| `fingerprinting_overhead/http2_without_fingerprinting` | HTTP/2   | 1           | OFF            |
+| `concurrency_scaling/http1_c/10`                       | HTTP/1.1 | 10          | ON             |
+| `concurrency_scaling/http1_c/50`                       | HTTP/1.1 | 50          | ON             |
+| `concurrency_scaling/http2_c/10`                       | HTTP/2   | 10          | ON             |
+| `concurrency_scaling/http2_c/50`                       | HTTP/2   | 50          | ON             |
 
 **Fingerprinting overhead** is the delta between `with_fingerprinting` and
 `without_fingerprinting` for each protocol. The H1 delta isolates JA4 cost;
@@ -152,18 +173,77 @@ oha --insecure -c 50 -z 30s --http-version 2 https://127.0.0.1:7000/
 
 Medians over **three** runs per protocol (same host, Compose TLS proxy, example backend ~800 B/response).
 
-| Protocol | req/s | p50 | p95 | p99 | p99.9 |
-|---|---|---|---|---|---|
-| HTTP/1.1 | ~12,700 | 3.2 ms | 7.2 ms | 16.6 ms | 46.9 ms |
-| HTTP/2   | ~7,200  | 0.86 ms | 42 ms | 44 ms | 50 ms |
+| Protocol | req/s   | p50     | p95    | p99     | p99.9   |
+|----------|---------|---------|--------|---------|---------|
+| HTTP/1.1 | ~12,700 | 3.2 ms  | 7.2 ms | 16.6 ms | 46.9 ms |
+| HTTP/2   | ~7,200  | 0.86 ms | 42 ms  | 44 ms   | 50 ms   |
 
 Success rate 100%; “aborted due to deadline” at end of window is an `oha` artifact, not proxy failure.
 
-**HTTP/1.1** — mostly unimodal; one run reached ~17.5k req/s, the other two ~12.4–12.7k (table uses medians). Typical p50 in the **low ms** range for this setup.
+**HTTP/1.1** — mostly unimodal; one run reached ~17.5k req/s, the other two ~12.4–12.7k (table uses medians). Typical
+p50 in the **low ms** range for this setup.
 
-**HTTP/2** — bimodal: p50 **sub‑ms** on the fast path, but p90+ dominated by **~42–44 ms** spikes (new TLS/H2 connections as `oha` spins connections). Compare H1 vs H2 **req/s** on equal `-c`/`-z`: H2 completes fewer requests in the same wall clock with this client.
+**HTTP/2** — bimodal: p50 **sub‑ms** on the fast path, but p90+ dominated by **~42–44 ms** spikes (new TLS/H2
+connections as `oha` spins connections). Compare H1 vs H2 **req/s** on equal `-c`/`-z`: H2 completes fewer requests in
+the same wall clock with this client.
 
-**Production capacity note:** the ~12.7k req/s H1 figure is **not** a universal ceiling — it depends on backend, payload, and hardware. Rule of thumb with 50 concurrent clients: `50 × (1000 / backend_ms)` req/s when backend latency dominates. What these runs show is sustained load **without HTTP errors**; tail latencies must be read in context (tooling + TLS churn).
+**Production capacity note:** the ~12.7k req/s H1 figure is **not** a universal ceiling — it depends on backend,
+payload, and hardware. Rule of thumb with 50 concurrent clients: `50 × (1000 / backend_ms)` req/s when backend latency
+dominates. What these runs show is sustained load **without HTTP errors**; tail latencies must be read in context (
+tooling + TLS churn).
+
+---
+
+## Throughput comparison with rewrk
+
+`rewrk` targets the same HTTPS stack as production (TLS + fingerprinting), so the numbers reflect real conditions. Both
+HTTP/1.1 and HTTP/2 runs are included. Use the same tool and flags against nginx / caddy to get directly comparable
+figures.
+
+```bash
+# Install rewrk (requires pkg-config + libssl-dev)
+cargo install rewrk
+
+# Without eBPF
+docker compose -f examples/docker-compose.release-without-ebpf.yml up -d
+benches/load/rewrk/bench.sh
+
+# With eBPF (requires CAP_BPF / kernel >= 5.11)
+docker compose -f examples/docker-compose.release-ebpf.yml up -d
+EBPF=true benches/load/rewrk/bench.sh
+
+# Override parameters
+CONNECTIONS=256 THREADS=8 DURATION=30s benches/load/rewrk/bench.sh
+```
+
+**TLS note:** `rewrk` has no `--insecure` flag. The script sets `SSL_CERT_FILE=examples/certs/server.crt` automatically
+so OpenSSL trusts the dev self-signed certificate. With a CA-issued cert this is not needed.
+
+### Load test results (rewrk, c=512, t=4, 15s, localhost)
+
+**Environment:** Ubuntu 24.04, rewrk 0.3.2, huginn-proxy `dynamic-arc-routes` branch, `docker-compose.release-*` images.
+Single proxy + single eBPF agent (when enabled) + `traefik/whoami` backend.
+
+**Why this is not a direct comparison with rpxy / nginx / caddy:** those benchmarks run plain HTTP (`http://`).
+huginn-proxy runs **HTTPS with TLS termination + JA4 + Akamai fingerprinting enabled** — the real production workload.
+Stripping TLS and fingerprinting to match their baseline would defeat the purpose of the project.
+
+The meaningful comparison here is **with eBPF vs without eBPF**: it isolates the cost of TCP SYN fingerprinting, which
+is huginn-proxy's unique feature on top of the TLS + HTTP fingerprinting baseline.
+
+| Config       | Protocol | req/s   | p50     | p95      | p99      | p99.9    |
+|--------------|----------|---------|---------|----------|----------|----------|
+| Without eBPF | HTTP/1.1 | ~25,200 | 35.4 ms | 100.1 ms | 148.6 ms | 218.2 ms |
+| Without eBPF | HTTP/2   | ~11,300 | 47.2 ms | 59.1 ms  | 75.2 ms  | 99.2 ms  |
+| With eBPF    | HTTP/1.1 | ~22,800 | 38.1 ms | 108.4 ms | 162.3 ms | 244.6 ms |
+| With eBPF    | HTTP/2   | ~11,600 | 45.7 ms | 52.5 ms  | 60.5 ms  | 86.8 ms  |
+
+**eBPF overhead (H1):** ~10% fewer req/s and slightly higher tail latencies — the cost of capturing and looking up the
+TCP SYN fingerprint on every new connection via XDP/eBPF. **H2 is within noise** because connection reuse means far
+fewer SYN events per request.
+
+The `connection closed before message completed` warnings in proxy logs at test end are expected — rewrk drops all 512
+connections simultaneously when the timer expires.
 
 ---
 
@@ -181,27 +261,31 @@ This models N independent clients connecting simultaneously.
 
 ### Baseline numbers (localhost, `cargo bench --bench bench_proxy`)
 
-Medians from Criterion’s **estimate** line (middle value). Refreshed after **three** consecutive runs; the table below matches the **last** run when the baseline comparison was stable. Same **Environment** as at the top of this document.
+Medians from Criterion’s **estimate** line (middle value). Refreshed after **three** consecutive runs; the table below
+matches the **last** run when the baseline comparison was stable. Same **Environment** as at the top of this document.
 
-| Benchmark | Estimate |
-|---|---|
-| HTTP/1.1 single request (warm) | ~172 µs |
-| HTTP/2 single request (warm) | ~182 µs |
-| HTTP/1.1 with fingerprinting (warm) | ~174 µs |
-| HTTP/1.1 without fingerprinting (warm) | ~166 µs |
-| **Fingerprinting overhead H1 (JA4 only)** | **~10 µs** |
-| HTTP/2 with fingerprinting (warm) | ~181 µs |
-| HTTP/2 without fingerprinting (warm) | ~162 µs |
-| **Fingerprinting overhead H2 (JA4 + Akamai)** | **~17 µs** |
-| Cold throughput, c=10, H1 | ~221 req/s |
-| Cold throughput, c=10, H2 | ~221 req/s |
-| Cold throughput, c=50, H1 | ~1000 req/s |
-| Cold throughput, c=50, H2 | ~1000 req/s |
+| Benchmark                                     | Estimate    |
+|-----------------------------------------------|-------------|
+| HTTP/1.1 single request (warm)                | ~172 µs     |
+| HTTP/2 single request (warm)                  | ~182 µs     |
+| HTTP/1.1 with fingerprinting (warm)           | ~174 µs     |
+| HTTP/1.1 without fingerprinting (warm)        | ~166 µs     |
+| **Fingerprinting overhead H1 (JA4 only)**     | **~10 µs**  |
+| HTTP/2 with fingerprinting (warm)             | ~181 µs     |
+| HTTP/2 without fingerprinting (warm)          | ~162 µs     |
+| **Fingerprinting overhead H2 (JA4 + Akamai)** | **~17 µs**  |
+| Cold throughput, c=10, H1                     | ~221 req/s  |
+| Cold throughput, c=10, H2                     | ~221 req/s  |
+| Cold throughput, c=50, H1                     | ~1000 req/s |
+| Cold throughput, c=50, H2                     | ~1000 req/s |
 
 Key observations:
+
 - Integration **round-trip** is **~170–185 µs** warm (TLS + localhost + Hyper), not sub‑100 µs.
-  Sub‑microsecond **parser-only** cost is what `bench_fingerprinting` measures; the delta here is **tens of µs** and mixes TLS + scheduling noise.
-- Fingerprinting overhead (with vs without) is **~10 µs** on H1 and **~17 µs** on H2 in this snapshot — use as a trend, not an absolute (runs vary ±5–15%).
+  Sub‑microsecond **parser-only** cost is what `bench_fingerprinting` measures; the delta here is **tens of µs** and
+  mixes TLS + scheduling noise.
+- Fingerprinting overhead (with vs without) is **~10 µs** on H1 and **~17 µs** on H2 in this snapshot — use as a trend,
+  not an absolute (runs vary ±5–15%).
 - Cold throughput is dominated by TLS handshakes; c=50 lands near **~1000** completed requests/s per benchmark design.
 
 If fingerprinting overhead grows significantly after a dependency update, suspect
@@ -228,9 +312,14 @@ Criterion exits with code 0 even when regressions are detected; post-process
 
 ## Load with k6
 
-Use the same TLS stack as the sustained-load examples: bring up the proxy (and eBPF agent) with Compose, then run k6 from the **repository root**. The URL is **`https://`**: traffic is still **TLS-encrypted**. **`--insecure-skip-tls-verify`** only disables **certificate chain / hostname verification** against the system trust store (needed for the usual self-signed dev certs). It does **not** turn off TLS — same role as `curl -k` or `oha --insecure`. Drop the flag when using a CA-trusted certificate.
+Use the same TLS stack as the sustained-load examples: bring up the proxy (and eBPF agent) with Compose, then run k6
+from the **repository root**. The URL is **`https://`**: traffic is still **TLS-encrypted**. *
+*`--insecure-skip-tls-verify`** only disables **certificate chain / hostname verification** against the system trust
+store (needed for the usual self-signed dev certs). It does **not** turn off TLS — same role as `curl -k` or
+`oha --insecure`. Drop the flag when using a CA-trusted certificate.
 
-The script **checks** that fingerprint headers (JA4, Akamai, TCP SYN) appear in the **backend echo** (header echo from `traefik/whoami`), not on the response seen by the k6 client.
+The script **checks** that fingerprint headers (JA4, Akamai, TCP SYN) appear in the **backend echo** (header echo from
+`traefik/whoami`), not on the response seen by the k6 client.
 
 ```bash
 docker compose -f examples/docker-compose.release-ebpf.yml up --build
@@ -240,13 +329,13 @@ k6 run --insecure-skip-tls-verify benches/load/k6/fingerprints.js
 
 All fingerprint checks are **on by default**. Disable individual checks with env vars:
 
-| Variable | Default | Description |
-|---|---|---|
-| `NO_CHECK_JA4=true` | off | Skip JA4 TLS fingerprint checks (`ja4`, `ja4_r`, `ja4_o`, `ja4_or`) |
-| `NO_CHECK_AKAMAI=true` | off | Skip Akamai HTTP/2 fingerprint check (auto-skipped when `K6_NO_HTTP2=true`) |
-| `NO_CHECK_TCP_SYN=true` | off | Skip TCP SYN fingerprint check — use when running without the eBPF agent |
-| `K6_CHECKS_RATE` | `0.99` | Minimum required check success rate (e.g. `0.995`) |
-| `K6_FAILED_RATE` | `0` (steady) / `0.02` (ramp) | Maximum tolerated HTTP error rate |
+| Variable                | Default                      | Description                                                                 |
+|-------------------------|------------------------------|-----------------------------------------------------------------------------|
+| `NO_CHECK_JA4=true`     | off                          | Skip JA4 TLS fingerprint checks (`ja4`, `ja4_r`, `ja4_o`, `ja4_or`)         |
+| `NO_CHECK_AKAMAI=true`  | off                          | Skip Akamai HTTP/2 fingerprint check (auto-skipped when `K6_NO_HTTP2=true`) |
+| `NO_CHECK_TCP_SYN=true` | off                          | Skip TCP SYN fingerprint check — use when running without the eBPF agent    |
+| `K6_CHECKS_RATE`        | `0.99`                       | Minimum required check success rate (e.g. `0.995`)                          |
+| `K6_FAILED_RATE`        | `0` (steady) / `0.02` (ramp) | Maximum tolerated HTTP error rate                                           |
 
 > **RAMP mode thresholds:** `RAMP=true` drives the proxy to saturation by design — some errors
 > at the 300 VU stage are expected. The script uses `rate<=0.02` (≤ 2 % errors) in ramp mode
@@ -259,13 +348,12 @@ connection consuming one ephemeral port. The kernel keeps closed ports in `TIME_
 `tcp_fin_timeout` seconds. At high VU counts this can exhaust the ephemeral port range before
 the proxy becomes the bottleneck.
 
-| Scenario | Required conn/s | Recommended tuning |
-|---|---|---|
-| ≤ 30 VUs + TCP SYN | < 470 | none (default `tcp_fin_timeout=60`, 28k ports) |
-| 50 VUs + TCP SYN | ~700 | `sudo sysctl -w net.ipv4.tcp_fin_timeout=15` |
-| RAMP to 300 VUs | ~2 000 peak | `tcp_fin_timeout=10` + `ip_local_port_range="10000 65535"` |
-| Any VU count, no TCP SYN | n/a | no tuning needed — keep-alive reuses connections |
-
+| Scenario                 | Required conn/s | Recommended tuning                                         |
+|--------------------------|-----------------|------------------------------------------------------------|
+| ≤ 30 VUs + TCP SYN       | < 470           | none (default `tcp_fin_timeout=60`, 28k ports)             |
+| 50 VUs + TCP SYN         | ~700            | `sudo sysctl -w net.ipv4.tcp_fin_timeout=15`               |
+| RAMP to 300 VUs          | ~2 000 peak     | `tcp_fin_timeout=10` + `ip_local_port_range="10000 65535"` |
+| Any VU count, no TCP SYN | n/a             | no tuning needed — keep-alive reuses connections           |
 
 Examples:
 
@@ -291,7 +379,3 @@ k6 run --env NO_CHECK_TCP_SYN=true --insecure-skip-tls-verify benches/load/k6/fi
 k6 run --env VUS=50 --env DURATION=60s --env NO_CHECK_TCP_SYN=true \
   --insecure-skip-tls-verify benches/load/k6/fingerprints.js
 ```
-
-### CPU / memory (container)
-
-k6 doesn’t show cgroup usage — use `docker stats` on the `proxy` container while the test runs. App counters: `http://127.0.0.1:9090/metrics`.
