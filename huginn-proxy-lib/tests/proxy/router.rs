@@ -228,7 +228,9 @@ fn fingerprinting_root_catch_all_candidates() {
         route("/", "root-a:9000"),
         route("/", "root-b:9000"),
     ]);
-    let r = pick_route_with_fingerprinting("/unknown", &routes).unwrap();
+    let Some(r) = pick_route_with_fingerprinting("/unknown", &routes) else {
+        panic!("Expected a route match for /unknown");
+    };
     assert_eq!(r.matched_prefix, "/");
     assert_eq!(r.backend_candidates, vec!["root-a:9000", "root-b:9000"]);
 }
@@ -240,7 +242,9 @@ fn fingerprinting_candidates_stops_at_shorter_prefix() {
         route("/api", "api-b:9000"),
         route("/", "root:9000"),
     ]);
-    let r = pick_route_with_fingerprinting("/api/users", &routes).unwrap();
+    let Some(r) = pick_route_with_fingerprinting("/api/users", &routes) else {
+        panic!("Expected a route match for /api/users");
+    };
     assert_eq!(r.backend_candidates, vec!["api-a:9000", "api-b:9000"]);
 }
 
@@ -251,7 +255,9 @@ fn fingerprinting_same_depth_different_prefix_not_included_in_candidates() {
         route("/web", "web:9000"),
         route("/api", "api-b:9000"),
     ]);
-    let r = pick_route_with_fingerprinting("/api/users", &routes).unwrap();
+    let Some(r) = pick_route_with_fingerprinting("/api/users", &routes) else {
+        panic!("Expected a route match for /api/users");
+    };
     assert_eq!(r.matched_prefix, "/api");
     assert_eq!(r.backend_candidates, vec!["api-a:9000", "api-b:9000"]);
 }
