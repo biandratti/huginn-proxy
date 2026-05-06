@@ -1,7 +1,7 @@
 //! TLS JA4 fingerprint injection tests.
 //!
-//! Covers all four JA4 variants (`ja4`, `ja4_r`, `ja4_o`, `ja4_or`) across every combination
-//! of HTTP version (HTTP/1.1 and HTTP/2) and IP version (IPv4 and IPv6).
+//! Covers all six JA4 variants (`ja4`, `ja4_r`, `ja4_o`, `ja4_or`, `ja4_s_v1`, `ja4_sr_v2`)
+//! across every combination of HTTP version (HTTP/1.1 and HTTP/2) and IP version (IPv4 and IPv6).
 //! Also verifies that JA4 headers respect per-route fingerprinting configuration.
 
 use huginn_proxy_lib::fingerprinting::names;
@@ -41,7 +41,14 @@ async fn test_ja4_impl(
 
     let echo = parse_backend_echo(response).await?;
 
-    for key in [names::TLS_JA4, names::TLS_JA4_R, names::TLS_JA4_O, names::TLS_JA4_OR] {
+    for key in [
+        names::TLS_JA4,
+        names::TLS_JA4_R,
+        names::TLS_JA4_O,
+        names::TLS_JA4_OR,
+        names::TLS_JA4_S_V1,
+        names::TLS_JA4_SR_V1,
+    ] {
         assert!(echo.has_header(key), "Header {key} should be present");
     }
 
@@ -57,10 +64,24 @@ async fn test_ja4_impl(
     let tls_fp_or = echo
         .header(names::TLS_JA4_OR)
         .ok_or("TLS JA4_or header should be present")?;
+    let tls_fp_s_v1 = echo
+        .header(names::TLS_JA4_S_V1)
+        .ok_or("TLS JA4_s_v1 header should be present")?;
+    let tls_fp_sr_v2 = echo
+        .header(names::TLS_JA4_SR_V1)
+        .ok_or("TLS JA4_sr_v2 header should be present")?;
 
     assert!(!tls_fp.is_empty(), "TLS JA4 fingerprint should not be empty");
     assert!(tls_fp.starts_with('t'), "TLS fingerprint should start with 't'");
     assert!(tls_fp.contains('_'), "TLS fingerprint should contain underscore separators");
+
+    assert!(!tls_fp_s_v1.is_empty(), "TLS JA4_s_v1 fingerprint should not be empty");
+    assert!(tls_fp_s_v1.starts_with('t'), "TLS JA4_s_v1 should start with 't'");
+    assert!(tls_fp_s_v1.contains('_'), "TLS JA4_s_v1 should contain underscore separators");
+
+    assert!(!tls_fp_sr_v2.is_empty(), "TLS JA4_sr_v2 fingerprint should not be empty");
+    assert!(tls_fp_sr_v2.starts_with('t'), "TLS JA4_sr_v2 should start with 't'");
+    assert!(tls_fp_sr_v2.contains('_'), "TLS JA4_sr_v2 should contain underscore separators");
 
     let expected = if use_http2 {
         "t13i1010h2_61a7ad8aa9b6_3a8073edd8ef"
@@ -75,8 +96,10 @@ async fn test_ja4_impl(
     println!("{ip_ver} {http_ver} TLS fingerprint ({}): {tls_fp_r}", names::TLS_JA4_R);
     println!("{ip_ver} {http_ver} TLS fingerprint ({}): {tls_fp_o}", names::TLS_JA4_O);
     println!("{ip_ver} {http_ver} TLS fingerprint ({}): {tls_fp_or}", names::TLS_JA4_OR);
+    println!("{ip_ver} {http_ver} TLS fingerprint ({}): {tls_fp_s_v1}", names::TLS_JA4_S_V1);
+    println!("{ip_ver} {http_ver} TLS fingerprint ({}): {tls_fp_sr_v2}", names::TLS_JA4_SR_V1);
 
-    // JA4 must be stable across a keep-alive second request
+    // All JA4 variants must be stable across a keep-alive second request
     let response2 = client
         .get(url)
         .send()
@@ -86,8 +109,23 @@ async fn test_ja4_impl(
     let tls_fp2 = echo2
         .header(names::TLS_JA4)
         .ok_or("TLS JA4 missing in second response")?;
+    let tls_fp_s_v1_2 = echo2
+        .header(names::TLS_JA4_S_V1)
+        .ok_or("TLS JA4_s_v1 missing in second response")?;
+    let tls_fp_sr_v2_2 = echo2
+        .header(names::TLS_JA4_SR_V1)
+        .ok_or("TLS JA4_sr_v2 missing in second response")?;
+
     assert_eq!(tls_fp, tls_fp2, "TLS JA4 fingerprint must be consistent across requests");
     assert_eq!(tls_fp2, expected, "Second request TLS JA4 must match expected value");
+    assert_eq!(
+        tls_fp_s_v1, tls_fp_s_v1_2,
+        "TLS JA4_s_v1 fingerprint must be consistent across requests"
+    );
+    assert_eq!(
+        tls_fp_sr_v2, tls_fp_sr_v2_2,
+        "TLS JA4_sr_v2 fingerprint must be consistent across requests"
+    );
 
     Ok(())
 }
@@ -119,7 +157,14 @@ async fn test_ja4_per_route_impl(
         .map_err(|e| format!("Failed to send request to /static: {e}"))?;
     assert_eq!(response.status(), reqwest::StatusCode::OK);
     let echo = parse_backend_echo(response).await?;
-    for key in [names::TLS_JA4, names::TLS_JA4_R, names::TLS_JA4_O, names::TLS_JA4_OR] {
+    for key in [
+        names::TLS_JA4,
+        names::TLS_JA4_R,
+        names::TLS_JA4_O,
+        names::TLS_JA4_OR,
+        names::TLS_JA4_S_V1,
+        names::TLS_JA4_SR_V1,
+    ] {
         assert!(
             !echo.has_header(key),
             "{key} should NOT be present when fingerprinting is disabled"
@@ -134,7 +179,14 @@ async fn test_ja4_per_route_impl(
         .map_err(|e| format!("Failed to send request to /api: {e}"))?;
     assert_eq!(response2.status(), reqwest::StatusCode::OK);
     let echo2 = parse_backend_echo(response2).await?;
-    for key in [names::TLS_JA4, names::TLS_JA4_R, names::TLS_JA4_O, names::TLS_JA4_OR] {
+    for key in [
+        names::TLS_JA4,
+        names::TLS_JA4_R,
+        names::TLS_JA4_O,
+        names::TLS_JA4_OR,
+        names::TLS_JA4_S_V1,
+        names::TLS_JA4_SR_V1,
+    ] {
         assert!(echo2.has_header(key), "{key} should be present when fingerprinting is enabled");
     }
     let tls_fp = echo2

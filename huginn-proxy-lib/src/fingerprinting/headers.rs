@@ -44,7 +44,7 @@ pub mod names {
     /// ClientHello extension order and emits raw (not hashed) hex values — equivalent to
     /// the relationship between JA4_r and JA4.
     /// It is injected for all TLS connections when fingerprinting is enabled.
-    pub const TLS_JA4_SR_V2: &str = "x-huginn-net-ja4_sr_v2";
+    pub const TLS_JA4_SR_V1: &str = "x-huginn-net-ja4_sr_v1";
 
     /// Header name for HTTP/2 (Akamai) fingerprint injection
     ///
