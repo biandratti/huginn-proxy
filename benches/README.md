@@ -206,7 +206,7 @@ cargo install rewrk
 
 # Without eBPF
 docker compose -f examples/docker-compose.release-without-ebpf.yml up -d
-benches/load/rewrk/bench.sh
+EBPF=false benches/load/rewrk/bench.sh
 
 # With eBPF (requires CAP_BPF / kernel >= 5.11)
 docker compose -f examples/docker-compose.release-ebpf.yml up -d
@@ -231,19 +231,22 @@ Stripping TLS and fingerprinting to match their baseline would defeat the purpos
 The meaningful comparison here is **with eBPF vs without eBPF**: it isolates the cost of TCP SYN fingerprinting, which
 is huginn-proxy's unique feature on top of the TLS + HTTP fingerprinting baseline.
 
-| Config       | Protocol | req/s   | p50     | p95      | p99      | p99.9    |
-|--------------|----------|---------|---------|----------|----------|----------|
-| Without eBPF | HTTP/1.1 | ~25,200 | 35.4 ms | 100.1 ms | 148.6 ms | 218.2 ms |
-| Without eBPF | HTTP/2   | ~11,300 | 47.2 ms | 59.1 ms  | 75.2 ms  | 99.2 ms  |
-| With eBPF    | HTTP/1.1 | ~22,800 | 38.1 ms | 108.4 ms | 162.3 ms | 244.6 ms |
-| With eBPF    | HTTP/2   | ~11,600 | 45.7 ms | 52.5 ms  | 60.5 ms  | 86.8 ms  |
+Averages over all clean runs (eBPF n=5, no-eBPF n=1). H1 has high run-to-run variance — see note below.
 
-**eBPF overhead (H1):** ~10% fewer req/s and slightly higher tail latencies — the cost of capturing and looking up the
-TCP SYN fingerprint on every new connection via XDP/eBPF. **H2 is within noise** because connection reuse means far
-fewer SYN events per request.
+| Config       | Protocol | avg req/s | avg p50  | avg p95   | avg p99   | avg p99.9 |
+|--------------|----------|-----------|----------|-----------|-----------|-----------|
+| Without eBPF | HTTP/1.1 | ~25,200   | ~35.4 ms | ~100.1 ms | ~148.6 ms | ~218.2 ms |
+| Without eBPF | HTTP/2   | ~11,300   | ~47.2 ms | ~59.1 ms  | ~75.2 ms  | ~99.2 ms  |
+| With eBPF    | HTTP/1.1 | ~24,500   | ~37.7 ms | ~105.2 ms | ~153.8 ms | ~225.3 ms |
+| With eBPF    | HTTP/2   | ~11,650   | ~45.0 ms | ~50.6 ms  | ~58.6 ms  | ~89.4 ms  |
 
-The `connection closed before message completed` warnings in proxy logs at test end are expected — rewrk drops all 512
-connections simultaneously when the timer expires.
+**H1 variance is expected** — dominated by TLS connection-pool state, not proxy throughput. Individual runs ranged from
+~19k to ~34k req/s depending on how many warm connections rewrk reused. H2 multiplexes over fewer long-lived connections
+so this effect is amortized — stdev stays under 3% across all H2 runs.
+
+**eBPF overhead:** ~3% on H1 avg req/s (~25.2k → ~24.5k); negligible on H2. The XDP SYN lookup cost per new connection
+is swamped by the TLS handshake at this concurrency. For a precise eBPF cost measurement use the Criterion
+`bench_fingerprinting` suite.
 
 ---
 

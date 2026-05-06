@@ -1,7 +1,7 @@
 use crate::telemetry::metrics::values;
 use crate::telemetry::Metrics;
 use std::sync::Arc;
-use tracing::warn;
+use tracing::{debug, warn};
 
 pub async fn serve_with_timeout<F, E>(
     serve_fut: F,
@@ -15,7 +15,7 @@ pub async fn serve_with_timeout<F, E>(
     match pingora_timeout::timeout(timeout_duration, serve_fut).await {
         Ok(Ok(())) => {}
         Ok(Err(e)) => {
-            warn!(?peer, error = %e, "serve_connection error");
+            debug!(?peer, reason = %e, "connection ended");
         }
         Err(_) => {
             warn!(?peer, "connection handling timeout");
