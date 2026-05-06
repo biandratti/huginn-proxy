@@ -21,9 +21,9 @@ Two benchmark suites with different scopes:
 - [bench\_proxy — integration benchmarks](#bench_proxy---integration-benchmarks)
 - [Sustained load testing — oha](#sustained-load-testing-external)
 - [Throughput comparison — rewrk](#throughput-comparison-with-rewrk)
-- [Load with k6](#load-with-k6)
 - [Interpreting results](#interpreting-results)
-- [CI / regression detection](#ci--regression-detection)
+- [Regression detection](#regression-detection)
+- [Load with k6](#load-with-k6)
 
 ## Environment
 
@@ -297,7 +297,7 @@ to isolate parser cost.
 
 ---
 
-## CI / regression detection
+## Regression detection
 
 Benchmarks are not run in CI by default (they take ~3 minutes and need dedicated CPU).
 To enable regression detection, run with a saved baseline and fail on > 10% regression:
@@ -341,8 +341,17 @@ All fingerprint checks are **on by default**. Disable individual checks with env
 | `K6_FAILED_RATE`        | `0` (steady) / `0.02` (ramp) | Maximum tolerated HTTP error rate                                           |
 
 > **RAMP mode thresholds:** `RAMP=true` drives the proxy to saturation by design — some errors
-> at the 300 VU stage are expected. The script uses `rate<=0.02` (≤ 2 % errors) in ramp mode
+> at the 300 VU (Virtual Users) stage are expected. The script uses `rate<=0.02` (≤ 2 % errors) in ramp mode
 > instead of the strict `rate==0` used in steady-state runs. Override with `--env K6_FAILED_RATE=0.01`.
+
+#### Reference results
+
+Steady-state run with all fingerprint checks enabled, eBPF agent active, `VUS=50 DURATION=60s`.
+Host: Intel Core i7-9750H, Linux, `tcp_fin_timeout=15`.
+
+| Scenario                              | VUs | req/s | checks pass | p50    | p95    |
+|---------------------------------------|-----|-------|-------------|--------|--------|
+| All checks + eBPF, TCP SYN (no reuse) | 50  | ~896  | 100 %       | ~42 ms | ~55 ms |
 
 #### OS tuning for high-VU tests
 
@@ -351,13 +360,6 @@ connection consuming one ephemeral port. The kernel keeps closed ports in `TIME_
 `tcp_fin_timeout` seconds. At high VU counts this can exhaust the ephemeral port range before
 the proxy becomes the bottleneck.
 
-| Scenario                 | Required conn/s | Recommended tuning                                         |
-|--------------------------|-----------------|------------------------------------------------------------|
-| ≤ 30 VUs + TCP SYN       | < 470           | none (default `tcp_fin_timeout=60`, 28k ports)             |
-| 50 VUs + TCP SYN         | ~700            | `sudo sysctl -w net.ipv4.tcp_fin_timeout=15`               |
-| RAMP to 300 VUs          | ~2 000 peak     | `tcp_fin_timeout=10` + `ip_local_port_range="10000 65535"` |
-| Any VU count, no TCP SYN | n/a             | no tuning needed — keep-alive reuses connections           |
-
 Examples:
 
 ```bash
@@ -365,7 +367,7 @@ Examples:
 k6 run --insecure-skip-tls-verify benches/load/k6/fingerprints.js
 
 # Higher steady load — tune TIME_WAIT first (see table above)
-k6 run --env VUS=50 --env DURATION=60s --insecure-skip-tls-verify benches/load/k6/fingerprints.js
+k6 run --env VUS=50 --env DURATION=60s --insecure-skip-tls-verify benches/load/k6/fingerprints.js````
 
 # Ramp to saturation: 10 → 50 → 150 → 300 VUs (~4 min)
 # Tune OS first: sudo sysctl -w net.ipv4.tcp_fin_timeout=10 net.ipv4.ip_local_port_range="10000 65535"
