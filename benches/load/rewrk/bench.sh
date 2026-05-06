@@ -1,16 +1,15 @@
 #!/bin/sh
 # rewrk load benchmark for huginn-proxy (HTTPS, HTTP/1.1 + HTTP/2).
-# Produces numbers comparable to nginx / caddy rewrk benchmarks.
 #
 # Requires rewrk (with OpenSSL support):
 #   sudo apt install pkg-config libssl-dev
-#   cargo install rewrk --git https://github.com/ChillFish8/rewrk.git
+#   cargo install rewrk
 #
 # Start the proxy stack first, then run this script from the repo root:
 #
 #   Without eBPF:
 #     docker compose -f examples/docker-compose.release-without-ebpf.yml up -d
-#     benches/load/rewrk/bench.sh
+#     EBPF=false benches/load/rewrk/bench.sh
 #
 #   With eBPF (requires CAP_BPF / kernel >= 5.11):
 #     docker compose -f examples/docker-compose.release-ebpf.yml up -d
