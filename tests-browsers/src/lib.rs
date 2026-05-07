@@ -9,6 +9,8 @@ pub const HEADER_TLS_JA4: &str = "x-huginn-net-ja4";
 pub const HEADER_TLS_JA4_R: &str = "x-huginn-net-ja4_r";
 pub const HEADER_TLS_JA4_O: &str = "x-huginn-net-ja4_o";
 pub const HEADER_TLS_JA4_OR: &str = "x-huginn-net-ja4_or";
+pub const HEADER_TLS_JA4_S_V1: &str = "x-huginn-net-ja4_s_v1";
+pub const HEADER_TLS_JA4_SR_V1: &str = "x-huginn-net-ja4_sr_v1";
 pub const HEADER_TCP_SYN: &str = "x-huginn-net-tcp";
 
 #[derive(Debug, Clone)]
@@ -16,18 +18,21 @@ pub struct BrowserFingerprints {
     pub version: &'static str,
     pub http2_akamai: &'static str,
     pub tls_ja4: &'static str,
+    pub tls_ja4_s_v1: &'static str,
 }
 
 pub const CHROME_FINGERPRINTS: BrowserFingerprints = BrowserFingerprints {
     version: "latest",
     http2_akamai: "1:65536;2:0;4:6291456;6:262144|15663105|0|m,a,s,p",
     tls_ja4: "t13d1516h2_8daaf6152771_d8a2da3f94cd",
+    tls_ja4_s_v1: "",
 };
 
 pub const FIREFOX_FINGERPRINTS: BrowserFingerprints = BrowserFingerprints {
     version: "147.0",
     http2_akamai: "1:65536;2:0;4:131072;5:16384|12517377|0|m,p,a,s",
     tls_ja4: "t13d1717h2_5b57614c22b0_3cbfd9057e0d",
+    tls_ja4_s_v1: "",
 };
 
 // ── response parsing ──────────────────────────────────────────────────────────
@@ -87,6 +92,8 @@ pub fn verify_fingerprint_headers(
         HEADER_TLS_JA4_R,
         HEADER_TLS_JA4_O,
         HEADER_TLS_JA4_OR,
+        HEADER_TLS_JA4_S_V1,
+        HEADER_TLS_JA4_SR_V1,
     ] {
         if !headers.contains_key(key) {
             return Err(format!("Missing {key} header").into());
