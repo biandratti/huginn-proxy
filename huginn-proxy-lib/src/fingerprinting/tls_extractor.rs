@@ -40,9 +40,10 @@ pub async fn read_client_hello(
                 .tls_fingerprint_extraction_duration_seconds
                 .record(duration, &[]);
             let ja4 = signature.generate_ja4();
-            let ja4_raw = signature.generate_ja4_original();
+            let ja4_original = signature.generate_ja4_original();
+            let ja4_stable_v1 = signature.generate_ja4_stable_v1();
             let sni = signature.sni;
-            Some(Ja4Fingerprints::new(ja4, ja4_raw, sni))
+            Some(Ja4Fingerprints::new(ja4, ja4_original, ja4_stable_v1, sni))
         }
         Err(_) => {
             metrics.tls_fingerprint_failures_total.add(1, &[]);

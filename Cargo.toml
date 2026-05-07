@@ -35,7 +35,7 @@ huginn-ebpf-common = { path = "huginn-ebpf-common" }
 huginn-net-db = "1.7.5"
 huginn-net-http = "1.7.5"
 huginn-net-tcp = "1.7.5"
-huginn-net-tls = "1.7.5"
+huginn-net-tls = { version = "1.7.5", features = ["stable-v1"] }
 hyper = { version = "1.9.0", features = ["full"] }
 hyper-util = { version = "0.1.20", features = ["full"] }
 ipnet = "2.12.0"
@@ -55,9 +55,9 @@ serde_norway = "0.9.42"
 serial_test = "3.4.0"
 socket2 = "0.6.3"
 tempfile = "3.27.0"
-thirtyfour = "0.36.3"
+thirtyfour = "0.37.0"
 thiserror = "2.0.18"
-tokio = { version = "1.52.1", features = ["net", "time", "io-util", "macros", "rt-multi-thread", "sync", "signal", "fs"] }
+tokio = { version = "1.52.2", features = ["net", "time", "io-util", "macros", "rt-multi-thread", "sync", "signal", "fs"] }
 tokio-rustls = "0.26.4"
 tokio-util = { version = "0.7.18", features = ["rt"] }
 toml = "1.1.2"
