@@ -96,30 +96,40 @@ Fingerprints are automatically extracted and injected as headers:
 
 **Examples:**
 
-```
-x-huginn-net-akamai: 3:100;4:10485760;2:0|1048510465|0|m,s,a,p
-x-huginn-net-ja4: t13d3112h2_e8f1e7e78f70_b26ce05bbdd6
-x-huginn-net-ja4_o: t13d3112h2_d7c3e2abb617_cad92ccb4254
-x-huginn-net-ja4_or: t13d3112h2_1302,1303,1301,c02c,c030,009f,cca9,cca8,ccaa,c02b,c02f,009e,c024,c028,006b,c023,c027,0067,c00a,c014,0039,c009,c013,0033,009d,009c,003d,003c,0035,002f,00ff_0000,000b,000a,0010,0016,0017,0031,000d,002b,002d,0033,0015_0403,0503,0603,0807,0808,0809,080a,080b,0804,0805,0806,0401,0501,0601,0303,0301,0302,0402,0502,0602
-x-huginn-net-ja4_r: t13d3112h2_002f,0033,0035,0039,003c,003d,0067,006b,009c,009d,009e,009f,00ff,1301,1302,1303,c009,c00a,c013,c014,c023,c024,c027,c028,c02b,c02c,c02f,c030,cca8,cca9,ccaa_000a,000b,000d,0015,0016,0017,002b,002d,0031,0033_0403,0503,0603,0807,0808,0809,080a,080b,0804,0805,0806,0401,0501,0601,0303,0301,0302,0402,0502,0602
-x-huginn-net-ja4_s_v1: t13d3111h2_e8f1e7e78f70_375ca2c5e164
-x-huginn-net-ja4_sr_v1: t13d3111h2_002f,0033,0035,0039,003c,003d,0067,006b,009c,009d,009e,009f,00ff,1301,1302,1303,c009,c00a,c013,c014,c023,c024,c027,c028,c02b,c02c,c02f,c030,cca8,cca9,ccaa_000a,000b,000d,0016,0017,002b,002d,0031,0033_0403,0503,0603,0807,0808,0809,080a,080b,0804,0805,0806,0401,0501,0601,0303,0301,0302,0402,0502,0602
-x-huginn-net-tcp: 4:64+0:0:1460:mss*44,7:mss,sok,ts,nop,ws:df,id+:0
-x-forwarded-for:     172.18.0.1,
-x-forwarded-port:    50908,
-x-forwarded-proto:   https,
-x-forwarded-host:    localhost
+```http
+# TLS — standard (FoxIO JA4)
+x-huginn-net-ja4:      t13d3112h2_e8f1e7e78f70_b26ce05bbdd6
+x-huginn-net-ja4_r:    t13d3112h2_002f,0033,...,ccaa_000a,..._0403,...
+x-huginn-net-ja4_o:    t13d3112h2_d7c3e2abb617_cad92ccb4254
+x-huginn-net-ja4_or:   t13d3112h2_1302,1303,..._0000,..._0403,...
+
+# TLS — stable (version-invariant)
+x-huginn-net-ja4_s_v1:  t13d3111h2_e8f1e7e78f70_375ca2c5e164
+x-huginn-net-ja4_sr_v1: t13d3111h2_002f,0033,...,ccaa_000a,..._0403,...
+
+# HTTP/2 (Akamai)
+x-huginn-net-akamai:   3:100;4:10485760;2:0|1048510465|0|m,s,a,p
+
+# TCP SYN (eBPF/XDP)
+x-huginn-net-tcp:      4:64+0:0:1460:mss*44,7:mss,sok,ts,nop,ws:df,id+:0
+
+# Forwarded
+x-forwarded-for:       172.18.0.1
+x-forwarded-host:      localhost
+x-forwarded-port:      50908
+x-forwarded-proto:     https
 ```
 
 These headers always override any client-provided values to prevent spoofing.
 
 ## Performance
 
-- **Fingerprinting Overhead**: ~2.2% (minimal impact)
-- **Concurrent Connections**: Handles thousands of concurrent connections
-- **Latency**: Sub-millisecond overhead for fingerprint extraction
+Benchmarked under realistic conditions — TLS termination, JA4 + Akamai + TCP SYN fingerprinting all enabled —
+huginn-proxy sustains **~25k req/s** (HTTP/1.1) and **~11k req/s** (HTTP/2) at c=512 on a **single instance**,
+with fingerprinting overhead of **~10–17 µs** per request. Most proxy benchmarks you'll find online run plain
+HTTP without TLS or fingerprinting; this is measured with the full production feature set active.
 
-See [`benches/README.md`](benches/README.md) for detailed benchmark results from development environment.
+See [`benches/README.md`](benches/README.md) for full methodology, numbers, and how to reproduce them.
 
 ## Deployment matrix
 
