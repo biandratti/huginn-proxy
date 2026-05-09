@@ -1016,9 +1016,9 @@ dependencies = [
  "huginn-ebpf",
  "hyper",
  "hyper-util",
- "opentelemetry",
+ "opentelemetry 0.31.0",
  "opentelemetry-prometheus",
- "opentelemetry_sdk",
+ "opentelemetry_sdk 0.31.0",
  "prometheus",
  "serde_json",
  "thiserror 2.0.18",
@@ -1124,9 +1124,9 @@ dependencies = [
  "hyper-util",
  "ipnet",
  "notify",
- "opentelemetry",
+ "opentelemetry 0.31.0",
  "opentelemetry-prometheus",
- "opentelemetry_sdk",
+ "opentelemetry_sdk 0.31.0",
  "pingora-limits",
  "pingora-timeout",
  "prometheus",
@@ -1829,14 +1829,24 @@ dependencies = [
 ]
 
 [[package]]
-name = "opentelemetry-prometheus"
-version = "0.31.0"
+name = "opentelemetry"
+version = "0.32.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "14095eb06b569eb5d538fa4555969f7e8a410ed7910c903bfd295f9e1a50d7ea"
+checksum = "b0142c63252a9e054e68a4c61a5778f7b14f576274d593f8ce883d191a099682"
+dependencies = [
+ "js-sys",
+ "tracing",
+]
+
+[[package]]
+name = "opentelemetry-prometheus"
+version = "0.32.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2c0359983e7f79cf33c9abd89e5d7ddf67c46c419d0148598022d70e70c01aba"
 dependencies = [
  "once_cell",
- "opentelemetry",
- "opentelemetry_sdk",
+ "opentelemetry 0.32.0",
+ "opentelemetry_sdk 0.32.0",
  "prometheus",
  "tracing",
 ]
@@ -1850,9 +1860,23 @@ dependencies = [
  "futures-channel",
  "futures-executor",
  "futures-util",
- "opentelemetry",
+ "opentelemetry 0.31.0",
  "percent-encoding",
  "rand 0.9.4",
+ "thiserror 2.0.18",
+]
+
+[[package]]
+name = "opentelemetry_sdk"
+version = "0.32.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "368afaed344110f40b179bb8fbe54bc52d98f9bd2b281799ef32487c2650c956"
+dependencies = [
+ "futures-channel",
+ "futures-executor",
+ "futures-util",
+ "opentelemetry 0.32.0",
+ "portable-atomic",
  "thiserror 2.0.18",
 ]
 
@@ -2119,6 +2143,12 @@ dependencies = [
  "pnet_packet",
  "pnet_sys",
 ]
+
+[[package]]
+name = "portable-atomic"
+version = "1.13.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c33a9471896f1c69cecef8d20cbe2f7accd12527ce60845ff44c153bb2a21b49"
 
 [[package]]
 name = "potential_utf"
