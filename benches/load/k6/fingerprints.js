@@ -96,6 +96,21 @@ function parseWhoami(text) {
     return inHeaders ? headers : null;
 }
 
+// FoxIO JA4 line: t|q + version + proto + ciphers + _ + hex + _ + hex
+const JA4_LINE_PATTERN = /^[tq]\d{2}[a-z]\d{4}[a-z0-9]{2}_[0-9a-f]+_[0-9a-f]+$/;
+// Akamai HTTP/2: SETTINGS|WINDOW_UPDATE|PRIORITY|pseudo-headers
+const AKAMAI_PATTERN = /^[\d:;]+\|\d+\|\d+\|[mapsi,]+$/;
+
+function headerMatchesJa4Line(h, name) {
+    const v = h[name];
+    return typeof v === "string" && JA4_LINE_PATTERN.test(v);
+}
+
+function headerNonEmpty(h, name) {
+    const v = h[name];
+    return typeof v === "string" && v.length > 0;
+}
+
 export default function () {
     const url =
         baseUrl.endsWith("/") && targetPath.startsWith("/")
@@ -122,70 +137,29 @@ export default function () {
     }
 
     if (checkJa4) {
-        // JA4 format: t<version><proto><ciphers>_<hash>_<hash>
-        // e.g. t13d1516h2_8daaf6152771_d8a2da3f94cd
-        const ja4Pattern = /^[tq]\d{2}[a-z]\d{4}[a-z0-9]{2}_[0-9a-f]+_[0-9a-f]+$/;
-
-        check(null, {
-            "echo: x-tls-ja4 valid": () => {
-                const v = headers["x-tls-ja4"];
-                return typeof v === "string" && ja4Pattern.test(v);
-            },
-        });
-
-        check(null, {
-            "echo: x-tls-ja4-r present": () => {
-                const v = headers["x-tls-ja4-r"];
-                return typeof v === "string" && v.length > 0;
-            },
-        });
-
-        check(null, {
-            "echo: x-tls-ja4-o present": () => {
-                const v = headers["x-tls-ja4-o"];
-                return typeof v === "string" && v.length > 0;
-            },
-        });
-
-        check(null, {
-            "echo: x-tls-ja4-or present": () => {
-                const v = headers["x-tls-ja4-or"];
-                return typeof v === "string" && v.length > 0;
-            },
-        });
-
-        check(null, {
-            "echo: x-tls-ja4-sv1 valid": () => {
-                const v = headers["x-tls-ja4-sv1"];
-                return typeof v === "string" && ja4Pattern.test(v);
-            },
-        });
-
-        check(null, {
-            "echo: x-tls-ja4-sv1r present": () => {
-                const v = headers["x-tls-ja4-sv1r"];
-                return typeof v === "string" && v.length > 0;
-            },
+        check(headers, {
+            "echo: x-tls-ja4 valid": (h) => headerMatchesJa4Line(h, "x-tls-ja4"),
+            "echo: x-tls-ja4-r present": (h) => headerNonEmpty(h, "x-tls-ja4-r"),
+            "echo: x-tls-ja4-o present": (h) => headerMatchesJa4Line(h, "x-tls-ja4-o"),
+            "echo: x-tls-ja4-or present": (h) => headerNonEmpty(h, "x-tls-ja4-or"),
+            "echo: x-tls-ja4-sv1 valid": (h) => headerMatchesJa4Line(h, "x-tls-ja4-sv1"),
+            "echo: x-tls-ja4-sv1r present": (h) => headerNonEmpty(h, "x-tls-ja4-sv1r"),
         });
     }
 
     if (checkAkamai) {
-        // Akamai HTTP/2 format: SETTINGS|WINDOW_UPDATE|PRIORITY|pseudo-headers
-        // e.g. 1:65536;2:0;4:6291456;6:262144|15663105|0|m,a,s,p
-        const akamaiPattern = /^[\d:;]+\|\d+\|\d+\|[mapsi,]+$/;
-        check(null, {
-            "echo: x-http2-akamai valid (HTTP/2)": () => {
-                const v = headers["x-http2-akamai"];
-                return typeof v === "string" && akamaiPattern.test(v);
+        check(headers, {
+            "echo: x-http2-akamai valid (HTTP/2)": (h) => {
+                const v = h["x-http2-akamai"];
+                return typeof v === "string" && AKAMAI_PATTERN.test(v);
             },
         });
     }
 
     if (checkTcpSyn) {
-        // TCP SYN format starts with IP version: 4: or 6:
-        check(null, {
-            "echo: x-tcp-p0f valid (eBPF)": () => {
-                const v = headers["x-tcp-p0f"];
+        check(headers, {
+            "echo: x-tcp-p0f valid (eBPF)": (h) => {
+                const v = h["x-tcp-p0f"];
                 return typeof v === "string" && (v.startsWith("4:") || v.startsWith("6:"));
             },
         });
