@@ -75,18 +75,18 @@ For deployment instructions, see [DEPLOYMENT.md](DEPLOYMENT.md).
 
 Fingerprints are automatically extracted and injected as headers:
 
-- **TLS (JA4)**: `x-huginn-net-ja4`: sorted cipher suites and extensions, SHA-256 hashed. Standard FoxIO JA4.
+- **TLS (JA4)**: `x-tls-ja4`: sorted cipher suites and extensions, SHA-256 hashed. Standard FoxIO JA4.
   using [huginn-net-tls](https://crates.io/crates/huginn-net-tls)
-- **TLS (JA4_r)**: `x-huginn-net-ja4_r`: original ClientHello order, SHA-256 hashed (FoxIO JA4_r)
-- **TLS (JA4_o)**: `x-huginn-net-ja4_o`: sorted, raw hex values without hashing (FoxIO JA4_o, useful for debugging)
-- **TLS (JA4_or)**: `x-huginn-net-ja4_or`: original order, raw hex values without hashing (FoxIO JA4_or)
-- **TLS (JA4_s_v1)**: `x-huginn-net-ja4_s_v1`: sorted cipher suites and extensions, SHA-256 hashed — version-stable
+- **TLS (JA4_r)**: `x-tls-ja4-r`: original ClientHello order, SHA-256 hashed (FoxIO JA4_r)
+- **TLS (JA4_o)**: `x-tls-ja4-o`: sorted, raw hex values without hashing (FoxIO JA4_o, useful for debugging)
+- **TLS (JA4_or)**: `x-tls-ja4-or`: original order, raw hex values without hashing (FoxIO JA4_or)
+- **TLS (JA4_sv1)**: `x-tls-ja4-sv1`: sorted cipher suites and extensions, SHA-256 hashed — version-stable
   variant that excludes browser-version-specific fields for a fingerprint consistent across minor browser updates
-- **TLS (JA4_sr_v1)**: `x-huginn-net-ja4_sr_v1`: original ClientHello order, SHA-256 hashed — same stability guarantee
-  as JA4_s_v1 but preserving the raw extension ordering
-- **HTTP/2 (Akamai)**: `x-huginn-net-akamai`: Extracted from HTTP/2 connections only
+- **TLS (JA4_sv1r)**: `x-tls-ja4-sv1r`: original ClientHello order, SHA-256 hashed — same stability guarantee
+  as JA4_sv1 but preserving the raw extension ordering
+- **HTTP/2 (Akamai)**: `x-http2-akamai`: Extracted from HTTP/2 connections only
   using [huginn-net-http](https://crates.io/crates/huginn-net-http)
-- **TCP SYN (p0f-style)**: `x-huginn-net-tcp` - Raw TCP SYN signature extracted via eBPF/XDP
+- **TCP SYN (p0f-style)**: `x-tcp-p0f` - Raw TCP SYN signature extracted via eBPF/XDP
   using [huginn-net-tcp](https://crates.io/crates/huginn-net-tcp). Requires `tcp_enabled = true`
   and the `ebpf-tcp` feature. Present on all requests of a connection (the fingerprint is
   captured once at TCP accept time and reused). IPv4 and IPv6 SYNs are captured when the next
@@ -98,26 +98,26 @@ Fingerprints are automatically extracted and injected as headers:
 
 ```http
 # TLS — standard (FoxIO JA4)
-x-huginn-net-ja4:      t13d3112h2_e8f1e7e78f70_b26ce05bbdd6
-x-huginn-net-ja4_r:    t13d3112h2_002f,0033,...,ccaa_000a,..._0403,...
-x-huginn-net-ja4_o:    t13d3112h2_d7c3e2abb617_cad92ccb4254
-x-huginn-net-ja4_or:   t13d3112h2_1302,1303,..._0000,..._0403,...
+x-tls-ja4:      t13d3112h2_e8f1e7e78f70_b26ce05bbdd6
+x-tls-ja4-r:    t13d3112h2_002f,0033,...,ccaa_000a,..._0403,...
+x-tls-ja4-o:    t13d3112h2_d7c3e2abb617_cad92ccb4254
+x-tls-ja4-or:   t13d3112h2_1302,1303,..._0000,..._0403,...
 
 # TLS — stable (version-invariant)
-x-huginn-net-ja4_s_v1:  t13d3111h2_e8f1e7e78f70_375ca2c5e164
-x-huginn-net-ja4_sr_v1: t13d3111h2_002f,0033,...,ccaa_000a,..._0403,...
+x-tls-ja4-sv1:  t13d3111h2_e8f1e7e78f70_375ca2c5e164
+x-tls-ja4-sv1r: t13d3111h2_002f,0033,...,ccaa_000a,..._0403,...
 
 # HTTP/2 (Akamai)
-x-huginn-net-akamai:   3:100;4:10485760;2:0|1048510465|0|m,s,a,p
+x-http2-akamai:   3:100;4:10485760;2:0|1048510465|0|m,s,a,p
 
 # TCP SYN (eBPF/XDP)
-x-huginn-net-tcp:      4:64+0:0:1460:mss*44,7:mss,sok,ts,nop,ws:df,id+:0
+x-tcp-p0f: 4:64+0:0:1460:mss*44,7:mss,sok,ts,nop,ws:df,id+:0
 
 # Forwarded
-x-forwarded-for:       172.18.0.1
-x-forwarded-host:      localhost
-x-forwarded-port:      50908
-x-forwarded-proto:     https
+x-forwarded-for:   172.18.0.1
+x-forwarded-host:  localhost
+x-forwarded-port:  50908
+x-forwarded-proto: https
 ```
 
 These headers always override any client-provided values to prevent spoofing.
@@ -143,9 +143,9 @@ For module structure and design decisions, see [ARCHITECTURE.md](ARCHITECTURE.md
 
 | Fingerprint     | Header                | eBPF agent required                 |
 |-----------------|-----------------------|-------------------------------------|
-| TLS (JA4)       | `x-huginn-net-ja4`    | No                                  |
-| HTTP/2 (Akamai) | `x-huginn-net-akamai` | No                                  |
-| TCP SYN (p0f)   | `x-huginn-net-tcp`    | **Yes** - Linux only, kernel ≥ 5.11 |
+| TLS (JA4)       | `x-tls-ja4`           | No                                  |
+| HTTP/2 (Akamai) | `x-http2-akamai`      | No                                  |
+| TCP SYN (p0f)   | `x-tcp-p0f`   | **Yes** - Linux only, kernel ≥ 5.11 |
 
 **GHCR:** three container packages ([
 `huginn-proxy`](https://github.com/biandratti/huginn-proxy/pkgs/container/huginn-proxy), [
@@ -154,7 +154,7 @@ For module structure and design decisions, see [ARCHITECTURE.md](ARCHITECTURE.md
 How many you run depends on the setup:
 
 - **Proxy + eBPF agent (TCP SYN):** **`huginn-proxy`** + **`huginn-proxy-ebpf-agent`** two containers; JA4, Akamai, and
-  `x-huginn-net-tcp`.
+  `x-tcp-p0f`.
 - **Proxy only (no TCP SYN):** **`huginn-proxy-plain`** one container; JA4 and Akamai, no kernel SYN path.
 
 ## License

@@ -2,7 +2,7 @@
 
 TCP SYN fingerprinting is implemented via an XDP eBPF program that captures TCP SYN packets
 and stores them in a BPF LRU hash map. The proxy looks up each connection's SYN data and
-injects the `x-huginn-net-tcp` header with the p0f-style signature.
+injects the `x-tcp-p0f` header with the p0f-style signature.
 
 ---
 
@@ -15,7 +15,7 @@ TCP fingerprinting uses two separate processes:
   sidecar in Docker Compose). Requires elevated privileges but opens no ports.
 
 - **`huginn-proxy`** — opens the pinned BPF maps in read mode and injects the
-  `x-huginn-net-tcp` header. Runs as a standard Deployment with HPA.
+  `x-tcp-p0f` header. Runs as a standard Deployment with HPA.
 
 ```
   huginn-ebpf-agent                      huginn-proxy
@@ -23,7 +23,7 @@ TCP fingerprinting uses two separate processes:
   │ • Load XDP program       │           │ • Open pinned maps      │
   │ • Attach to interface   │           │   (read-only)           │
   │ • Pin maps to bpffs     │           │ • Lookup per connection  │
-  │ • Wait for SIGTERM      │           │ • Inject x-huginn-net-tcp│
+  │ • Wait for SIGTERM      │           │ • Inject x-tcp-p0f│
   └────────────┬────────────┘           └────────────▲───────────┘
                │                                       │
                │    /sys/fs/bpf/huginn/                │
@@ -207,7 +207,7 @@ See [DEPLOYMENT.md](DEPLOYMENT.md) for the full Kubernetes section.
 ## HTTP keep-alives
 
 XDP captures only TCP SYN packets. The fingerprint is looked up once at TCP accept time and
-reused for every request on that connection. As a result, **`x-huginn-net-tcp` is present on
+reused for every request on that connection. As a result, **`x-tcp-p0f` is present on
 all requests** of a keep-alive connection — not just the first.
 
 A `SynResult::Miss` (no header injected) happens when:

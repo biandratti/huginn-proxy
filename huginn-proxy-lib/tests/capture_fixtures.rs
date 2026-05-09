@@ -141,19 +141,19 @@ async fn capture_fingerprint_values() -> Result<(), Box<dyn std::error::Error + 
                     let ja4 = Arc::clone(&ja4);
                     let akamai = Arc::clone(&akamai);
                     async move {
-                        if let Some(v) = req.headers().get("x-huginn-net-ja4") {
+                        if let Some(v) = req.headers().get("x-tls-ja4") {
                             *ja4.lock()
                                 .unwrap_or_else(|e| panic!("ja4 mutex poisoned: {e}")) =
                                 Some(v.to_str().unwrap_or("").to_string());
                         }
-                        if let Some(v) = req.headers().get("x-huginn-net-akamai") {
+                        if let Some(v) = req.headers().get("x-http2-akamai") {
                             *akamai
                                 .lock()
                                 .unwrap_or_else(|e| panic!("akamai mutex poisoned: {e}")) =
                                 Some(v.to_str().unwrap_or("").to_string());
                         }
                         let mut resp = Response::new(Full::new(Bytes::from("ok")));
-                        for name in ["x-huginn-net-ja4", "x-huginn-net-akamai"] {
+                        for name in ["x-tls-ja4", "x-http2-akamai"] {
                             if let Some(value) = req.headers().get(name) {
                                 resp.headers_mut().insert(
                                     hyper::header::HeaderName::from_bytes(name.as_bytes())
@@ -275,14 +275,14 @@ async fn capture_fingerprint_values() -> Result<(), Box<dyn std::error::Error + 
 
     let ja4_val = resp
         .headers()
-        .get("x-huginn-net-ja4")
+        .get("x-tls-ja4")
         .and_then(|v| v.to_str().ok())
         .unwrap_or("(not present in response - check backend echo)")
         .to_string();
 
     let akamai_val = resp
         .headers()
-        .get("x-huginn-net-akamai")
+        .get("x-http2-akamai")
         .and_then(|v| v.to_str().ok())
         .unwrap_or("(not present - HTTP/2 capture may need a second request)")
         .to_string();

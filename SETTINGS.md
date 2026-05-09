@@ -213,7 +213,7 @@ Path-prefix routing rules. **First match wins** — order matters. **Dynamic** (
 |------------------------|--------|---------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `prefix`               | string | —       | URL path prefix to match. Use `"/"` as a catch-all default route.                                                                                                                              |
 | `backend`              | string | —       | Backend address to forward to. Must match a `[[backends]].address` exactly.                                                                                                                    |
-| `fingerprinting`       | bool   | `true`  | Inject TLS/HTTP fingerprint headers (`x-huginn-net-*`) for this route.                                                                                                                         |
+| `fingerprinting`       | bool   | `true`  | Inject TLS/HTTP fingerprint headers (`x-tls-ja4*`, `x-http2-akamai`, `x-tcp-p0f`) for this route.                                                                                                                         |
 | `force_new_connection` | bool   | `false` | Bypass the connection pool — opens a fresh TCP+TLS connection per request. Required when you need a fresh TLS handshake for each request (e.g. JA4 extraction on every request). Adds latency. |
 | `replace_path`         | string | `null`  | Path prefix replacement. Empty string (`""`) strips the prefix. Any other value replaces the matched prefix. Absent = forward as-is.                                                           |
 | `rate_limit`           | table  | —       | Per-route rate limit overrides. See [`[routes.rate_limit]`](#routesrate_limit) below.                                                                                                          |
@@ -660,9 +660,9 @@ Feature flags for passive fingerprinting. **Static** — eBPF programs are loade
 
 | Key            | Type    | Default | Description                                                                                                                                                |
 |----------------|---------|---------|------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `tls_enabled`  | bool    | `true`  | Extract TLS (JA4) fingerprints and inject `x-huginn-net-ja4*` headers.                                                                                     |
-| `http_enabled` | bool    | `true`  | Extract HTTP/2 (Akamai) fingerprints and inject `x-huginn-net-akamai` header.                                                                              |
-| `tcp_enabled`  | bool    | `false` | Extract TCP SYN (p0f-style) fingerprints via eBPF/XDP and inject `x-huginn-net-tcp` header. Requires the `ebpf-tcp` build feature and Linux kernel ≥ 5.11. |
+| `tls_enabled`  | bool    | `true`  | Extract TLS (JA4) fingerprints and inject `x-tls-ja4*` headers.                                                                                     |
+| `http_enabled` | bool    | `true`  | Extract HTTP/2 (Akamai) fingerprints and inject `x-http2-akamai` header.                                                                              |
+| `tcp_enabled`  | bool    | `false` | Extract TCP SYN (p0f-style) fingerprints via eBPF/XDP and inject `x-tcp-p0f` header. Requires the `ebpf-tcp` build feature and Linux kernel ≥ 5.11. |
 | `max_capture`  | integer | `65536` | Maximum bytes captured per HTTP/2 connection for fingerprinting.                                                                                           |
 
 <table>

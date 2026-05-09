@@ -108,19 +108,19 @@ async fn test_security_headers_with_fingerprinting(
 
     let echo = parse_backend_echo(response).await?;
 
-    if let Some(ja4) = echo.header("x-huginn-net-ja4") {
+    if let Some(ja4) = echo.header("x-tls-ja4") {
         println!("JA4 fingerprint present: {}", ja4);
     }
-    if let Some(ja4_r) = echo.header("x-huginn-net-ja4_r") {
+    if let Some(ja4_r) = echo.header("x-tls-ja4-r") {
         println!("JA4_r fingerprint present: {}", ja4_r);
     }
-    if let Some(ja4_o) = echo.header("x-huginn-net-ja4_o") {
+    if let Some(ja4_o) = echo.header("x-tls-ja4-o") {
         println!("JA4_o fingerprint present: {}", ja4_o);
     }
-    if let Some(ja4_or) = echo.header("x-huginn-net-ja4_or") {
+    if let Some(ja4_or) = echo.header("x-tls-ja4-or") {
         println!("JA4_or fingerprint present: {}", ja4_or);
     }
-    if let Some(akamai) = echo.header("x-huginn-net-akamai") {
+    if let Some(akamai) = echo.header("x-http2-akamai") {
         println!("Akamai fingerprint present: {}", akamai);
     }
 
@@ -178,10 +178,10 @@ async fn test_security_headers_with_fingerprinting_ipv6(
     assert_eq!(response.status(), reqwest::StatusCode::OK);
 
     let echo = parse_backend_echo(response).await?;
-    if let Some(ja4) = echo.header("x-huginn-net-ja4") {
+    if let Some(ja4) = echo.header("x-tls-ja4") {
         println!("IPv6 JA4 fingerprint present: {ja4}");
     }
-    if let Some(akamai) = echo.header("x-huginn-net-akamai") {
+    if let Some(akamai) = echo.header("x-http2-akamai") {
         println!("IPv6 Akamai fingerprint present: {akamai}");
     }
 

@@ -127,43 +127,43 @@ export default function () {
         const ja4Pattern = /^[tq]\d{2}[a-z]\d{4}[a-z0-9]{2}_[0-9a-f]+_[0-9a-f]+$/;
 
         check(null, {
-            "echo: x-huginn-net-ja4 valid": () => {
-                const v = headers["x-huginn-net-ja4"];
+            "echo: x-tls-ja4 valid": () => {
+                const v = headers["x-tls-ja4"];
                 return typeof v === "string" && ja4Pattern.test(v);
             },
         });
 
         check(null, {
-            "echo: x-huginn-net-ja4_r present": () => {
-                const v = headers["x-huginn-net-ja4_r"];
+            "echo: x-tls-ja4-r present": () => {
+                const v = headers["x-tls-ja4-r"];
                 return typeof v === "string" && v.length > 0;
             },
         });
 
         check(null, {
-            "echo: x-huginn-net-ja4_o present": () => {
-                const v = headers["x-huginn-net-ja4_o"];
+            "echo: x-tls-ja4-o present": () => {
+                const v = headers["x-tls-ja4-o"];
                 return typeof v === "string" && v.length > 0;
             },
         });
 
         check(null, {
-            "echo: x-huginn-net-ja4_or present": () => {
-                const v = headers["x-huginn-net-ja4_or"];
+            "echo: x-tls-ja4-or present": () => {
+                const v = headers["x-tls-ja4-or"];
                 return typeof v === "string" && v.length > 0;
             },
         });
 
         check(null, {
-            "echo: x-huginn-net-ja4_s_v1 valid": () => {
-                const v = headers["x-huginn-net-ja4_s_v1"];
+            "echo: x-tls-ja4-sv1 valid": () => {
+                const v = headers["x-tls-ja4-sv1"];
                 return typeof v === "string" && ja4Pattern.test(v);
             },
         });
 
         check(null, {
-            "echo: x-huginn-net-ja4_sr_v1 present": () => {
-                const v = headers["x-huginn-net-ja4_sr_v1"];
+            "echo: x-tls-ja4-sv1r present": () => {
+                const v = headers["x-tls-ja4-sv1r"];
                 return typeof v === "string" && v.length > 0;
             },
         });
@@ -174,8 +174,8 @@ export default function () {
         // e.g. 1:65536;2:0;4:6291456;6:262144|15663105|0|m,a,s,p
         const akamaiPattern = /^[\d:;]+\|\d+\|\d+\|[mapsi,]+$/;
         check(null, {
-            "echo: x-huginn-net-akamai valid (HTTP/2)": () => {
-                const v = headers["x-huginn-net-akamai"];
+            "echo: x-http2-akamai valid (HTTP/2)": () => {
+                const v = headers["x-http2-akamai"];
                 return typeof v === "string" && akamaiPattern.test(v);
             },
         });
@@ -184,8 +184,8 @@ export default function () {
     if (checkTcpSyn) {
         // TCP SYN format starts with IP version: 4: or 6:
         check(null, {
-            "echo: x-huginn-net-tcp valid (eBPF)": () => {
-                const v = headers["x-huginn-net-tcp"];
+            "echo: x-tcp-p0f valid (eBPF)": () => {
+                const v = headers["x-tcp-p0f"];
                 return typeof v === "string" && (v.startsWith("4:") || v.startsWith("6:"));
             },
         });

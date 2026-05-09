@@ -146,7 +146,7 @@ Everything runs in-process on localhost. No Docker, no external services.
 the H2 delta isolates JA4 + Akamai cost together.
 
 **Fingerprint value assertion**: every fingerprinted request asserts that
-`x-huginn-net-ja4` (and `x-huginn-net-akamai` for HTTP/2) matches the values
+`x-tls-ja4` (and `x-http2-akamai` for HTTP/2) matches the values
 captured in `benches/fixtures/fingerprint_values.txt`. If either changes after a
 dependency update, the bench panics with a message pointing to `capture_fixtures`.
 
