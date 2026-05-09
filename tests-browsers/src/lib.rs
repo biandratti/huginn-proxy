@@ -4,14 +4,14 @@ use std::collections::HashMap;
 use thirtyfour::prelude::*;
 
 pub const PROXY_URL: &str = "https://localhost:7000";
-pub const HEADER_HTTP2_AKAMAI: &str = "x-huginn-net-akamai";
-pub const HEADER_TLS_JA4: &str = "x-huginn-net-ja4";
-pub const HEADER_TLS_JA4_R: &str = "x-huginn-net-ja4_r";
-pub const HEADER_TLS_JA4_O: &str = "x-huginn-net-ja4_o";
-pub const HEADER_TLS_JA4_OR: &str = "x-huginn-net-ja4_or";
-pub const HEADER_TLS_JA4_S_V1: &str = "x-huginn-net-ja4_s_v1";
-pub const HEADER_TLS_JA4_SR_V1: &str = "x-huginn-net-ja4_sr_v1";
-pub const HEADER_TCP_SYN: &str = "x-huginn-net-tcp";
+pub const HEADER_HTTP2_AKAMAI: &str = "x-http2-akamai";
+pub const HEADER_TLS_JA4: &str = "x-tls-ja4";
+pub const HEADER_TLS_JA4_R: &str = "x-tls-ja4-r";
+pub const HEADER_TLS_JA4_O: &str = "x-tls-ja4-o";
+pub const HEADER_TLS_JA4_OR: &str = "x-tls-ja4-or";
+pub const HEADER_TLS_JA4_S_V1: &str = "x-tls-ja4-sv1";
+pub const HEADER_TLS_JA4_SR_V1: &str = "x-tls-ja4-sv1r";
+pub const HEADER_TCP_SYN: &str = "x-tcp-p0f";
 
 #[derive(Debug, Clone)]
 pub struct BrowserFingerprints {

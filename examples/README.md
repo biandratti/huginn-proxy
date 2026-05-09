@@ -294,12 +294,12 @@ curl -sk https://127.0.0.1:7000/api/test
 
 Expected headers:
 
-- `x-huginn-net-ja4`: TLS fingerprint, sorted ciphers/extensions, hashed (FoxIO JA4)
-- `x-huginn-net-ja4_r`: TLS fingerprint, original ClientHello order, hashed (FoxIO JA4_r)
-- `x-huginn-net-ja4_o`: TLS fingerprint, sorted, raw hex values (FoxIO JA4_o)
-- `x-huginn-net-ja4_or`: TLS fingerprint, original order, raw hex values (FoxIO JA4_or)
-- `x-huginn-net-akamai`: HTTP/2 fingerprint
-- `x-huginn-net-tcp`: TCP SYNC fingerprint
+- `x-tls-ja4`: TLS fingerprint, sorted ciphers/extensions, hashed (FoxIO JA4)
+- `x-tls-ja4-r`: TLS fingerprint, original ClientHello order, hashed (FoxIO JA4_r)
+- `x-tls-ja4-o`: TLS fingerprint, sorted, raw hex values (FoxIO JA4_o)
+- `x-tls-ja4-or`: TLS fingerprint, original order, raw hex values (FoxIO JA4_or)
+- `x-http2-akamai`: HTTP/2 fingerprint
+- `x-tcp-p0f`: TCP SYN fingerprint
 
 ---
 

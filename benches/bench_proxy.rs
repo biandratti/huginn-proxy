@@ -48,8 +48,8 @@ use tokio::net::TcpListener;
 // ---------------------------------------------------------------------------
 // Fingerprint header names (mirrors huginn_proxy_lib::fingerprinting::names)
 // ---------------------------------------------------------------------------
-const HEADER_JA4: &str = "x-huginn-net-ja4";
-const HEADER_AKAMAI: &str = "x-huginn-net-akamai";
+const HEADER_JA4: &str = "x-tls-ja4";
+const HEADER_AKAMAI: &str = "x-http2-akamai";
 
 // ---------------------------------------------------------------------------
 // Expected fingerprint values - captured from a real reqwest/rustls connection.

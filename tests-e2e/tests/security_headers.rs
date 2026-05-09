@@ -1,9 +1,37 @@
+use huginn_proxy_lib::names;
 use reqwest::Client;
 
 use tests_e2e::common::{
-    parse_backend_echo, wait_for_service, DEFAULT_SERVICE_TIMEOUT_SECS, PROXY_HTTPS_URL_IPV4,
-    PROXY_HTTPS_URL_IPV6,
+    parse_backend_echo, wait_for_service, BackendEcho, DEFAULT_SERVICE_TIMEOUT_SECS,
+    PROXY_HTTPS_URL_IPV4, PROXY_HTTPS_URL_IPV6,
 };
+
+fn assert_injected_fingerprint_headers(echo: &BackendEcho, ipv6: bool) {
+    let prefix = if ipv6 { "IPv6 " } else { "" };
+
+    let tls: &[(&str, &str)] = &[
+        ("JA4", names::TLS_JA4),
+        ("JA4_r", names::TLS_JA4_R),
+        ("JA4_o", names::TLS_JA4_O),
+        ("JA4_or", names::TLS_JA4_OR),
+        ("JA4_sv1", names::TLS_JA4_S_V1),
+        ("JA4_sv1r", names::TLS_JA4_SR_V1),
+    ];
+
+    for (label, name) in tls {
+        let v = echo.header(name).unwrap_or_else(|| {
+            panic!("{prefix}expected injected header {name} ({label})");
+        });
+        assert!(!v.is_empty(), "{prefix}{name} ({label}) must be non-empty");
+        println!("{prefix}{label} fingerprint present: {v}");
+    }
+
+    let akamai = echo.header(names::HTTP2_AKAMAI).unwrap_or_else(|| {
+        panic!("{prefix}expected injected header {}", names::HTTP2_AKAMAI);
+    });
+    assert!(!akamai.is_empty(), "{prefix}HTTP/2 Akamai fingerprint must be non-empty");
+    println!("{prefix}Akamai fingerprint present: {akamai}");
+}
 
 #[tokio::test]
 async fn test_custom_security_headers() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -107,22 +135,7 @@ async fn test_security_headers_with_fingerprinting(
     assert_eq!(response.status(), reqwest::StatusCode::OK);
 
     let echo = parse_backend_echo(response).await?;
-
-    if let Some(ja4) = echo.header("x-huginn-net-ja4") {
-        println!("JA4 fingerprint present: {}", ja4);
-    }
-    if let Some(ja4_r) = echo.header("x-huginn-net-ja4_r") {
-        println!("JA4_r fingerprint present: {}", ja4_r);
-    }
-    if let Some(ja4_o) = echo.header("x-huginn-net-ja4_o") {
-        println!("JA4_o fingerprint present: {}", ja4_o);
-    }
-    if let Some(ja4_or) = echo.header("x-huginn-net-ja4_or") {
-        println!("JA4_or fingerprint present: {}", ja4_or);
-    }
-    if let Some(akamai) = echo.header("x-huginn-net-akamai") {
-        println!("Akamai fingerprint present: {}", akamai);
-    }
+    assert_injected_fingerprint_headers(&echo, false);
 
     Ok(())
 }
@@ -178,12 +191,7 @@ async fn test_security_headers_with_fingerprinting_ipv6(
     assert_eq!(response.status(), reqwest::StatusCode::OK);
 
     let echo = parse_backend_echo(response).await?;
-    if let Some(ja4) = echo.header("x-huginn-net-ja4") {
-        println!("IPv6 JA4 fingerprint present: {ja4}");
-    }
-    if let Some(akamai) = echo.header("x-huginn-net-akamai") {
-        println!("IPv6 Akamai fingerprint present: {akamai}");
-    }
+    assert_injected_fingerprint_headers(&echo, true);
 
     Ok(())
 }

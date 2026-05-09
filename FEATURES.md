@@ -140,13 +140,13 @@ disabled).
 
 Passive fingerprinting extracts three types of signatures from client connections:
 
-- **TLS (JA4)** - extracted from the TLS ClientHello. Injected as `x-huginn-net-ja4` (sorted, hashed),
-  `x-huginn-net-ja4_r` (original order, hashed), `x-huginn-net-ja4_o` (sorted, raw), `x-huginn-net-ja4_or` (original
-  order, raw), `x-huginn-net-ja4_s_v1` (sorted, stable, hashed), `x-huginn-net-ja4_sr_v1`(original order, stable,
+- **TLS (JA4)** - extracted from the TLS ClientHello. Injected as `x-tls-ja4` (sorted, hashed),
+  `x-tls-ja4-r` (original order, hashed), `x-tls-ja4-o` (sorted, raw), `x-tls-ja4-or` (original
+  order, raw), `x-tls-ja4-sv1` (sorted, stable, hashed), `x-tls-ja4-sv1r` (original order, stable,
   hashed).
-- **HTTP/2 (Akamai)** - extracted from HTTP/2 SETTINGS and WINDOW_UPDATE frames. Injected as `x-huginn-net-akamai`.
+- **HTTP/2 (Akamai)** - extracted from HTTP/2 SETTINGS and WINDOW_UPDATE frames. Injected as `x-http2-akamai`.
 - **TCP SYN (p0f-style)** - extracted from the raw TCP SYN packet via an eBPF/XDP program attached to the network
-  interface. Injected as `x-huginn-net-tcp`. Requires the `ebpf-tcp` build feature and `tcp_enabled = true` in config.
+  interface. Injected as `x-tcp-p0f`. Requires the `ebpf-tcp` build feature and `tcp_enabled = true` in config.
 
 Per-route control to enable/disable TLS and HTTP/2 fingerprinting. TCP SYN fingerprinting is global (controlled by the
 `fingerprint.tcp_enabled` flag).
