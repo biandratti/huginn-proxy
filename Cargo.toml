@@ -57,7 +57,7 @@ socket2 = "0.6.3"
 tempfile = "3.27.0"
 thirtyfour = "0.37.0"
 thiserror = "2.0.18"
-tokio = { version = "1.52.2", features = ["net", "time", "io-util", "macros", "rt-multi-thread", "sync", "signal", "fs"] }
+tokio = { version = "1.52.3", features = ["net", "time", "io-util", "macros", "rt-multi-thread", "sync", "signal", "fs"] }
 tokio-rustls = "0.26.4"
 tokio-util = { version = "0.7.18", features = ["rt"] }
 toml = "1.1.2"
