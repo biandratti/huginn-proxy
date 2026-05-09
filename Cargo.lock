@@ -1016,7 +1016,7 @@ dependencies = [
  "huginn-ebpf",
  "hyper",
  "hyper-util",
- "opentelemetry",
+ "opentelemetry 0.32.0",
  "opentelemetry-prometheus",
  "opentelemetry_sdk",
  "prometheus",
@@ -1124,7 +1124,7 @@ dependencies = [
  "hyper-util",
  "ipnet",
  "notify",
- "opentelemetry",
+ "opentelemetry 0.32.0",
  "opentelemetry-prometheus",
  "opentelemetry_sdk",
  "pingora-limits",
@@ -1829,13 +1829,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "opentelemetry"
+version = "0.32.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b0142c63252a9e054e68a4c61a5778f7b14f576274d593f8ce883d191a099682"
+dependencies = [
+ "futures-core",
+ "futures-sink",
+ "js-sys",
+ "pin-project-lite",
+ "thiserror 2.0.18",
+ "tracing",
+]
+
+[[package]]
 name = "opentelemetry-prometheus"
 version = "0.31.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "14095eb06b569eb5d538fa4555969f7e8a410ed7910c903bfd295f9e1a50d7ea"
 dependencies = [
  "once_cell",
- "opentelemetry",
+ "opentelemetry 0.31.0",
  "opentelemetry_sdk",
  "prometheus",
  "tracing",
@@ -1850,7 +1864,7 @@ dependencies = [
  "futures-channel",
  "futures-executor",
  "futures-util",
- "opentelemetry",
+ "opentelemetry 0.31.0",
  "percent-encoding",
  "rand 0.9.4",
  "thiserror 2.0.18",
