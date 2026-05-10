@@ -19,10 +19,10 @@ Derived from the TLS ClientHello (via [huginn-net-tls](https://crates.io/crates/
 
 | Header | Role |
 | --- | --- |
-| `x-huginn-net-ja4` | Sorted cipher suites and extensions, SHA-256 hashed (FoxIO JA4) |
-| `x-huginn-net-ja4_r` | Original ClientHello order, hashed (JA4_r) |
-| `x-huginn-net-ja4_o` | Sorted, raw hex (JA4_o), useful for debugging |
-| `x-huginn-net-ja4_or` | Original order, raw hex (JA4_or) |
+| `x-tls-ja4` | Sorted cipher suites and extensions, SHA-256 hashed (FoxIO JA4) |
+| `x-tls-ja4-r` | Original ClientHello order, hashed (JA4_r) |
+| `x-tls-ja4-o` | Sorted, raw hex (JA4_o), useful for debugging |
+| `x-tls-ja4-or` | Original order, raw hex (JA4_or) |
 
 TLS fingerprints are usually **once per TLS session**. For debugging per-connection variation (e.g. extension order randomization), you may need to force new connections or adjust ALPN / keep-alive. That is not generally recommended for production.
 
@@ -52,7 +52,7 @@ tls_enabled = true   # default: inject JA4 headers when TLS is used
 
 ## HTTP/2 [Akamai]
 
-On HTTP/2 connections only, a compact signature is emitted as `x-huginn-net-akamai` using [huginn-net-http](https://crates.io/crates/huginn-net-http).
+On HTTP/2 connections only, a compact signature is emitted as `x-http2-akamai` using [huginn-net-http](https://crates.io/crates/huginn-net-http).
 
 **Enable or disable globally** with `http_enabled`:
 
@@ -80,7 +80,7 @@ If `tls_enabled` or `http_enabled` is `false`, the corresponding headers are not
 
 ## TCP SYN [p0f]
 
-When built with `ebpf-tcp`, `tcp_enabled = true`, and the [eBPF agent](/huginn-proxy/docs/ebpf-setup/) is running, a p0f-style string is sent as `x-huginn-net-tcp` ([huginn-net-tcp](https://crates.io/crates/huginn-net-tcp)).
+When built with `ebpf-tcp`, `tcp_enabled = true`, and the [eBPF agent](/huginn-proxy/docs/ebpf-setup/) is running, a p0f-style string is sent as `x-tcp-p0f` ([huginn-net-tcp](https://crates.io/crates/huginn-net-tcp)).
 
 **Enable or disable globally.** There is **no per-route** TCP SYN toggle:
 
@@ -98,7 +98,7 @@ fingerprint:
 ```toml
 [fingerprint]
 tcp_enabled = true
-# tcp_enabled = false   # no x-huginn-net-tcp; proxy still runs without eBPF TCP path
+# tcp_enabled = false   # no x-tcp-p0f; proxy still runs without eBPF TCP path
 ```
 
   </TabItem>

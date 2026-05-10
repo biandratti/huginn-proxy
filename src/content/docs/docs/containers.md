@@ -8,7 +8,7 @@ sidebar:
 Huginn Proxy is published as **container images**; how you compose them matters. There are **two different setups**:
 
 1. **Full fingerprint path** — **TCP SYN** (eBPF sidecar) plus **TLS (JA4)** and **HTTP/2 (Akamai)** inside the proxy. Extra containers, kernel, and privileges.
-2. **TLS + HTTP only** — **JA4** and **Akamai** still come from the proxy; the **TCP SYN** path (`x-huginn-net-tcp`) is **not** available without the eBPF stack.
+2. **TLS + HTTP only** — **JA4** and **Akamai** still come from the proxy; the **TCP SYN** path (`x-tcp-p0f`) is **not** available without the eBPF stack.
 
 Do not mix them blindly: the Compose files, images, and mounts are **not** drop-in replacements for each other.
 

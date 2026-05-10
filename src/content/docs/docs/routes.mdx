@@ -169,7 +169,7 @@ replace_path = "/api/v1"
 
 HTTP/1.1 and HTTP/2 reuse **connections to backends** where possible; pool settings are under **[`[backend_pool]`](/huginn-proxy/docs/backends/#backend-pool)** on the Backends page. `force_new_connection = true` bypasses that pool and opens a **new TCP connection to the upstream** for each request (and a new TLS session if the backend speaks TLS). That is **only** about the proxy→backend leg.
 
-It does **not** change whether client fingerprints are available: TLS JA4 and HTTP/2 signatures come from the client→proxy connection; TCP SYN (`x-huginn-net-tcp`) is captured on the client→proxy path via eBPF and is unrelated to backend pooling. Forcing new backend connections does **not** re-capture the client’s SYN.
+It does **not** change whether client fingerprints are available: TLS JA4 and HTTP/2 signatures come from the client→proxy connection; TCP SYN (`x-tcp-p0f`) is captured on the client→proxy path via eBPF and is unrelated to backend pooling. Forcing new backend connections does **not** re-capture the client’s SYN.
 
 <Tabs syncKey="huginn-config">
   <TabItem label="YAML">

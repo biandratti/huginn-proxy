@@ -70,16 +70,20 @@ const github = 'https://github.com/biandratti/huginn-proxy';
 							</tr>
 						</thead>
 						<tbody>
+						<tr>
+							<td><code>x-tls-ja4</code> (+ <code>-r</code> / <code>-o</code> / <code>-or</code>)</td>
+							<td>TLS ClientHello — FoxIO-LLC JA4 family (hashed &amp; raw variants)</td>
+						</tr>
+						<tr>
+							<td><code>x-tls-ja4-sv1</code> (+ <code>-sv1r</code>)</td>
+							<td>TLS ClientHello — stable JA4 (ephemeral extensions excluded)</td>
+						</tr>
 							<tr>
-								<td><code>x-huginn-net-ja4</code> (and JA4_r / JA4_o / JA4_or)</td>
-								<td>TLS ClientHello (FoxIO JA4 family)</td>
-							</tr>
-							<tr>
-								<td><code>x-huginn-net-akamai</code></td>
+								<td><code>x-http2-akamai</code></td>
 								<td>HTTP/2 only</td>
 							</tr>
 							<tr>
-								<td><code>x-huginn-net-tcp</code></td>
+								<td><code>x-tcp-p0f</code></td>
 								<td>TCP SYN via eBPF/XDP when enabled</td>
 							</tr>
 						</tbody>
