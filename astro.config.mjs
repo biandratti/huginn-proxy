@@ -125,7 +125,10 @@ export default defineConfig({
 				},
 				{
 					label: 'Project',
-					items: [{ label: 'Architecture', slug: 'docs/architecture' }],
+					items: [
+						{ label: 'Architecture', slug: 'docs/architecture' },
+						{ label: 'Benchmarks', slug: 'docs/benchmarks' },
+					],
 				},
 			],
 		}),
