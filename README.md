@@ -80,10 +80,8 @@ Fingerprints are automatically extracted and injected as headers:
 - **TLS (JA4_r)**: `x-tls-ja4-r`: original ClientHello order, SHA-256 hashed (FoxIO JA4_r)
 - **TLS (JA4_o)**: `x-tls-ja4-o`: sorted, raw hex values without hashing (FoxIO JA4_o, useful for debugging)
 - **TLS (JA4_or)**: `x-tls-ja4-or`: original order, raw hex values without hashing (FoxIO JA4_or)
-- **TLS (JA4_sv1)**: `x-tls-ja4-sv1`: sorted cipher suites and extensions, SHA-256 hashed — version-stable
-  variant that excludes browser-version-specific fields for a fingerprint consistent across minor browser updates
-- **TLS (JA4_sv1r)**: `x-tls-ja4-sv1r`: original ClientHello order, SHA-256 hashed — same stability guarantee
-  as JA4_sv1 but preserving the raw extension ordering
+- **TLS (JA4_sv1)**: `x-tls-ja4-sv1`: sorted cipher suites and extensions, SHA-256 hashed — ephemeral extensions excluded
+- **TLS (JA4_sv1r)**: `x-tls-ja4-sv1r`: original ClientHello order, SHA-256 hashed — ephemeral extensions excluded
 - **HTTP/2 (Akamai)**: `x-http2-akamai`: Extracted from HTTP/2 connections only
   using [huginn-net-http](https://crates.io/crates/huginn-net-http)
 - **TCP SYN (p0f-style)**: `x-tcp-p0f` - Raw TCP SYN signature extracted via eBPF/XDP

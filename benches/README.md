@@ -27,10 +27,18 @@ Two benchmark suites with different scopes:
 
 ## Environment
 
-**Load tests** (oha, k6) target a **minimal Docker Compose** stack: **one** proxy, **one** eBPF agent, and **one**
-backend — a simplified layout on purpose; **more replicas and stronger hardware** usually improve throughput and
-latency. **Criterion** runs (`cargo bench`, release) execute on the host without Compose. All figures are **indicative
-** (~**±5–15%** between runs).
+All figures in this document were collected on the following machine and setup:
+
+| Setting | Value |
+|---|---|
+| **OS** | Linux |
+| **CPU** | Intel Core i7-1165G7 @ 2.80 GHz — 4 cores / 8 threads |
+| **Stack** | Single proxy + single eBPF agent + `traefik/whoami` backend (Docker Compose, localhost) |
+
+**Criterion** runs (`cargo bench`, release) execute on the host without Compose. **Load tests** (oha, k6, rewrk) target
+the Compose stack over localhost TLS — not a realistic network path. All figures are **indicative** (~**±5–15 %**
+between runs, more on HTTP/1.1 due to TLS connection-pool variance). More replicas and stronger hardware will generally
+improve throughput and latency.
 
 ---
 
@@ -221,8 +229,7 @@ so OpenSSL trusts the dev self-signed certificate. With a CA-issued cert this is
 
 ### Load test results (rewrk, c=512, t=4, 15s, localhost)
 
-**Environment:** Ubuntu 24.04, rewrk 0.3.2, huginn-proxy `dynamic-arc-routes` branch, `docker-compose.release-*` images.
-Single proxy + single eBPF agent (when enabled) + `traefik/whoami` backend.
+See [Environment](#environment) at the top of this document for hardware and stack details.
 
 **Why this is not a direct comparison with rpxy / nginx / caddy:** those benchmarks run plain HTTP (`http://`).
 huginn-proxy runs **HTTPS with TLS termination + JA4 + Akamai fingerprinting enabled** — the real production workload.
