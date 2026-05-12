@@ -113,12 +113,12 @@ async fn test_chrome_fingerprint() -> Result<(), Box<dyn std::error::Error>> {
             CHROME_FINGERPRINTS.version, CHROME_FINGERPRINTS.tls_ja4, ja4_fp
         );
 
-        if !CHROME_FINGERPRINTS.tls_ja4_s_v1.is_empty() {
+        if !CHROME_FINGERPRINTS.tls_ja4_s1.is_empty() {
             assert_eq!(
-                ja4_fp_s1, CHROME_FINGERPRINTS.tls_ja4_s_v1,
-                "JA4_s_v1 fingerprint mismatch. Expected Chrome {} fingerprint: {}. Got: {}. \
+                ja4_fp_s1, CHROME_FINGERPRINTS.tls_ja4_s1,
+                "JA4_s1 fingerprint mismatch. Expected Chrome {} fingerprint: {}. Got: {}. \
                  Update CHROME_FINGERPRINTS in lib.rs if Chrome version changed.",
-                CHROME_FINGERPRINTS.version, CHROME_FINGERPRINTS.tls_ja4_s_v1, ja4_fp_s1
+                CHROME_FINGERPRINTS.version, CHROME_FINGERPRINTS.tls_ja4_s1, ja4_fp_s1
             );
         }
 

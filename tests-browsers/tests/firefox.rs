@@ -138,12 +138,12 @@ async fn test_firefox_fingerprint() -> Result<(), Box<dyn std::error::Error>> {
             FIREFOX_FINGERPRINTS.version, FIREFOX_FINGERPRINTS.tls_ja4, ja4_fp
         );
 
-        if !FIREFOX_FINGERPRINTS.tls_ja4_s_v1.is_empty() {
+        if !FIREFOX_FINGERPRINTS.tls_ja4_s1.is_empty() {
             assert_eq!(
-                ja4_fp_s1, FIREFOX_FINGERPRINTS.tls_ja4_s_v1,
-                "JA4_s_v1 fingerprint mismatch. Expected Firefox {} fingerprint: {}. Got: {}. \
+                ja4_fp_s1, FIREFOX_FINGERPRINTS.tls_ja4_s1,
+                "JA4_s1 fingerprint mismatch. Expected Firefox {} fingerprint: {}. Got: {}. \
                  Update FIREFOX_FINGERPRINTS in lib.rs if Firefox version changed.",
-                FIREFOX_FINGERPRINTS.version, FIREFOX_FINGERPRINTS.tls_ja4_s_v1, ja4_fp_s1
+                FIREFOX_FINGERPRINTS.version, FIREFOX_FINGERPRINTS.tls_ja4_s1, ja4_fp_s1
             );
         }
 

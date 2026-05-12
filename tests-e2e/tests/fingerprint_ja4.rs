@@ -66,7 +66,7 @@ async fn test_ja4_impl(
         .ok_or("TLS JA4_or header should be present")?;
     let tls_fp_s1 = echo
         .header(names::TLS_JA4_S1)
-        .ok_or("TLS JA4_s_v1 header should be present")?;
+        .ok_or("TLS JA4_s1 header should be present")?;
     let tls_fp_s1r = echo
         .header(names::TLS_JA4_S1R)
         .ok_or("TLS JA4_s1r header should be present")?;
@@ -75,9 +75,9 @@ async fn test_ja4_impl(
     assert!(tls_fp.starts_with('t'), "TLS fingerprint should start with 't'");
     assert!(tls_fp.contains('_'), "TLS fingerprint should contain underscore separators");
 
-    assert!(!tls_fp_s1.is_empty(), "TLS JA4_s_v1 fingerprint should not be empty");
-    assert!(tls_fp_s1.starts_with('t'), "TLS JA4_s_v1 should start with 't'");
-    assert!(tls_fp_s1.contains('_'), "TLS JA4_s_v1 should contain underscore separators");
+    assert!(!tls_fp_s1.is_empty(), "TLS JA4_s1 fingerprint should not be empty");
+    assert!(tls_fp_s1.starts_with('t'), "TLS JA4_s1 should start with 't'");
+    assert!(tls_fp_s1.contains('_'), "TLS JA4_s1 should contain underscore separators");
 
     assert!(!tls_fp_s1r.is_empty(), "TLS JA4_s1r fingerprint should not be empty");
     assert!(tls_fp_s1r.starts_with('t'), "TLS JA4_s1r should start with 't'");
@@ -111,7 +111,7 @@ async fn test_ja4_impl(
         .ok_or("TLS JA4 missing in second response")?;
     let tls_fp_s1_2 = echo2
         .header(names::TLS_JA4_S1)
-        .ok_or("TLS JA4_s_v1 missing in second response")?;
+        .ok_or("TLS JA4_s1 missing in second response")?;
     let tls_fp_s1r_2 = echo2
         .header(names::TLS_JA4_S1R)
         .ok_or("TLS JA4_s1r missing in second response")?;
@@ -120,7 +120,7 @@ async fn test_ja4_impl(
     assert_eq!(tls_fp2, expected, "Second request TLS JA4 must match expected value");
     assert_eq!(
         tls_fp_s1, tls_fp_s1_2,
-        "TLS JA4_s_v1 fingerprint must be consistent across requests"
+        "TLS JA4_s1 fingerprint must be consistent across requests"
     );
     assert_eq!(
         tls_fp_s1r, tls_fp_s1r_2,
