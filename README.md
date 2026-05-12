@@ -80,8 +80,9 @@ Fingerprints are automatically extracted and injected as headers:
 - **TLS (JA4_r)**: `x-tls-ja4-r` — cipher suites and extensions sorted, raw hex (FoxIO JA4_r)
 - **TLS (JA4_o)**: `x-tls-ja4-o` — original ClientHello order, SHA-256 hashed (FoxIO JA4_o)
 - **TLS (JA4_or)**: `x-tls-ja4-or` — original ClientHello order, raw hex (FoxIO JA4_or)
-- **TLS (JA4_sv1)**: `x-tls-ja4-sv1` — cipher suites and extensions sorted, SHA-256 hashed, ephemeral extensions excluded (huginn-net-tls Stable v1)
-- **TLS (JA4_sv1r)**: `x-tls-ja4-sv1r` — raw hex, ephemeral extensions excluded (huginn-net-tls Stable v1)
+- **TLS (JA4_s1)**: `x-tls-ja4-s1` — cipher suites and extensions sorted, SHA-256 hashed, ephemeral extensions
+  excluded (huginn-net-tls Stable v1)
+- **TLS (JA4_s1r)**: `x-tls-ja4-s1r` — raw hex, ephemeral extensions excluded (huginn-net-tls Stable v1)
 - **HTTP/2 (Akamai)**: `x-http2-akamai`: Extracted from HTTP/2 connections only
   using [huginn-net-http](https://crates.io/crates/huginn-net-http)
 - **TCP SYN (p0f-style)**: `x-tcp-p0f` - Raw TCP SYN signature extracted via eBPF/XDP
@@ -102,8 +103,8 @@ x-tls-ja4-o:    t13d3112h2_d7c3e2abb617_cad92ccb4254
 x-tls-ja4-or:   t13d3112h2_1302,1303,..._0000,..._0403,...
 
 # TLS — stable V1 (huginn-net-tls)
-x-tls-ja4-sv1:  t13d3111h2_e8f1e7e78f70_375ca2c5e164
-x-tls-ja4-sv1r: t13d3111h2_002f,0033,...,ccaa_000a,..._0403,...
+x-tls-ja4-s1:  t13d3111h2_e8f1e7e78f70_375ca2c5e164
+x-tls-ja4-s1r: t13d3111h2_002f,0033,...,ccaa_000a,..._0403,...
 
 # HTTP/2 (Akamai)
 x-http2-akamai:   3:100;4:10485760;2:0|1048510465|0|m,s,a,p

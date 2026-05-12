@@ -142,7 +142,7 @@ Passive fingerprinting extracts three types of signatures from client connection
 
 - **TLS (JA4)** - extracted from the TLS ClientHello. Injected as `x-tls-ja4` (sorted, hashed),
   `x-tls-ja4-r` (sorted, raw), `x-tls-ja4-o` (original order, hashed), `x-tls-ja4-or` (original
-  order, raw), `x-tls-ja4-sv1` (sorted, ephemeral extensions excluded, hashed), `x-tls-ja4-sv1r`
+  order, raw), `x-tls-ja4-s1` (sorted, ephemeral extensions excluded, hashed), `x-tls-ja4-s1r`
   (sorted, ephemeral extensions excluded, raw).
 - **HTTP/2 (Akamai)** - extracted from HTTP/2 SETTINGS and WINDOW_UPDATE frames. Injected as `x-http2-akamai`.
 - **TCP SYN (p0f)** - extracted from the raw TCP SYN packet via an eBPF/XDP program attached to the network

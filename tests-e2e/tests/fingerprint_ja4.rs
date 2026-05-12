@@ -1,6 +1,6 @@
 //! TLS JA4 fingerprint injection tests.
 //!
-//! Covers all six JA4 variants (`ja4`, `ja4_r`, `ja4_o`, `ja4_or`, `ja4_sv1`, `ja4_srv1`)
+//! Covers all six JA4 variants (`ja4`, `ja4_r`, `ja4_o`, `ja4_or`, `ja4_s1`, `ja4_s1r`)
 //! across every combination of HTTP version (HTTP/1.1 and HTTP/2) and IP version (IPv4 and IPv6).
 //! Also verifies that JA4 headers respect per-route fingerprinting configuration.
 
@@ -46,8 +46,8 @@ async fn test_ja4_impl(
         names::TLS_JA4_R,
         names::TLS_JA4_O,
         names::TLS_JA4_OR,
-        names::TLS_JA4_SV1,
-        names::TLS_JA4_SRV1,
+        names::TLS_JA4_S1,
+        names::TLS_JA4_S1R,
     ] {
         assert!(echo.has_header(key), "Header {key} should be present");
     }
@@ -64,24 +64,24 @@ async fn test_ja4_impl(
     let tls_fp_or = echo
         .header(names::TLS_JA4_OR)
         .ok_or("TLS JA4_or header should be present")?;
-    let tls_fp_sv1 = echo
-        .header(names::TLS_JA4_SV1)
+    let tls_fp_s1 = echo
+        .header(names::TLS_JA4_S1)
         .ok_or("TLS JA4_s_v1 header should be present")?;
-    let tls_fp_srv1 = echo
-        .header(names::TLS_JA4_SRV1)
-        .ok_or("TLS JA4_srv1 header should be present")?;
+    let tls_fp_s1r = echo
+        .header(names::TLS_JA4_S1R)
+        .ok_or("TLS JA4_s1r header should be present")?;
 
     assert!(!tls_fp.is_empty(), "TLS JA4 fingerprint should not be empty");
     assert!(tls_fp.starts_with('t'), "TLS fingerprint should start with 't'");
     assert!(tls_fp.contains('_'), "TLS fingerprint should contain underscore separators");
 
-    assert!(!tls_fp_sv1.is_empty(), "TLS JA4_s_v1 fingerprint should not be empty");
-    assert!(tls_fp_sv1.starts_with('t'), "TLS JA4_s_v1 should start with 't'");
-    assert!(tls_fp_sv1.contains('_'), "TLS JA4_s_v1 should contain underscore separators");
+    assert!(!tls_fp_s1.is_empty(), "TLS JA4_s_v1 fingerprint should not be empty");
+    assert!(tls_fp_s1.starts_with('t'), "TLS JA4_s_v1 should start with 't'");
+    assert!(tls_fp_s1.contains('_'), "TLS JA4_s_v1 should contain underscore separators");
 
-    assert!(!tls_fp_srv1.is_empty(), "TLS JA4_srv1 fingerprint should not be empty");
-    assert!(tls_fp_srv1.starts_with('t'), "TLS JA4_srv1 should start with 't'");
-    assert!(tls_fp_srv1.contains('_'), "TLS JA4_srv1 should contain underscore separators");
+    assert!(!tls_fp_s1r.is_empty(), "TLS JA4_s1r fingerprint should not be empty");
+    assert!(tls_fp_s1r.starts_with('t'), "TLS JA4_s1r should start with 't'");
+    assert!(tls_fp_s1r.contains('_'), "TLS JA4_s1r should contain underscore separators");
 
     let expected = if use_http2 {
         "t13i1010h2_61a7ad8aa9b6_3a8073edd8ef"
@@ -96,8 +96,8 @@ async fn test_ja4_impl(
     println!("{ip_ver} {http_ver} TLS fingerprint ({}): {tls_fp_r}", names::TLS_JA4_R);
     println!("{ip_ver} {http_ver} TLS fingerprint ({}): {tls_fp_o}", names::TLS_JA4_O);
     println!("{ip_ver} {http_ver} TLS fingerprint ({}): {tls_fp_or}", names::TLS_JA4_OR);
-    println!("{ip_ver} {http_ver} TLS fingerprint ({}): {tls_fp_sv1}", names::TLS_JA4_SV1);
-    println!("{ip_ver} {http_ver} TLS fingerprint ({}): {tls_fp_srv1}", names::TLS_JA4_SRV1);
+    println!("{ip_ver} {http_ver} TLS fingerprint ({}): {tls_fp_s1}", names::TLS_JA4_S1);
+    println!("{ip_ver} {http_ver} TLS fingerprint ({}): {tls_fp_s1r}", names::TLS_JA4_S1R);
 
     // All JA4 variants must be stable across a keep-alive second request
     let response2 = client
@@ -109,22 +109,22 @@ async fn test_ja4_impl(
     let tls_fp2 = echo2
         .header(names::TLS_JA4)
         .ok_or("TLS JA4 missing in second response")?;
-    let tls_fp_sv1_2 = echo2
-        .header(names::TLS_JA4_SV1)
+    let tls_fp_s1_2 = echo2
+        .header(names::TLS_JA4_S1)
         .ok_or("TLS JA4_s_v1 missing in second response")?;
-    let tls_fp_srv1_2 = echo2
-        .header(names::TLS_JA4_SRV1)
-        .ok_or("TLS JA4_srv1 missing in second response")?;
+    let tls_fp_s1r_2 = echo2
+        .header(names::TLS_JA4_S1R)
+        .ok_or("TLS JA4_s1r missing in second response")?;
 
     assert_eq!(tls_fp, tls_fp2, "TLS JA4 fingerprint must be consistent across requests");
     assert_eq!(tls_fp2, expected, "Second request TLS JA4 must match expected value");
     assert_eq!(
-        tls_fp_sv1, tls_fp_sv1_2,
+        tls_fp_s1, tls_fp_s1_2,
         "TLS JA4_s_v1 fingerprint must be consistent across requests"
     );
     assert_eq!(
-        tls_fp_srv1, tls_fp_srv1_2,
-        "TLS JA4_srv1 fingerprint must be consistent across requests"
+        tls_fp_s1r, tls_fp_s1r_2,
+        "TLS JA4_s1r fingerprint must be consistent across requests"
     );
 
     Ok(())
@@ -162,8 +162,8 @@ async fn test_ja4_per_route_impl(
         names::TLS_JA4_R,
         names::TLS_JA4_O,
         names::TLS_JA4_OR,
-        names::TLS_JA4_SV1,
-        names::TLS_JA4_SRV1,
+        names::TLS_JA4_S1,
+        names::TLS_JA4_S1R,
     ] {
         assert!(
             !echo.has_header(key),
@@ -184,8 +184,8 @@ async fn test_ja4_per_route_impl(
         names::TLS_JA4_R,
         names::TLS_JA4_O,
         names::TLS_JA4_OR,
-        names::TLS_JA4_SV1,
-        names::TLS_JA4_SRV1,
+        names::TLS_JA4_S1,
+        names::TLS_JA4_S1R,
     ] {
         assert!(echo2.has_header(key), "{key} should be present when fingerprinting is enabled");
     }

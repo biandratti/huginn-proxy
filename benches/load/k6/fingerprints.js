@@ -142,8 +142,8 @@ export default function () {
             "echo: x-tls-ja4-r present": (h) => headerNonEmpty(h, "x-tls-ja4-r"),
             "echo: x-tls-ja4-o present": (h) => headerMatchesJa4Line(h, "x-tls-ja4-o"),
             "echo: x-tls-ja4-or present": (h) => headerNonEmpty(h, "x-tls-ja4-or"),
-            "echo: x-tls-ja4-sv1 valid": (h) => headerMatchesJa4Line(h, "x-tls-ja4-sv1"),
-            "echo: x-tls-ja4-sv1r present": (h) => headerNonEmpty(h, "x-tls-ja4-sv1r"),
+            "echo: x-tls-ja4-s1 valid": (h) => headerMatchesJa4Line(h, "x-tls-ja4-s1"),
+            "echo: x-tls-ja4-s1r present": (h) => headerNonEmpty(h, "x-tls-ja4-s1r"),
         });
     }
 
