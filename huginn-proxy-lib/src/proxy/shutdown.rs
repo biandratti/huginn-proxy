@@ -10,6 +10,11 @@ pub async fn wait_for_drain(
     active_connections: Arc<AtomicUsize>,
     timeout_secs: u64,
 ) {
+    if active_connections.load(Ordering::Relaxed) == 0 {
+        info!("All connections closed, shutdown complete");
+        return;
+    }
+
     let start = Instant::now();
     let deadline = start
         .checked_add(Duration::from_secs(timeout_secs))
