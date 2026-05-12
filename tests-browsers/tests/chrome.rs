@@ -24,7 +24,7 @@
 use tests_browsers::{
     get_chrome_json, parse_backend_echo, verify_chrome_version, verify_fingerprint_headers,
     CHROME_FINGERPRINTS, HEADER_HTTP2_AKAMAI, HEADER_TCP_SYN, HEADER_TLS_JA4, HEADER_TLS_JA4_R,
-    HEADER_TLS_JA4_SR_V1, HEADER_TLS_JA4_S_V1, PROXY_URL,
+    HEADER_TLS_JA4_S1, HEADER_TLS_JA4_S1R, PROXY_URL,
 };
 use thirtyfour::prelude::*;
 
@@ -75,15 +75,15 @@ async fn test_chrome_fingerprint() -> Result<(), Box<dyn std::error::Error>> {
             .map(|s| s.as_str())
             .ok_or(format!("Missing {} header", HEADER_TLS_JA4_R))?;
 
-        let ja4_fp_s_v1 = headers
-            .get(HEADER_TLS_JA4_S_V1)
+        let ja4_fp_s1 = headers
+            .get(HEADER_TLS_JA4_S1)
             .map(|s| s.as_str())
-            .ok_or(format!("Missing {} header", HEADER_TLS_JA4_S_V1))?;
+            .ok_or(format!("Missing {} header", HEADER_TLS_JA4_S1))?;
 
-        let ja4_fp_sr_v1 = headers
-            .get(HEADER_TLS_JA4_SR_V1)
+        let ja4_fp_s1r = headers
+            .get(HEADER_TLS_JA4_S1R)
             .map(|s| s.as_str())
-            .ok_or(format!("Missing {} header", HEADER_TLS_JA4_SR_V1))?;
+            .ok_or(format!("Missing {} header", HEADER_TLS_JA4_S1R))?;
 
         let tcp_syn_fp = headers
             .get(HEADER_TCP_SYN)
@@ -98,13 +98,13 @@ async fn test_chrome_fingerprint() -> Result<(), Box<dyn std::error::Error>> {
         println!("Chrome fingerprints:");
         println!("  TLS JA4: {}", ja4_fp);
         println!("  TLS JA4_r: {}", ja4_fp_r);
-        println!("  TLS JA4_s_v1: {}", ja4_fp_s_v1);
-        println!("  TLS JA4_sr_v1: {}", ja4_fp_sr_v1);
+        println!("  TLS JA4_s1: {}", ja4_fp_s1);
+        println!("  TLS JA4_s1r: {}", ja4_fp_s1r);
         println!("  HTTP/2: {}", http2_fp);
         println!("  TCP SYN: {}", tcp_syn_fp);
 
         assert!(!ja4_fp_r.is_empty(), "JA4_r fingerprint should not be empty");
-        assert!(!ja4_fp_sr_v1.is_empty(), "JA4_sr_v1 fingerprint should not be empty");
+        assert!(!ja4_fp_s1r.is_empty(), "JA4_s1r fingerprint should not be empty");
 
         assert_eq!(
             ja4_fp, CHROME_FINGERPRINTS.tls_ja4,
@@ -113,12 +113,12 @@ async fn test_chrome_fingerprint() -> Result<(), Box<dyn std::error::Error>> {
             CHROME_FINGERPRINTS.version, CHROME_FINGERPRINTS.tls_ja4, ja4_fp
         );
 
-        if !CHROME_FINGERPRINTS.tls_ja4_s_v1.is_empty() {
+        if !CHROME_FINGERPRINTS.tls_ja4_s1.is_empty() {
             assert_eq!(
-                ja4_fp_s_v1, CHROME_FINGERPRINTS.tls_ja4_s_v1,
-                "JA4_s_v1 fingerprint mismatch. Expected Chrome {} fingerprint: {}. Got: {}. \
+                ja4_fp_s1, CHROME_FINGERPRINTS.tls_ja4_s1,
+                "JA4_s1 fingerprint mismatch. Expected Chrome {} fingerprint: {}. Got: {}. \
                  Update CHROME_FINGERPRINTS in lib.rs if Chrome version changed.",
-                CHROME_FINGERPRINTS.version, CHROME_FINGERPRINTS.tls_ja4_s_v1, ja4_fp_s_v1
+                CHROME_FINGERPRINTS.version, CHROME_FINGERPRINTS.tls_ja4_s1, ja4_fp_s1
             );
         }
 

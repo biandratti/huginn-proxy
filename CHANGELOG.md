@@ -19,7 +19,8 @@ First public release candidate.
 
 **Fingerprinting**
 
-- TLS (JA4) fingerprinting via ClientHello — injects `x-tls-ja4`, `x-tls-ja4-r`, `x-tls-ja4-o`, `x-tls-ja4-or`, `x-tls-ja4-sv1`, `x-tls-ja4-sv1r`
+- TLS (JA4) fingerprinting via ClientHello — injects `x-tls-ja4`, `x-tls-ja4-r`, `x-tls-ja4-o`, `x-tls-ja4-or`,
+  `x-tls-ja4-s1`, `x-tls-ja4-s1r`
 - HTTP/2 (Akamai) fingerprinting from SETTINGS and WINDOW_UPDATE frames — injects `x-http2-akamai`
 - TCP SYN (p0f-style) fingerprinting via eBPF/XDP — injects `x-tcp-p0f` (requires `ebpf-tcp` build feature and
   Linux kernel ≥ 5.11)

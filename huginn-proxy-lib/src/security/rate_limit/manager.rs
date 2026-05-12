@@ -42,7 +42,11 @@ impl RateLimitManager {
                         .requests_per_second
                         .unwrap_or(global_config.requests_per_second);
                     let burst = route_rate_limit.burst.unwrap_or(global_config.burst);
-                    let window = Duration::from_secs(global_config.window_seconds);
+                    let window = Duration::from_secs(
+                        route_rate_limit
+                            .window_seconds
+                            .unwrap_or(global_config.window_seconds),
+                    );
 
                     route_limiters
                         .insert(route.prefix.clone(), RateLimiter::new(rps, burst, window));

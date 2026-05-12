@@ -54,6 +54,9 @@ pub async fn accept_loop(
             break;
         }
 
+        // TODO: potential hang at shutdown, if the shutdown signal is set after the check above
+        // but before this await, the loop blocks until a new client connects. Fix: use
+        // tokio::select! to race listener.accept() against a shutdown notification.
         let (stream, peer) = match listener.accept().await {
             Ok(pair) => pair,
             Err(e) => {

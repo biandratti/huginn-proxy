@@ -62,6 +62,8 @@ impl ConnectionManager {
             return Err(ConnectionError::Shutdown);
         }
 
+        // TODO: race condition, two threads can both read the same count, pass the limit check,
+        // and both increment, exceeding max_connections. Fix: fetch_add first, then revert if over limit.
         // Check connection limit (DoS protection)
         let current_connections = self.active_connections.load(Ordering::Relaxed);
         if current_connections >= self.max_connections {

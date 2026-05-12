@@ -141,11 +141,11 @@ disabled).
 Passive fingerprinting extracts three types of signatures from client connections:
 
 - **TLS (JA4)** - extracted from the TLS ClientHello. Injected as `x-tls-ja4` (sorted, hashed),
-  `x-tls-ja4-r` (original order, hashed), `x-tls-ja4-o` (sorted, raw), `x-tls-ja4-or` (original
-  order, raw), `x-tls-ja4-sv1` (sorted, stable, hashed), `x-tls-ja4-sv1r` (original order, stable,
-  hashed).
+  `x-tls-ja4-r` (sorted, raw), `x-tls-ja4-o` (original order, hashed), `x-tls-ja4-or` (original
+  order, raw), `x-tls-ja4-s1` (sorted, ephemeral extensions excluded, hashed), `x-tls-ja4-s1r`
+  (sorted, ephemeral extensions excluded, raw).
 - **HTTP/2 (Akamai)** - extracted from HTTP/2 SETTINGS and WINDOW_UPDATE frames. Injected as `x-http2-akamai`.
-- **TCP SYN (p0f-style)** - extracted from the raw TCP SYN packet via an eBPF/XDP program attached to the network
+- **TCP SYN (p0f)** - extracted from the raw TCP SYN packet via an eBPF/XDP program attached to the network
   interface. Injected as `x-tcp-p0f`. Requires the `ebpf-tcp` build feature and `tcp_enabled = true` in config.
 
 Per-route control to enable/disable TLS and HTTP/2 fingerprinting. TCP SYN fingerprinting is global (controlled by the
