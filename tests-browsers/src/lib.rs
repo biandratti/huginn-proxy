@@ -9,8 +9,8 @@ pub const HEADER_TLS_JA4: &str = "x-tls-ja4";
 pub const HEADER_TLS_JA4_R: &str = "x-tls-ja4-r";
 pub const HEADER_TLS_JA4_O: &str = "x-tls-ja4-o";
 pub const HEADER_TLS_JA4_OR: &str = "x-tls-ja4-or";
-pub const HEADER_TLS_JA4_S_V1: &str = "x-tls-ja4-sv1";
-pub const HEADER_TLS_JA4_SR_V1: &str = "x-tls-ja4-sv1r";
+pub const HEADER_TLS_JA4_SV1: &str = "x-tls-ja4-sv1";
+pub const HEADER_TLS_JA4_SRV1: &str = "x-tls-ja4-sv1r";
 pub const HEADER_TCP_SYN: &str = "x-tcp-p0f";
 
 #[derive(Debug, Clone)]
@@ -92,8 +92,8 @@ pub fn verify_fingerprint_headers(
         HEADER_TLS_JA4_R,
         HEADER_TLS_JA4_O,
         HEADER_TLS_JA4_OR,
-        HEADER_TLS_JA4_S_V1,
-        HEADER_TLS_JA4_SR_V1,
+        HEADER_TLS_JA4_SV1,
+        HEADER_TLS_JA4_SRV1,
     ] {
         if !headers.contains_key(key) {
             return Err(format!("Missing {key} header").into());

@@ -55,7 +55,7 @@ use serial_test::serial;
 use tests_browsers::{
     get_chrome_json, get_firefox_json, get_http2_fingerprint, parse_backend_echo,
     verify_fingerprint_headers, verify_firefox_version, FIREFOX_FINGERPRINTS, HEADER_HTTP2_AKAMAI,
-    HEADER_TCP_SYN, HEADER_TLS_JA4, HEADER_TLS_JA4_R, HEADER_TLS_JA4_SR_V1, HEADER_TLS_JA4_S_V1,
+    HEADER_TCP_SYN, HEADER_TLS_JA4, HEADER_TLS_JA4_R, HEADER_TLS_JA4_SRV1, HEADER_TLS_JA4_SV1,
     PROXY_URL,
 };
 use thirtyfour::prelude::*;
@@ -100,15 +100,15 @@ async fn test_firefox_fingerprint() -> Result<(), Box<dyn std::error::Error>> {
             .map(|s| s.as_str())
             .ok_or(format!("Missing {} header", HEADER_TLS_JA4_R))?;
 
-        let ja4_fp_s_v1 = headers
-            .get(HEADER_TLS_JA4_S_V1)
+        let ja4_fp_sv1 = headers
+            .get(HEADER_TLS_JA4_SV1)
             .map(|s| s.as_str())
-            .ok_or(format!("Missing {} header", HEADER_TLS_JA4_S_V1))?;
+            .ok_or(format!("Missing {} header", HEADER_TLS_JA4_SV1))?;
 
-        let ja4_fp_sr_v1 = headers
-            .get(HEADER_TLS_JA4_SR_V1)
+        let ja4_fp_srv1 = headers
+            .get(HEADER_TLS_JA4_SRV1)
             .map(|s| s.as_str())
-            .ok_or(format!("Missing {} header", HEADER_TLS_JA4_SR_V1))?;
+            .ok_or(format!("Missing {} header", HEADER_TLS_JA4_SRV1))?;
 
         let tcp_syn_fp = headers
             .get(HEADER_TCP_SYN)
@@ -123,13 +123,13 @@ async fn test_firefox_fingerprint() -> Result<(), Box<dyn std::error::Error>> {
         println!("Firefox fingerprints:");
         println!("  TLS JA4: {}", ja4_fp);
         println!("  TLS JA4_r: {}", ja4_fp_r);
-        println!("  TLS JA4_s_v1: {}", ja4_fp_s_v1);
-        println!("  TLS JA4_sr_v1: {}", ja4_fp_sr_v1);
+        println!("  TLS JA4_sv1: {}", ja4_fp_sv1);
+        println!("  TLS JA4_srv1: {}", ja4_fp_srv1);
         println!("  HTTP/2: {}", http2_fp);
         println!("  TCP SYN: {}", tcp_syn_fp);
 
         assert!(!ja4_fp_r.is_empty(), "JA4_r fingerprint should not be empty");
-        assert!(!ja4_fp_sr_v1.is_empty(), "JA4_sr_v1 fingerprint should not be empty");
+        assert!(!ja4_fp_srv1.is_empty(), "JA4_srv1 fingerprint should not be empty");
 
         assert_eq!(
             ja4_fp, FIREFOX_FINGERPRINTS.tls_ja4,
@@ -140,10 +140,10 @@ async fn test_firefox_fingerprint() -> Result<(), Box<dyn std::error::Error>> {
 
         if !FIREFOX_FINGERPRINTS.tls_ja4_s_v1.is_empty() {
             assert_eq!(
-                ja4_fp_s_v1, FIREFOX_FINGERPRINTS.tls_ja4_s_v1,
+                ja4_fp_sv1, FIREFOX_FINGERPRINTS.tls_ja4_s_v1,
                 "JA4_s_v1 fingerprint mismatch. Expected Firefox {} fingerprint: {}. Got: {}. \
                  Update FIREFOX_FINGERPRINTS in lib.rs if Firefox version changed.",
-                FIREFOX_FINGERPRINTS.version, FIREFOX_FINGERPRINTS.tls_ja4_s_v1, ja4_fp_s_v1
+                FIREFOX_FINGERPRINTS.version, FIREFOX_FINGERPRINTS.tls_ja4_s_v1, ja4_fp_sv1
             );
         }
 
