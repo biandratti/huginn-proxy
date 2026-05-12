@@ -240,6 +240,9 @@ pub struct RouteRateLimitConfig {
     /// Burst size for this route
     /// If not specified, uses global config
     pub burst: Option<u32>,
+    /// Time window in seconds for this route
+    /// If not specified, uses global config
+    pub window_seconds: Option<u64>,
     /// Key extraction strategy for this route
     /// If not specified, uses global config
     pub limit_by: Option<LimitBy>,
