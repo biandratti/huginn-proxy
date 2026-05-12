@@ -165,13 +165,13 @@ pub async fn handle_proxy_request(
                 hyper::header::HeaderValue::from_str(&fingerprints.ja4_stable_v1.full.to_string())
             {
                 req.headers_mut()
-                    .insert(HeaderName::from_static(names::TLS_JA4_S_V1), hv);
+                    .insert(HeaderName::from_static(names::TLS_JA4_SV1), hv);
             }
             if let Ok(hv) =
                 hyper::header::HeaderValue::from_str(&fingerprints.ja4_stable_v1.raw.to_string())
             {
                 req.headers_mut()
-                    .insert(HeaderName::from_static(names::TLS_JA4_SR_V1), hv);
+                    .insert(HeaderName::from_static(names::TLS_JA4_SRV1), hv);
             }
         }
         if let Some(ref rx) = fingerprint_rx {

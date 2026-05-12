@@ -10,15 +10,14 @@ pub mod names {
 
     /// Header name for TLS JA4_r fingerprint injection (FoxIO naming)
     ///
-    /// JA4_r: cipher suites and extensions in original ClientHello, SHA-256 hashed.
-    /// Differs from JA4 only in sort order of the B and C components.
+    /// JA4_r: cipher suites and extensions sorted, raw (not hashed) hex values.
+    /// Useful for debugging and forensic analysis without needing to reverse a hash.
     /// It is injected for all TLS connections when fingerprinting is enabled.
     pub const TLS_JA4_R: &str = "x-tls-ja4-r";
 
     /// Header name for TLS JA4_o fingerprint injection (FoxIO naming)
     ///
-    /// JA4_o: cipher suites and extensions sorted, raw (not hashed) hex values.
-    /// Useful for debugging and forensic analysis without needing to reverse a hash.
+    /// JA4_o: cipher suites and extensions in original ClientHello order, SHA-256 hashed.
     /// It is injected for all TLS connections when fingerprinting is enabled.
     pub const TLS_JA4_O: &str = "x-tls-ja4-o";
 
@@ -29,22 +28,21 @@ pub mod names {
     /// It is injected for all TLS connections when fingerprinting is enabled.
     pub const TLS_JA4_OR: &str = "x-tls-ja4-or";
 
-    /// Header name for TLS JA4_s1 stable fingerprint injection
+    /// Header name for TLS JA4_sv1 stable fingerprint injection (huginn-net-tls Stable v1)
     ///
-    /// JA4_s1: JA4 computed after dropping ephemeral extensions that legitimately vary
-    /// per connection (session ticket 0x0023, pre-shared key 0x0029, padding 0x0015).
-    /// Yields more consistent fingerprints across resumptions and TLS 1.3 flows from
+    /// JA4_sv1: cipher suites and extensions sorted, SHA-256 hashed, ephemeral extensions
+    /// excluded (session ticket 0x0023, pre-shared key 0x0029, padding 0x0015).
+    /// Yields more consistent fingerprints across resumptions from
     /// the same client than plain JA4, at the cost of omitting signal from those extensions.
     /// It is injected for all TLS connections when fingerprinting is enabled.
-    pub const TLS_JA4_S_V1: &str = "x-tls-ja4-sv1";
+    pub const TLS_JA4_SV1: &str = "x-tls-ja4-sv1";
 
-    /// Header name for TLS JA4_s1r stable fingerprint injection (raw variant)
+    /// Header name for TLS JA4_sv1r stable fingerprint injection (raw variant)
     ///
-    /// JA4_s1r: same ephemeral-extension filtering as JA4_s1, but preserves the original
-    /// ClientHello extension order and emits raw (not hashed) hex values — equivalent to
-    /// the relationship between JA4_r and JA4.
+    /// JA4_sv1r: same ephemeral-extension filtering as JA4_sv1, cipher suites and extensions
+    /// sorted, raw (not hashed) hex values.
     /// It is injected for all TLS connections when fingerprinting is enabled.
-    pub const TLS_JA4_SR_V1: &str = "x-tls-ja4-sv1r";
+    pub const TLS_JA4_SRV1: &str = "x-tls-ja4-sv1r";
 
     /// Header name for HTTP/2 (Akamai) fingerprint injection
     ///
