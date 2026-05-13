@@ -30,6 +30,9 @@ jobs:
           languages: rust
           config-file: ./.github/codeql/codeql-config.yml
 
+      - name: Setup eBPF build dependencies
+        uses: ./.github/actions/setup-ebpf-build
+
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
 
