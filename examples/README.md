@@ -224,11 +224,17 @@ To switch configurations, edit `docker-compose.ebpf.yml` and change the `command
 
 ## Telemetry
 
-The observability stack runs **Prometheus** (`prom/prometheus`), **Grafana**, and **cAdvisor** as a separate Docker Compose project alongside the main proxy stack. Prometheus scrapes metrics from the proxy (`port 9090`) and the eBPF agent (`port 9091`) via `host.docker.internal`, and scrapes **cAdvisor** on the compose network for per-container CPU and memory. Grafana is pre-provisioned with a data source and a dashboard (including a **Docker resources (cAdvisor)** row) — no manual setup needed. Optional cAdvisor UI: `http://localhost:8099/`.
+The observability stack runs **Prometheus** (`prom/prometheus`), **Grafana**, and **cAdvisor** as a separate Docker
+Compose project alongside the main proxy stack. Prometheus scrapes metrics from the proxy (`port 9090`) and the eBPF
+agent (`port 9091`) via `host.docker.internal`, and scrapes **cAdvisor** on the compose network for per-container CPU
+and memory. Grafana is pre-provisioned with a data source and a dashboard (including a **Docker resources (cAdvisor)**
+row) — no manual setup needed. Optional cAdvisor UI: `http://localhost:8099/`.
 
 ### Prerequisites
 
-The main proxy stack must already be running and exposing ports `9090` and `9091` on the host before starting the observability stack. Prometheus reaches the proxy via `host.docker.internal` (mapped to `host-gateway` inside the container).
+The main proxy stack must already be running and exposing ports `9090` and `9091` on the host before starting the
+observability stack. Prometheus reaches the proxy via `host.docker.internal` (mapped to `host-gateway` inside the
+container).
 
 ### Start
 
@@ -294,10 +300,13 @@ curl -sk https://127.0.0.1:7000/api/test
 
 Expected headers:
 
-- `x-tls-ja4`: TLS fingerprint, sorted ciphers/extensions, hashed (FoxIO JA4)
-- `x-tls-ja4-r`: TLS fingerprint, original ClientHello order, hashed (FoxIO JA4_r)
-- `x-tls-ja4-o`: TLS fingerprint, sorted, raw hex values (FoxIO JA4_o)
-- `x-tls-ja4-or`: TLS fingerprint, original order, raw hex values (FoxIO JA4_or)
+- `x-tls-ja4`: TLS fingerprint, cipher suites and extensions sorted, SHA-256 hashed (standard FoxIO JA4)
+- `x-tls-ja4-r`: TLS fingerprint, cipher suites and extensions sorted, raw hex (FoxIO JA4_r)
+- `x-tls-ja4-o`: TLS fingerprint, original ClientHello order, SHA-256 hashed (FoxIO JA4_o)
+- `x-tls-ja4-or`: TLS fingerprint, original ClientHello order, raw hex (FoxIO JA4_or)
+- `x-tls-ja4-s1`: TLS fingerprint, cipher suites and extensions sorted, SHA-256 hashed, ephemeral extensions excluded (
+  huginn-net-tls Stable v1)
+- `x-tls-ja4-s1r` TLS fingerprint, raw hex, ephemeral extensions excluded (huginn-net-tls Stable v1)
 - `x-http2-akamai`: HTTP/2 fingerprint
 - `x-tcp-p0f`: TCP SYN fingerprint
 

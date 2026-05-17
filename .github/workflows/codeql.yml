@@ -30,8 +30,14 @@ jobs:
           languages: rust
           config-file: ./.github/codeql/codeql-config.yml
 
-      - name: Autobuild
-        uses: github/codeql-action/autobuild@v4
+      - name: Setup eBPF build dependencies
+        uses: ./.github/actions/setup-ebpf-build
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build
+        run: cargo build --workspace
 
       - name: Perform CodeQL analysis
         uses: github/codeql-action/analyze@v4
