@@ -8,7 +8,7 @@
 #   docker build --target ebpf  -f docker/proxy.Dockerfile .    (or just: docker build -f ...)
 
 # ── builder base ────────────────────────────────────────────────
-FROM rust:1.95.0-slim@sha256:985053ebf77f576c742435c12c1923ee04dbe511e17f087dd1a8f022307d3aeb AS builder-base
+FROM rust:1.95.0-slim@sha256:5021128d455987e7e7d6586bd7288fa876614821292614acbb761c21fc1ebb15 AS builder-base
 RUN apt-get update -q && apt-get install -y --no-install-recommends \
     pkg-config libssl-dev \
     && rm -rf /var/lib/apt/lists/*
