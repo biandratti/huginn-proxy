@@ -1,37 +1,104 @@
+use opentelemetry::global;
+use opentelemetry_otlp::WithExportConfig;
+use opentelemetry_sdk::trace::SdkTracerProvider;
+use opentelemetry_sdk::Resource;
+use tracing::level_filters::LevelFilter;
+use tracing::Level;
 use tracing_subscriber::layer::SubscriberExt;
-use tracing_subscriber::Registry;
+use tracing_subscriber::util::SubscriberInitExt;
+use tracing_subscriber::Layer;
 
-/// Initialize tracing with OpenTelemetry integration
-pub fn init_tracing_with_otel(
-    log_level: String,
-    show_target: bool,
-    otel_log_level: String,
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let filter_str = format!("{log_level},opentelemetry={otel_log_level}");
-    let env_filter = tracing_subscriber::EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new(filter_str));
-    let fmt_layer = tracing_subscriber::fmt::layer().with_target(show_target);
-
-    let subscriber = Registry::default().with(env_filter).with(fmt_layer);
-
-    tracing::subscriber::set_global_default(subscriber)
-        .map_err(|e| format!("Failed to set global tracing subscriber: {e}"))?;
-
-    Ok(())
+pub struct OpentelemetryConfig {
+    endpoint: String,
+    tracer_name: String,
+    resource_name: String,
+    log_level: Level,
+    // TODO: more options like proto, timeouts...
 }
 
-/// Shutdown tracing and flush any pending logs
-///
-/// Currently flushes stdout/stderr to ensure all logs are written.
-/// When OpenTelemetry tracing is added, this will also shutdown the tracer provider.
-pub fn shutdown_tracing() {
-    use std::io::Write;
+impl OpentelemetryConfig {
+    pub fn new(
+        endpoint: String,
+        tracer_name: String,
+        resource_name: String,
+        log_level: Level,
+    ) -> Self {
+        Self { endpoint, tracer_name, resource_name, log_level }
+    }
+}
 
-    // Flush stdout and stderr to ensure all logs are written
-    // This is important for logs that might be buffered
-    let _ = std::io::stdout().flush();
-    let _ = std::io::stderr().flush();
+fn fmt_layer<S>(show_target: bool, log_level: Level) -> impl Layer<S>
+where
+    S: tracing::Subscriber + for<'a> tracing_subscriber::registry::LookupSpan<'a>,
+{
+    tracing_subscriber::fmt::layer()
+        .with_target(show_target)
+        .with_filter(LevelFilter::from_level(log_level))
+}
 
-    // TODO: When OpenTelemetry tracing is implemented, add:
-    // opentelemetry::global::shutdown_tracer_provider();
+pub fn init_tracing_stdout(log_level: Level, show_target: bool) -> TracingGuard {
+    tracing_subscriber::registry()
+        .with(fmt_layer(show_target, log_level))
+        .init();
+    TracingGuard { otel_provider: None }
+}
+
+#[derive(Debug, Default)]
+pub struct TracingGuard {
+    otel_provider: Option<SdkTracerProvider>,
+}
+
+impl TracingGuard {
+    pub fn shutdown(self) {
+        use std::io::Write;
+        let _ = std::io::stdout().flush();
+        let _ = std::io::stderr().flush();
+        if let Some(p) = self.otel_provider {
+            if let Err(e) = p.force_flush() {
+                tracing::error!("otel tracer flush error: {e}");
+            }
+            if let Err(e) = p.shutdown() {
+                tracing::error!("otel tracer shutdown error: {e}");
+            }
+        }
+    }
+
+    pub fn with_otel(otel_provider: SdkTracerProvider) -> Self {
+        Self { otel_provider: Some(otel_provider) }
+    }
+}
+
+/// Initialize tracing with OpenTelemetry integration
+pub fn init_tracing_otel(
+    log_level: Level,
+    show_target: bool,
+    otel_config: OpentelemetryConfig,
+) -> Result<TracingGuard, Box<dyn std::error::Error + Send + Sync>> {
+    let exporter = opentelemetry_otlp::SpanExporterBuilder::new()
+        .with_http()
+        .with_endpoint(otel_config.endpoint)
+        .build()?;
+
+    let provider = SdkTracerProvider::builder()
+        .with_resource(
+            Resource::builder()
+                .with_service_name(otel_config.resource_name)
+                .build(),
+        )
+        .with_batch_exporter(exporter)
+        .build();
+
+    let tracer = global::tracer(otel_config.tracer_name);
+
+    // TODO: make log_level work for internal otel library logs
+    let otel_layer = tracing_opentelemetry::layer()
+        .with_tracer(tracer)
+        .with_filter(LevelFilter::from_level(otel_config.log_level));
+
+    tracing_subscriber::registry()
+        .with(fmt_layer(show_target, log_level))
+        .with(otel_layer)
+        .init();
+
+    Ok(TracingGuard::with_otel(provider))
 }

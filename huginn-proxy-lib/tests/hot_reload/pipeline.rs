@@ -3,9 +3,9 @@ use std::io::Write as _;
 use std::sync::Arc;
 
 use huginn_proxy_lib::{
-    initial_client_pool, initial_rate_limiter, try_reload, Config, DynamicConfig,
-    HealthCheckSupervisor, HealthRegistry, Metrics, SharedClientPool, SharedRateLimiter,
-    StaticConfig,
+    config::startup::telemetry::LogLevel, initial_client_pool, initial_rate_limiter, try_reload,
+    Config, DynamicConfig, HealthCheckSupervisor, HealthRegistry, Metrics, SharedClientPool,
+    SharedRateLimiter, StaticConfig,
 };
 
 fn test_health_supervisor() -> HealthCheckSupervisor {
@@ -53,7 +53,7 @@ fn minimal_config(backend_addr: std::net::SocketAddr, listen_port: u16) -> Confi
             tcp_enabled: false,
             max_capture: 0,
         },
-        logging: LoggingConfig { level: "warn".to_string(), show_target: false },
+        logging: LoggingConfig { level: LogLevel::Warn, show_target: false },
         timeout: TimeoutConfig {
             upstream_connect_ms: Some(1000),
             proxy_idle_ms: 5000,
@@ -63,7 +63,7 @@ fn minimal_config(backend_addr: std::net::SocketAddr, listen_port: u16) -> Confi
             keep_alive: KeepAliveConfig::default(),
         },
         security: SecurityConfig::default(),
-        telemetry: TelemetryConfig { metrics_port: None, otel_log_level: "warn".to_string() },
+        telemetry: TelemetryConfig { metrics_port: None, otel: None },
         headers: None,
         preserve_host: false,
         backend_pool: Default::default(),

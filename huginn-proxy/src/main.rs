@@ -2,15 +2,17 @@
 
 use std::env;
 use std::path::PathBuf;
+use std::str::FromStr;
 use std::sync::Arc;
 
 use arc_swap::ArcSwap;
 use clap::Parser;
 use huginn_proxy_lib::config::load_from_path;
+use huginn_proxy_lib::config::startup::telemetry::LogLevel;
 use huginn_proxy_lib::proxy::shutdown::{shutdown_channel, ServiceHandle, ServiceName};
 use huginn_proxy_lib::run;
 use huginn_proxy_lib::telemetry::{
-    init_metrics, init_tracing_with_otel, shutdown_tracing, start_observability_server,
+    init_metrics, init_tracing_otel, init_tracing_stdout, start_observability_server,
 };
 use huginn_proxy_lib::WatchOptions;
 use tokio::time::Duration;
@@ -51,13 +53,20 @@ async fn main() -> Result<(), BoxError> {
     }
 
     // RUST_LOG environment variable can override at runtime (e.g., docker run -e RUST_LOG=debug)
-    let log_level = env::var("RUST_LOG").unwrap_or_else(|_| config.logging.level.clone());
+    let log_level = env::var("RUST_LOG")
+        .map(|v| {
+            LogLevel::from_str(&v).unwrap_or_else(|e| {
+                eprintln!("could not parse logging level: {e}, falling back to config");
+                config.logging.level.clone()
+            })
+        })
+        .unwrap_or_else(|_| config.logging.level.clone());
 
-    init_tracing_with_otel(
-        log_level,
-        config.logging.show_target,
-        config.telemetry.otel_log_level.clone(),
-    )?;
+    let tracing_guard = if let Some(otel) = config.telemetry.otel.clone() {
+        init_tracing_otel(log_level.into(), config.logging.show_target, otel.into())?
+    } else {
+        init_tracing_stdout(log_level.into(), config.logging.show_target)
+    };
 
     let huginn_proxy_lib::config::ConfigParts { static_cfg, dynamic_cfg } = config.into_parts();
     let static_cfg = Arc::new(static_cfg);
@@ -189,8 +198,7 @@ async fn main() -> Result<(), BoxError> {
         svc.shutdown(Duration::from_secs(2)).await;
     }
 
-    // All background tasks have exited and flushed their logs, safe to tear down tracing.
-    shutdown_tracing();
+    tracing_guard.shutdown();
 
     result?;
     Ok(())
