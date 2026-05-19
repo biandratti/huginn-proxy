@@ -67,10 +67,10 @@ impl Drop for TracingGuard {
         let _ = std::io::stderr().flush();
         if let Some(ref p) = self.otel_provider {
             if let Err(e) = p.force_flush() {
-                tracing::error!("otel tracer flush error: {e}");
+                eprintln!("otel tracer flush error: {e}");
             }
             if let Err(e) = p.shutdown() {
-                tracing::error!("otel tracer shutdown error: {e}");
+                eprintln!("otel tracer shutdown error: {e}");
             }
         }
     }
