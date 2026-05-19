@@ -24,13 +24,16 @@ pub struct OtelConfig {
     pub tracer_name: String,
     #[serde(default = "default_otel_resource_name")]
     pub resource_name: String,
+    /// Log level for sending logs to OTEL
+    #[serde(default = "default_otel_log_level")]
+    pub log_level: LogLevel,
     /// OpenTelemetry internal log level
     /// Controls verbosity of OpenTelemetry SDK internal logs (not application logs)
     /// This is separate from the main application log level in the \[logging\] TOML table
     /// Options: "trace", "debug", "info", "warn", "error"
     /// Default: "warn" (suppress informational logs from OpenTelemetry SDK)
-    #[serde(default = "default_otel_log_level")]
-    pub log_level: LogLevel,
+    #[serde(default = "default_otel_sdk_log_level")]
+    sdk_log_level: LogLevel,
     #[serde(default)]
     pub show_target: bool,
 }
@@ -42,6 +45,7 @@ impl From<OtelConfig> for OpentelemetryConfig {
             value.tracer_name,
             value.resource_name,
             value.log_level.into(),
+            value.sdk_log_level.into(),
         )
     }
 }
@@ -54,8 +58,12 @@ fn default_otel_resource_name() -> String {
     "huginn-proxy".to_string()
 }
 
-fn default_otel_log_level() -> LogLevel {
+fn default_otel_sdk_log_level() -> LogLevel {
     LogLevel::Warn
+}
+
+fn default_otel_log_level() -> LogLevel {
+    LogLevel::Info
 }
 
 /// Logging configuration
