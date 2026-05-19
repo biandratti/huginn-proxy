@@ -43,17 +43,19 @@ pub fn init_tracing_stdout(log_level: Level, show_target: bool) -> TracingGuard 
     TracingGuard { otel_provider: None }
 }
 
+// In future if we will be able to log to files will holds guards to files
+/// Logger guard, shutdown method should be called on exit
 #[derive(Debug, Default)]
 pub struct TracingGuard {
     otel_provider: Option<SdkTracerProvider>,
 }
 
-impl TracingGuard {
-    pub fn shutdown(self) {
+impl Drop for TracingGuard {
+    fn drop(&mut self) {
         use std::io::Write;
         let _ = std::io::stdout().flush();
         let _ = std::io::stderr().flush();
-        if let Some(p) = self.otel_provider {
+        if let Some(ref p) = self.otel_provider {
             if let Err(e) = p.force_flush() {
                 tracing::error!("otel tracer flush error: {e}");
             }
@@ -62,7 +64,9 @@ impl TracingGuard {
             }
         }
     }
+}
 
+impl TracingGuard {
     pub fn with_otel(otel_provider: SdkTracerProvider) -> Self {
         Self { otel_provider: Some(otel_provider) }
     }

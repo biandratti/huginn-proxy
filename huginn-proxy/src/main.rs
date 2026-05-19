@@ -62,7 +62,7 @@ async fn main() -> Result<(), BoxError> {
         })
         .unwrap_or_else(|_| config.logging.level.clone());
 
-    let tracing_guard = if let Some(otel) = config.telemetry.otel.clone() {
+    let _tracing_guard = if let Some(otel) = config.telemetry.otel.clone() {
         init_tracing_otel(log_level.into(), config.logging.show_target, otel.into())?
     } else {
         init_tracing_stdout(log_level.into(), config.logging.show_target)
@@ -197,8 +197,6 @@ async fn main() -> Result<(), BoxError> {
     if let Some(svc) = metrics_service {
         svc.shutdown(Duration::from_secs(2)).await;
     }
-
-    tracing_guard.shutdown();
 
     result?;
     Ok(())
