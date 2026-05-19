@@ -6,14 +6,22 @@ use tracing::level_filters::LevelFilter;
 use tracing::Level;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
-use tracing_subscriber::Layer;
+use tracing_subscriber::{EnvFilter, Layer};
 
 pub struct OpentelemetryConfig {
     endpoint: String,
     tracer_name: String,
     resource_name: String,
+    /// Log level for OTEL
     log_level: Level,
+    /// Log level of opentelemetry_sdk
+    sdk_log_level: Level,
     // TODO: more options like proto, timeouts...
+}
+
+fn build_env_filter(app_level: Level, sdk_level: Level) -> EnvFilter {
+    EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| EnvFilter::new(format!("{app_level},opentelemetry={sdk_level}")))
 }
 
 impl OpentelemetryConfig {
@@ -22,8 +30,9 @@ impl OpentelemetryConfig {
         tracer_name: String,
         resource_name: String,
         log_level: Level,
+        sdk_log_level: Level,
     ) -> Self {
-        Self { endpoint, tracer_name, resource_name, log_level }
+        Self { endpoint, tracer_name, resource_name, log_level, sdk_log_level }
     }
 }
 
@@ -38,6 +47,7 @@ where
 
 pub fn init_tracing_stdout(log_level: Level, show_target: bool) -> TracingGuard {
     tracing_subscriber::registry()
+        .with(build_env_filter(log_level, Level::ERROR))
         .with(fmt_layer(show_target, log_level))
         .init();
     TracingGuard { otel_provider: None }
@@ -100,6 +110,7 @@ pub fn init_tracing_otel(
         .with_filter(LevelFilter::from_level(otel_config.log_level));
 
     tracing_subscriber::registry()
+        .with(build_env_filter(log_level, otel_config.sdk_log_level))
         .with(fmt_layer(show_target, log_level))
         .with(otel_layer)
         .init();
