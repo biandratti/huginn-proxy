@@ -7,9 +7,10 @@ use tracing::{error, info};
 
 use crate::config::TlsConfig;
 use crate::error::Result;
+use crate::telemetry::Metrics;
 
 use super::acceptor::build_server_config;
-use super::cert_source::{CertSource, StaticCertSource, WatchedCertSource};
+use super::cert_source::{cert_chain_hash, CertSource, StaticCertSource, WatchedCertSource};
 
 pub type SharedTlsAcceptor = Arc<ArcSwap<TlsAcceptor>>;
 
@@ -34,6 +35,7 @@ pub async fn setup_tls_with_hot_reload(
     tls_config: &TlsConfig,
     watch: bool,
     watch_delay_secs: u32,
+    metrics: Arc<Metrics>,
 ) -> Result<TlsSetup> {
     let source = build_cert_source(tls_config, watch, watch_delay_secs).await?;
 
@@ -49,6 +51,8 @@ pub async fn setup_tls_with_hot_reload(
     let tls_acceptor =
         Arc::new(ArcSwap::new(Arc::new(TlsAcceptor::from(Arc::new(initial_server)))));
 
+    metrics.record_tls_cert_reload_success(cert_chain_hash(&initial_certs.certs));
+
     let rx_opt = source.subscribe();
     if let Some(mut rx) = rx_opt {
         let acceptor_for_update = Arc::clone(&tls_acceptor);
@@ -56,6 +60,7 @@ pub async fn setup_tls_with_hot_reload(
         let options = tls_config.options.clone();
         let client_auth = tls_config.client_auth.clone();
         let session_resumption = tls_config.session_resumption.clone();
+        let metrics_for_task = Arc::clone(&metrics);
         tokio::spawn(async move {
             let _source_keep_alive = source;
             loop {
@@ -81,9 +86,12 @@ pub async fn setup_tls_with_hot_reload(
                 ) {
                     Ok(cfg) => {
                         acceptor_for_update.store(Arc::new(TlsAcceptor::from(Arc::new(cfg))));
+                        metrics_for_task
+                            .record_tls_cert_reload_success(cert_chain_hash(&new_certs.certs));
                         info!("TLS acceptor hot-swapped to new certificate");
                     }
                     Err(e) => {
+                        metrics_for_task.record_tls_cert_reload_error();
                         error!(error = %e, "Failed to rebuild TLS acceptor on reload");
                     }
                 }

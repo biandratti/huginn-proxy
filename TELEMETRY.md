@@ -9,8 +9,9 @@ agent**.
 
 Huginn Proxy provides comprehensive telemetry through:
 
-- **Prometheus Metrics** - 44 metrics covering connections, requests, TLS, fingerprinting, backends, active health
-  checks, throughput, rate limiting, IP filtering, header manipulation, mTLS, and config hot reload
+- **Prometheus Metrics** - 47 metrics covering connections, requests, TLS, fingerprinting, backends, active health
+  checks, throughput, rate limiting, IP filtering, header manipulation, mTLS, config hot reload, and TLS certificate
+  hot reload
 - **Health Check Endpoints** - Kubernetes-ready: `/health`, `/ready`, `/live`, `/metrics`
 
 All proxy telemetry is exposed on a separate observability server (configurable via `telemetry.metrics_port`).
@@ -147,11 +148,11 @@ rate(huginn_connections_rejected_total[5m])
 
 ### 3. Request Metrics
 
-| Metric                                | Type      | Description                                                       | Labels                                       |
-|---------------------------------------|-----------|-------------------------------------------------------------------|----------------------------------------------|
-| `huginn_entrypoint_requests_total`    | Counter   | All requests arriving at the proxy, regardless of routing outcome | `method`, `status_code`, `protocol`          |
-| `huginn_requests_total`               | Counter   | Requests matched to a route and dispatched                        | `method`, `status_code`, `protocol`, `route` |
-| `huginn_requests_duration_seconds`    | Histogram | Duration of routed requests                                       | `method`, `status_code`, `protocol`, `route` |
+| Metric                             | Type      | Description                                                       | Labels                                       |
+|------------------------------------|-----------|-------------------------------------------------------------------|----------------------------------------------|
+| `huginn_entrypoint_requests_total` | Counter   | All requests arriving at the proxy, regardless of routing outcome | `method`, `status_code`, `protocol`          |
+| `huginn_requests_total`            | Counter   | Requests matched to a route and dispatched                        | `method`, `status_code`, `protocol`, `route` |
+| `huginn_requests_duration_seconds` | Histogram | Duration of routed requests                                       | `method`, `status_code`, `protocol`, `route` |
 
 The two request counters model the same two layers as Traefik's `entrypoint` / `router` metrics:
 
@@ -556,7 +557,40 @@ sum by (protocol) (rate(huginn_mtls_connections_total[5m]))
 
 ---
 
-### 13. Build Info
+### 13. TLS Certificate Hot Reload Metrics
+
+| Metric                                          | Type    | Description                                                       | Labels   |
+|-------------------------------------------------|---------|-------------------------------------------------------------------|----------|
+| `huginn_tls_cert_reload_total`                  | Counter | TLS certificate load/reload attempts (includes initial load)      | `result` |
+| `huginn_tls_cert_last_reload_timestamp_seconds` | Gauge   | Unix timestamp of the last successful TLS cert load or reload     | -        |
+| `huginn_tls_cert_hash`                          | Gauge   | FNV-1a hash of the currently active certificate chain (DER bytes) | -        |
+
+**Labels**:
+
+- `result`: Outcome of the reload attempt — `success` or `error`
+
+**Notes**:
+
+- This metric trio is **independent** from the config hot reload trio (§12). Modifying the TOML config does not bump
+  these gauges; replacing the cert/key files does. The two subsystems run in separate background tasks.
+- The hash and timestamp gauges are populated **immediately at boot** with the initial certificate, so
+  `time() - huginn_tls_cert_last_reload_timestamp_seconds` is meaningful from the first scrape (unlike §12, which only
+  populates on the first hot reload event).
+- `huginn_tls_cert_hash` hashes the certificate chain DER bytes. The private key is intentionally not part of the hash
+  (cert/key are always rotated together, and hashing key material in a process-wide gauge is a security smell).
+- A failed reload (cert/key parse error, validation failure, or `ServerConfig` rebuild error) bumps the
+  `result="error"` counter but leaves the hash and timestamp gauges untouched, so dashboards continue to advertise the
+  last *good* certificate that is actually serving traffic.
+
+**Example queries**:
+
+- Detect a rotation in the last 5 minutes: `changes(huginn_tls_cert_hash[5m]) > 0`
+- Alert on stuck reloads (rotation attempted but failed): `rate(huginn_tls_cert_reload_total{result="error"}[5m]) > 0`
+- Cert age proxy (time since last successful load): `time() - huginn_tls_cert_last_reload_timestamp_seconds`
+
+---
+
+### 14. Build Info
 
 | Metric              | Type  | Description                  | Labels                    |
 |---------------------|-------|------------------------------|---------------------------|
@@ -604,7 +638,8 @@ same health endpoints as the proxy.
 
 - Request rate (all traffic): `rate(huginn_entrypoint_requests_total[5m])`
 - Active connections: `huginn_connections_active`
-- Error rate (client view): `rate(huginn_entrypoint_requests_total{status_code=~"5.."}[5m]) / rate(huginn_entrypoint_requests_total[5m])`
+- Error rate (client view):
+  `rate(huginn_entrypoint_requests_total{status_code=~"5.."}[5m]) / rate(huginn_entrypoint_requests_total[5m])`
 - P95 latency: `histogram_quantile(0.95, rate(huginn_requests_duration_seconds_bucket[5m]))`
 - Bandwidth (MB/s): `(rate(huginn_bytes_received_total[5m]) + rate(huginn_bytes_sent_total[5m])) / 1024 / 1024`
 
@@ -640,12 +675,23 @@ same health endpoints as the proxy.
   `rate(huginn_health_check_probes_total{result="fail"}[5m]) / rate(huginn_health_check_probes_total[5m])`;
   gate 502s `sum by (backend_address) (rate(huginn_health_check_gate_rejects_total[5m]))`
 
-**Config Hot Reload Panel**:
+**Hot Reload Panel** (config and TLS cert grouped in one section, two parallel rows):
+
+Config row:
 
 - Reload success rate: `rate(huginn_config_reload_total{result="success"}[1h])`
 - Reload error rate: `rate(huginn_config_reload_total{result="error"}[1h])`
 - Time since last successful reload: `time() - huginn_config_last_reload_timestamp_seconds`
 - Active config hash: `huginn_config_hash`
+
+TLS certificate row (each panel aligned column-wise under its config counterpart):
+
+- Cert reload success rate: `rate(huginn_tls_cert_reload_total{result="success"}[1h])`
+- Cert reload error rate: `rate(huginn_tls_cert_reload_total{result="error"}[1h])`
+- Time since last successful cert load: `time() - huginn_tls_cert_last_reload_timestamp_seconds`
+- Active cert hash: `huginn_tls_cert_hash` (changes on every rotation; content hash for change detection, not a
+  JA4-style client fingerprint)
+- Detect rotation in last 5 min: `changes(huginn_tls_cert_hash[5m]) > 0`
 
 **eBPF Agent Panel** (DaemonSet, one agent per node):
 
@@ -668,7 +714,8 @@ The following metrics are **not** implemented yet (the product may already inclu
 - **Backend connection pool**: optional future gauges/counters (e.g. pool size, active/idle connections, reuse rate).
   The **connection pool to upstreams already exists** (see [SETTINGS.md](SETTINGS.md) and
   [FEATURES.md](FEATURES.md)); only dedicated Prometheus series for it are still missing.
-- **Tracing**: distributed request tracing and correlation (`traceparent` propagation, proxy spans, and request ID correlation) is planned but not implemented yet.
+- **Tracing**: distributed request tracing and correlation (`traceparent` propagation, proxy spans, and request ID
+  correlation) is planned but not implemented yet.
 
 ---
 

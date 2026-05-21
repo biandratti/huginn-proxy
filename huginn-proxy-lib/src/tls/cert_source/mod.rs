@@ -4,6 +4,7 @@
 //! - [`StaticCertSource`]: loaded once at startup, never changes.
 //! - [`WatchedCertSource`]: filesystem watcher publishes updates on cert/key
 
+use std::hash::{Hash, Hasher};
 use std::path::Path;
 use std::sync::Arc;
 
@@ -31,6 +32,16 @@ impl Clone for ServerCertsKeys {
     fn clone(&self) -> Self {
         Self { certs: self.certs.to_vec(), key: self.key.clone_key() }
     }
+}
+
+/// FNV-1a-style hash of the entire certificate chain (DER bytes, in order).
+pub fn cert_chain_hash(certs: &[CertificateDer<'static>]) -> u64 {
+    use std::collections::hash_map::DefaultHasher;
+    let mut hasher = DefaultHasher::new();
+    for cert in certs {
+        cert.as_ref().hash(&mut hasher);
+    }
+    hasher.finish()
 }
 
 /// Source of TLS server certificates.

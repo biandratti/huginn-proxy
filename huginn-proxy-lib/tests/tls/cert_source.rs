@@ -4,9 +4,10 @@ use std::time::Duration;
 
 use crate::helpers::{create_valid_test_cert, generate_dummy_test_cert_der};
 use huginn_proxy_lib::config::{ClientAuth, TlsConfig, TlsOptions};
+use huginn_proxy_lib::telemetry::Metrics;
 use huginn_proxy_lib::tls::{
-    build_server_config, setup_tls_with_hot_reload, CertSource, ServerCertsKeys, StaticCertSource,
-    WatchedCertSource,
+    build_server_config, cert_chain_hash, setup_tls_with_hot_reload, CertSource, ServerCertsKeys,
+    StaticCertSource, WatchedCertSource,
 };
 use tokio_rustls::rustls::{CipherSuite, ServerConfig};
 
@@ -158,7 +159,7 @@ async fn setup_tls_static_no_spurious_reloads(
         session_resumption: Default::default(),
     };
 
-    let setup = setup_tls_with_hot_reload(&config, false, 1).await?;
+    let setup = setup_tls_with_hot_reload(&config, false, 1, Metrics::new_noop()).await?;
     let initial_ptr = Arc::as_ptr(&setup.acceptor.load());
 
     tokio::time::sleep(Duration::from_millis(300)).await;
@@ -252,7 +253,7 @@ async fn cipher_suites_applied_after_reload() -> Result<(), Box<dyn std::error::
         session_resumption: Default::default(),
     };
 
-    let setup = setup_tls_with_hot_reload(&config, true, 1).await?;
+    let setup = setup_tls_with_hot_reload(&config, true, 1, Metrics::new_noop()).await?;
     let initial_acceptor = setup.acceptor.load_full();
     let initial_ptr = Arc::as_ptr(&initial_acceptor);
 
@@ -309,7 +310,9 @@ async fn hot_reload_survives_dropping_tls_setup_keeping_only_acceptor(
     };
 
     // Simulate the proxy::server caller: keep only the acceptor.
-    let acceptor = setup_tls_with_hot_reload(&config, true, 1).await?.acceptor;
+    let acceptor = setup_tls_with_hot_reload(&config, true, 1, Metrics::new_noop())
+        .await?
+        .acceptor;
     let initial_ptr = Arc::as_ptr(&acceptor.load_full());
 
     // Rotate the cert and assert the acceptor is swapped in. If the
@@ -335,6 +338,26 @@ async fn hot_reload_survives_dropping_tls_setup_keeping_only_acceptor(
     outcome.map_err(|_| {
         "TlsAcceptor was not swapped within 5s, watcher was torn down when TlsSetup was dropped"
     })?;
+    Ok(())
+}
+
+#[tokio::test]
+async fn cert_chain_hash_changes_when_certificate_chain_changes(
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    use rustls_pki_types::CertificateDer;
+
+    let key_a = rcgen::generate_simple_self_signed(vec!["a.test".to_string()])?;
+    let key_b = rcgen::generate_simple_self_signed(vec!["b.test".to_string()])?;
+
+    let der_a: CertificateDer<'static> = key_a.cert.der().clone();
+    let der_b: CertificateDer<'static> = key_b.cert.der().clone();
+
+    let hash_a_first = cert_chain_hash(std::slice::from_ref(&der_a));
+    let hash_a_second = cert_chain_hash(std::slice::from_ref(&der_a));
+    let hash_b = cert_chain_hash(std::slice::from_ref(&der_b));
+
+    assert_eq!(hash_a_first, hash_a_second, "same chain must produce a stable hash");
+    assert_ne!(hash_a_first, hash_b, "different chains must produce different hashes");
     Ok(())
 }
 

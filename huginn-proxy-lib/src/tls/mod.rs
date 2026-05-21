@@ -7,7 +7,9 @@ pub mod session_resumption;
 pub mod setup;
 
 pub use acceptor::{build_server_config, build_tls_acceptor};
-pub use cert_source::{CertSource, ServerCertsKeys, StaticCertSource, WatchedCertSource};
+pub use cert_source::{
+    cert_chain_hash, CertSource, ServerCertsKeys, StaticCertSource, WatchedCertSource,
+};
 pub use cipher_suites::{is_cipher_suite_supported, supported_cipher_suites};
 pub use curves::{is_curve_supported, supported_curves};
 pub use metrics::{extract_tls_info, record_tls_handshake_metrics};
