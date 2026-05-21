@@ -35,8 +35,12 @@ async fn test_build_cert_reloader() -> Result<(), Box<dyn std::error::Error + Se
 
     let alpn = vec!["h2".to_string()];
     let options = TlsOptions::default();
-    let acceptor_result =
-        certs_keys.build_tls_acceptor(&alpn, &options, &config.session_resumption);
+    let acceptor_result = certs_keys.build_tls_acceptor(
+        &alpn,
+        &options,
+        &config.client_auth,
+        &config.session_resumption,
+    );
     assert!(
         acceptor_result.is_ok(),
         "build_tls_acceptor should succeed with valid certificates"
@@ -189,7 +193,12 @@ fn test_server_certs_keys_build_tls_acceptor(
     let alpn = vec!["h2".to_string()];
     let options = TlsOptions::default();
 
-    let result = server_certs_keys.build_tls_acceptor(&alpn, &options, &Default::default());
+    let result = server_certs_keys.build_tls_acceptor(
+        &alpn,
+        &options,
+        &Default::default(),
+        &Default::default(),
+    );
     assert!(result.is_err());
     Ok(())
 }

@@ -1,7 +1,6 @@
-use crate::config::{SessionResumptionConfig, TlsConfig, TlsOptions};
+use crate::config::{ClientAuth, SessionResumptionConfig, TlsConfig, TlsOptions};
 use crate::error::ProxyError;
-use crate::tls::acceptor::validate_tls_options;
-use crate::tls::session_resumption::configure_session_resumption;
+use crate::tls::acceptor::build_server_config;
 use notify::{Config, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use rustls_pki_types::pem::PemObject;
 use rustls_pki_types::{CertificateDer, PrivateKeyDer};
@@ -10,7 +9,6 @@ use std::sync::Arc;
 use tokio::fs;
 use tokio::sync::watch;
 use tokio::time::{sleep, sleep_until, Duration, Instant};
-use tokio_rustls::rustls::ServerConfig;
 use tokio_rustls::TlsAcceptor;
 use tracing::{debug, error, info, warn};
 
@@ -27,34 +25,26 @@ impl Clone for ServerCertsKeys {
 }
 
 impl ServerCertsKeys {
+    /// Build a `TlsAcceptor` from these certs, honoring the full TLS config
+    /// (cipher suites, ALPN, client auth, session resumption).
+    ///
+    /// Delegates to `build_server_config` so the reload path and the startup
+    /// path produce identical `ServerConfig`s for the same inputs.
     pub fn build_tls_acceptor(
         &self,
         alpn: &[String],
         options: &TlsOptions,
+        client_auth: &ClientAuth,
         session_resumption: &SessionResumptionConfig,
     ) -> crate::error::Result<TlsAcceptor> {
-        validate_tls_options(options)?;
-
-        let mut server = ServerConfig::builder()
-            .with_no_client_auth()
-            .with_single_cert(self.certs.to_vec(), self.key.clone_key())
-            .map_err(|e| ProxyError::Tls(format!("Failed to build TLS config: {e}")))?;
-
-        if !options.cipher_suites.is_empty() {
-            warn!(
-                "Cipher suite specification is not yet fully supported in rustls 0.23. \
-                Using safe defaults. Specified cipher suites: {:?}",
-                options.cipher_suites
-            );
-        }
-
-        if !alpn.is_empty() {
-            server.alpn_protocols = alpn.iter().map(|s| s.as_bytes().to_vec()).collect();
-        }
-        // If alpn is empty, leave server.alpn_protocols as default (empty = no ALPN)
-
-        configure_session_resumption(&mut server, session_resumption);
-
+        let server = build_server_config(
+            self.certs.to_vec(),
+            self.key.clone_key(),
+            alpn,
+            options,
+            client_auth,
+            session_resumption,
+        )?;
         Ok(TlsAcceptor::from(Arc::new(server)))
     }
 }

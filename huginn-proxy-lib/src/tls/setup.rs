@@ -37,6 +37,7 @@ pub async fn setup_tls_with_hot_reload(
     let mut reloader_rx = build_cert_reloader(tls_config, watch, watch_delay_secs).await?;
     let alpn = tls_config.alpn.clone();
     let tls_options = tls_config.options.clone();
+    let client_auth = tls_config.client_auth.clone();
     let session_resumption = tls_config.session_resumption.clone();
 
     let tls_acceptor_for_update = Arc::clone(&tls_acceptor);
@@ -49,7 +50,12 @@ pub async fn setup_tls_with_hot_reload(
             }
             let certs_keys = reloader_rx.borrow().clone();
             if let Some(certs_keys) = certs_keys {
-                match certs_keys.build_tls_acceptor(&alpn, &tls_options, &session_resumption) {
+                match certs_keys.build_tls_acceptor(
+                    &alpn,
+                    &tls_options,
+                    &client_auth,
+                    &session_resumption,
+                ) {
                     Ok(new_acceptor) => {
                         info!("Certificate reloaded successfully");
                         tls_acceptor_for_update.store(Arc::new(new_acceptor));
