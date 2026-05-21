@@ -131,8 +131,7 @@ async fn watcher_updates_receiver_when_cert_files_change(
 
 /// `StaticCertSource::subscribe()` returning `None` is the contract that
 /// guarantees `setup_tls_with_hot_reload` does not spawn a reload task in
-/// static mode. Together with `setup_tls_static_no_spurious_reloads` below
-/// this guards against regressing the issue #211 spin-loop.
+/// static mode.
 #[tokio::test]
 async fn static_source_does_not_expose_subscription(
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -295,10 +294,53 @@ async fn cipher_suites_applied_after_reload() -> Result<(), Box<dyn std::error::
     Ok(())
 }
 
+#[tokio::test]
+async fn hot_reload_survives_dropping_tls_setup_keeping_only_acceptor(
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let (cert_path, key_path) = create_valid_test_cert()?;
+
+    let config = TlsConfig {
+        cert_path: cert_path.display().to_string(),
+        key_path: key_path.display().to_string(),
+        alpn: vec![],
+        options: TlsOptions::default(),
+        client_auth: ClientAuth::Disabled,
+        session_resumption: Default::default(),
+    };
+
+    // Simulate the proxy::server caller: keep only the acceptor.
+    let acceptor = setup_tls_with_hot_reload(&config, true, 1).await?.acceptor;
+    let initial_ptr = Arc::as_ptr(&acceptor.load_full());
+
+    // Rotate the cert and assert the acceptor is swapped in. If the
+    // watcher had been torn down with the dropped `TlsSetup`, no swap would ever happen.
+    let rcgen::CertifiedKey { cert, signing_key } =
+        rcgen::generate_simple_self_signed(vec!["localhost".to_string()])?;
+    std::fs::write(&cert_path, cert.pem())?;
+    std::fs::write(&key_path, signing_key.serialize_pem())?;
+
+    let outcome = tokio::time::timeout(Duration::from_secs(5), async {
+        loop {
+            tokio::time::sleep(Duration::from_millis(50)).await;
+            if Arc::as_ptr(&acceptor.load_full()) != initial_ptr {
+                return;
+            }
+        }
+    })
+    .await;
+
+    let _ = std::fs::remove_file(&cert_path);
+    let _ = std::fs::remove_file(&key_path);
+
+    outcome.map_err(|_| {
+        "TlsAcceptor was not swapped within 5s — watcher was torn down when TlsSetup was dropped"
+    })?;
+    Ok(())
+}
+
 /// Dropping a `WatchedCertSource` must close the underlying `watch::Sender`,
 /// which is what lets the reload task spawned in `setup_tls_with_hot_reload`
-/// exit cleanly instead of spinning. This is the structural invariant
-/// behind the issue #211 fix on the watch-mode side.
+/// exit cleanly instead of spinning.
 #[tokio::test]
 async fn dropping_watched_source_closes_subscription_channel(
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {

@@ -15,13 +15,12 @@ pub type SharedTlsAcceptor = Arc<ArcSwap<TlsAcceptor>>;
 
 /// Result of TLS setup.
 ///
-/// `_source` is kept alive for the lifetime of `TlsSetup`. Dropping the
-/// setup tears down the certificate source (and its filesystem watcher, in
-/// watch mode), which in turn closes the reload channel and lets the
-/// reload task exit cleanly.
+/// In watch mode the reload background task owns the `CertSource` so the
+/// filesystem watcher and its `watch::Sender` stay alive for the lifetime
+/// of the task (which itself is alive for the lifetime of the process).
+/// `TlsSetup` therefore only needs to expose the shared `TlsAcceptor`.
 pub struct TlsSetup {
     pub acceptor: SharedTlsAcceptor,
-    _source: CertSource,
 }
 
 /// Setup TLS with hot reload support.
@@ -50,16 +49,20 @@ pub async fn setup_tls_with_hot_reload(
     let tls_acceptor =
         Arc::new(ArcSwap::new(Arc::new(TlsAcceptor::from(Arc::new(initial_server)))));
 
-    if let Some(mut rx) = source.subscribe() {
+    // For watched sources we move ownership of `source` into the reload
+    // task so the filesystem watcher and the `watch::Sender` survive as
+    // long as the task is alive. For static sources there is nothing to
+    // keep alive and the source is dropped at the end of this scope.
+    let rx_opt = source.subscribe();
+    if let Some(mut rx) = rx_opt {
         let acceptor_for_update = Arc::clone(&tls_acceptor);
         let alpn = tls_config.alpn.clone();
         let options = tls_config.options.clone();
         let client_auth = tls_config.client_auth.clone();
         let session_resumption = tls_config.session_resumption.clone();
         tokio::spawn(async move {
+            let _source_keep_alive = source;
             loop {
-                // If the source is dropped, the sender is gone and the
-                // channel is closed; exit cleanly instead of spinning.
                 if rx.changed().await.is_err() {
                     error!("Certificate source channel closed; hot reload disabled until restart");
                     break;
@@ -85,7 +88,7 @@ pub async fn setup_tls_with_hot_reload(
         });
     }
 
-    Ok(TlsSetup { acceptor: tls_acceptor, _source: source })
+    Ok(TlsSetup { acceptor: tls_acceptor })
 }
 
 async fn build_cert_source(
