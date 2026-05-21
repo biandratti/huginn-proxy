@@ -8,6 +8,7 @@ use huginn_proxy_lib::tls::{
     build_server_config, setup_tls_with_hot_reload, CertSource, ServerCertsKeys, StaticCertSource,
     WatchedCertSource,
 };
+use tokio_rustls::rustls::{CipherSuite, ServerConfig};
 
 #[tokio::test]
 async fn static_cert_source_loads_valid_certs(
@@ -192,5 +193,133 @@ fn build_server_config_rejects_invalid_certs(
         &Default::default(),
     );
     assert!(result.is_err(), "dummy DER bytes must fail to build a ServerConfig");
+    Ok(())
+}
+
+fn cipher_suites_of(server: &ServerConfig) -> Vec<CipherSuite> {
+    server
+        .crypto_provider()
+        .cipher_suites
+        .iter()
+        .map(|s| s.suite())
+        .collect()
+}
+
+#[tokio::test]
+async fn cipher_suites_applied_on_initial_build(
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let (cert_path, key_path) = create_valid_test_cert()?;
+    let source_result = StaticCertSource::load(&cert_path, &key_path).await;
+    let _ = std::fs::remove_file(&cert_path);
+    let _ = std::fs::remove_file(&key_path);
+    let source = CertSource::Static(source_result?);
+    let snapshot = source.current();
+
+    let options = TlsOptions {
+        cipher_suites: vec!["TLS13_AES_128_GCM_SHA256".to_string()],
+        ..Default::default()
+    };
+    let server = build_server_config(
+        snapshot.certs.clone(),
+        snapshot.key.clone_key(),
+        &[],
+        &options,
+        &ClientAuth::Disabled,
+        &Default::default(),
+    )?;
+
+    assert_eq!(
+        cipher_suites_of(&server),
+        vec![CipherSuite::TLS13_AES_128_GCM_SHA256],
+        "build_server_config must apply the configured cipher suites, not the provider defaults"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn cipher_suites_applied_after_reload() -> Result<(), Box<dyn std::error::Error + Send + Sync>>
+{
+    let (cert_path, key_path) = create_valid_test_cert()?;
+
+    let config = TlsConfig {
+        cert_path: cert_path.display().to_string(),
+        key_path: key_path.display().to_string(),
+        alpn: vec![],
+        options: TlsOptions {
+            cipher_suites: vec!["TLS13_AES_128_GCM_SHA256".to_string()],
+            ..Default::default()
+        },
+        client_auth: ClientAuth::Disabled,
+        session_resumption: Default::default(),
+    };
+
+    let setup = setup_tls_with_hot_reload(&config, true, 1).await?;
+    let initial_acceptor = setup.acceptor.load_full();
+    let initial_ptr = Arc::as_ptr(&initial_acceptor);
+
+    // Initial config must already have the custom cipher suites applied.
+    assert_eq!(
+        cipher_suites_of(initial_acceptor.config()),
+        vec![CipherSuite::TLS13_AES_128_GCM_SHA256],
+        "initial TlsAcceptor must honor configured cipher suites"
+    );
+
+    // Rotate the certificate files.
+    let rcgen::CertifiedKey { cert, signing_key } =
+        rcgen::generate_simple_self_signed(vec!["localhost".to_string()])?;
+    std::fs::write(&cert_path, cert.pem())?;
+    std::fs::write(&key_path, signing_key.serialize_pem())?;
+
+    // Wait for the reload task to swap the acceptor.
+    let swap_outcome = tokio::time::timeout(Duration::from_secs(5), async {
+        loop {
+            tokio::time::sleep(Duration::from_millis(50)).await;
+            let current = setup.acceptor.load_full();
+            if Arc::as_ptr(&current) != initial_ptr {
+                return current;
+            }
+        }
+    })
+    .await;
+
+    let _ = std::fs::remove_file(&cert_path);
+    let _ = std::fs::remove_file(&key_path);
+
+    let new_acceptor = swap_outcome.map_err(|_| "TlsAcceptor was not swapped within 5 seconds")?;
+
+    assert_eq!(
+        cipher_suites_of(new_acceptor.config()),
+        vec![CipherSuite::TLS13_AES_128_GCM_SHA256],
+        "TlsAcceptor must still honor configured cipher suites after a reload"
+    );
+    Ok(())
+}
+
+/// Dropping a `WatchedCertSource` must close the underlying `watch::Sender`,
+/// which is what lets the reload task spawned in `setup_tls_with_hot_reload`
+/// exit cleanly instead of spinning. This is the structural invariant
+/// behind the issue #211 fix on the watch-mode side.
+#[tokio::test]
+async fn dropping_watched_source_closes_subscription_channel(
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let (cert_path, key_path) = create_valid_test_cert()?;
+    let result = WatchedCertSource::watch(cert_path.clone(), key_path.clone(), 60).await;
+
+    let _ = std::fs::remove_file(&cert_path);
+    let _ = std::fs::remove_file(&key_path);
+
+    let source = CertSource::Watched(result?);
+    let mut rx = source
+        .subscribe()
+        .ok_or("watched source must expose subscription")?;
+
+    drop(source);
+
+    let outcome = tokio::time::timeout(Duration::from_secs(1), rx.changed()).await;
+    let changed = outcome.map_err(|_| "rx.changed() did not return within 1s after source drop")?;
+    assert!(
+        changed.is_err(),
+        "rx.changed() must return Err once the source (and its sender) is dropped"
+    );
     Ok(())
 }
