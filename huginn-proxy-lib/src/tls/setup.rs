@@ -28,7 +28,12 @@ pub async fn setup_tls_with_hot_reload(
     let initial_acceptor = build_tls_acceptor(tls_config)?;
     let tls_acceptor = Arc::new(ArcSwap::new(Arc::new(initial_acceptor)));
 
-    // Set up certificate reloader (async - initializes filesystem watcher)
+    // In static mode the certificates are loaded once by `build_tls_acceptor`
+    // above and never change, so there is no reason to spawn a reload task.
+    if !watch {
+        return Ok(TlsSetup { acceptor: tls_acceptor });
+    }
+
     let mut reloader_rx = build_cert_reloader(tls_config, watch, watch_delay_secs).await?;
     let alpn = tls_config.alpn.clone();
     let tls_options = tls_config.options.clone();
@@ -37,7 +42,11 @@ pub async fn setup_tls_with_hot_reload(
     let tls_acceptor_for_update = Arc::clone(&tls_acceptor);
     tokio::spawn(async move {
         loop {
-            let _ = reloader_rx.changed().await;
+            // If the watcher's sender is dropped, the channel is closed and future reloads are impossible.
+            if reloader_rx.changed().await.is_err() {
+                error!("Certificate reloader channel closed; hot reload disabled until restart");
+                break;
+            }
             let certs_keys = reloader_rx.borrow().clone();
             if let Some(certs_keys) = certs_keys {
                 match certs_keys.build_tls_acceptor(&alpn, &tls_options, &session_resumption) {

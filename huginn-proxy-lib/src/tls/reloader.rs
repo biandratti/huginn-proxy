@@ -104,12 +104,21 @@ pub async fn read_certs_and_keys(
 }
 
 /// Load certificates once and return a static receiver, no filesystem watching.
+///
+/// The sender is kept alive in a detached task that never terminates, so the
+/// channel stays open for the lifetime of the process. If we dropped it, any
+/// consumer calling `rx.changed().await` would receive `Err(RecvError)`
+/// immediately and could spin if the error is ignored.
 async fn load_certs_static(
     cert_path: &Path,
     key_path: &Path,
 ) -> Result<watch::Receiver<Option<ServerCertsKeys>>, ProxyError> {
     let certs_keys = read_certs_and_keys(cert_path, key_path).await?;
-    let (_, rx) = watch::channel(Some(certs_keys));
+    let (tx, rx) = watch::channel(Some(certs_keys));
+    tokio::spawn(async move {
+        let _tx = tx;
+        std::future::pending::<()>().await;
+    });
     Ok(rx)
 }
 
