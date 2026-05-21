@@ -1,8 +1,9 @@
+use std::sync::Arc;
 use std::time::Duration;
 
 use crate::helpers::{create_valid_test_cert, generate_dummy_test_cert_der};
 use huginn_proxy_lib::config::{ClientAuth, TlsConfig, TlsOptions};
-use huginn_proxy_lib::tls::build_cert_reloader;
+use huginn_proxy_lib::tls::{build_cert_reloader, setup_tls_with_hot_reload};
 
 #[tokio::test]
 async fn test_build_cert_reloader() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -105,6 +106,74 @@ async fn watcher_updates_receiver_when_cert_files_change(
     let _ = std::fs::remove_file(&cert_path);
     let _ = std::fs::remove_file(&key_path);
 
+    Ok(())
+}
+
+/// In static mode (watch=false), the reloader should never fire `changed()`.
+/// The watch sender must stay alive so that `changed()` blocks forever instead
+/// of returning `Err(RecvError)` immediately and causing a spin loop.
+#[tokio::test]
+async fn static_reloader_no_update() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let (cert_path, key_path) = create_valid_test_cert()?;
+
+    let config = TlsConfig {
+        cert_path: cert_path.display().to_string(),
+        key_path: key_path.display().to_string(),
+        alpn: vec![],
+        options: TlsOptions::default(),
+        client_auth: ClientAuth::Disabled,
+        session_resumption: Default::default(),
+    };
+
+    let mut rx = build_cert_reloader(&config, false, 1).await?;
+    let _initial = rx.borrow().clone().ok_or("initial cert value was None")?;
+
+    let mut counter = 0usize;
+    let _ = tokio::time::timeout(Duration::from_millis(200), async {
+        loop {
+            let _ = rx.changed().await;
+            counter += 1;
+        }
+    })
+    .await;
+
+    let _ = std::fs::remove_file(&cert_path);
+    let _ = std::fs::remove_file(&key_path);
+
+    assert_eq!(counter, 0, "static reloader must never fire changed()");
+    Ok(())
+}
+
+#[tokio::test]
+async fn setup_tls_static_no_spurious_reloads(
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let (cert_path, key_path) = create_valid_test_cert()?;
+
+    let config = TlsConfig {
+        cert_path: cert_path.display().to_string(),
+        key_path: key_path.display().to_string(),
+        alpn: vec![],
+        options: TlsOptions::default(),
+        client_auth: ClientAuth::Disabled,
+        session_resumption: Default::default(),
+    };
+
+    let setup = setup_tls_with_hot_reload(&config, false, 1).await?;
+
+    let initial_ptr = Arc::as_ptr(&setup.acceptor.load());
+
+    // Give the background task 300 ms to misbehave (spin-reload).
+    tokio::time::sleep(Duration::from_millis(300)).await;
+
+    let final_ptr = Arc::as_ptr(&setup.acceptor.load());
+
+    let _ = std::fs::remove_file(&cert_path);
+    let _ = std::fs::remove_file(&key_path);
+
+    assert_eq!(
+        initial_ptr, final_ptr,
+        "acceptor must not be swapped in static mode — spurious reloads detected"
+    );
     Ok(())
 }
 
