@@ -26,38 +26,50 @@ fn load_ca_certs(path: &str) -> Result<Vec<CertificateDer<'static>>> {
         .map_err(|e| ProxyError::Tls(format!("Failed to parse client CA certificates: {e}")))
 }
 
-/// Builds a TLS acceptor from configuration
-pub fn build_tls_acceptor(cfg: &TlsConfig) -> Result<TlsAcceptor> {
-    let certs = {
-        let bytes = std::fs::read(&cfg.cert_path)
-            .map_err(|e| ProxyError::Tls(format!("Failed to read certificate: {e}")))?;
-        CertificateDer::pem_slice_iter(&bytes)
-            .collect::<std::result::Result<Vec<_>, rustls_pki_types::pem::Error>>()
-            .map_err(|e| ProxyError::Tls(format!("Failed to parse certificates: {e}")))?
-    };
+fn read_certs_and_keys_sync(
+    cert_path: &str,
+    key_path: &str,
+) -> Result<(Vec<CertificateDer<'static>>, PrivateKeyDer<'static>)> {
+    let cert_bytes = std::fs::read(cert_path)
+        .map_err(|e| ProxyError::Tls(format!("Failed to read certificate: {e}")))?;
+    let certs: Vec<CertificateDer<'static>> = CertificateDer::pem_slice_iter(&cert_bytes)
+        .collect::<std::result::Result<Vec<_>, rustls_pki_types::pem::Error>>()
+        .map_err(|e| ProxyError::Tls(format!("Failed to parse certificates: {e}")))?;
 
-    let key = {
-        let bytes = std::fs::read(&cfg.key_path)
-            .map_err(|e| ProxyError::Tls(format!("Failed to read key: {e}")))?;
-        let mut keys: Vec<PrivateKeyDer<'_>> = PrivateKeyDer::pem_slice_iter(&bytes)
-            .collect::<std::result::Result<Vec<_>, rustls_pki_types::pem::Error>>()
-            .map_err(|e| ProxyError::Tls(format!("Failed to parse private key: {e}")))?;
-        let Some(k) = keys.pop() else {
-            return Err(ProxyError::NoPrivateKey);
-        };
-        k
+    let key_bytes =
+        std::fs::read(key_path).map_err(|e| ProxyError::Tls(format!("Failed to read key: {e}")))?;
+    let mut keys: Vec<PrivateKeyDer<'_>> = PrivateKeyDer::pem_slice_iter(&key_bytes)
+        .collect::<std::result::Result<Vec<_>, rustls_pki_types::pem::Error>>()
+        .map_err(|e| ProxyError::Tls(format!("Failed to parse private key: {e}")))?;
+    let Some(key) = keys.pop() else {
+        return Err(ProxyError::NoPrivateKey);
     };
+    Ok((certs, key))
+}
 
-    validate_tls_options(&cfg.options)?;
+/// Builds a fully-configured `ServerConfig` from in-memory certs + TLS settings.
+///
+/// This is the single source of truth used by both startup (`build_tls_acceptor`)
+/// and the hot-reload path. Cipher suites, ALPN, client auth, and session
+/// resumption are all applied uniformly here.
+pub fn build_server_config(
+    certs: Vec<CertificateDer<'static>>,
+    key: PrivateKeyDer<'static>,
+    alpn: &[String],
+    options: &TlsOptions,
+    client_auth: &ClientAuth,
+    session_resumption: &crate::config::SessionResumptionConfig,
+) -> Result<ServerConfig> {
+    validate_tls_options(options)?;
 
     // Build a CryptoProvider with the requested cipher suites, falling back to
-    // ring's defaults when none are specified. All other provider fields (key
-    // exchange groups, signature algorithms, …) keep the ring defaults.
-    let provider = if cfg.options.cipher_suites.is_empty() {
+    // aws-lc-rs defaults when none are specified. All other provider fields
+    // (key exchange groups, signature algorithms, …) keep the defaults.
+    let provider = if options.cipher_suites.is_empty() {
         aws_lc_provider::default_provider()
     } else {
         CryptoProvider {
-            cipher_suites: resolve_cipher_suites(&cfg.options.cipher_suites),
+            cipher_suites: resolve_cipher_suites(&options.cipher_suites),
             ..aws_lc_provider::default_provider()
         }
     };
@@ -66,7 +78,7 @@ pub fn build_tls_acceptor(cfg: &TlsConfig) -> Result<TlsAcceptor> {
         .with_safe_default_protocol_versions()
         .map_err(|e| ProxyError::Tls(format!("Failed to set TLS protocol versions: {e}")))?;
 
-    let mut server = match &cfg.client_auth {
+    let mut server = match client_auth {
         ClientAuth::Required { ca_cert_path } => {
             let client_ca_certs = load_ca_certs(ca_cert_path)?;
             let mut root_store = RootCertStore::empty();
@@ -89,13 +101,26 @@ pub fn build_tls_acceptor(cfg: &TlsConfig) -> Result<TlsAcceptor> {
             .map_err(|e| ProxyError::Tls(format!("Failed to build TLS config: {e}")))?,
     };
 
-    if !cfg.alpn.is_empty() {
-        server.alpn_protocols = cfg.alpn.iter().map(|s| s.as_bytes().to_vec()).collect();
+    if !alpn.is_empty() {
+        server.alpn_protocols = alpn.iter().map(|s| s.as_bytes().to_vec()).collect();
     }
-    // If alpn is empty, leave server.alpn_protocols as default (empty = no ALPN)
 
-    configure_session_resumption(&mut server, &cfg.session_resumption);
+    configure_session_resumption(&mut server, session_resumption);
 
+    Ok(server)
+}
+
+/// Builds a TLS acceptor from configuration, reading cert + key from disk.
+pub fn build_tls_acceptor(cfg: &TlsConfig) -> Result<TlsAcceptor> {
+    let (certs, key) = read_certs_and_keys_sync(&cfg.cert_path, &cfg.key_path)?;
+    let server = build_server_config(
+        certs,
+        key,
+        &cfg.alpn,
+        &cfg.options,
+        &cfg.client_auth,
+        &cfg.session_resumption,
+    )?;
     Ok(TlsAcceptor::from(Arc::new(server)))
 }
 
