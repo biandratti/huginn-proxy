@@ -61,6 +61,7 @@ pub async fn run(
                 tls_config,
                 watch_opts.watch,
                 watch_opts.watch_delay_secs,
+                Arc::clone(&metrics),
             )
             .await?;
             Some(tls_setup.acceptor)

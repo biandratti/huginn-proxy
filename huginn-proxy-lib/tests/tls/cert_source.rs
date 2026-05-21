@@ -1,0 +1,387 @@
+use std::path::PathBuf;
+use std::sync::Arc;
+use std::time::Duration;
+
+use crate::helpers::{create_valid_test_cert, generate_dummy_test_cert_der};
+use huginn_proxy_lib::config::{ClientAuth, TlsConfig, TlsOptions};
+use huginn_proxy_lib::telemetry::Metrics;
+use huginn_proxy_lib::tls::{
+    build_server_config, cert_chain_hash, setup_tls_with_hot_reload, CertSource, ServerCertsKeys,
+    StaticCertSource, WatchedCertSource,
+};
+use tokio_rustls::rustls::{CipherSuite, ServerConfig};
+
+#[tokio::test]
+async fn static_cert_source_loads_valid_certs(
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let (cert_path, key_path) = create_valid_test_cert()?;
+
+    let result = StaticCertSource::load(&cert_path, &key_path).await;
+
+    let _ = std::fs::remove_file(&cert_path);
+    let _ = std::fs::remove_file(&key_path);
+
+    let source = CertSource::Static(result?);
+
+    assert!(
+        source.subscribe().is_none(),
+        "static sources must not expose a subscription channel"
+    );
+    let snapshot = source.current();
+    assert!(!snapshot.certs.is_empty(), "static source should expose loaded certificates");
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn watched_cert_source_loads_valid_certs(
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let (cert_path, key_path) = create_valid_test_cert()?;
+
+    let result = WatchedCertSource::watch(cert_path.clone(), key_path.clone(), 60).await;
+
+    let _ = std::fs::remove_file(&cert_path);
+    let _ = std::fs::remove_file(&key_path);
+
+    let source = CertSource::Watched(result?);
+
+    assert!(
+        source.subscribe().is_some(),
+        "watched sources must expose a subscription channel"
+    );
+    let snapshot = source.current();
+    let alpn = vec!["h2".to_string()];
+    let options = TlsOptions::default();
+    let server = build_server_config(
+        snapshot.certs.clone(),
+        snapshot.key.clone_key(),
+        &alpn,
+        &options,
+        &ClientAuth::Disabled,
+        &Default::default(),
+    );
+    assert!(server.is_ok(), "build_server_config should succeed on watched snapshot");
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn static_cert_source_missing_files_errors(
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let result = StaticCertSource::load(
+        std::path::Path::new("/nonexistent/cert.pem"),
+        std::path::Path::new("/nonexistent/key.pem"),
+    )
+    .await;
+    assert!(result.is_err(), "missing files must error");
+    Ok(())
+}
+
+#[tokio::test]
+async fn watched_cert_source_missing_files_errors(
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let result = WatchedCertSource::watch(
+        PathBuf::from("/nonexistent/cert.pem"),
+        PathBuf::from("/nonexistent/key.pem"),
+        60,
+    )
+    .await;
+    assert!(result.is_err(), "missing files must error");
+    Ok(())
+}
+
+#[tokio::test]
+async fn watcher_updates_receiver_when_cert_files_change(
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let (cert_path, key_path) = create_valid_test_cert()?;
+
+    let source = WatchedCertSource::watch(cert_path.clone(), key_path.clone(), 1).await?;
+    let source = CertSource::Watched(source);
+    let mut rx = source
+        .subscribe()
+        .ok_or("watched source must expose subscription")?;
+    let initial = source.current();
+
+    let rcgen::CertifiedKey { cert, signing_key } =
+        rcgen::generate_simple_self_signed(vec!["localhost".to_string()])?;
+    std::fs::write(&cert_path, cert.pem())?;
+    std::fs::write(&key_path, signing_key.serialize_pem())?;
+
+    let outcome = tokio::time::timeout(Duration::from_secs(5), async {
+        loop {
+            if rx.changed().await.is_err() {
+                return Err("watcher channel closed before cert changed");
+            }
+            let current = rx.borrow().clone();
+            if *current != *initial {
+                return Ok(());
+            }
+        }
+    })
+    .await;
+
+    let _ = std::fs::remove_file(&cert_path);
+    let _ = std::fs::remove_file(&key_path);
+
+    match outcome {
+        Err(_) => Err("cert reload did not happen within 5 seconds".into()),
+        Ok(Err(e)) => Err(e.into()),
+        Ok(Ok(())) => Ok(()),
+    }
+}
+
+/// `StaticCertSource::subscribe()` returning `None` is the contract that
+/// guarantees `setup_tls_with_hot_reload` does not spawn a reload task in
+/// static mode.
+#[tokio::test]
+async fn static_source_does_not_expose_subscription(
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let (cert_path, key_path) = create_valid_test_cert()?;
+    let source = StaticCertSource::load(&cert_path, &key_path).await?;
+    let _ = std::fs::remove_file(&cert_path);
+    let _ = std::fs::remove_file(&key_path);
+
+    assert!(CertSource::Static(source).subscribe().is_none());
+    Ok(())
+}
+
+#[tokio::test]
+async fn setup_tls_static_no_spurious_reloads(
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let (cert_path, key_path) = create_valid_test_cert()?;
+
+    let config = TlsConfig {
+        cert_path: cert_path.display().to_string(),
+        key_path: key_path.display().to_string(),
+        alpn: vec![],
+        options: TlsOptions::default(),
+        client_auth: ClientAuth::Disabled,
+        session_resumption: Default::default(),
+    };
+
+    let setup = setup_tls_with_hot_reload(&config, false, 1, Metrics::new_noop()).await?;
+    let initial_ptr = Arc::as_ptr(&setup.acceptor.load());
+
+    tokio::time::sleep(Duration::from_millis(300)).await;
+
+    let final_ptr = Arc::as_ptr(&setup.acceptor.load());
+
+    let _ = std::fs::remove_file(&cert_path);
+    let _ = std::fs::remove_file(&key_path);
+
+    assert_eq!(
+        initial_ptr, final_ptr,
+        "acceptor must not be swapped in static mode, spurious reloads detected"
+    );
+    Ok(())
+}
+
+#[test]
+fn build_server_config_rejects_invalid_certs(
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let (cert, key) = generate_dummy_test_cert_der();
+    let server_certs_keys = ServerCertsKeys { certs: vec![cert], key };
+    let alpn = vec!["h2".to_string()];
+    let options = TlsOptions::default();
+
+    let result = build_server_config(
+        server_certs_keys.certs.clone(),
+        server_certs_keys.key.clone_key(),
+        &alpn,
+        &options,
+        &ClientAuth::Disabled,
+        &Default::default(),
+    );
+    assert!(result.is_err(), "dummy DER bytes must fail to build a ServerConfig");
+    Ok(())
+}
+
+fn cipher_suites_of(server: &ServerConfig) -> Vec<CipherSuite> {
+    server
+        .crypto_provider()
+        .cipher_suites
+        .iter()
+        .map(|s| s.suite())
+        .collect()
+}
+
+#[tokio::test]
+async fn cipher_suites_applied_on_initial_build(
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let (cert_path, key_path) = create_valid_test_cert()?;
+    let source_result = StaticCertSource::load(&cert_path, &key_path).await;
+    let _ = std::fs::remove_file(&cert_path);
+    let _ = std::fs::remove_file(&key_path);
+    let source = CertSource::Static(source_result?);
+    let snapshot = source.current();
+
+    let options = TlsOptions {
+        cipher_suites: vec!["TLS13_AES_128_GCM_SHA256".to_string()],
+        ..Default::default()
+    };
+    let server = build_server_config(
+        snapshot.certs.clone(),
+        snapshot.key.clone_key(),
+        &[],
+        &options,
+        &ClientAuth::Disabled,
+        &Default::default(),
+    )?;
+
+    assert_eq!(
+        cipher_suites_of(&server),
+        vec![CipherSuite::TLS13_AES_128_GCM_SHA256],
+        "build_server_config must apply the configured cipher suites, not the provider defaults"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn cipher_suites_applied_after_reload() -> Result<(), Box<dyn std::error::Error + Send + Sync>>
+{
+    let (cert_path, key_path) = create_valid_test_cert()?;
+
+    let config = TlsConfig {
+        cert_path: cert_path.display().to_string(),
+        key_path: key_path.display().to_string(),
+        alpn: vec![],
+        options: TlsOptions {
+            cipher_suites: vec!["TLS13_AES_128_GCM_SHA256".to_string()],
+            ..Default::default()
+        },
+        client_auth: ClientAuth::Disabled,
+        session_resumption: Default::default(),
+    };
+
+    let setup = setup_tls_with_hot_reload(&config, true, 1, Metrics::new_noop()).await?;
+    let initial_acceptor = setup.acceptor.load_full();
+    let initial_ptr = Arc::as_ptr(&initial_acceptor);
+
+    // Initial config must already have the custom cipher suites applied.
+    assert_eq!(
+        cipher_suites_of(initial_acceptor.config()),
+        vec![CipherSuite::TLS13_AES_128_GCM_SHA256],
+        "initial TlsAcceptor must honor configured cipher suites"
+    );
+
+    // Rotate the certificate files.
+    let rcgen::CertifiedKey { cert, signing_key } =
+        rcgen::generate_simple_self_signed(vec!["localhost".to_string()])?;
+    std::fs::write(&cert_path, cert.pem())?;
+    std::fs::write(&key_path, signing_key.serialize_pem())?;
+
+    // Wait for the reload task to swap the acceptor.
+    let swap_outcome = tokio::time::timeout(Duration::from_secs(5), async {
+        loop {
+            tokio::time::sleep(Duration::from_millis(50)).await;
+            let current = setup.acceptor.load_full();
+            if Arc::as_ptr(&current) != initial_ptr {
+                return current;
+            }
+        }
+    })
+    .await;
+
+    let _ = std::fs::remove_file(&cert_path);
+    let _ = std::fs::remove_file(&key_path);
+
+    let new_acceptor = swap_outcome.map_err(|_| "TlsAcceptor was not swapped within 5 seconds")?;
+
+    assert_eq!(
+        cipher_suites_of(new_acceptor.config()),
+        vec![CipherSuite::TLS13_AES_128_GCM_SHA256],
+        "TlsAcceptor must still honor configured cipher suites after a reload"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn hot_reload_survives_dropping_tls_setup_keeping_only_acceptor(
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let (cert_path, key_path) = create_valid_test_cert()?;
+
+    let config = TlsConfig {
+        cert_path: cert_path.display().to_string(),
+        key_path: key_path.display().to_string(),
+        alpn: vec![],
+        options: TlsOptions::default(),
+        client_auth: ClientAuth::Disabled,
+        session_resumption: Default::default(),
+    };
+
+    // Simulate the proxy::server caller: keep only the acceptor.
+    let acceptor = setup_tls_with_hot_reload(&config, true, 1, Metrics::new_noop())
+        .await?
+        .acceptor;
+    let initial_ptr = Arc::as_ptr(&acceptor.load_full());
+
+    // Rotate the cert and assert the acceptor is swapped in. If the
+    // watcher had been torn down with the dropped `TlsSetup`, no swap would ever happen.
+    let rcgen::CertifiedKey { cert, signing_key } =
+        rcgen::generate_simple_self_signed(vec!["localhost".to_string()])?;
+    std::fs::write(&cert_path, cert.pem())?;
+    std::fs::write(&key_path, signing_key.serialize_pem())?;
+
+    let outcome = tokio::time::timeout(Duration::from_secs(5), async {
+        loop {
+            tokio::time::sleep(Duration::from_millis(50)).await;
+            if Arc::as_ptr(&acceptor.load_full()) != initial_ptr {
+                return;
+            }
+        }
+    })
+    .await;
+
+    let _ = std::fs::remove_file(&cert_path);
+    let _ = std::fs::remove_file(&key_path);
+
+    outcome.map_err(|_| {
+        "TlsAcceptor was not swapped within 5s, watcher was torn down when TlsSetup was dropped"
+    })?;
+    Ok(())
+}
+
+#[tokio::test]
+async fn cert_chain_hash_changes_when_certificate_chain_changes(
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    use rustls_pki_types::CertificateDer;
+
+    let key_a = rcgen::generate_simple_self_signed(vec!["a.test".to_string()])?;
+    let key_b = rcgen::generate_simple_self_signed(vec!["b.test".to_string()])?;
+
+    let der_a: CertificateDer<'static> = key_a.cert.der().clone();
+    let der_b: CertificateDer<'static> = key_b.cert.der().clone();
+
+    let hash_a_first = cert_chain_hash(std::slice::from_ref(&der_a));
+    let hash_a_second = cert_chain_hash(std::slice::from_ref(&der_a));
+    let hash_b = cert_chain_hash(std::slice::from_ref(&der_b));
+
+    assert_eq!(hash_a_first, hash_a_second, "same chain must produce a stable hash");
+    assert_ne!(hash_a_first, hash_b, "different chains must produce different hashes");
+    Ok(())
+}
+
+#[tokio::test]
+async fn dropping_watched_source_closes_subscription_channel(
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let (cert_path, key_path) = create_valid_test_cert()?;
+    let result = WatchedCertSource::watch(cert_path.clone(), key_path.clone(), 60).await;
+
+    let _ = std::fs::remove_file(&cert_path);
+    let _ = std::fs::remove_file(&key_path);
+
+    let source = CertSource::Watched(result?);
+    let mut rx = source
+        .subscribe()
+        .ok_or("watched source must expose subscription")?;
+
+    drop(source);
+
+    let outcome = tokio::time::timeout(Duration::from_secs(1), rx.changed()).await;
+    let changed = outcome.map_err(|_| "rx.changed() did not return within 1s after source drop")?;
+    assert!(
+        changed.is_err(),
+        "rx.changed() must return Err once the source (and its sender) is dropped"
+    );
+    Ok(())
+}

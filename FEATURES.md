@@ -105,9 +105,26 @@ Configurable cipher suites, curve preferences, and TLS version restrictions (1.2
 HTTP/2 negotiation.
 
 Certificate hot reload watches the cert files and reloads them when they change. Uses a configurable delay to avoid
-reloading too frequently.
+reloading too frequently. The same `ServerConfig` builder is used at startup and on every hot reload, so cipher suites,
+ALPN, client auth, and session resumption settings are applied identically in both paths — no drift between the initial
+configuration and reloaded certificates.
+
+Each successful load or rotation increments `huginn_tls_cert_reload_total{result="success"}`, updates
+`huginn_tls_cert_last_reload_timestamp_seconds`, and publishes the new certificate-chain content hash via
+`huginn_tls_cert_hash`.
+Failed rebuilds bump the `result="error"` counter but leave the hash and timestamp gauges untouched, so dashboards
+always reflect the last *good* certificate actually serving traffic. See [TELEMETRY.md](TELEMETRY.md) §13 for the full
+metric reference and example alert queries.
+
+**Cipher suite selection.** Suites are read from `[tls.options].cipher_suites` in the config file and applied as the
+exact set offered to clients. Names are validated at startup against the suites supported by the underlying TLS provider
+(`aws-lc-rs`); an unknown or misspelled suite fails the boot with an explicit error listing the supported names — there
+is no silent fallback. When `cipher_suites` is empty or omitted, the proxy uses the safe defaults provided by
+`aws-lc-rs`.
 
 Limitation: Only one certificate per proxy instance. No SNI support for serving multiple domains with different certs.
+Cipher suite list is global, not per-route or per-listener; the provider itself (`aws-lc-rs`) is not configurable from
+the TOML file.
 
 ## TLS Session Resumption
 
@@ -237,7 +254,8 @@ Limitation: No API for dynamic config changes.
 **Prometheus metrics and health checks**
 
 Metrics server runs on a separate port (configurable via `telemetry.metrics_port`). Covers connections, requests, TLS,
-fingerprinting, backends, throughput, rate limiting, IP filtering, header manipulation, hot reload, and mTLS.
+fingerprinting, backends, throughput, rate limiting, IP filtering, header manipulation, mTLS, config hot reload, and
+TLS certificate hot reload (cert hash + last-reload timestamp + attempt counter).
 
 Health endpoints: `/health` (general), `/ready` (Kubernetes readiness), `/live` (Kubernetes liveness), `/metrics` (
 Prometheus).

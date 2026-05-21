@@ -2034,7 +2034,7 @@
     {
       "id": 110,
       "type": "row",
-      "title": "Config Hot Reload",
+      "title": "Hot Reload",
       "collapsed": false,
       "gridPos": {
         "x": 0,
@@ -2042,7 +2042,7 @@
         "w": 24,
         "h": 1
       },
-      "description": "Metrics only appear after a hot-reload event (config file changed while proxy is running). On initial startup no reload is recorded. To trigger: modify the TOML config while the proxy is live."
+      "description": "Two independent hot-reload subsystems. Top row: TOML config reload (rate limits, routes, headers, security). Populated only after the first reload event triggered by SIGHUP or filesystem watcher. Bottom row: TLS certificate reload. Populated immediately at boot with the initial cert, then on every successful or failed rotation."
     },
     {
       "id": 41,
@@ -2187,7 +2187,7 @@
       "collapsed": false,
       "gridPos": {
         "x": 0,
-        "y": 154,
+        "y": 162,
         "w": 24,
         "h": 1
       }
@@ -2199,7 +2199,7 @@
       "description": "CPU usage from cAdvisor. Series are summed by Compose project and service (expects services named `proxy` and `ebpf-agent`, e.g. examples/docker-compose.ebpf.yml). Values are approximate cores (rate of cgroup CPU seconds). Requires docker-compose.observability.yml with cAdvisor.",
       "gridPos": {
         "x": 0,
-        "y": 155,
+        "y": 163,
         "w": 12,
         "h": 8
       },
@@ -2233,7 +2233,7 @@
       "description": "container_memory_working_set_bytes for the same Compose services as the CPU panel.",
       "gridPos": {
         "x": 12,
-        "y": 155,
+        "y": 163,
         "w": 12,
         "h": 8
       },
@@ -2247,6 +2247,143 @@
       "fieldConfig": {
         "defaults": {
           "unit": "bytes"
+        }
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 301,
+      "type": "stat",
+      "title": "Active Cert Hash",
+      "gridPos": {
+        "x": 0,
+        "y": 154,
+        "w": 4,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "huginn_tls_cert_hash",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "none",
+        "noValue": "\u2014"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 0,
+          "noValue": "\u2014"
+        }
+      },
+      "description": "Content hash of the currently active certificate chain (FNV-1a over DER bytes). Changes value whenever the cert is rotated; same value across reloads means the new cert chain is byte-identical to the previous one. Note: this is a change-detection hash for the server cert, not related to JA4/Akamai/p0f client fingerprinting."
+    },
+    {
+      "id": 302,
+      "type": "stat",
+      "title": "Time Since Last Cert Reload",
+      "gridPos": {
+        "x": 4,
+        "y": 154,
+        "w": 4,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "time() - huginn_tls_cert_last_reload_timestamp_seconds",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        }
+      },
+      "description": "Seconds since the last successful TLS certificate load. Populated at boot with the initial cert, then bumped on every successful rotation. Use for alerting on stale rotations.",
+      "noValue": "No cert loaded"
+    },
+    {
+      "id": 303,
+      "type": "stat",
+      "title": "Total Cert Reloads",
+      "gridPos": {
+        "x": 8,
+        "y": 154,
+        "w": 4,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "huginn_tls_cert_reload_total_total{result=\"success\"}",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "none",
+        "noValue": "\u2014"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 0,
+          "noValue": "\u2014"
+        }
+      },
+      "description": "Cumulative count of successful TLS certificate (re)loads since process start. Includes the initial load at boot."
+    },
+    {
+      "id": 304,
+      "type": "timeseries",
+      "title": "TLS Cert Reload Attempts",
+      "gridPos": {
+        "x": 12,
+        "y": 154,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "rate(huginn_tls_cert_reload_total_total{result=\"success\"}[$__rate_interval]) or on() vector(0)",
+          "legendFormat": "success",
+          "refId": "A"
+        },
+        {
+          "expr": "rate(huginn_tls_cert_reload_total_total{result=\"error\"}[$__rate_interval]) or on() vector(0)",
+          "legendFormat": "error",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
         }
       },
       "options": {

@@ -126,6 +126,15 @@ pub struct Metrics {
     pub config_last_reload_timestamp_seconds: Gauge<f64>,
     /// FNV-1a hash of the active `DynamicConfig` changes on every successful reload.
     pub config_hash: Gauge<u64>,
+
+    // TLS certificate reload metrics
+    /// `huginn_tls_cert_reload_total{result="success|error"}` total TLS cert reload attempts
+    /// (including the initial load at boot).
+    pub tls_cert_reload_total: Counter<u64>,
+    /// Unix timestamp (seconds) of the last successful TLS certificate load/reload.
+    pub tls_cert_last_reload_timestamp_seconds: Gauge<f64>,
+    /// FNV-1a hash of the currently active certificate chain; changes on every rotation.
+    pub tls_cert_hash: Gauge<u64>,
 }
 
 impl Metrics {
@@ -332,6 +341,19 @@ impl Metrics {
             config_hash: meter
                 .u64_gauge("huginn_config_hash")
                 .with_description("FNV-1a hash of the active DynamicConfig; changes on each successful reload")
+                .build(),
+
+            tls_cert_reload_total: meter
+                .u64_counter("huginn_tls_cert_reload_total")
+                .with_description("Total TLS certificate load/reload attempts, labelled result=success|error")
+                .build(),
+            tls_cert_last_reload_timestamp_seconds: meter
+                .f64_gauge("huginn_tls_cert_last_reload_timestamp_seconds")
+                .with_description("Unix timestamp of the last successful TLS certificate load or reload")
+                .build(),
+            tls_cert_hash: meter
+                .u64_gauge("huginn_tls_cert_hash")
+                .with_description("FNV-1a hash of the currently active certificate chain DER bytes; changes on every rotation.")
                 .build(),
         }
     }
@@ -619,6 +641,26 @@ impl Metrics {
     /// Record a failed config reload (parse error or validation error).
     pub fn record_reload_error(&self) {
         self.config_reload_total
+            .add(1, &[KeyValue::new(labels::RESULT, values::RELOAD_ERROR)]);
+    }
+
+    /// Record a successful TLS certificate load or hot reload.
+    /// `cert_hash` is the FNV-1a hash of the certificate chain DER bytes;
+    pub fn record_tls_cert_reload_success(&self, cert_hash: u64) {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs_f64();
+        self.tls_cert_reload_total
+            .add(1, &[KeyValue::new(labels::RESULT, values::RELOAD_SUCCESS)]);
+        self.tls_cert_last_reload_timestamp_seconds.record(now, &[]);
+        self.tls_cert_hash.record(cert_hash, &[]);
+    }
+
+    /// Record a failed TLS certificate reload (parse error, validation error,
+    /// or any failure rebuilding the `ServerConfig`).
+    pub fn record_tls_cert_reload_error(&self) {
+        self.tls_cert_reload_total
             .add(1, &[KeyValue::new(labels::RESULT, values::RELOAD_ERROR)]);
     }
 
