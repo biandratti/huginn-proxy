@@ -55,7 +55,7 @@ impl CertSource {
 
     /// Subscribe to cert updates.
     ///
-    /// Returns `None` for static sources — the caller MUST NOT spawn a
+    /// Returns `None` for static sources the caller MUST NOT spawn a
     /// reload task. Returns `Some(receiver)` for watched sources, with
     /// each successful reload publishing a new `Arc<ServerCertsKeys>`.
     pub fn subscribe(&self) -> Option<watch::Receiver<Arc<ServerCertsKeys>>> {

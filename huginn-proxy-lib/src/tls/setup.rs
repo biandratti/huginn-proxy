@@ -49,10 +49,6 @@ pub async fn setup_tls_with_hot_reload(
     let tls_acceptor =
         Arc::new(ArcSwap::new(Arc::new(TlsAcceptor::from(Arc::new(initial_server)))));
 
-    // For watched sources we move ownership of `source` into the reload
-    // task so the filesystem watcher and the `watch::Sender` survive as
-    // long as the task is alive. For static sources there is nothing to
-    // keep alive and the source is dropped at the end of this scope.
     let rx_opt = source.subscribe();
     if let Some(mut rx) = rx_opt {
         let acceptor_for_update = Arc::clone(&tls_acceptor);

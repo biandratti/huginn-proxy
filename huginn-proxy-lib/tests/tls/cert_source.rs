@@ -170,7 +170,7 @@ async fn setup_tls_static_no_spurious_reloads(
 
     assert_eq!(
         initial_ptr, final_ptr,
-        "acceptor must not be swapped in static mode — spurious reloads detected"
+        "acceptor must not be swapped in static mode, spurious reloads detected"
     );
     Ok(())
 }
@@ -333,7 +333,7 @@ async fn hot_reload_survives_dropping_tls_setup_keeping_only_acceptor(
     let _ = std::fs::remove_file(&key_path);
 
     outcome.map_err(|_| {
-        "TlsAcceptor was not swapped within 5s — watcher was torn down when TlsSetup was dropped"
+        "TlsAcceptor was not swapped within 5s, watcher was torn down when TlsSetup was dropped"
     })?;
     Ok(())
 }
