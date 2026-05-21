@@ -1,74 +1,112 @@
-use super::{build_cert_reloader, build_tls_acceptor};
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
+
+use arc_swap::ArcSwap;
+use tokio_rustls::TlsAcceptor;
+use tracing::{error, info};
+
 use crate::config::TlsConfig;
 use crate::error::Result;
-use arc_swap::ArcSwap;
-use std::sync::Arc;
-use tokio_rustls::TlsAcceptor;
-use tracing::{error, info, warn};
+
+use super::acceptor::build_server_config;
+use super::cert_source::{CertSource, StaticCertSource, WatchedCertSource};
+
 pub type SharedTlsAcceptor = Arc<ArcSwap<TlsAcceptor>>;
 
+/// Result of TLS setup.
+///
+/// `_source` is kept alive for the lifetime of `TlsSetup`. Dropping the
+/// setup tears down the certificate source (and its filesystem watcher, in
+/// watch mode), which in turn closes the reload channel and lets the
+/// reload task exit cleanly.
 pub struct TlsSetup {
     pub acceptor: SharedTlsAcceptor,
+    _source: CertSource,
 }
 
-/// Setup TLS with hot reload support
+/// Setup TLS with hot reload support.
 ///
-/// This function:
-/// 1. Builds the initial TLS acceptor from configuration (synchronous)
-/// 2. Sets up certificate hot reload monitoring (async - waits for ReloaderService initialization)
-/// 3. Spawns background tasks for certificate reloading
-///
-/// Returns a `TlsSetup` containing the TLS acceptor.
-/// The reloader service runs in background tasks and doesn't need to be returned.
+/// - `watch = false`: certificates are loaded once and never reloaded. No
+///   background task is spawned.
+/// - `watch = true`: a filesystem watcher monitors cert/key files; on
+///   debounced change events, a background task rebuilds the `TlsAcceptor`
+///   and swaps it in via `ArcSwap`.
 pub async fn setup_tls_with_hot_reload(
     tls_config: &TlsConfig,
     watch: bool,
     watch_delay_secs: u32,
 ) -> Result<TlsSetup> {
-    let initial_acceptor = build_tls_acceptor(tls_config)?;
-    let tls_acceptor = Arc::new(ArcSwap::new(Arc::new(initial_acceptor)));
+    let source = build_cert_source(tls_config, watch, watch_delay_secs).await?;
 
-    // In static mode the certificates are loaded once by `build_tls_acceptor`
-    // above and never change, so there is no reason to spawn a reload task.
-    if !watch {
-        return Ok(TlsSetup { acceptor: tls_acceptor });
-    }
+    let initial_certs = source.current();
+    let initial_server = build_server_config(
+        initial_certs.certs.clone(),
+        initial_certs.key.clone_key(),
+        &tls_config.alpn,
+        &tls_config.options,
+        &tls_config.client_auth,
+        &tls_config.session_resumption,
+    )?;
+    let tls_acceptor =
+        Arc::new(ArcSwap::new(Arc::new(TlsAcceptor::from(Arc::new(initial_server)))));
 
-    let mut reloader_rx = build_cert_reloader(tls_config, watch, watch_delay_secs).await?;
-    let alpn = tls_config.alpn.clone();
-    let tls_options = tls_config.options.clone();
-    let client_auth = tls_config.client_auth.clone();
-    let session_resumption = tls_config.session_resumption.clone();
-
-    let tls_acceptor_for_update = Arc::clone(&tls_acceptor);
-    tokio::spawn(async move {
-        loop {
-            // If the watcher's sender is dropped, the channel is closed and future reloads are impossible.
-            if reloader_rx.changed().await.is_err() {
-                error!("Certificate reloader channel closed; hot reload disabled until restart");
-                break;
-            }
-            let certs_keys = reloader_rx.borrow().clone();
-            if let Some(certs_keys) = certs_keys {
-                match certs_keys.build_tls_acceptor(
+    if let Some(mut rx) = source.subscribe() {
+        let acceptor_for_update = Arc::clone(&tls_acceptor);
+        let alpn = tls_config.alpn.clone();
+        let options = tls_config.options.clone();
+        let client_auth = tls_config.client_auth.clone();
+        let session_resumption = tls_config.session_resumption.clone();
+        tokio::spawn(async move {
+            loop {
+                // If the source is dropped, the sender is gone and the
+                // channel is closed; exit cleanly instead of spinning.
+                if rx.changed().await.is_err() {
+                    error!("Certificate source channel closed; hot reload disabled until restart");
+                    break;
+                }
+                let new_certs = rx.borrow().clone();
+                match build_server_config(
+                    new_certs.certs.clone(),
+                    new_certs.key.clone_key(),
                     &alpn,
-                    &tls_options,
+                    &options,
                     &client_auth,
                     &session_resumption,
                 ) {
-                    Ok(new_acceptor) => {
+                    Ok(cfg) => {
+                        acceptor_for_update.store(Arc::new(TlsAcceptor::from(Arc::new(cfg))));
                         info!("Certificate reloaded successfully");
-                        tls_acceptor_for_update.store(Arc::new(new_acceptor));
                     }
                     Err(e) => {
-                        error!(error = %e, "Failed to build TLS acceptor from reloaded certificates");
+                        error!(error = %e, "Failed to rebuild TLS acceptor on reload");
                     }
                 }
-            } else {
-                warn!("Certificate reloader returned None, keeping current certificates");
             }
-        }
-    });
+        });
+    }
 
-    Ok(TlsSetup { acceptor: tls_acceptor })
+    Ok(TlsSetup { acceptor: tls_acceptor, _source: source })
+}
+
+async fn build_cert_source(
+    tls_config: &TlsConfig,
+    watch: bool,
+    watch_delay_secs: u32,
+) -> Result<CertSource> {
+    let cert_path = PathBuf::from(&tls_config.cert_path);
+    let key_path = PathBuf::from(&tls_config.key_path);
+
+    if watch {
+        Ok(CertSource::Watched(
+            WatchedCertSource::watch(cert_path, key_path, watch_delay_secs).await?,
+        ))
+    } else {
+        Ok(CertSource::Static(
+            StaticCertSource::load(
+                Path::new(&tls_config.cert_path),
+                Path::new(&tls_config.key_path),
+            )
+            .await?,
+        ))
+    }
 }
