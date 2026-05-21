@@ -47,7 +47,7 @@ fn read_certs_and_keys_sync(
     Ok((certs, key))
 }
 
-/// Builds a fully-configured `ServerConfig` from in-memory certs + TLS settings.
+/// Builds a fully configured `ServerConfig` from in-memory certs + TLS settings.
 ///
 /// This is the single source of truth used by both startup (`build_tls_acceptor`)
 /// and the hot-reload path. Cipher suites, ALPN, client auth, and session

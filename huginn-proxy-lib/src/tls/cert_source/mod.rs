@@ -3,10 +3,6 @@
 //! Two variants:
 //! - [`StaticCertSource`]: loaded once at startup, never changes.
 //! - [`WatchedCertSource`]: filesystem watcher publishes updates on cert/key
-//!   file changes, with a debounce window.
-//!
-//! Wrapped in the [`CertSource`] enum so the rest of the TLS subsystem can
-//! treat both uniformly while still distinguishing them at compile time.
 
 use std::path::Path;
 use std::sync::Arc;
@@ -25,7 +21,6 @@ pub use watched_source::WatchedCertSource;
 mod static_source;
 mod watched_source;
 
-/// In-memory snapshot of the TLS server certificate chain and private key.
 #[derive(Debug, PartialEq, Eq)]
 pub struct ServerCertsKeys {
     pub certs: Vec<CertificateDer<'static>>,
@@ -42,7 +37,7 @@ impl Clone for ServerCertsKeys {
 ///
 /// Closed enum: the two reasonable shapes today are "loaded once" and
 /// "watch the filesystem". Future sources (Vault, K8s secrets, SPIRE…)
-/// should be added as new variants so the exhaustive match in
+/// should be added as new variants, so the exhaustive match in
 /// `setup_tls_with_hot_reload` forces every site to handle them.
 pub enum CertSource {
     Static(StaticCertSource),
@@ -71,10 +66,9 @@ impl CertSource {
     }
 }
 
-/// Read certificate and private key from disk.
+/// Read the certificate and private key from the disk.
 ///
-/// Used by both `StaticCertSource::load` and the `WatchedCertSource`
-/// reload task.
+/// Used by both `StaticCertSource::load` and the `WatchedCertSource` reload task.
 pub(crate) async fn read_certs_and_keys(
     cert_path: &Path,
     key_path: &Path,

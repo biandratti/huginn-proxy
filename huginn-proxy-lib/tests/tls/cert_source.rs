@@ -338,9 +338,6 @@ async fn hot_reload_survives_dropping_tls_setup_keeping_only_acceptor(
     Ok(())
 }
 
-/// Dropping a `WatchedCertSource` must close the underlying `watch::Sender`,
-/// which is what lets the reload task spawned in `setup_tls_with_hot_reload`
-/// exit cleanly instead of spinning.
 #[tokio::test]
 async fn dropping_watched_source_closes_subscription_channel(
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {

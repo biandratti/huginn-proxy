@@ -6,10 +6,6 @@ use crate::error::ProxyError;
 use super::{read_certs_and_keys, ServerCertsKeys};
 
 /// Certificates loaded once at startup. Never reloaded.
-///
-/// No background task, no channels. Construction reads the cert + key from
-/// disk; afterwards `current()` returns the same snapshot for the lifetime
-/// of the source.
 pub struct StaticCertSource {
     certs: Arc<ServerCertsKeys>,
 }

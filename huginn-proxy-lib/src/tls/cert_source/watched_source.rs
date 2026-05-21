@@ -80,7 +80,23 @@ impl WatchedCertSource {
                 tokio::select! {
                     msg = event_rx.recv() => {
                         if msg.is_none() {
-                            // Watcher dropped or all event senders gone; nothing more to do.
+                            // The filesystem-event sender lives inside the watcher closure,
+                            // so a `None` here means the watcher has been dropped. In normal
+                            // operation this only happens on process shutdown; if you see
+                            // this log outside of shutdown, something tore the watcher down
+                            // unexpectedly and hot reload is no longer active.
+                            //
+                            // TODO: graceful shutdown for the watched cert reload subsystem
+                            // is pending and will be tackled in a separate task. "Coordinated shutdown for the
+                            // cert reload subsystem" for the design (modeled after Pingora's
+                            // `ShutdownWatch = watch::Receiver<bool>` pattern). Until then
+                            // this log only fires on the rare anomaly of the watcher dying
+                            // mid-process; on normal SIGINT/SIGTERM the task is cancelled
+                            // by the Tokio runtime before this branch can execute.
+                            info!(
+                                cert_path = %cert_path_for_task.display(),
+                                "Certificate watcher event channel closed; debounce task exiting"
+                            );
                             break;
                         }
                         reload_deadline = Instant::now()
@@ -98,13 +114,20 @@ impl WatchedCertSource {
                             match read_certs_and_keys(&cert_path_for_task, &key_path_for_task).await {
                                 Ok(certs_keys) => {
                                     if let Err(e) = tx.send(Arc::new(certs_keys)) {
-                                        warn!("Failed to send certificate update: {}", e);
+                                        warn!("Failed to publish certificate update to subscribers: {}", e);
                                         break;
                                     }
-                                    info!("Certificates reloaded successfully");
+                                    info!(
+                                        cert_path = %cert_path_for_task.display(),
+                                        "Certificate files re-read from disk and published to subscribers"
+                                    );
                                 }
                                 Err(e) => {
-                                    error!(error = %e, "Failed to reload certificates, keeping current ones");
+                                    error!(
+                                        error = %e,
+                                        cert_path = %cert_path_for_task.display(),
+                                        "Failed to re-read certificate files, keeping current ones"
+                                    );
                                 }
                             }
                         }

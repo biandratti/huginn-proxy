@@ -63,6 +63,13 @@ pub async fn setup_tls_with_hot_reload(
         tokio::spawn(async move {
             let _source_keep_alive = source;
             loop {
+                // TODO: graceful shutdown for the cert reload subsystem is
+                // pending and will be tackled in a separate task.
+                // Coordinated shutdown for the cert reload subsystem" for the design (modeled after
+                // Pingora's `ShutdownWatch = watch::Receiver<bool>` pattern).
+                // Until then this loop only exits on the anomaly of the
+                // source channel closing mid-process; on normal
+                // SIGINT/SIGTERM the task is cancelled by the Tokio runtime.
                 if rx.changed().await.is_err() {
                     error!("Certificate source channel closed; hot reload disabled until restart");
                     break;
@@ -78,7 +85,7 @@ pub async fn setup_tls_with_hot_reload(
                 ) {
                     Ok(cfg) => {
                         acceptor_for_update.store(Arc::new(TlsAcceptor::from(Arc::new(cfg))));
-                        info!("Certificate reloaded successfully");
+                        info!("TLS acceptor hot-swapped to new certificate");
                     }
                     Err(e) => {
                         error!(error = %e, "Failed to rebuild TLS acceptor on reload");
