@@ -1,6 +1,8 @@
+use std::time::Duration;
+
 use opentelemetry::global;
-use opentelemetry_otlp::WithExportConfig;
-use opentelemetry_sdk::trace::SdkTracerProvider;
+use opentelemetry_otlp::{ExportConfig, Protocol, WithExportConfig};
+use opentelemetry_sdk::trace::{Sampler, SdkTracerProvider};
 use opentelemetry_sdk::Resource;
 use tracing::level_filters::LevelFilter;
 use tracing::Level;
@@ -8,6 +10,7 @@ use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::{EnvFilter, Layer};
 
+#[derive(Debug, Clone)]
 pub struct OpentelemetryConfig {
     endpoint: String,
     tracer_name: String,
@@ -16,7 +19,12 @@ pub struct OpentelemetryConfig {
     log_level: Level,
     /// Log level of opentelemetry_sdk
     sdk_log_level: Level,
-    // TODO: more options like proto, timeouts...
+    /// Protocol to use
+    protocol: Protocol,
+    /// Send timeout
+    timeout: Option<Duration>,
+    /// Sample ratio
+    sample_ratio: f64,
 }
 
 fn build_env_filter(app_level: Level, sdk_level: Level) -> EnvFilter {
@@ -31,8 +39,26 @@ impl OpentelemetryConfig {
         resource_name: String,
         log_level: Level,
         sdk_log_level: Level,
+        protocol: Protocol,
+        timeout: Option<Duration>,
+        sample_ratio: f64,
     ) -> Self {
-        Self { endpoint, tracer_name, resource_name, log_level, sdk_log_level }
+        Self {
+            endpoint,
+            tracer_name,
+            resource_name,
+            log_level,
+            sdk_log_level,
+            protocol,
+            timeout,
+            sample_ratio,
+        }
+    }
+}
+
+impl From<OpentelemetryConfig> for ExportConfig {
+    fn from(value: OpentelemetryConfig) -> Self {
+        Self { endpoint: Some(value.endpoint), protocol: value.protocol, timeout: value.timeout }
     }
 }
 
@@ -88,23 +114,45 @@ pub fn init_tracing_otel(
     show_target: bool,
     otel_config: OpentelemetryConfig,
 ) -> Result<TracingGuard, Box<dyn std::error::Error + Send + Sync>> {
-    let exporter = opentelemetry_otlp::SpanExporterBuilder::new()
-        .with_http()
-        .with_endpoint(otel_config.endpoint)
-        .build()?;
+    let exporter_builder = opentelemetry_otlp::SpanExporterBuilder::new();
+    let provider_builder = SdkTracerProvider::builder().with_resource(
+        Resource::builder()
+            .with_service_name(otel_config.resource_name.clone())
+            .build(),
+    );
 
-    let provider = SdkTracerProvider::builder()
-        .with_resource(
-            Resource::builder()
-                .with_service_name(otel_config.resource_name)
-                .build(),
-        )
-        .with_batch_exporter(exporter)
-        .build();
+    let sampler = Sampler::ParentBased(Box::new(Sampler::TraceIdRatioBased(
+        // TODO: whats a good default?
+        otel_config.sample_ratio,
+    )) as _);
 
+    let tracer_provider = match otel_config.protocol {
+        Protocol::Grpc => {
+            let exporter = exporter_builder
+                .with_tonic()
+                .with_export_config(otel_config.clone().into())
+                .build()?;
+            provider_builder
+                .with_batch_exporter(exporter)
+                .with_sampler(sampler)
+                .build()
+        }
+        // binary or json http
+        _ => {
+            let exporter = exporter_builder
+                .with_http()
+                .with_export_config(otel_config.clone().into())
+                .build()?;
+            provider_builder
+                .with_batch_exporter(exporter)
+                .with_sampler(sampler)
+                .build()
+        }
+    };
+
+    global::set_tracer_provider(tracer_provider.clone());
     let tracer = global::tracer(otel_config.tracer_name);
 
-    // TODO: make log_level work for internal otel library logs
     let otel_layer = tracing_opentelemetry::layer()
         .with_tracer(tracer)
         .with_filter(LevelFilter::from_level(otel_config.log_level));
@@ -115,5 +163,5 @@ pub fn init_tracing_otel(
         .with(otel_layer)
         .init();
 
-    Ok(TracingGuard::with_otel(provider))
+    Ok(TracingGuard::with_otel(tracer_provider))
 }

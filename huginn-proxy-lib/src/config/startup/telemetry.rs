@@ -1,4 +1,4 @@
-use std::str::FromStr;
+use std::{str::FromStr, time::Duration};
 
 use serde::Deserialize;
 
@@ -27,6 +27,10 @@ pub struct OtelConfig {
     /// Log level for sending logs to OTEL
     #[serde(default = "default_otel_log_level")]
     pub log_level: LogLevel,
+    /// Protocol to use, default = "http_binary"
+    pub protocol: OtlpProtocol,
+    /// Timeout for sending spans to consumer in seconds
+    pub timeout: Option<u64>,
     /// OpenTelemetry internal log level
     /// Controls verbosity of OpenTelemetry SDK internal logs (not application logs)
     /// This is separate from the main application log level in the \[logging\] TOML table
@@ -36,6 +40,32 @@ pub struct OtelConfig {
     sdk_log_level: LogLevel,
     #[serde(default)]
     pub show_target: bool,
+    #[serde(default = "default_otel_sample_ratio")]
+    sample_ratio: f64,
+}
+
+#[derive(Debug, Deserialize, Clone, PartialEq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum OtlpProtocol {
+    #[default]
+    HttpBinary,
+    HttpJson,
+    Grpc,
+}
+
+impl From<OtlpProtocol> for opentelemetry_otlp::Protocol {
+    fn from(value: OtlpProtocol) -> Self {
+        match value {
+            OtlpProtocol::HttpBinary => opentelemetry_otlp::Protocol::HttpBinary,
+            OtlpProtocol::HttpJson => opentelemetry_otlp::Protocol::HttpJson,
+            OtlpProtocol::Grpc => opentelemetry_otlp::Protocol::Grpc,
+        }
+    }
+}
+
+// TODO: whats a good default here?
+fn default_otel_sample_ratio() -> f64 {
+    0.5
 }
 
 impl From<OtelConfig> for OpentelemetryConfig {
@@ -46,6 +76,9 @@ impl From<OtelConfig> for OpentelemetryConfig {
             value.resource_name,
             value.log_level.into(),
             value.sdk_log_level.into(),
+            value.protocol.into(),
+            value.timeout.map(Duration::from_secs),
+            value.sample_ratio,
         )
     }
 }
