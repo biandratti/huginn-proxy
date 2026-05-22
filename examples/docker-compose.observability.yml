@@ -64,6 +64,23 @@ services:
       - prometheus
     restart: unless-stopped
 
+  jaeger:
+    image: jaegertracing/jaeger:2.18.0
+    container_name: jaeger
+    restart: unless-stopped
+    ports:
+      - "16686:16686" # Jaeger UI (HTTP)
+      - "16687:16687" # Jaeger UI (gRPC / query API)
+      - "4317:4317" # OTLP gRPC receiver
+      - "4318:4318" # OTLP HTTP receiver
+    command:
+      - "--set=receivers.otlp.protocols.grpc.endpoint=0.0.0.0:4317"
+      - "--set=receivers.otlp.protocols.http.endpoint=0.0.0.0:4318"
+      # In-memory storage
+      - "--set=extensions.jaeger_storage.backends.memstore.memory.max_traces=100000"
+      # Log level
+      - "--set=service.telemetry.logs.level=info"
+
 volumes:
   prometheus-data:
   grafana-data:
