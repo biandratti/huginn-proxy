@@ -29,7 +29,7 @@ In TOML, these bare keys must appear **before** any `[table]` header. In YAML, u
 matter.
 
 | Key             | Type | Default | Description                                                                                                                                     |
-|-----------------|------|---------|-------------------------------------------------------------------------------------------------------------------------------------------------|
+| --------------- | ---- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
 | `preserve_host` | bool | `false` | Forward the original `Host` header from the client to the backend. When `false`, the proxy substitutes its own `Host` with the backend address. |
 
 <table>
@@ -66,7 +66,7 @@ preserve_host: false
 Network interfaces and socket options. **Static** — requires restart to change.
 
 | Key           | Type             | Default | Description                                                                            |
-|---------------|------------------|---------|----------------------------------------------------------------------------------------|
+| ------------- | ---------------- | ------- | -------------------------------------------------------------------------------------- |
 | `addrs`       | array of strings | —       | One or more `host:port` addresses to bind. IPv6 addresses must be wrapped in brackets. |
 | `tcp_backlog` | integer          | `4096`  | Kernel `listen(2)` backlog per socket. Increase under heavy connection bursts.         |
 
@@ -109,11 +109,11 @@ listen:
 
 Backend servers for forwarding. Repeat the header for each backend. **Dynamic** (hot-reloadable).
 
-| Key            | Type   | Default           | Description                                                                                                                        |
-|----------------|--------|-------------------|------------------------------------------------------------------------------------------------------------------------------------|
-| `address`      | string | —                 | `host:port` of the backend. Used as the pool key — must match exactly what routes reference.                                       |
-| `http_version` | string | `null` (preserve) | Protocol to use when connecting to this backend. `"http11"`, `"http2"`, or `"preserve"` (negotiate based on what the client used). |
-| `health_check` | table  | `null` (off)     | Optional active health probe. When set, the proxy tracks per-upstream health and returns **502** to clients when the backend is marked unhealthy. If you omit this key (or leave the backend without a `health_check` table), that backend is not probed and the health gate does not apply to it. See [`[backends.health_check]`](#backendshealth_check) below. |
+| Key            | Type   | Default           | Description                                                                                                                                                                                                                                                                                                                                                      |
+| -------------- | ------ | ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `address`      | string | —                 | `host:port` of the backend. Used as the pool key — must match exactly what routes reference.                                                                                                                                                                                                                                                                     |
+| `http_version` | string | `null` (preserve) | Protocol to use when connecting to this backend. `"http11"`, `"http2"`, or `"preserve"` (negotiate based on what the client used).                                                                                                                                                                                                                               |
+| `health_check` | table  | `null` (off)      | Optional active health probe. When set, the proxy tracks per-upstream health and returns **502** to clients when the backend is marked unhealthy. If you omit this key (or leave the backend without a `health_check` table), that backend is not probed and the health gate does not apply to it. See [`[backends.health_check]`](#backendshealth_check) below. |
 
 <table>
 <thead>
@@ -156,15 +156,15 @@ backends:
 
 Optional. **Dynamic** (hot-reloadable). If absent, the backend is always treated as healthy for the gate (no background task).
 
-| Key                    | Type   | Default  | Description |
-|------------------------|--------|----------|-------------|
-| `type`                 | string | `tcp`    | `tcp` (TCP 3-way handshake to `address`) or `http` (HTTP/1.1 `GET` to `http://{address}{path}`; plain HTTP only, no TLS to upstream). |
-| `path`                 | string | —        | Required when `type = "http"`: must start with `/` (e.g. `/` or `/ready`). Ignored for `tcp`. |
-| `expected_status`      | int    | `200`    | For `http` only: response status must match (e.g. `200`, `204`). |
-| `interval_secs`        | int    | `10`     | Time between probes. |
-| `timeout_secs`         | int    | `5`      | Per-probe budget (must be ≤ `interval_secs`). Encompasses connect, request, and body drain for `http`. |
-| `unhealthy_threshold`  | int    | `3`      | Consecutive failed probes before marking upstream unhealthy. |
-| `healthy_threshold`    | int    | `2`      | Consecutive successful probes before marking upstream healthy again. |
+| Key                   | Type   | Default | Description                                                                                                                           |
+| --------------------- | ------ | ------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `type`                | string | `tcp`   | `tcp` (TCP 3-way handshake to `address`) or `http` (HTTP/1.1 `GET` to `http://{address}{path}`; plain HTTP only, no TLS to upstream). |
+| `path`                | string | —       | Required when `type = "http"`: must start with `/` (e.g. `/` or `/ready`). Ignored for `tcp`.                                         |
+| `expected_status`     | int    | `200`   | For `http` only: response status must match (e.g. `200`, `204`).                                                                      |
+| `interval_secs`       | int    | `10`    | Time between probes.                                                                                                                  |
+| `timeout_secs`        | int    | `5`     | Per-probe budget (must be ≤ `interval_secs`). Encompasses connect, request, and body drain for `http`.                                |
+| `unhealthy_threshold` | int    | `3`     | Consecutive failed probes before marking upstream unhealthy.                                                                          |
+| `healthy_threshold`   | int    | `2`     | Consecutive successful probes before marking upstream healthy again.                                                                  |
 
 <table>
 <thead>
@@ -210,10 +210,10 @@ backends:
 Path-prefix routing rules. **First match wins** — order matters. **Dynamic** (hot-reloadable).
 
 | Key                    | Type   | Default | Description                                                                                                                                                                                    |
-|------------------------|--------|---------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| ---------------------- | ------ | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `prefix`               | string | —       | URL path prefix to match. Use `"/"` as a catch-all default route.                                                                                                                              |
 | `backend`              | string | —       | Backend address to forward to. Must match a `[[backends]].address` exactly.                                                                                                                    |
-| `fingerprinting`       | bool   | `true`  | Inject TLS/HTTP fingerprint headers (`x-tls-ja4*`, `x-http2-akamai`, `x-tcp-p0f`) for this route.                                                                                                                         |
+| `fingerprinting`       | bool   | `true`  | Inject TLS/HTTP fingerprint headers (`x-tls-ja4*`, `x-http2-akamai`, `x-tcp-p0f`) for this route.                                                                                              |
 | `force_new_connection` | bool   | `false` | Bypass the connection pool — opens a fresh TCP+TLS connection per request. Required when you need a fresh TLS handshake for each request (e.g. JA4 extraction on every request). Adds latency. |
 | `replace_path`         | string | `null`  | Path prefix replacement. Empty string (`""`) strips the prefix. Any other value replaces the matched prefix. Absent = forward as-is.                                                           |
 | `rate_limit`           | table  | —       | Per-route rate limit overrides. See [`[routes.rate_limit]`](#routesrate_limit) below.                                                                                                          |
@@ -291,7 +291,7 @@ Overrides the global `[security.rate_limit]` for this specific route. Only the k
 keys fall back to the global config.
 
 | Key                   | Type    | Default | Description                                                               |
-|-----------------------|---------|---------|---------------------------------------------------------------------------|
+| --------------------- | ------- | ------- | ------------------------------------------------------------------------- |
 | `enabled`             | bool    | `null`  | Override whether rate limiting is active for this route.                  |
 | `requests_per_second` | integer | `null`  | Override RPS limit.                                                       |
 | `burst`               | integer | `null`  | Override burst size.                                                      |
@@ -409,14 +409,14 @@ Global header manipulation applied to every request/response. **Dynamic** (hot-r
 ### `[headers.request]`
 
 | Key      | Type                     | Default | Description                                                            |
-|----------|--------------------------|---------|------------------------------------------------------------------------|
+| -------- | ------------------------ | ------- | ---------------------------------------------------------------------- |
 | `add`    | array of `{name, value}` | `[]`    | Headers to add to the upstream request. Overwrites if already present. |
 | `remove` | array of strings         | `[]`    | Header names to remove from the upstream request.                      |
 
 ### `[headers.response]`
 
 | Key      | Type                     | Default | Description                                      |
-|----------|--------------------------|---------|--------------------------------------------------|
+| -------- | ------------------------ | ------- | ------------------------------------------------ |
 | `add`    | array of `{name, value}` | `[]`    | Headers to add to the client response.           |
 | `remove` | array of strings         | `[]`    | Header names to remove from the client response. |
 
@@ -478,7 +478,7 @@ TLS termination. Omit the entire section to run as plain HTTP. **Static** — re
 contents are hot-reloaded separately via file watcher).
 
 | Key         | Type             | Default | Description                                                                                                 |
-|-------------|------------------|---------|-------------------------------------------------------------------------------------------------------------|
+| ----------- | ---------------- | ------- | ----------------------------------------------------------------------------------------------------------- |
 | `cert_path` | string           | —       | Path to the server certificate PEM file.                                                                    |
 | `key_path`  | string           | —       | Path to the private key PEM file.                                                                           |
 | `alpn`      | array of strings | `[]`    | ALPN protocols to advertise. Use `["h2", "http/1.1"]` to support both HTTP/2 and HTTP/1.1 with negotiation. |
@@ -521,7 +521,7 @@ tls:
 ### `[tls.options]`
 
 | Key                 | Type             | Default          | Description                                                |
-|---------------------|------------------|------------------|------------------------------------------------------------|
+| ------------------- | ---------------- | ---------------- | ---------------------------------------------------------- |
 | `versions`          | array of strings | `["1.2", "1.3"]` | Allowed TLS versions. Values: `"1.2"`, `"1.3"`.            |
 | `cipher_suites`     | array of strings | all supported    | Named cipher suites. Restrict to tighten security posture. |
 | `curve_preferences` | array of strings | all supported    | Named elliptic curves for key exchange.                    |
@@ -616,7 +616,7 @@ tls:
 ### `[tls.session_resumption]`
 
 | Key            | Type    | Default | Description                                                                    |
-|----------------|---------|---------|--------------------------------------------------------------------------------|
+| -------------- | ------- | ------- | ------------------------------------------------------------------------------ |
 | `enabled`      | bool    | `true`  | Enable TLS session resumption (TLS 1.2 session IDs + TLS 1.3 session tickets). |
 | `max_sessions` | integer | `256`   | TLS 1.2 server-side session cache size.                                        |
 
@@ -658,12 +658,12 @@ tls:
 
 Feature flags for passive fingerprinting. **Static** — eBPF programs are loaded at startup.
 
-| Key            | Type    | Default | Description                                                                                                                                                |
-|----------------|---------|---------|------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Key            | Type    | Default | Description                                                                                                                                         |
+| -------------- | ------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `tls_enabled`  | bool    | `true`  | Extract TLS (JA4) fingerprints and inject `x-tls-ja4*` headers.                                                                                     |
-| `http_enabled` | bool    | `true`  | Extract HTTP/2 (Akamai) fingerprints and inject `x-http2-akamai` header.                                                                              |
+| `http_enabled` | bool    | `true`  | Extract HTTP/2 (Akamai) fingerprints and inject `x-http2-akamai` header.                                                                            |
 | `tcp_enabled`  | bool    | `false` | Extract TCP SYN (p0f-style) fingerprints via eBPF/XDP and inject `x-tcp-p0f` header. Requires the `ebpf-tcp` build feature and Linux kernel ≥ 5.11. |
-| `max_capture`  | integer | `65536` | Maximum bytes captured per HTTP/2 connection for fingerprinting.                                                                                           |
+| `max_capture`  | integer | `65536` | Maximum bytes captured per HTTP/2 connection for fingerprinting.                                                                                    |
 
 <table>
 <thead>
@@ -707,7 +707,7 @@ fingerprint:
 **Static** — logger is initialized once at startup.
 
 | Key           | Type   | Default  | Description                                                                                                           |
-|---------------|--------|----------|-----------------------------------------------------------------------------------------------------------------------|
+| ------------- | ------ | -------- | --------------------------------------------------------------------------------------------------------------------- |
 | `level`       | string | `"info"` | Log level: `"trace"`, `"debug"`, `"info"`, `"warn"`, `"error"`. Overridable with the `RUST_LOG` environment variable. |
 | `show_target` | bool   | `false`  | Include the Rust module path in log lines (useful for debugging).                                                     |
 
@@ -746,12 +746,28 @@ logging:
 
 ## `[telemetry]`
 
-Metrics server and OpenTelemetry settings. **Static** — the metrics listener binds at startup.
+Metrics server and OpenTelemetry settings. **Static** — the metrics listener and OTLP exporter are both initialized at startup.
 
-| Key              | Type    | Default  | Description                                                                                                                       |
-|------------------|---------|----------|-----------------------------------------------------------------------------------------------------------------------------------|
-| `metrics_port`   | integer | `null`   | Port for the Prometheus metrics + health-check HTTP server. Omit to disable. Endpoints: `/metrics`, `/health`, `/ready`, `/live`. |
-| `otel_log_level` | string  | `"warn"` | OpenTelemetry SDK internal log level. Does not affect application logs.                                                           |
+| Key            | Type    | Default | Description                                                                                                                       |
+| -------------- | ------- | ------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `metrics_port` | integer | `null`  | Port for the Prometheus metrics + health-check HTTP server. Omit to disable. Endpoints: `/metrics`, `/health`, `/ready`, `/live`. |
+
+### `[telemetry.otel]`
+
+Omit the entire table to disable tracing. When present, `enabled` is required.
+
+| Key               | Type    | Default            | Description                                                                                                                                                  |
+| ----------------- | ------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `enabled`         | bool    | —                  | Master switch. `false` disables OTLP export and falls back to stdout-only logging. Required when the table is present.                                       |
+| `endpoint`        | string  | —                  | Base URL of the OTLP receiver.                                                                                                                               |
+| `tracer_name`     | string  | `huginn-tracer`    | Instrumentation scope name attached to every exported span.                                                                                                  |
+| `resource_name`   | string  | `huginn-proxy`     | Sets the `service.name` resource attribute identifying this node in the tracing backend.                                                                     |
+| `protocol`        | string  | `http_binary`      | Wire protocol: `http_binary` (HTTP + Protobuf, port 4318), `http_json` (HTTP + JSON, port 4318), `grpc` (port 4317).                                         |
+| `log_level`       | string  | `"info"`           | Minimum tracing level forwarded to OTLP. Spans below this level are dropped before export.                                                                   |
+| `sdk_log_level`   | string  | `"warn"`           | OpenTelemetry SDK internal log level. Independent of the application log level in `[logging]`. Set to `warn` or `error` in production to suppress SDK noise. |
+| `timeout_seconds` | integer | SDK default (10 s) | Per-batch export deadline in seconds. Omit entirely for no custom timeout; setting `0` is invalid.                                                           |
+| `sample_ratio`    | float   | `0.5`              | Fraction of root traces to sample (`0.0`–`1.0`). Inherited from upstream `traceparent` when present; only consulted for root spans.                          |
+| `show_target`     | bool    | `false`            | Include the Rust module path as a span attribute. Useful for debugging; avoid in production due to attribute cardinality overhead.                           |
 
 <table>
 <thead>
@@ -767,7 +783,18 @@ Metrics server and OpenTelemetry settings. **Static** — the metrics listener b
 ```toml
 [telemetry]
 metrics_port = 9090
-otel_log_level = "warn"
+
+[telemetry.otel]
+enabled         = true
+endpoint        = "http://localhost:4318"
+tracer_name     = "huginn-example-tracer"
+resource_name   = "huginn-proxy-node-1"
+protocol        = "http_binary"
+log_level       = "info"
+sdk_log_level   = "warn"
+timeout_seconds = 5
+sample_ratio    = 0.5
+# show_target   = false
 ```
 
 </td>
@@ -776,7 +803,17 @@ otel_log_level = "warn"
 ```yaml
 telemetry:
   metrics_port: 9090
-  otel_log_level: "warn"
+  otel:
+    enabled: true
+    endpoint: "http://localhost:4318"
+    tracer_name: "huginn-example-tracer"
+    resource_name: "huginn-proxy-node-1"
+    protocol: "http_binary"
+    log_level: "info"
+    sdk_log_level: "warn"
+    timeout_seconds: 5
+    sample_ratio: 0.5
+    # show_target: false
 ```
 
 </td>
@@ -792,7 +829,7 @@ Connection timeout controls. **Static** — applied once at startup; the connect
 values.
 
 | Key                        | Type    | Default             | Description                                                                                                                           |
-|----------------------------|---------|---------------------|---------------------------------------------------------------------------------------------------------------------------------------|
+| -------------------------- | ------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
 | `upstream_connect_ms`      | integer | absent (no timeout) | TCP connect timeout to backend in milliseconds. Absent or omitted = no timeout.                                                       |
 | `proxy_idle_ms`            | integer | `60000`             | Inbound idle timeout in milliseconds. Applied as HTTP/1.1 `header_read_timeout` and HTTP/2 keep-alive interval.                       |
 | `tls_handshake_secs`       | integer | `15`                | Maximum seconds to complete the client TLS handshake. Slow/malicious clients that stall the handshake are disconnected.               |
@@ -841,7 +878,7 @@ timeout:
 HTTP/1.1 keep-alive and upstream TCP keepalive. Applies only to HTTP/1.1; HTTP/2 connections are always persistent.
 
 | Key                     | Type    | Default | Description                                                                                                                                                                                   |
-|-------------------------|---------|---------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| ----------------------- | ------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `enabled`               | bool    | `true`  | Enable HTTP/1.1 persistent connections (`Connection: keep-alive`).                                                                                                                            |
 | `upstream_idle_timeout` | integer | `60`    | TCP keepalive interval in seconds for proxy → backend connections. Sets how often keepalive packets are sent to detect dead backend connections. Aligned with rpxy's `upstream_idle_timeout`. |
 
@@ -885,7 +922,7 @@ HTTP connection pool for proxy → backend connections. **Dynamic** (hot-reloada
 recreation and draining of old connections.
 
 | Key                      | Type    | Default | Description                                                                                                            |
-|--------------------------|---------|---------|------------------------------------------------------------------------------------------------------------------------|
+| ------------------------ | ------- | ------- | ---------------------------------------------------------------------------------------------------------------------- |
 | `enabled`                | bool    | `true`  | Enable connection pooling. Set to `false` to open a new connection for every request (not recommended for production). |
 | `idle_timeout`           | integer | `90`    | Seconds before an idle pooled connection is closed and removed.                                                        |
 | `pool_max_idle_per_host` | integer | `0`     | Maximum idle connections kept per backend host. `0` = unlimited.                                                       |
@@ -930,7 +967,7 @@ backend_pool:
 ### Top-level security keys
 
 | Key               | Type    | Default | Description                                                                         |
-|-------------------|---------|---------|-------------------------------------------------------------------------------------|
+| ----------------- | ------- | ------- | ----------------------------------------------------------------------------------- |
 | `max_connections` | integer | `512`   | Maximum concurrent client connections. **Static** — enforced at the acceptor level. |
 
 <table>
@@ -967,7 +1004,7 @@ security:
 IP-based access control. **Dynamic** (hot-reloadable).
 
 | Key         | Type             | Default      | Description                                                                                                |
-|-------------|------------------|--------------|------------------------------------------------------------------------------------------------------------|
+| ----------- | ---------------- | ------------ | ---------------------------------------------------------------------------------------------------------- |
 | `mode`      | string           | `"disabled"` | Filter mode: `"disabled"`, `"allowlist"` (only listed IPs pass), or `"denylist"` (listed IPs are blocked). |
 | `allowlist` | array of strings | `[]`         | CIDR ranges allowed when `mode = "allowlist"`. Supports IPv4 and IPv6. Empty allowlist blocks all traffic. |
 | `denylist`  | array of strings | `[]`         | CIDR ranges blocked when `mode = "denylist"`. Supports IPv4 and IPv6. Empty denylist allows all traffic.   |
@@ -1036,7 +1073,7 @@ security:
 Global rate limiting. **Dynamic** (hot-reloadable). Per-route overrides via `[routes.rate_limit]`.
 
 | Key                   | Type    | Default | Description                                                                         |
-|-----------------------|---------|---------|-------------------------------------------------------------------------------------|
+| --------------------- | ------- | ------- | ----------------------------------------------------------------------------------- |
 | `enabled`             | bool    | `false` | Enable global rate limiting.                                                        |
 | `requests_per_second` | integer | `1000`  | Sustained request rate allowed.                                                     |
 | `burst`               | integer | `2000`  | Maximum burst size above the sustained rate.                                        |
@@ -1127,7 +1164,7 @@ security:
 Security headers added to every response. **Dynamic** (hot-reloadable).
 
 | Key      | Type                     | Default | Description                               |
-|----------|--------------------------|---------|-------------------------------------------|
+| -------- | ------------------------ | ------- | ----------------------------------------- |
 | `custom` | array of `{name, value}` | `[]`    | Arbitrary headers added to all responses. |
 
 <table>
@@ -1175,7 +1212,7 @@ security:
 HTTP Strict Transport Security. Only meaningful when TLS is enabled.
 
 | Key                  | Type    | Default    | Description                                                 |
-|----------------------|---------|------------|-------------------------------------------------------------|
+| -------------------- | ------- | ---------- | ----------------------------------------------------------- |
 | `enabled`            | bool    | `false`    | Add `Strict-Transport-Security` header to responses.        |
 | `max_age`            | integer | `31536000` | `max-age` in seconds (default = 1 year).                    |
 | `include_subdomains` | bool    | `false`    | Add `includeSubDomains` directive.                          |
@@ -1223,7 +1260,7 @@ security:
 Content Security Policy.
 
 | Key       | Type   | Default                | Description                                        |
-|-----------|--------|------------------------|----------------------------------------------------|
+| --------- | ------ | ---------------------- | -------------------------------------------------- |
 | `enabled` | bool   | `false`                | Add `Content-Security-Policy` header to responses. |
 | `policy`  | string | `"default-src 'self'"` | Full CSP policy string.                            |
 
