@@ -1,4 +1,4 @@
-use std::{str::FromStr, time::Duration};
+use std::{num::NonZeroU64, str::FromStr, time::Duration};
 
 use serde::Deserialize;
 
@@ -19,7 +19,11 @@ pub struct TelemetryConfig {
 
 #[derive(Debug, Deserialize, Clone, PartialEq)]
 pub struct OtelConfig {
-    pub endpoint: String,
+    pub enabled: bool,
+
+    /// Defaults to http://localhost:4318
+    /// Can be overriden with
+    pub endpoint: Option<String>,
     #[serde(default = "default_otel_tracer_name")]
     pub tracer_name: String,
     #[serde(default = "default_otel_resource_name")]
@@ -30,7 +34,7 @@ pub struct OtelConfig {
     /// Protocol to use, default = "http_binary"
     pub protocol: OtlpProtocol,
     /// Timeout for sending spans to consumer in seconds
-    pub timeout: Option<u64>,
+    pub timeout_seconds: Option<NonZeroU64>,
     /// OpenTelemetry internal log level
     /// Controls verbosity of OpenTelemetry SDK internal logs (not application logs)
     /// This is separate from the main application log level in the \[logging\] TOML table
@@ -70,16 +74,30 @@ fn default_otel_sample_ratio() -> f64 {
 
 impl From<OtelConfig> for OpentelemetryConfig {
     fn from(value: OtelConfig) -> Self {
-        OpentelemetryConfig::new(
-            value.endpoint,
-            value.tracer_name,
-            value.resource_name,
-            value.log_level.into(),
-            value.sdk_log_level.into(),
-            value.protocol.into(),
-            value.timeout.map(Duration::from_secs),
-            value.sample_ratio,
-        )
+        let OtelConfig {
+            endpoint,
+            tracer_name,
+            resource_name,
+            log_level,
+            protocol,
+            timeout_seconds,
+            sdk_log_level,
+            show_target,
+            sample_ratio,
+            ..
+        } = value;
+
+        OpentelemetryConfig {
+            endpoint,
+            tracer_name,
+            resource_name,
+            log_level: log_level.into(),
+            sdk_log_level: sdk_log_level.into(),
+            protocol: protocol.into(),
+            timeout: timeout_seconds.map(|v| Duration::from_secs(v.get())),
+            sample_ratio,
+            show_target,
+        }
     }
 }
 

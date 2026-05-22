@@ -12,19 +12,20 @@ use tracing_subscriber::{EnvFilter, Layer};
 
 #[derive(Debug, Clone)]
 pub struct OpentelemetryConfig {
-    endpoint: String,
-    tracer_name: String,
-    resource_name: String,
+    pub endpoint: Option<String>,
+    pub tracer_name: String,
+    pub resource_name: String,
     /// Log level for OTEL
-    log_level: Level,
+    pub log_level: Level,
     /// Log level of opentelemetry_sdk
-    sdk_log_level: Level,
+    pub sdk_log_level: Level,
     /// Protocol to use
-    protocol: Protocol,
+    pub protocol: Protocol,
     /// Send timeout
-    timeout: Option<Duration>,
+    pub timeout: Option<Duration>,
     /// Sample ratio
-    sample_ratio: f64,
+    pub sample_ratio: f64,
+    pub show_target: bool,
 }
 
 fn build_env_filter(app_level: Level, sdk_level: Level) -> EnvFilter {
@@ -32,33 +33,16 @@ fn build_env_filter(app_level: Level, sdk_level: Level) -> EnvFilter {
         .unwrap_or_else(|_| EnvFilter::new(format!("{app_level},opentelemetry={sdk_level}")))
 }
 
-impl OpentelemetryConfig {
-    pub fn new(
-        endpoint: String,
-        tracer_name: String,
-        resource_name: String,
-        log_level: Level,
-        sdk_log_level: Level,
-        protocol: Protocol,
-        timeout: Option<Duration>,
-        sample_ratio: f64,
-    ) -> Self {
-        Self {
-            endpoint,
-            tracer_name,
-            resource_name,
-            log_level,
-            sdk_log_level,
-            protocol,
-            timeout,
-            sample_ratio,
-        }
-    }
-}
-
 impl From<OpentelemetryConfig> for ExportConfig {
     fn from(value: OpentelemetryConfig) -> Self {
-        Self { endpoint: Some(value.endpoint), protocol: value.protocol, timeout: value.timeout }
+        // If set programmatically, the /v1/traces route is not auto-appended
+        // like in case with env var or default value
+        let endpoint = value.endpoint.map(|mut v| {
+            v.push_str("/v1/traces");
+            v
+        });
+
+        Self { endpoint, protocol: value.protocol, timeout: value.timeout }
     }
 }
 
@@ -121,13 +105,12 @@ pub fn init_tracing_otel(
             .build(),
     );
 
-    let sampler = Sampler::ParentBased(Box::new(Sampler::TraceIdRatioBased(
-        // TODO: whats a good default?
-        otel_config.sample_ratio,
-    )) as _);
+    let sampler =
+        Sampler::ParentBased(Box::new(Sampler::TraceIdRatioBased(otel_config.sample_ratio)) as _);
 
     let tracer_provider = match otel_config.protocol {
         Protocol::Grpc => {
+            println!("building grpc exporter");
             let exporter = exporter_builder
                 .with_tonic()
                 .with_export_config(otel_config.clone().into())
@@ -137,8 +120,8 @@ pub fn init_tracing_otel(
                 .with_sampler(sampler)
                 .build()
         }
-        // binary or json http
-        _ => {
+        Protocol::HttpBinary | Protocol::HttpJson => {
+            println!("building http exporter");
             let exporter = exporter_builder
                 .with_http()
                 .with_export_config(otel_config.clone().into())
@@ -151,10 +134,13 @@ pub fn init_tracing_otel(
     };
 
     global::set_tracer_provider(tracer_provider.clone());
-    let tracer = global::tracer(otel_config.tracer_name);
+    let tracer = global::tracer(otel_config.tracer_name.clone());
+
+    println!("Tracer provider set {otel_config:?}");
 
     let otel_layer = tracing_opentelemetry::layer()
         .with_tracer(tracer)
+        .with_target(otel_config.show_target)
         .with_filter(LevelFilter::from_level(otel_config.log_level));
 
     tracing_subscriber::registry()

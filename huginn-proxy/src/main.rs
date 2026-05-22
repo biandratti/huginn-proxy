@@ -62,11 +62,16 @@ async fn main() -> Result<(), BoxError> {
         })
         .unwrap_or_else(|_| config.logging.level.clone());
 
-    let _tracing_guard = if let Some(otel) = config.telemetry.otel.clone() {
-        init_tracing_otel(log_level.into(), config.logging.show_target, otel.into())?
-    } else {
-        init_tracing_stdout(log_level.into(), config.logging.show_target)
+    let _tracing_guard = match config.telemetry.otel.clone() {
+        Some(otel) if otel.enabled => {
+            init_tracing_otel(log_level.into(), config.logging.show_target, otel.into())?
+        }
+        _ => init_tracing_stdout(log_level.into(), config.logging.show_target),
     };
+
+    let span = tracing::info_span!("hello_from_main").entered();
+    info!(target: "my-target", "hello from {}. My price is {}", "apple", 1.99);
+    drop(span);
 
     let huginn_proxy_lib::config::ConfigParts { static_cfg, dynamic_cfg } = config.into_parts();
     let static_cfg = Arc::new(static_cfg);
