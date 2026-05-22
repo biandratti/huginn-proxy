@@ -69,10 +69,6 @@ async fn main() -> Result<(), BoxError> {
         _ => init_tracing_stdout(log_level.into(), config.logging.show_target),
     };
 
-    let span = tracing::info_span!("hello_from_main").entered();
-    info!(target: "my-target", "hello from {}. My price is {}", "apple", 1.99);
-    drop(span);
-
     let huginn_proxy_lib::config::ConfigParts { static_cfg, dynamic_cfg } = config.into_parts();
     let static_cfg = Arc::new(static_cfg);
     let dynamic_cfg = Arc::new(ArcSwap::from_pointee(dynamic_cfg));

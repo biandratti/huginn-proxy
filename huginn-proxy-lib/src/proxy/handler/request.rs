@@ -17,10 +17,13 @@ use http::Version;
 use hyper::body::Incoming;
 use hyper::header::HeaderName;
 use hyper::Request;
+use opentelemetry::global::{self, BoxedTracer};
+use opentelemetry::trace::{FutureExt, TraceContextExt, Tracer};
+use opentelemetry_http::HeaderExtractor;
 use std::sync::Arc;
 use tokio::sync::watch;
 use tokio::time::Instant;
-use tracing::debug;
+use tracing::{debug, info};
 
 type RespBody = http_body_util::combinators::BoxBody<bytes::Bytes, hyper::Error>;
 
@@ -60,8 +63,18 @@ pub async fn handle_proxy_request(
     client_pool: &Arc<ClientPool>,
     upstream: &UpstreamGateway,
 ) -> HttpResult<hyper::Response<RespBody>> {
+    let parent_cx = extract_request_context(&req);
+    let tracer = global::tracer("huggin-tracer");
+    let span = tracer
+        .span_builder("proxy-request")
+        .with_kind(opentelemetry::trace::SpanKind::Server)
+        .start_with_context(&tracer, &parent_cx);
+    let cx = parent_cx.with_span(span);
+
     let start = Instant::now();
     let method = req.method().to_string();
+
+    info!("started processing request {:?}", req);
     let protocol = format!("{:?}", req.version());
 
     if let Some(content_length) = req.headers().get(hyper::header::CONTENT_LENGTH) {
@@ -235,6 +248,7 @@ pub async fn handle_proxy_request(
             force_new_connection: route_match.force_new_connection,
         },
     )
+    .with_context(cx)
     .await;
 
     let mut result = result;
@@ -275,4 +289,10 @@ pub async fn handle_proxy_request(
     );
 
     result
+}
+
+fn extract_request_context(req: &Request<Incoming>) -> opentelemetry::Context {
+    let extractor = &HeaderExtractor(req.headers());
+
+    global::get_text_map_propagator(|prop| prop.extract(extractor))
 }

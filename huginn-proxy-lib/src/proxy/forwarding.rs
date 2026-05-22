@@ -5,8 +5,11 @@ use crate::telemetry::Metrics;
 use http::{Request, Response, Version};
 use http_body_util::{combinators::BoxBody, BodyExt};
 use hyper::body::Incoming;
+use opentelemetry::global;
+use opentelemetry::trace::Tracer;
 use std::sync::Arc;
 use tokio::time::Instant;
+use tracing::info;
 
 type RespBody = BoxBody<bytes::Bytes, hyper::Error>;
 
@@ -63,8 +66,15 @@ pub async fn forward(
     backend: String,
     config: ForwardConfig<'_>,
 ) -> HttpResult<Response<RespBody>> {
+    let tracer = global::tracer("huginn-tracer");
+    let _span = tracer
+        .span_builder("forward")
+        .with_kind(opentelemetry::trace::SpanKind::Internal)
+        .start(&tracer);
     let start = Instant::now();
     let protocol = format!("{:?}", req.version());
+
+    info!("started forward to {backend}");
 
     let org_pq = req
         .uri()
