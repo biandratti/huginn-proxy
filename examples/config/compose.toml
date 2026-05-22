@@ -184,4 +184,15 @@ policy = "default-src 'self'; script-src 'self' 'unsafe-inline'"
 
 [telemetry]
 metrics_port = 9090
-otel_log_level = "warn"
+
+[telemetry.otel]
+enabled         = true
+endpoint        = "http://localhost:4318"
+tracer_name     = "huginn-example-tracer"
+resource_name   = "huginn-proxy-node-1"
+protocol        = "http_binary"
+log_level       = "info"
+sdk_log_level   = "warn"
+timeout_seconds = 5
+sample_ratio    = 0.5
+# show_target   = false
