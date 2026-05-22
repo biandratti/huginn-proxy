@@ -2,6 +2,7 @@ use std::time::Duration;
 
 use opentelemetry::global;
 use opentelemetry_otlp::{ExportConfig, Protocol, WithExportConfig};
+use opentelemetry_sdk::propagation::TraceContextPropagator;
 use opentelemetry_sdk::trace::{Sampler, SdkTracerProvider};
 use opentelemetry_sdk::Resource;
 use tracing::level_filters::LevelFilter;
@@ -134,6 +135,8 @@ pub fn init_tracing_otel(
     };
 
     global::set_tracer_provider(tracer_provider.clone());
+    let propagator = TraceContextPropagator::new();
+    global::set_text_map_propagator(propagator);
     let tracer = global::tracer(otel_config.tracer_name.clone());
 
     println!("Tracer provider set {otel_config:?}");
