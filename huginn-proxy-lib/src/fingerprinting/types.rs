@@ -1,4 +1,4 @@
-use huginn_net_db::observable_signals::TcpObservation;
+use huginn_net_tcp::TcpObservation;
 
 /// Outcome of a TCP SYN fingerprint probe.
 ///
