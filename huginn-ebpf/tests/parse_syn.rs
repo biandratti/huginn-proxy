@@ -1,5 +1,5 @@
 use huginn_ebpf::types::{parse_syn_v4, quirk_bits, SynRawDataV4};
-use huginn_net_db::tcp::Quirk;
+use huginn_net_tcp::tcp::Quirk;
 
 type TestResult = Result<(), Box<dyn std::error::Error + Send + Sync>>;
 

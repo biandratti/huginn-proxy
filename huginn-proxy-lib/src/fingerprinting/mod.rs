@@ -6,7 +6,7 @@ pub mod types;
 
 pub use headers::{forwarded, names};
 pub use http2_extractor::CapturingStream;
-pub use huginn_net_db::observable_signals::TcpObservation;
+pub use huginn_net_tcp::TcpObservation;
 pub use ja4::Ja4Fingerprints;
 pub use tls_extractor::read_client_hello;
 pub use types::SynResult;
