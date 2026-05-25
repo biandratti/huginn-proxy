@@ -10,7 +10,7 @@ use crate::proxy::listener::{bind_listener, register_signal};
 use crate::proxy::reload::{
     initial_client_pool, initial_rate_limiter, try_reload, SharedDynamicConfig,
 };
-use crate::proxy::shutdown::wait_for_drain;
+use crate::proxy::shutdown::{wait_for_drain, ServiceHandle, ShutdownSender};
 pub use crate::proxy::watch::WatchOptions;
 use crate::telemetry::Metrics;
 use crate::tls::setup_tls_with_hot_reload;
@@ -32,7 +32,16 @@ pub async fn run(
     metrics: Arc<Metrics>,
     syn_probe: Option<SynProbe>,
     watch_opts: WatchOptions,
+    // Shutdown channel owned at a higher level (main.rs) so that
+    // all background tasks — including the metrics server — share
+    // the same signal. The sender is used here to broadcast on
+    // SIGTERM/SIGINT; each task receives a cloned receiver.
+    shutdown_tx: ShutdownSender,
 ) -> Result<()> {
+    // Derive receiver from the sender so all clones share the same channel
+    // that was created in main.rs (which also drives the metrics server).
+    let shutdown_rx = shutdown_tx.subscribe();
+
     let rate_limiter = Arc::new(initial_rate_limiter(&dynamic_cfg.load()));
     let client_pool = initial_client_pool(&static_cfg, &dynamic_cfg.load().backend_pool);
 
@@ -55,6 +64,9 @@ pub async fn run(
         .keep_alive_interval(idle_timeout)
         .keep_alive_timeout(idle_timeout.saturating_add(Duration::from_secs(1)));
 
+    // Collect background service handles for ordered cooperative shutdown.
+    let mut services: Vec<ServiceHandle> = Vec::new();
+
     let tls_acceptor = match &static_cfg.tls {
         Some(tls_config) => {
             let tls_setup = setup_tls_with_hot_reload(
@@ -62,8 +74,12 @@ pub async fn run(
                 watch_opts.watch,
                 watch_opts.watch_delay_secs,
                 Arc::clone(&metrics),
+                shutdown_rx.clone(),
             )
             .await?;
+            if let Some(svc) = tls_setup.reload_handle {
+                services.push(svc);
+            }
             Some(tls_setup.acceptor)
         }
         None => None,
@@ -86,7 +102,13 @@ pub async fn run(
     if watch_opts.watch {
         match &watch_opts.config_path {
             Some(config_path) => {
-                spawn_config_watcher(config_path.clone(), reload_tx, watch_opts.watch_delay_secs)?;
+                let svc = spawn_config_watcher(
+                    config_path.clone(),
+                    reload_tx,
+                    watch_opts.watch_delay_secs,
+                    shutdown_rx.clone(),
+                )?;
+                services.push(svc);
             }
             None => {
                 warn!("HUGINN_WATCH=true but no config path provided hot-reload disabled");
@@ -176,12 +198,14 @@ pub async fn run(
                 info!("Received SIGTERM, initiating graceful shutdown");
                 health_supervisor.shutdown();
                 shutdown_signal.store(1, Ordering::Relaxed);
+                shutdown_tx.send(true).ok();
                 break;
             }
             _ = sigint.recv() => {
                 info!("Received SIGINT, initiating graceful shutdown");
                 health_supervisor.shutdown();
                 shutdown_signal.store(1, Ordering::Relaxed);
+                shutdown_tx.send(true).ok();
                 break;
             }
         }
@@ -200,6 +224,13 @@ pub async fn run(
         static_cfg.timeout.shutdown_secs,
     )
     .await;
+
+    // Await background services in order. By the time connection drain
+    // completes, each service has already received the shutdown signal
+    // and should be ready — the timeout is defence-in-depth only.
+    for service in services {
+        service.shutdown(Duration::from_secs(5)).await;
+    }
 
     info!("Proxy server stopped");
     Ok(())

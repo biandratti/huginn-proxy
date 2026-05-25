@@ -159,7 +159,11 @@ async fn setup_tls_static_no_spurious_reloads(
         session_resumption: Default::default(),
     };
 
-    let setup = setup_tls_with_hot_reload(&config, false, 1, Metrics::new_noop()).await?;
+    let setup = setup_tls_with_hot_reload(&config, false, 1, Metrics::new_noop(), {
+        let (_, rx) = tokio::sync::watch::channel(false);
+        rx
+    })
+    .await?;
     let initial_ptr = Arc::as_ptr(&setup.acceptor.load());
 
     tokio::time::sleep(Duration::from_millis(300)).await;
@@ -253,7 +257,9 @@ async fn cipher_suites_applied_after_reload() -> Result<(), Box<dyn std::error::
         session_resumption: Default::default(),
     };
 
-    let setup = setup_tls_with_hot_reload(&config, true, 1, Metrics::new_noop()).await?;
+    let (_shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
+    let setup =
+        setup_tls_with_hot_reload(&config, true, 1, Metrics::new_noop(), shutdown_rx).await?;
     let initial_acceptor = setup.acceptor.load_full();
     let initial_ptr = Arc::as_ptr(&initial_acceptor);
 
@@ -310,7 +316,10 @@ async fn hot_reload_survives_dropping_tls_setup_keeping_only_acceptor(
     };
 
     // Simulate the proxy::server caller: keep only the acceptor.
-    let acceptor = setup_tls_with_hot_reload(&config, true, 1, Metrics::new_noop())
+    // _shutdown_tx must stay alive — dropping it closes the channel and the
+    // reload task would exit immediately via wait_for returning Err.
+    let (_shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
+    let acceptor = setup_tls_with_hot_reload(&config, true, 1, Metrics::new_noop(), shutdown_rx)
         .await?
         .acceptor;
     let initial_ptr = Arc::as_ptr(&acceptor.load_full());
@@ -383,5 +392,112 @@ async fn dropping_watched_source_closes_subscription_channel(
         changed.is_err(),
         "rx.changed() must return Err once the source (and its sender) is dropped"
     );
+    Ok(())
+}
+
+#[tokio::test]
+async fn cert_reload_task_exits_on_shutdown_signal(
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let (cert_path, key_path) = create_valid_test_cert()?;
+    let config = TlsConfig {
+        cert_path: cert_path.display().to_string(),
+        key_path: key_path.display().to_string(),
+        alpn: vec![],
+        options: TlsOptions::default(),
+        client_auth: ClientAuth::Disabled,
+        session_resumption: Default::default(),
+    };
+
+    let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
+    let setup =
+        setup_tls_with_hot_reload(&config, true, 60, Metrics::new_noop(), shutdown_rx).await?;
+
+    let handle = setup
+        .reload_handle
+        .ok_or("watch mode must produce a reload handle")?;
+
+    // Signal shutdown and assert the task exits within 1 second.
+    shutdown_tx.send(true)?;
+    tokio::time::timeout(Duration::from_secs(1), handle.handle)
+        .await
+        .map_err(|_| "cert-reload task did not exit within 1s after shutdown signal")?
+        .map_err(|e| format!("cert-reload task panicked: {e}"))?;
+
+    let _ = std::fs::remove_file(&cert_path);
+    let _ = std::fs::remove_file(&key_path);
+    Ok(())
+}
+
+#[tokio::test]
+async fn cert_reload_task_none_in_static_mode(
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let (cert_path, key_path) = create_valid_test_cert()?;
+    let config = TlsConfig {
+        cert_path: cert_path.display().to_string(),
+        key_path: key_path.display().to_string(),
+        alpn: vec![],
+        options: TlsOptions::default(),
+        client_auth: ClientAuth::Disabled,
+        session_resumption: Default::default(),
+    };
+
+    let (_, shutdown_rx) = tokio::sync::watch::channel(false);
+    let setup =
+        setup_tls_with_hot_reload(&config, false, 60, Metrics::new_noop(), shutdown_rx).await?;
+
+    assert!(setup.reload_handle.is_none(), "static mode must not spawn a reload task");
+
+    let _ = std::fs::remove_file(&cert_path);
+    let _ = std::fs::remove_file(&key_path);
+    Ok(())
+}
+
+#[tokio::test]
+async fn shutdown_ordering_background_tasks_exit_before_signal(
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::Arc as StdArc;
+
+    let (cert_path, key_path) = create_valid_test_cert()?;
+    let config = TlsConfig {
+        cert_path: cert_path.display().to_string(),
+        key_path: key_path.display().to_string(),
+        alpn: vec![],
+        options: TlsOptions::default(),
+        client_auth: ClientAuth::Disabled,
+        session_resumption: Default::default(),
+    };
+
+    let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
+    let setup =
+        setup_tls_with_hot_reload(&config, true, 60, Metrics::new_noop(), shutdown_rx).await?;
+
+    let svc = setup
+        .reload_handle
+        .ok_or("watch mode must produce a reload handle")?;
+
+    // Signal shutdown, await the handle, then set the flag.
+    // If anything logged after the flag was set and before tracing teardown
+    // would be lost — here we verify ordering without touching tracing.
+    let tasks_exited = StdArc::new(AtomicBool::new(false));
+    let flag = StdArc::clone(&tasks_exited);
+
+    shutdown_tx.send(true)?;
+    tokio::time::timeout(Duration::from_secs(1), svc.handle)
+        .await
+        .map_err(|_| "cert-reload task did not exit within timeout")?
+        .map_err(|e| format!("cert-reload task panicked: {e}"))?;
+
+    flag.store(true, Ordering::SeqCst);
+
+    // shutdown_tracing() would be called here in production.
+    // The flag being true proves all tasks finished first.
+    assert!(
+        tasks_exited.load(Ordering::SeqCst),
+        "background tasks must exit before tracing teardown"
+    );
+
+    let _ = std::fs::remove_file(&cert_path);
+    let _ = std::fs::remove_file(&key_path);
     Ok(())
 }

@@ -123,12 +123,14 @@ pub async fn spawn_proxy(
 
     let config_path_buf = config_path.to_path_buf();
     let handle = tokio::spawn(async move {
+        let (shutdown_tx, _) = huginn_proxy_lib::shutdown_channel();
         let _ = huginn_proxy_lib::run(
             static_cfg,
             dynamic_cfg,
             Metrics::new_noop(),
             None,
             WatchOptions { config_path: Some(config_path_buf), watch, watch_delay_secs },
+            shutdown_tx,
         )
         .await;
     });
