@@ -97,9 +97,9 @@ async fn watcher_updates_receiver_when_cert_files_change(
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let (cert_path, key_path) = create_valid_test_cert()?;
 
+    let (_shutdown_tx, shutdown_rx) = never_shutdown();
     let source =
-        WatchedCertSource::watch(cert_path.clone(), key_path.clone(), 1, never_shutdown().1)
-            .await?;
+        WatchedCertSource::watch(cert_path.clone(), key_path.clone(), 1, shutdown_rx).await?;
     let source = CertSource::Watched(source);
     let mut rx = source
         .subscribe()
@@ -500,5 +500,90 @@ async fn shutdown_ordering_background_tasks_exit_before_signal(
 
     let _ = std::fs::remove_file(&cert_path);
     let _ = std::fs::remove_file(&key_path);
+    Ok(())
+}
+
+#[tokio::test]
+async fn debounce_task_exits_cooperatively_on_shutdown(
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let (cert_path, key_path) = create_valid_test_cert()?;
+    let (shutdown_tx, shutdown_rx) = huginn_proxy_lib::shutdown_channel();
+    let source =
+        WatchedCertSource::watch(cert_path.clone(), key_path.clone(), 60, shutdown_rx).await?;
+    let source = CertSource::Watched(source);
+    let mut rx = source
+        .subscribe()
+        .ok_or("watched source must expose subscription")?;
+
+    shutdown_tx.send(true)?;
+
+    let outcome = tokio::time::timeout(Duration::from_secs(1), rx.changed()).await;
+    let _ = std::fs::remove_file(&cert_path);
+    let _ = std::fs::remove_file(&key_path);
+
+    let changed = outcome.map_err(|_| "debounce task did not exit within 1s after shutdown")?;
+    assert!(
+        changed.is_err(),
+        "cert channel must close when debounce task exits cooperatively on shutdown"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn shutdown_during_debounce_window_does_not_publish(
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let (cert_path, key_path) = create_valid_test_cert()?;
+    let (shutdown_tx, shutdown_rx) = huginn_proxy_lib::shutdown_channel();
+    let source =
+        WatchedCertSource::watch(cert_path.clone(), key_path.clone(), 5, shutdown_rx).await?;
+    let source = CertSource::Watched(source);
+    let mut rx = source
+        .subscribe()
+        .ok_or("watched source must expose subscription")?;
+
+    let rcgen::CertifiedKey { cert, signing_key } =
+        rcgen::generate_simple_self_signed(vec!["localhost".to_string()])?;
+    std::fs::write(&cert_path, cert.pem())?;
+    std::fs::write(&key_path, signing_key.serialize_pem())?;
+
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    shutdown_tx.send(true)?;
+
+    let outcome = tokio::time::timeout(Duration::from_secs(2), rx.changed()).await;
+    let _ = std::fs::remove_file(&cert_path);
+    let _ = std::fs::remove_file(&key_path);
+
+    let changed = outcome.map_err(|_| "channel did not close within 2s after shutdown")?;
+    assert!(
+        changed.is_err(),
+        "debounce must not publish cert update when shutdown interrupts the debounce window"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn debounce_task_exits_when_shutdown_sender_dropped(
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let (cert_path, key_path) = create_valid_test_cert()?;
+    let (shutdown_tx, shutdown_rx) = huginn_proxy_lib::shutdown_channel();
+    let source =
+        WatchedCertSource::watch(cert_path.clone(), key_path.clone(), 60, shutdown_rx).await?;
+    let source = CertSource::Watched(source);
+    let mut rx = source
+        .subscribe()
+        .ok_or("watched source must expose subscription")?;
+
+    drop(shutdown_tx);
+
+    let outcome = tokio::time::timeout(Duration::from_secs(1), rx.changed()).await;
+    let _ = std::fs::remove_file(&cert_path);
+    let _ = std::fs::remove_file(&key_path);
+
+    let changed =
+        outcome.map_err(|_| "debounce task did not exit within 1s after sender dropped")?;
+    assert!(
+        changed.is_err(),
+        "cert channel must close when debounce task exits after shutdown sender is dropped"
+    );
     Ok(())
 }

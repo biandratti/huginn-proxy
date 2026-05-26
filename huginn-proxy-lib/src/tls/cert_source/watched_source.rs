@@ -81,8 +81,8 @@ impl WatchedCertSource {
             loop {
                 tokio::select! {
                     biased;
-                    _ = shutdown_rx.changed() => {
-                        if *shutdown_rx.borrow() {
+                    result = shutdown_rx.changed() => {
+                        if result.is_err() || *shutdown_rx.borrow() {
                             info!("Certificate debounce task shutting down");
                             break;
                         }
