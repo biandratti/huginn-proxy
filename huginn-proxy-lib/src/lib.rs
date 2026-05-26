@@ -8,6 +8,7 @@ pub mod proxy;
 pub mod security;
 pub mod telemetry;
 pub mod tls;
+pub(crate) mod utils;
 
 pub use backend::{
     BackendSelector, HealthCheckSupervisor, HealthRegistry, RoundRobin, UpstreamHealth,

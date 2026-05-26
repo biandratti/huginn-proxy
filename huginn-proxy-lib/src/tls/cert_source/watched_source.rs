@@ -95,9 +95,7 @@ impl WatchedCertSource {
                             );
                             break;
                         }
-                        reload_deadline = Instant::now()
-                            .checked_add(debounce_duration)
-                            .or_else(|| Instant::now().checked_add(Duration::from_secs(60)));
+                        reload_deadline = Some(crate::utils::deadline_from(Instant::now(), debounce_duration));
                     }
                     _ = async {
                         match reload_deadline {

@@ -84,9 +84,7 @@ pub async fn wait_for_drain(
     }
 
     let start = Instant::now();
-    let deadline = start
-        .checked_add(Duration::from_secs(timeout_secs))
-        .unwrap_or_else(|| start.checked_add(Duration::from_secs(60)).unwrap_or(start));
+    let deadline = crate::utils::deadline_from(start, Duration::from_secs(timeout_secs));
 
     let timed_out = tokio::select! {
         _ = connections_closed_rx.changed() => false,

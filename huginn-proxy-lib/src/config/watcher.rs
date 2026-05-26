@@ -84,8 +84,7 @@ pub fn spawn_config_watcher(
                 }
                 _ = event_rx.recv() => {
                     info!(path = %config_path.display(), debounce_secs = watch_delay_secs, "Config file change detected, reload scheduled");
-                    reload_deadline = Instant::now().checked_add(debounce_duration)
-                        .or_else(|| Instant::now().checked_add(Duration::from_secs(60)));
+                    reload_deadline = Some(crate::utils::deadline_from(Instant::now(), debounce_duration));
                 }
                 _ = async {
                     match reload_deadline {
