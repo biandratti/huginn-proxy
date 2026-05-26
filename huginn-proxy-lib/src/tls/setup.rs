@@ -18,7 +18,7 @@ pub type SharedTlsAcceptor = Arc<ArcSwap<TlsAcceptor>>;
 /// Result of TLS setup.
 ///
 /// `reload_handle` is `Some` only in watch mode. It must be awaited during
-/// graceful shutdown (after signalling via [`ShutdownSender`]) so teardown
+/// graceful shutdown (after signalling via [`crate::proxy::shutdown::ShutdownSender`]) so teardown
 /// logs are flushed before tracing is torn down.
 ///
 /// In watch mode the reload background task owns the `CertSource` so the

@@ -2,7 +2,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::helpers::{create_valid_test_cert, generate_dummy_test_cert_der};
+use crate::helpers::{create_valid_test_cert, generate_dummy_test_cert_der, never_shutdown};
 use huginn_proxy_lib::config::{ClientAuth, TlsConfig, TlsOptions};
 use huginn_proxy_lib::telemetry::Metrics;
 use huginn_proxy_lib::tls::{
@@ -159,11 +159,9 @@ async fn setup_tls_static_no_spurious_reloads(
         session_resumption: Default::default(),
     };
 
-    let setup = setup_tls_with_hot_reload(&config, false, 1, Metrics::new_noop(), {
-        let (_, rx) = tokio::sync::watch::channel(false);
-        rx
-    })
-    .await?;
+    let (_shutdown_tx, shutdown_rx) = never_shutdown();
+    let setup =
+        setup_tls_with_hot_reload(&config, false, 1, Metrics::new_noop(), shutdown_rx).await?;
     let initial_ptr = Arc::as_ptr(&setup.acceptor.load());
 
     tokio::time::sleep(Duration::from_millis(300)).await;
@@ -257,7 +255,7 @@ async fn cipher_suites_applied_after_reload() -> Result<(), Box<dyn std::error::
         session_resumption: Default::default(),
     };
 
-    let (_shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
+    let (_shutdown_tx, shutdown_rx) = never_shutdown();
     let setup =
         setup_tls_with_hot_reload(&config, true, 1, Metrics::new_noop(), shutdown_rx).await?;
     let initial_acceptor = setup.acceptor.load_full();
@@ -316,9 +314,7 @@ async fn hot_reload_survives_dropping_tls_setup_keeping_only_acceptor(
     };
 
     // Simulate the proxy::server caller: keep only the acceptor.
-    // _shutdown_tx must stay alive — dropping it closes the channel and the
-    // reload task would exit immediately via wait_for returning Err.
-    let (_shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
+    let (_shutdown_tx, shutdown_rx) = never_shutdown();
     let acceptor = setup_tls_with_hot_reload(&config, true, 1, Metrics::new_noop(), shutdown_rx)
         .await?
         .acceptor;
@@ -408,7 +404,7 @@ async fn cert_reload_task_exits_on_shutdown_signal(
         session_resumption: Default::default(),
     };
 
-    let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
+    let (shutdown_tx, shutdown_rx) = huginn_proxy_lib::shutdown_channel();
     let setup =
         setup_tls_with_hot_reload(&config, true, 60, Metrics::new_noop(), shutdown_rx).await?;
 
@@ -441,7 +437,7 @@ async fn cert_reload_task_none_in_static_mode(
         session_resumption: Default::default(),
     };
 
-    let (_, shutdown_rx) = tokio::sync::watch::channel(false);
+    let (_shutdown_tx, shutdown_rx) = never_shutdown();
     let setup =
         setup_tls_with_hot_reload(&config, false, 60, Metrics::new_noop(), shutdown_rx).await?;
 
@@ -468,7 +464,7 @@ async fn shutdown_ordering_background_tasks_exit_before_signal(
         session_resumption: Default::default(),
     };
 
-    let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
+    let (shutdown_tx, shutdown_rx) = huginn_proxy_lib::shutdown_channel();
     let setup =
         setup_tls_with_hot_reload(&config, true, 60, Metrics::new_noop(), shutdown_rx).await?;
 
