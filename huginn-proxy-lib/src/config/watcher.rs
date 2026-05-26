@@ -1,12 +1,10 @@
-use std::path::PathBuf;
-
-use notify::{Config, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
-use tokio::sync::mpsc::UnboundedSender;
-use tokio::time::{sleep, sleep_until, Duration, Instant};
-use tracing::{error, info};
-
 use crate::error::ProxyError;
-use crate::proxy::shutdown::{ServiceHandle, ShutdownWatch};
+use crate::proxy::shutdown::{ServiceHandle, ServiceName, ShutdownWatch};
+use notify::{Config, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
+use std::path::PathBuf;
+use tokio::sync::mpsc::UnboundedSender;
+use tokio::time::{sleep_until, Duration, Instant};
+use tracing::{error, info};
 
 /// Spawn a background task that watches `config_path` for filesystem changes and
 /// sends a unit signal on `reload_tx` after each debounced event.
@@ -59,7 +57,7 @@ pub fn spawn_config_watcher(
         .map_err(|e| ProxyError::Config(format!("Failed to watch config directory: {e}")))?;
 
     if let Err(e) = watcher.watch(&config_path, RecursiveMode::NonRecursive) {
-        tracing::error!(
+        error!(
             path = %config_path.display(),
             error = %e,
             "Could not watch config file directly (parent-dir watch still active)"
@@ -90,10 +88,9 @@ pub fn spawn_config_watcher(
                         .or_else(|| Instant::now().checked_add(Duration::from_secs(60)));
                 }
                 _ = async {
-                    if let Some(deadline) = reload_deadline {
-                        sleep_until(deadline).await;
-                    } else {
-                        loop { sleep(Duration::from_secs(3600)).await; }
+                    match reload_deadline {
+                        Some(deadline) => sleep_until(deadline).await,
+                        None => std::future::pending().await,
                     }
                 } => {
                     if reload_deadline.take().is_some() {
@@ -108,5 +105,5 @@ pub fn spawn_config_watcher(
         }
     });
 
-    Ok(ServiceHandle { handle, name: "config-watcher" })
+    Ok(ServiceHandle { handle, name: ServiceName::ConfigWatcher })
 }

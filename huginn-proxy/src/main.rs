@@ -7,7 +7,7 @@ use std::sync::Arc;
 use arc_swap::ArcSwap;
 use clap::Parser;
 use huginn_proxy_lib::config::load_from_path;
-use huginn_proxy_lib::proxy::shutdown::{shutdown_channel, ServiceHandle};
+use huginn_proxy_lib::proxy::shutdown::{shutdown_channel, ServiceHandle, ServiceName};
 use huginn_proxy_lib::run;
 use huginn_proxy_lib::telemetry::{
     init_metrics, init_tracing_with_otel, shutdown_tracing, start_observability_server,
@@ -94,7 +94,7 @@ async fn main() -> Result<(), BoxError> {
                     }
                 }
             });
-            Some(ServiceHandle { handle, name: "metrics-server" })
+            Some(ServiceHandle { handle, name: ServiceName::MetricsServer })
         } else {
             info!("Metrics initialized (no metrics_port, Prometheus endpoint disabled)");
             drop(registry);

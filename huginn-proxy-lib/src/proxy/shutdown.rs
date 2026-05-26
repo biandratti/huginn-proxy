@@ -1,3 +1,4 @@
+use std::fmt;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
@@ -24,6 +25,23 @@ pub fn shutdown_channel() -> (ShutdownSender, ShutdownWatch) {
     watch::channel(false)
 }
 
+/// Identifies each background service for logging during shutdown.
+pub enum ServiceName {
+    CertReload,
+    ConfigWatcher,
+    MetricsServer,
+}
+
+impl fmt::Display for ServiceName {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            Self::CertReload => "cert-reload",
+            Self::ConfigWatcher => "config-watcher",
+            Self::MetricsServer => "metrics-server",
+        })
+    }
+}
+
 /// Handle to a background service that supports cooperative shutdown.
 ///
 /// # Today (single runtime)
@@ -37,7 +55,7 @@ pub fn shutdown_channel() -> (ShutdownSender, ShutdownWatch) {
 /// collection in `run()` stay unchanged; only this impl changes.
 pub struct ServiceHandle {
     pub handle: JoinHandle<()>,
-    pub name: &'static str,
+    pub name: ServiceName,
 }
 
 impl ServiceHandle {

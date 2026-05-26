@@ -7,7 +7,7 @@ use tracing::{error, info};
 
 use crate::config::TlsConfig;
 use crate::error::Result;
-use crate::proxy::shutdown::{ServiceHandle, ShutdownWatch};
+use crate::proxy::shutdown::{ServiceHandle, ServiceName, ShutdownWatch};
 use crate::telemetry::Metrics;
 
 use super::acceptor::build_server_config;
@@ -43,7 +43,8 @@ pub async fn setup_tls_with_hot_reload(
     metrics: Arc<Metrics>,
     mut shutdown_rx: ShutdownWatch,
 ) -> Result<TlsSetup> {
-    let source = build_cert_source(tls_config, watch, watch_delay_secs).await?;
+    let source =
+        build_cert_source(tls_config, watch, watch_delay_secs, shutdown_rx.clone()).await?;
 
     let initial_certs = source.current();
     let initial_server = build_server_config(
@@ -111,7 +112,7 @@ pub async fn setup_tls_with_hot_reload(
                 // _source_keep_alive drops here → AbortOnDrop cancels debounce task
             });
 
-            Some(ServiceHandle { handle, name: "cert-reload" })
+            Some(ServiceHandle { handle, name: ServiceName::CertReload })
         }
     };
 
@@ -122,13 +123,14 @@ async fn build_cert_source(
     tls_config: &TlsConfig,
     watch: bool,
     watch_delay_secs: u32,
+    shutdown_rx: ShutdownWatch,
 ) -> Result<CertSource> {
     let cert_path = PathBuf::from(&tls_config.cert_path);
     let key_path = PathBuf::from(&tls_config.key_path);
 
     if watch {
         Ok(CertSource::Watched(
-            WatchedCertSource::watch(cert_path, key_path, watch_delay_secs).await?,
+            WatchedCertSource::watch(cert_path, key_path, watch_delay_secs, shutdown_rx).await?,
         ))
     } else {
         Ok(CertSource::Static(

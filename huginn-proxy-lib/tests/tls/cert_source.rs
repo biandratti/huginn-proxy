@@ -38,7 +38,8 @@ async fn watched_cert_source_loads_valid_certs(
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let (cert_path, key_path) = create_valid_test_cert()?;
 
-    let result = WatchedCertSource::watch(cert_path.clone(), key_path.clone(), 60).await;
+    let result =
+        WatchedCertSource::watch(cert_path.clone(), key_path.clone(), 60, never_shutdown().1).await;
 
     let _ = std::fs::remove_file(&cert_path);
     let _ = std::fs::remove_file(&key_path);
@@ -84,6 +85,7 @@ async fn watched_cert_source_missing_files_errors(
         PathBuf::from("/nonexistent/cert.pem"),
         PathBuf::from("/nonexistent/key.pem"),
         60,
+        never_shutdown().1,
     )
     .await;
     assert!(result.is_err(), "missing files must error");
@@ -95,7 +97,9 @@ async fn watcher_updates_receiver_when_cert_files_change(
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let (cert_path, key_path) = create_valid_test_cert()?;
 
-    let source = WatchedCertSource::watch(cert_path.clone(), key_path.clone(), 1).await?;
+    let source =
+        WatchedCertSource::watch(cert_path.clone(), key_path.clone(), 1, never_shutdown().1)
+            .await?;
     let source = CertSource::Watched(source);
     let mut rx = source
         .subscribe()
@@ -370,7 +374,8 @@ async fn cert_chain_hash_changes_when_certificate_chain_changes(
 async fn dropping_watched_source_closes_subscription_channel(
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let (cert_path, key_path) = create_valid_test_cert()?;
-    let result = WatchedCertSource::watch(cert_path.clone(), key_path.clone(), 60).await;
+    let result =
+        WatchedCertSource::watch(cert_path.clone(), key_path.clone(), 60, never_shutdown().1).await;
 
     let _ = std::fs::remove_file(&cert_path);
     let _ = std::fs::remove_file(&key_path);
