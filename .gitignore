@@ -5,7 +5,6 @@ cobertura.xml
 *.log
 **/Cargo.lock
 !Cargo.lock
-/data
 /examples/certs/
 /examples/certs/*
 .astro/

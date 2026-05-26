@@ -4,10 +4,11 @@ use std::sync::Arc;
 use notify::{Config, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use tokio::sync::watch;
 use tokio::task::JoinHandle;
-use tokio::time::{sleep, sleep_until, Duration, Instant};
+use tokio::time::{sleep_until, Duration, Instant};
 use tracing::{error, info, warn};
 
 use crate::error::ProxyError;
+use crate::proxy::shutdown::ShutdownWatch;
 
 use super::{read_certs_and_keys, ServerCertsKeys};
 
@@ -39,6 +40,7 @@ impl WatchedCertSource {
         cert_path: PathBuf,
         key_path: PathBuf,
         watch_delay_secs: u32,
+        mut shutdown_rx: ShutdownWatch,
     ) -> Result<Self, ProxyError> {
         let initial = Arc::new(read_certs_and_keys(&cert_path, &key_path).await?);
         let (tx, rx) = watch::channel(initial);
@@ -78,36 +80,27 @@ impl WatchedCertSource {
 
             loop {
                 tokio::select! {
+                    biased;
+                    result = shutdown_rx.changed() => {
+                        if result.is_err() || *shutdown_rx.borrow() {
+                            info!("Certificate debounce task shutting down");
+                            break;
+                        }
+                    }
                     msg = event_rx.recv() => {
                         if msg.is_none() {
-                            // The filesystem-event sender lives inside the watcher closure,
-                            // so a `None` here means the watcher has been dropped. In normal
-                            // operation this only happens on process shutdown; if you see
-                            // this log outside of shutdown, something tore the watcher down
-                            // unexpectedly and hot reload is no longer active.
-                            //
-                            // TODO: graceful shutdown for the watched cert reload subsystem
-                            // is pending and will be tackled in a separate task. "Coordinated shutdown for the
-                            // cert reload subsystem" for the design (modeled after Pingora's
-                            // `ShutdownWatch = watch::Receiver<bool>` pattern). Until then
-                            // this log only fires on the rare anomaly of the watcher dying
-                            // mid-process; on normal SIGINT/SIGTERM the task is cancelled
-                            // by the Tokio runtime before this branch can execute.
-                            info!(
+                            error!(
                                 cert_path = %cert_path_for_task.display(),
-                                "Certificate watcher event channel closed; debounce task exiting"
+                                "Certificate watcher event channel closed unexpectedly; debounce task exiting"
                             );
                             break;
                         }
-                        reload_deadline = Instant::now()
-                            .checked_add(debounce_duration)
-                            .or_else(|| Instant::now().checked_add(Duration::from_secs(60)));
+                        reload_deadline = Some(crate::utils::deadline_from(Instant::now(), debounce_duration));
                     }
                     _ = async {
-                        if let Some(deadline) = reload_deadline {
-                            sleep_until(deadline).await;
-                        } else {
-                            loop { sleep(Duration::from_secs(3600)).await; }
+                        match reload_deadline {
+                            Some(deadline) => sleep_until(deadline).await,
+                            None => std::future::pending().await,
                         }
                     } => {
                         if reload_deadline.take().is_some() {

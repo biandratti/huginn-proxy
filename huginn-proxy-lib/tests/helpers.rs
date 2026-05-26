@@ -3,6 +3,26 @@ use std::path::PathBuf;
 use std::sync::OnceLock;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+use huginn_proxy_lib::{ShutdownSender, ShutdownWatch};
+
+/// Return a `(ShutdownSender, ShutdownWatch)` pair that never fires.
+///
+/// Both halves must be kept alive for the duration of the test.
+/// Assign the sender to a named variable (`_shutdown_tx`, not `_`) so that
+/// Rust keeps it alive until the end of the scope instead of dropping it immediately.
+/// Dropping the sender closes the channel and causes any task that calls
+/// `shutdown_rx.wait_for(|v| *v)` to receive `Err`, which is treated as a
+/// shutdown signal — the task exits without doing any useful work.
+///
+/// # Example
+/// ```rust
+/// let (_shutdown_tx, shutdown_rx) = never_shutdown();
+/// let setup = setup_tls_with_hot_reload(&config, true, 60, metrics, shutdown_rx).await?;
+/// ```
+pub fn never_shutdown() -> (ShutdownSender, ShutdownWatch) {
+    huginn_proxy_lib::shutdown_channel()
+}
+
 /// Generate a temporary file path for testing
 pub fn tmp_path(name: &str) -> PathBuf {
     let nanos = SystemTime::now()

@@ -8,6 +8,7 @@ pub mod proxy;
 pub mod security;
 pub mod telemetry;
 pub mod tls;
+pub(crate) mod utils;
 
 pub use backend::{
     BackendSelector, HealthCheckSupervisor, HealthRegistry, RoundRobin, UpstreamHealth,
@@ -23,6 +24,7 @@ pub use proxy::reload::{
     initial_client_pool, initial_rate_limiter, try_reload, SharedClientPool, SharedRateLimiter,
 };
 pub use proxy::server::{SynProbe, WatchOptions};
+pub use proxy::shutdown::{shutdown_channel, ShutdownSender, ShutdownWatch};
 pub use proxy::{forwarding, run};
 pub use telemetry::Metrics;
 pub use tls::build_tls_acceptor;

@@ -1,17 +1,20 @@
-use std::path::PathBuf;
-
-use notify::{Config, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
-use tokio::sync::mpsc::UnboundedSender;
-use tokio::time::{sleep, sleep_until, Duration, Instant};
-use tracing::{error, info};
-
 use crate::error::ProxyError;
+use crate::proxy::shutdown::{ServiceHandle, ServiceName, ShutdownWatch};
+use notify::{Config, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
+use std::path::PathBuf;
+use tokio::sync::mpsc::UnboundedSender;
+use tokio::time::{sleep_until, Duration, Instant};
+use tracing::{error, info};
 
 /// Spawn a background task that watches `config_path` for filesystem changes and
 /// sends a unit signal on `reload_tx` after each debounced event.
 ///
 /// Activated only when `--watch` is enabled. A single signal is sent per
 /// burst of changes (debounced by `watch_delay_secs`).
+///
+/// The returned [`ServiceHandle`] must be awaited during graceful shutdown
+/// (after signalling via [`crate::proxy::shutdown::ShutdownSender`]) to ensure
+/// teardown logs are flushed before tracing is torn down.
 ///
 /// ## Watch strategy
 ///
@@ -26,7 +29,8 @@ pub fn spawn_config_watcher(
     config_path: PathBuf,
     reload_tx: UnboundedSender<()>,
     watch_delay_secs: u32,
-) -> crate::error::Result<()> {
+    mut shutdown_rx: ShutdownWatch,
+) -> crate::error::Result<ServiceHandle> {
     let config_path_for_watcher = config_path.clone();
     let (event_tx, mut event_rx) = tokio::sync::mpsc::unbounded_channel::<()>();
 
@@ -53,7 +57,7 @@ pub fn spawn_config_watcher(
         .map_err(|e| ProxyError::Config(format!("Failed to watch config directory: {e}")))?;
 
     if let Err(e) = watcher.watch(&config_path, RecursiveMode::NonRecursive) {
-        tracing::error!(
+        error!(
             path = %config_path.display(),
             error = %e,
             "Could not watch config file directly (parent-dir watch still active)"
@@ -66,23 +70,26 @@ pub fn spawn_config_watcher(
         "Config watcher started, watching for file changes"
     );
 
-    tokio::spawn(async move {
+    let handle = tokio::spawn(async move {
         let debounce_duration = Duration::from_secs(watch_delay_secs as u64);
         let mut reload_deadline: Option<Instant> = None;
         let _watcher = watcher;
 
         loop {
             tokio::select! {
+                biased;
+                _ = shutdown_rx.wait_for(|v| *v) => {
+                    info!("Config watcher task shutting down");
+                    break;
+                }
                 _ = event_rx.recv() => {
                     info!(path = %config_path.display(), debounce_secs = watch_delay_secs, "Config file change detected, reload scheduled");
-                    reload_deadline = Instant::now().checked_add(debounce_duration)
-                        .or_else(|| Instant::now().checked_add(Duration::from_secs(60)));
+                    reload_deadline = Some(crate::utils::deadline_from(Instant::now(), debounce_duration));
                 }
                 _ = async {
-                    if let Some(deadline) = reload_deadline {
-                        sleep_until(deadline).await;
-                    } else {
-                        loop { sleep(Duration::from_secs(3600)).await; }
+                    match reload_deadline {
+                        Some(deadline) => sleep_until(deadline).await,
+                        None => std::future::pending().await,
                     }
                 } => {
                     if reload_deadline.take().is_some() {
@@ -97,5 +104,5 @@ pub fn spawn_config_watcher(
         }
     });
 
-    Ok(())
+    Ok(ServiceHandle { handle, name: ServiceName::ConfigWatcher })
 }

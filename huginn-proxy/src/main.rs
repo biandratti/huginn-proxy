@@ -7,11 +7,13 @@ use std::sync::Arc;
 use arc_swap::ArcSwap;
 use clap::Parser;
 use huginn_proxy_lib::config::load_from_path;
+use huginn_proxy_lib::proxy::shutdown::{shutdown_channel, ServiceHandle, ServiceName};
 use huginn_proxy_lib::run;
 use huginn_proxy_lib::telemetry::{
     init_metrics, init_tracing_with_otel, shutdown_tracing, start_observability_server,
 };
 use huginn_proxy_lib::WatchOptions;
+use tokio::time::Duration;
 use tracing::info;
 
 type BoxError = Box<dyn std::error::Error + Send + Sync>;
@@ -61,29 +63,41 @@ async fn main() -> Result<(), BoxError> {
     let static_cfg = Arc::new(static_cfg);
     let dynamic_cfg = Arc::new(ArcSwap::from_pointee(dynamic_cfg));
 
-    let (metrics, metrics_handle) = {
-        let (metrics, registry) =
-            init_metrics().map_err(|e| format!("Failed to initialize metrics: {e}"))?;
+    // Single shutdown channel shared by all background tasks
+    let (shutdown_tx, shutdown_rx) = shutdown_channel();
 
-        let handle = if let Some(metrics_port) = static_cfg.telemetry.metrics_port {
+    // metrics (Arc<Metrics>) is kept alive for run(); only registry is moved into the spawn.
+    let (metrics, registry) =
+        init_metrics().map_err(|e| format!("Failed to initialize metrics: {e}"))?;
+
+    let metrics_service: Option<ServiceHandle> =
+        if let Some(metrics_port) = static_cfg.telemetry.metrics_port {
             info!(port = metrics_port, "Metrics initialized, starting observability server");
             let backends_for_observability = dynamic_cfg.load().backends.clone();
-            Some(tokio::spawn(async move {
-                if let Err(e) =
-                    start_observability_server(metrics_port, registry, backends_for_observability)
-                        .await
-                {
-                    tracing::error!(error = %e, "Observability server error");
+            let mut metrics_shutdown = shutdown_rx.clone();
+            let handle = tokio::spawn(async move {
+                tokio::select! {
+                    biased;
+                    _ = metrics_shutdown.wait_for(|v| *v) => {
+                        info!("Metrics server shutting down");
+                    }
+                    result = start_observability_server(
+                        metrics_port,
+                        registry,
+                        backends_for_observability,
+                    ) => {
+                        if let Err(e) = result {
+                            tracing::error!(error = %e, "Observability server error");
+                        }
+                    }
                 }
-            }))
+            });
+            Some(ServiceHandle { handle, name: ServiceName::MetricsServer })
         } else {
             info!("Metrics initialized (no metrics_port, Prometheus endpoint disabled)");
             drop(registry);
             None
         };
-
-        (metrics, handle)
-    };
 
     // TCP SYN fingerprinting via eBPF/XDP.
     // When tcp_enabled = true the proxy opens BPF maps pinned by huginn-ebpf-agent.
@@ -158,20 +172,24 @@ async fn main() -> Result<(), BoxError> {
         watch_delay_secs: cli.watch_delay_secs,
     };
 
+    // run() broadcasts shutdown_tx on SIGTERM/SIGINT and awaits
+    // cert-reload + config-watcher handles before returning.
     let result = run(
         Arc::clone(&static_cfg),
         Arc::clone(&dynamic_cfg),
         metrics,
         syn_probe,
         watch_opts,
+        shutdown_tx,
     )
     .await;
 
-    if let Some(handle) = metrics_handle {
-        info!("Shutting down observability server");
-        handle.abort();
+    // Metrics server already received the shutdown signal (via shutdown_rx clone).
+    if let Some(svc) = metrics_service {
+        svc.shutdown(Duration::from_secs(2)).await;
     }
 
+    // All background tasks have exited and flushed their logs, safe to tear down tracing.
     shutdown_tracing();
 
     result?;
