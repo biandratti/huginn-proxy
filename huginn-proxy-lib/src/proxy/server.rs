@@ -32,14 +32,9 @@ pub async fn run(
     metrics: Arc<Metrics>,
     syn_probe: Option<SynProbe>,
     watch_opts: WatchOptions,
-    // Shutdown channel owned at a higher level (main.rs) so that
-    // all background tasks — including the metrics server — share
-    // the same signal. The sender is used here to broadcast on
-    // SIGTERM/SIGINT; each task receives a cloned receiver.
     shutdown_tx: ShutdownSender,
 ) -> Result<()> {
     // Derive receiver from the sender so all clones share the same channel
-    // that was created in main.rs (which also drives the metrics server).
     let shutdown_rx = shutdown_tx.subscribe();
 
     let rate_limiter = Arc::new(initial_rate_limiter(&dynamic_cfg.load()));
@@ -227,7 +222,7 @@ pub async fn run(
 
     // Await background services in order. By the time connection drain
     // completes, each service has already received the shutdown signal
-    // and should be ready — the timeout is defence-in-depth only.
+    // and should be ready, the timeout is defence-in-depth only.
     for service in services {
         service.shutdown(Duration::from_secs(5)).await;
     }

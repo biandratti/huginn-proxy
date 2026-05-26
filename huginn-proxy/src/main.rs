@@ -63,9 +63,7 @@ async fn main() -> Result<(), BoxError> {
     let static_cfg = Arc::new(static_cfg);
     let dynamic_cfg = Arc::new(ArcSwap::from_pointee(dynamic_cfg));
 
-    // Single shutdown channel shared by all background tasks: cert-reload,
-    // config-watcher (via run()), and the metrics server (below).
-    // run() holds the ShutdownSender and broadcasts `true` on SIGTERM/SIGINT.
+    // Single shutdown channel shared by all background tasks
     let (shutdown_tx, shutdown_rx) = shutdown_channel();
 
     // metrics (Arc<Metrics>) is kept alive for run(); only registry is moved into the spawn.
@@ -187,12 +185,11 @@ async fn main() -> Result<(), BoxError> {
     .await;
 
     // Metrics server already received the shutdown signal (via shutdown_rx clone).
-    // It should be ready by now; the timeout is defence-in-depth only.
     if let Some(svc) = metrics_service {
         svc.shutdown(Duration::from_secs(2)).await;
     }
 
-    // All background tasks have exited and flushed their logs — safe to tear down tracing.
+    // All background tasks have exited and flushed their logs, safe to tear down tracing.
     shutdown_tracing();
 
     result?;

@@ -9,7 +9,7 @@ use huginn_proxy_lib::{ShutdownSender, ShutdownWatch};
 ///
 /// Both halves must be kept alive for the duration of the test.
 /// Assign the sender to a named variable (`_shutdown_tx`, not `_`) so that
-/// Rust keeps it alive until end of scope instead of dropping it immediately.
+/// Rust keeps it alive until the end of the scope instead of dropping it immediately.
 /// Dropping the sender closes the channel and causes any task that calls
 /// `shutdown_rx.wait_for(|v| *v)` to receive `Err`, which is treated as a
 /// shutdown signal — the task exits without doing any useful work.

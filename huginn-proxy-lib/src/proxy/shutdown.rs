@@ -1,3 +1,36 @@
+//! Cooperative shutdown primitives.
+//!
+//! ## Shutdown sequence
+//!
+//! ```text
+//! SIGTERM / SIGINT
+//!   │
+//!   └─▶ shutdown_tx.send(true)          (server.rs)
+//!         │
+//!         ├─▶ debounce task             (WatchedCertSource)
+//!         │     shutdown_rx.changed() → break
+//!         │     tx (cert updates) drops → subscribers receive Err
+//!         │
+//!         ├─▶ cert-reload task          (tls/setup.rs)
+//!         │     shutdown_rx.wait_for(true) → break
+//!         │     _source_keep_alive drops → AbortOnDrop fires (defence-in-depth,
+//!         │     debounce task has already exited cooperatively)
+//!         │
+//!         ├─▶ config-watcher task       (config/watcher.rs)
+//!         │     shutdown_rx.wait_for(true) → break
+//!         │
+//!         ├─▶ metrics-server task       (main.rs)
+//!         │     shutdown_rx.wait_for(true) → break
+//!         │
+//!         └─▶ wait_for_drain            (server.rs)
+//!               waits for all active HTTP connections to finish,
+//!               then ServiceHandle::shutdown() awaits each background task
+//! ```
+//!
+//! Every background task receives a [`ShutdownWatch`] clone and selects on it
+//! against its main work loop. [`ServiceHandle`] wraps the resulting
+//! `JoinHandle` and is awaited in order during drain.
+
 use std::fmt;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
@@ -48,7 +81,7 @@ impl fmt::Display for ServiceName {
 /// Wraps a `JoinHandle<()>` in the shared Tokio runtime.
 /// `shutdown()` awaits the handle with a timeout.
 ///
-/// # Migration path to multi-runtime
+/// # Migration path to multi-runtime. Conditions are already prepared in case of using multi-runtime.
 /// Add a `runtime: tokio::runtime::Runtime` field and change `shutdown()` to
 /// call `self.runtime.shutdown_timeout(timeout)` — the same mechanism Pingora
 /// uses. Every background task's `select!` loop and the `Vec<ServiceHandle>`

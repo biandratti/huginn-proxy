@@ -109,7 +109,8 @@ pub async fn setup_tls_with_hot_reload(
                         }
                     }
                 }
-                // _source_keep_alive drops here → AbortOnDrop cancels debounce task
+                // _source_keep_alive drops here; the debounce task has already exited
+                // cooperatively via shutdown_rx. AbortOnDrop is defence-in-depth.
             });
 
             Some(ServiceHandle { handle, name: ServiceName::CertReload })
