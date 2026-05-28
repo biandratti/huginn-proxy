@@ -34,6 +34,7 @@ use arc_swap::ArcSwap;
 use bytes::Bytes;
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use http_body_util::Full;
+use huginn_proxy_lib::config::startup::telemetry::LogLevel;
 use huginn_proxy_lib::config::{
     Backend, FingerprintConfig, KeepAliveConfig, ListenConfig, LoggingConfig, Route,
     SecurityConfig, TelemetryConfig, TimeoutConfig,
@@ -155,7 +156,7 @@ impl BenchFixture {
                 tcp_enabled: false,
                 max_capture: 64 * 1024,
             },
-            logging: LoggingConfig { level: "warn".to_string(), show_target: false },
+            logging: LoggingConfig { level: LogLevel::Warn, show_target: false },
             timeout: TimeoutConfig {
                 upstream_connect_ms: Some(5000),
                 proxy_idle_ms: 600_000, // 10 min - bench groups share a connection pool
@@ -165,7 +166,7 @@ impl BenchFixture {
                 keep_alive: KeepAliveConfig::default(),
             },
             security: SecurityConfig::default(),
-            telemetry: TelemetryConfig { metrics_port: None, otel_log_level: "warn".to_string() },
+            telemetry: TelemetryConfig { metrics_port: None, otel: None },
             headers: None,
             preserve_host: false,
             backend_pool: Default::default(),

@@ -19,6 +19,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use arc_swap::ArcSwap;
+use huginn_proxy_lib::config::startup::telemetry::LogLevel;
 use huginn_proxy_lib::config::{
     Backend, FingerprintConfig, KeepAliveConfig, ListenConfig, LoggingConfig, Route,
     SecurityConfig, TelemetryConfig, TimeoutConfig,
@@ -219,7 +220,7 @@ async fn capture_fingerprint_values() -> Result<(), Box<dyn std::error::Error + 
             tcp_enabled: false,
             max_capture: 64 * 1024,
         },
-        logging: LoggingConfig { level: "warn".to_string(), show_target: false },
+        logging: LoggingConfig { level: LogLevel::Warn, show_target: false },
         timeout: TimeoutConfig {
             upstream_connect_ms: Some(5000),
             proxy_idle_ms: 30_000,
@@ -229,7 +230,7 @@ async fn capture_fingerprint_values() -> Result<(), Box<dyn std::error::Error + 
             keep_alive: KeepAliveConfig::default(),
         },
         security: SecurityConfig::default(),
-        telemetry: TelemetryConfig { metrics_port: None, otel_log_level: "warn".to_string() },
+        telemetry: TelemetryConfig { metrics_port: None, otel: None },
         headers: None,
         preserve_host: false,
         backend_pool: Default::default(),

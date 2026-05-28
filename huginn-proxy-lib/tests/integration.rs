@@ -1,6 +1,6 @@
 use huginn_proxy_lib::config::{
-    load_from_path, Backend, Config, FingerprintConfig, KeepAliveConfig, ListenConfig,
-    LoggingConfig, SecurityConfig, TelemetryConfig, TimeoutConfig,
+    load_from_path, startup::telemetry::LogLevel, Backend, Config, FingerprintConfig,
+    KeepAliveConfig, ListenConfig, LoggingConfig, SecurityConfig, TelemetryConfig, TimeoutConfig,
 };
 use std::io::Write;
 
@@ -23,7 +23,7 @@ fn create_test_config(listen: &str, backends: Vec<Backend>) -> Config {
             tcp_enabled: false,
             max_capture: 64 * 1024,
         },
-        logging: LoggingConfig { level: "info".to_string(), show_target: false },
+        logging: LoggingConfig { level: LogLevel::Info, show_target: false },
         timeout: TimeoutConfig {
             upstream_connect_ms: Some(5000),
             proxy_idle_ms: 60000,
@@ -33,7 +33,7 @@ fn create_test_config(listen: &str, backends: Vec<Backend>) -> Config {
             keep_alive: KeepAliveConfig::default(),
         },
         security: SecurityConfig::default(),
-        telemetry: TelemetryConfig { metrics_port: None, otel_log_level: "warn".to_string() },
+        telemetry: TelemetryConfig { metrics_port: None, otel: None },
         headers: None,
     }
 }
@@ -93,7 +93,7 @@ fn test_config_defaults() {
 
     assert!(config.fingerprint.tls_enabled);
     assert!(config.fingerprint.http_enabled);
-    assert_eq!(config.logging.level, "info");
+    assert_eq!(config.logging.level, LogLevel::Info);
     assert!(!config.logging.show_target);
     assert_eq!(config.timeout.upstream_connect_ms, Some(5000));
     assert_eq!(config.timeout.proxy_idle_ms, 60000);

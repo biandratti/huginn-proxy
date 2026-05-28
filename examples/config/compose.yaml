@@ -71,7 +71,7 @@ routes:
   - prefix: "/lb"
     backend: "backend-a:9000"
     fingerprinting: true
-    
+
   - prefix: "/lb"
     backend: "backend-b:9000"
     fingerprinting: true
@@ -189,4 +189,13 @@ security:
 
 telemetry:
   metrics_port: 9090
-  otel_log_level: "warn"
+  otel:
+    enabled: true
+    endpoint: http://localhost:4318
+    tracer_name: "huginn-example-tracer"
+    resource_name: "huginn-proxy-node-1"
+    log_level: "info"
+    sdk_log_level: "warn"
+    protocol: "http_json"
+    timeout_seconds: 1
+    sample_ratio: 1

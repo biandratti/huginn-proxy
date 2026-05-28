@@ -1,7 +1,7 @@
 # Telemetry Documentation
 
 > **Status**: This document covers currently implemented telemetry features for both **Huginn Proxy** and the **eBPF
-agent**.
+> agent**.
 
 ## Overview
 
@@ -12,6 +12,8 @@ Huginn Proxy provides comprehensive telemetry through:
 - **Prometheus Metrics** - 47 metrics covering connections, requests, TLS, fingerprinting, backends, active health
   checks, throughput, rate limiting, IP filtering, header manipulation, mTLS, config hot reload, and TLS certificate
   hot reload
+- **Distributed Tracing** - OpenTelemetry (OTLP) export to any compatible backend (Jaeger, Grafana Tempo, Honeycomb,
+  etc.)
 - **Health Check Endpoints** - Kubernetes-ready: `/health`, `/ready`, `/live`, `/metrics`
 
 All proxy telemetry is exposed on a separate observability server (configurable via `telemetry.metrics_port`).
@@ -44,7 +46,7 @@ When `metrics_port` is configured, the following endpoints become available:
 The agent’s observability server is configured via environment variables:
 
 | Variable                   | Required | Description                     |
-|----------------------------|----------|---------------------------------|
+| -------------------------- | -------- | ------------------------------- |
 | `HUGINN_EBPF_METRICS_ADDR` | Yes      | Bind address (e.g. `127.0.0.1`) |
 | `HUGINN_EBPF_METRICS_PORT` | Yes      | Port (e.g. `9091`)              |
 
@@ -63,16 +65,42 @@ The agent’s observability server is configured via environment variables:
 
 ```yaml
 scrape_configs:
-  - job_name: 'huginn-proxy'
+  - job_name: "huginn-proxy"
     static_configs:
-      - targets: [ 'localhost:9090' ]
+      - targets: ["localhost:9090"]
     scrape_interval: 15s
 
-  - job_name: 'huginn-ebpf-agent'
+  - job_name: "huginn-ebpf-agent"
     static_configs:
-      - targets: [ '127.0.0.1:9091' ]
+      - targets: ["127.0.0.1:9091"]
     scrape_interval: 15s
 ```
+
+---
+
+## Distributed Tracing (OpenTelemetry)
+
+Huginn exports distributed traces via OTLP.
+
+### Protocols
+
+| Transport       | Notes                                                                            |
+| --------------- | -------------------------------------------------------------------------------- |
+| HTTP + Protobuf | Default. Lowest overhead, widest backend support.                                |
+| HTTP + JSON     | Human-readable wire format. Useful for debugging .                               |
+| gRPC            | Use when your collector requires gRPC, or when you need bidirectional streaming. |
+
+### Sampling
+
+The sampler is **parent-based with a ratio fallback**:
+
+- If an incoming request carries a valid `traceparent` header, the sampling decision is inherited from the upstream
+  caller — `sample_ratio` is not consulted.
+- If there is no parent (the proxy is the root of the trace), `sample_ratio` governs whether a new trace is started.
+
+Set `sample_ratio = 1.0` to capture every root trace (recommended during development and initial rollout). Lower
+values reduce ingest volume proportionally — `0.1` samples one in ten root requests. Already-sampled traces from
+upstream callers are always forwarded regardless of this setting.
 
 ---
 
@@ -81,7 +109,7 @@ scrape_configs:
 ### 1. Throughput Metrics
 
 | Metric                                | Type    | Description                        | Labels            |
-|---------------------------------------|---------|------------------------------------|-------------------|
+| ------------------------------------- | ------- | ---------------------------------- | ----------------- |
 | `huginn_bytes_received_total`         | Counter | Total bytes received from clients  | `protocol`        |
 | `huginn_bytes_sent_total`             | Counter | Total bytes sent to clients        | `protocol`        |
 | `huginn_backend_bytes_received_total` | Counter | Total bytes received from backends | `backend_address` |
@@ -120,7 +148,7 @@ sum by (backend_address) (rate(huginn_backend_bytes_received_total[5m]))
 ### 2. Connection Metrics
 
 | Metric                              | Type    | Description                        | Labels     |
-|-------------------------------------|---------|------------------------------------|------------|
+| ----------------------------------- | ------- | ---------------------------------- | ---------- |
 | `huginn_connections_total`          | Counter | Total connections established      | `protocol` |
 | `huginn_connections_active`         | Gauge   | Active connections currently open  | `protocol` |
 | `huginn_connections_rejected_total` | Counter | Connections rejected due to limits | `reason`   |
@@ -149,7 +177,7 @@ rate(huginn_connections_rejected_total[5m])
 ### 3. Request Metrics
 
 | Metric                             | Type      | Description                                                       | Labels                                       |
-|------------------------------------|-----------|-------------------------------------------------------------------|----------------------------------------------|
+| ---------------------------------- | --------- | ----------------------------------------------------------------- | -------------------------------------------- |
 | `huginn_entrypoint_requests_total` | Counter   | All requests arriving at the proxy, regardless of routing outcome | `method`, `status_code`, `protocol`          |
 | `huginn_requests_total`            | Counter   | Requests matched to a route and dispatched                        | `method`, `status_code`, `protocol`, `route` |
 | `huginn_requests_duration_seconds` | Histogram | Duration of routed requests                                       | `method`, `status_code`, `protocol`, `route` |
@@ -209,7 +237,7 @@ sum by (route) (rate(huginn_requests_total{status_code=~"5.."}[5m]))
 ### 4. TLS Handshake Metrics
 
 | Metric                                  | Type      | Description              | Labels                        |
-|-----------------------------------------|-----------|--------------------------|-------------------------------|
+| --------------------------------------- | --------- | ------------------------ | ----------------------------- |
 | `huginn_tls_handshakes_total`           | Counter   | TLS handshakes completed | `tls_version`, `cipher_suite` |
 | `huginn_tls_handshake_duration_seconds` | Histogram | TLS handshake duration   | `tls_version`                 |
 | `huginn_tls_handshake_errors_total`     | Counter   | TLS handshake errors     | `error_type`                  |
@@ -248,7 +276,7 @@ histogram_quantile(0.95, rate(huginn_tls_handshake_duration_seconds_bucket[5m]))
 #### TLS Fingerprinting (JA4)
 
 | Metric                                               | Type      | Description                         | Labels |
-|------------------------------------------------------|-----------|-------------------------------------|--------|
+| ---------------------------------------------------- | --------- | ----------------------------------- | ------ |
 | `huginn_tls_fingerprints_extracted_total`            | Counter   | TLS (JA4) fingerprints extracted    | -      |
 | `huginn_tls_fingerprint_extraction_duration_seconds` | Histogram | TLS fingerprint extraction time     | -      |
 | `huginn_tls_fingerprint_failures_total`              | Counter   | TLS fingerprint extraction failures | -      |
@@ -256,7 +284,7 @@ histogram_quantile(0.95, rate(huginn_tls_handshake_duration_seconds_bucket[5m]))
 #### HTTP/2 Fingerprinting (Akamai)
 
 | Metric                                                 | Type      | Description                            | Labels   |
-|--------------------------------------------------------|-----------|----------------------------------------|----------|
+| ------------------------------------------------------ | --------- | -------------------------------------- | -------- |
 | `huginn_http2_fingerprints_extracted_total`            | Counter   | HTTP/2 (Akamai) fingerprints extracted | -        |
 | `huginn_http2_fingerprint_extraction_duration_seconds` | Histogram | HTTP/2 fingerprint extraction time     | -        |
 | `huginn_http2_fingerprint_failures_total`              | Counter   | HTTP/2 fingerprint failures            | `reason` |
@@ -270,7 +298,7 @@ histogram_quantile(0.95, rate(huginn_tls_handshake_duration_seconds_bucket[5m]))
 #### TCP SYN Fingerprinting (p0f via eBPF)
 
 | Metric                                        | Type      | Description                                                 | Labels   |
-|-----------------------------------------------|-----------|-------------------------------------------------------------|----------|
+| --------------------------------------------- | --------- | ----------------------------------------------------------- | -------- |
 | `huginn_tcp_syn_fingerprints_total`           | Counter   | TCP SYN fingerprint lookups (`result=hit\|miss\|malformed`) | `reason` |
 | `huginn_tcp_syn_fingerprint_duration_seconds` | Histogram | BPF map lookup and parse duration                           | `reason` |
 | `huginn_tcp_syn_fingerprint_failures_total`   | Counter   | Malformed BPF map entries (undecodable TCP options)         | -        |
@@ -312,7 +340,7 @@ histogram_quantile(0.95, rate(huginn_tls_fingerprint_extraction_duration_seconds
 ### 6. Backend Metrics
 
 | Metric                            | Type      | Description                    | Labels                                                |
-|-----------------------------------|-----------|--------------------------------|-------------------------------------------------------|
+| --------------------------------- | --------- | ------------------------------ | ----------------------------------------------------- |
 | `huginn_backend_requests_total`   | Counter   | Requests forwarded to backends | `backend_address`, `status_code`, `protocol`, `route` |
 | `huginn_backend_errors_total`     | Counter   | Backend errors                 | `backend_address`, `error_type`, `route`              |
 | `huginn_backend_duration_seconds` | Histogram | Backend request duration       | `backend_address`, `route`                            |
@@ -358,7 +386,7 @@ see [SETTINGS.md](SETTINGS.md)). The supervisor probes the backend; requests are
 upstream is marked unhealthy (`error_type` = `upstream_unhealthy` in `huginn_errors_total`).
 
 | Metric                                   | Type    | Description                                                       | Labels              |
-|------------------------------------------|---------|-------------------------------------------------------------------|---------------------|
+| ---------------------------------------- | ------- | ----------------------------------------------------------------- | ------------------- |
 | `huginn_health_check_probes_total`       | Counter | Probes: TCP connect or HTTP round-trip (success and failure)      | `backend`, `result` |
 | `huginn_health_check_gate_rejects_total` | Counter | Client requests not forwarded because upstream is unhealthy (502) | `backend_address`   |
 
@@ -387,7 +415,7 @@ sum by (backend) (rate(huginn_health_check_probes_total{result="fail"}[5m]))
 ### 7. Rate Limiting Metrics
 
 | Metric                             | Type    | Description                                   | Labels              |
-|------------------------------------|---------|-----------------------------------------------|---------------------|
+| ---------------------------------- | ------- | --------------------------------------------- | ------------------- |
 | `huginn_rate_limit_requests_total` | Counter | Total requests evaluated by rate limiter      | `strategy`, `route` |
 | `huginn_rate_limit_allowed_total`  | Counter | Total requests allowed by rate limiter        | `strategy`, `route` |
 | `huginn_rate_limit_rejected_total` | Counter | Total requests rejected (429) by rate limiter | `strategy`, `route` |
@@ -407,7 +435,7 @@ rate(huginn_rate_limit_requests_total[5m])
 rate(huginn_rate_limit_rejected_total[5m])
 
 # Rate limit rejection percentage
-rate(huginn_rate_limit_rejected_total[5m]) 
+rate(huginn_rate_limit_rejected_total[5m])
   / rate(huginn_rate_limit_requests_total[5m]) * 100
 
 # Rejections by strategy
@@ -425,7 +453,7 @@ sum by (strategy) (rate(huginn_rate_limit_allowed_total[5m]))
 ### 8. Error Metrics
 
 | Metric                | Type    | Description          | Labels                    |
-|-----------------------|---------|----------------------|---------------------------|
+| --------------------- | ------- | -------------------- | ------------------------- |
 | `huginn_errors_total` | Counter | Total errors by type | `error_type`, `component` |
 
 **Labels**:
@@ -448,7 +476,7 @@ rate(huginn_errors_total[5m])
 ### 9. IP Filtering Metrics
 
 | Metric                            | Type    | Description                              | Labels |
-|-----------------------------------|---------|------------------------------------------|--------|
+| --------------------------------- | ------- | ---------------------------------------- | ------ |
 | `huginn_ip_filter_requests_total` | Counter | Total requests evaluated by IP filter    | -      |
 | `huginn_ip_filter_allowed_total`  | Counter | Total requests allowed by IP filter      | -      |
 | `huginn_ip_filter_denied_total`   | Counter | Total requests denied by IP filter (403) | -      |
@@ -463,7 +491,7 @@ rate(huginn_ip_filter_requests_total[5m])
 rate(huginn_ip_filter_denied_total[5m])
 
 # IP filter denial percentage
-rate(huginn_ip_filter_denied_total[5m]) 
+rate(huginn_ip_filter_denied_total[5m])
   / rate(huginn_ip_filter_requests_total[5m]) * 100
 
 # Allow rate
@@ -475,7 +503,7 @@ rate(huginn_ip_filter_allowed_total[5m])
 ### 10. Header Manipulation Metrics
 
 | Metric                         | Type    | Description                                  | Labels    |
-|--------------------------------|---------|----------------------------------------------|-----------|
+| ------------------------------ | ------- | -------------------------------------------- | --------- |
 | `huginn_headers_added_total`   | Counter | Total headers added by header manipulation   | `context` |
 | `huginn_headers_removed_total` | Counter | Total headers removed by header manipulation | `context` |
 
@@ -504,7 +532,7 @@ sum by (context) (rate(huginn_headers_removed_total[5m]))
 ### 11. mTLS Metrics
 
 | Metric                          | Type    | Description                                                       | Labels     |
-|---------------------------------|---------|-------------------------------------------------------------------|------------|
+| ------------------------------- | ------- | ----------------------------------------------------------------- | ---------- |
 | `huginn_mtls_connections_total` | Counter | Total connections with mTLS enabled (client certificate verified) | `protocol` |
 
 **Labels**:
@@ -518,7 +546,7 @@ sum by (context) (rate(huginn_headers_removed_total[5m]))
 rate(huginn_mtls_connections_total[5m])
 
 # mTLS usage percentage
-rate(huginn_mtls_connections_total[5m]) 
+rate(huginn_mtls_connections_total[5m])
   / rate(huginn_tls_handshakes_total[5m]) * 100
 
 # mTLS by protocol version
@@ -537,7 +565,7 @@ sum by (protocol) (rate(huginn_mtls_connections_total[5m]))
 ### 12. Config Hot Reload Metrics
 
 | Metric                                        | Type    | Description                                  | Labels   |
-|-----------------------------------------------|---------|----------------------------------------------|----------|
+| --------------------------------------------- | ------- | -------------------------------------------- | -------- |
 | `huginn_config_reload_total`                  | Counter | Config reload attempts                       | `result` |
 | `huginn_config_last_reload_timestamp_seconds` | Gauge   | Unix timestamp of the last successful reload | -        |
 | `huginn_config_hash`                          | Gauge   | Semantic hash of the active `DynamicConfig`  | -        |
@@ -560,7 +588,7 @@ sum by (protocol) (rate(huginn_mtls_connections_total[5m]))
 ### 13. TLS Certificate Hot Reload Metrics
 
 | Metric                                          | Type    | Description                                                       | Labels   |
-|-------------------------------------------------|---------|-------------------------------------------------------------------|----------|
+| ----------------------------------------------- | ------- | ----------------------------------------------------------------- | -------- |
 | `huginn_tls_cert_reload_total`                  | Counter | TLS certificate load/reload attempts (includes initial load)      | `result` |
 | `huginn_tls_cert_last_reload_timestamp_seconds` | Gauge   | Unix timestamp of the last successful TLS cert load or reload     | -        |
 | `huginn_tls_cert_hash`                          | Gauge   | FNV-1a hash of the currently active certificate chain (DER bytes) | -        |
@@ -580,7 +608,7 @@ sum by (protocol) (rate(huginn_mtls_connections_total[5m]))
   (cert/key are always rotated together, and hashing key material in a process-wide gauge is a security smell).
 - A failed reload (cert/key parse error, validation failure, or `ServerConfig` rebuild error) bumps the
   `result="error"` counter but leaves the hash and timestamp gauges untouched, so dashboards continue to advertise the
-  last *good* certificate that is actually serving traffic.
+  last _good_ certificate that is actually serving traffic.
 
 **Example queries**:
 
@@ -593,7 +621,7 @@ sum by (protocol) (rate(huginn_mtls_connections_total[5m]))
 ### 14. Build Info
 
 | Metric              | Type  | Description                  | Labels                    |
-|---------------------|-------|------------------------------|---------------------------|
+| ------------------- | ----- | ---------------------------- | ------------------------- |
 | `huginn_build_info` | Gauge | Build information (always 1) | `version`, `rust_version` |
 
 **Labels**:
@@ -623,12 +651,14 @@ same health endpoints as the proxy.
 ### Agent metrics
 
 | Metric                          | Type               | Description                                                            | Labels                    |
-|---------------------------------|--------------------|------------------------------------------------------------------------|---------------------------|
+| ------------------------------- | ------------------ | ---------------------------------------------------------------------- | ------------------------- |
 | `tcp_syn_captured_total`        | Observable counter | Number of TCP SYN signatures successfully captured                     | -                         |
 | `tcp_syn_insert_failures_total` | Observable counter | Number of TCP SYN map insert failures (e.g. LRU full)                  | -                         |
 | `tcp_syn_malformed_total`       | Observable counter | Number of malformed TCP packets (e.g. doff too short) that matched dst | -                         |
 | `agent_up`                      | Gauge              | 1 if the agent has pinned maps and is running                          | -                         |
 | `huginn_ebpf_agent_build_info`  | Gauge              | Build information (always 1)                                           | `version`, `rust_version` |
+
+---
 
 ## Grafana Dashboard Suggestions
 
@@ -714,8 +744,8 @@ The following metrics are **not** implemented yet (the product may already inclu
 - **Backend connection pool**: optional future gauges/counters (e.g. pool size, active/idle connections, reuse rate).
   The **connection pool to upstreams already exists** (see [SETTINGS.md](SETTINGS.md) and
   [FEATURES.md](FEATURES.md)); only dedicated Prometheus series for it are still missing.
-- **Tracing**: distributed request tracing and correlation (`traceparent` propagation, proxy spans, and request ID
-  correlation) is planned but not implemented yet.
+- **Trace propagation**: `traceparent` injection into upstream requests and per-route span correlation with request IDs
+  is planned but not yet implemented. Spans currently cover the proxy's own processing.
 
 ---
 

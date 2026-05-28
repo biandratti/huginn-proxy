@@ -8,4 +8,4 @@ pub use health::{health_check_response, live_check_response, ready_check_respons
 pub use metrics::{init_metrics, values, Metrics};
 pub use metrics_handler::handle_metrics;
 pub use server::start_observability_server;
-pub use tracing::{init_tracing_with_otel, shutdown_tracing};
+pub use tracing::{init_tracing_otel, init_tracing_stdout, OpentelemetryConfig, TracingGuard};

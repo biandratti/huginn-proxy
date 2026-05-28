@@ -1,37 +1,186 @@
+use http::HeaderMap;
+
+use opentelemetry::global::{self};
+use opentelemetry::propagation::{TextMapCompositePropagator, TextMapPropagator};
+use opentelemetry::trace::SpanKind;
+use opentelemetry::Context;
+use opentelemetry_http::{HeaderExtractor, HeaderInjector};
+use opentelemetry_otlp::{ExportConfig, Protocol, WithExportConfig};
+use opentelemetry_sdk::trace::{Sampler, SdkTracerProvider};
+use opentelemetry_sdk::Resource;
+use std::time::Duration;
+use tracing::level_filters::LevelFilter;
+use tracing::Level;
+use tracing_opentelemetry::OpenTelemetrySpanExt;
 use tracing_subscriber::layer::SubscriberExt;
-use tracing_subscriber::Registry;
+use tracing_subscriber::util::SubscriberInitExt;
+use tracing_subscriber::{EnvFilter, Layer};
 
-/// Initialize tracing with OpenTelemetry integration
-pub fn init_tracing_with_otel(
-    log_level: String,
-    show_target: bool,
-    otel_log_level: String,
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let filter_str = format!("{log_level},opentelemetry={otel_log_level}");
-    let env_filter = tracing_subscriber::EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new(filter_str));
-    let fmt_layer = tracing_subscriber::fmt::layer().with_target(show_target);
-
-    let subscriber = Registry::default().with(env_filter).with(fmt_layer);
-
-    tracing::subscriber::set_global_default(subscriber)
-        .map_err(|e| format!("Failed to set global tracing subscriber: {e}"))?;
-
-    Ok(())
+#[derive(Debug, Clone)]
+pub struct OpentelemetryConfig {
+    pub endpoint: Option<String>,
+    pub tracer_name: String,
+    pub resource_name: String,
+    /// Log level for OTEL
+    pub log_level: Level,
+    /// Log level of opentelemetry_sdk
+    pub sdk_log_level: Level,
+    /// Protocol to use
+    pub protocol: Protocol,
+    /// Send timeout
+    pub timeout: Option<Duration>,
+    /// Sample ratio
+    pub sample_ratio: f64,
+    pub show_target: bool,
 }
 
-/// Shutdown tracing and flush any pending logs
-///
-/// Currently flushes stdout/stderr to ensure all logs are written.
-/// When OpenTelemetry tracing is added, this will also shutdown the tracer provider.
-pub fn shutdown_tracing() {
-    use std::io::Write;
+fn build_env_filter(app_level: Level, sdk_level: Level) -> EnvFilter {
+    EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| EnvFilter::new(format!("{app_level},opentelemetry={sdk_level}")))
+}
 
-    // Flush stdout and stderr to ensure all logs are written
-    // This is important for logs that might be buffered
-    let _ = std::io::stdout().flush();
-    let _ = std::io::stderr().flush();
+impl From<OpentelemetryConfig> for ExportConfig {
+    fn from(value: OpentelemetryConfig) -> Self {
+        // If set programmatically, the /v1/traces route is not auto-appended
+        // like in case with env var or default value
+        let endpoint = value.endpoint.map(|mut v| {
+            v.push_str("/v1/traces");
+            v
+        });
 
-    // TODO: When OpenTelemetry tracing is implemented, add:
-    // opentelemetry::global::shutdown_tracer_provider();
+        Self { endpoint, protocol: value.protocol, timeout: value.timeout }
+    }
+}
+
+fn fmt_layer<S>(show_target: bool, log_level: Level) -> impl Layer<S>
+where
+    S: tracing::Subscriber + for<'a> tracing_subscriber::registry::LookupSpan<'a>,
+{
+    tracing_subscriber::fmt::layer()
+        .with_target(show_target)
+        .with_filter(LevelFilter::from_level(log_level))
+}
+
+pub fn init_tracing_stdout(log_level: Level, show_target: bool) -> TracingGuard {
+    tracing_subscriber::registry()
+        .with(build_env_filter(log_level, Level::ERROR))
+        .with(fmt_layer(show_target, log_level))
+        .init();
+    TracingGuard { otel_provider: None }
+}
+
+// In future if we will be able to log to files will holds guards to files
+/// Logger guard, shutdown method should be called on exit
+#[derive(Debug, Default)]
+pub struct TracingGuard {
+    otel_provider: Option<SdkTracerProvider>,
+}
+
+impl Drop for TracingGuard {
+    fn drop(&mut self) {
+        use std::io::Write;
+        let _ = std::io::stdout().flush();
+        let _ = std::io::stderr().flush();
+        if let Some(ref p) = self.otel_provider {
+            if let Err(e) = p.force_flush() {
+                eprintln!("otel tracer flush error: {e}");
+            }
+            if let Err(e) = p.shutdown() {
+                eprintln!("otel tracer shutdown error: {e}");
+            }
+        }
+    }
+}
+
+impl TracingGuard {
+    pub fn with_otel(otel_provider: SdkTracerProvider) -> Self {
+        Self { otel_provider: Some(otel_provider) }
+    }
+}
+
+/// Initialize tracing with OpenTelemetry integration
+pub fn init_tracing_otel(
+    log_level: Level,
+    show_target: bool,
+    otel_config: OpentelemetryConfig,
+) -> Result<TracingGuard, Box<dyn std::error::Error + Send + Sync>> {
+    let exporter_builder = opentelemetry_otlp::SpanExporterBuilder::new();
+    let provider_builder = SdkTracerProvider::builder().with_resource(
+        Resource::builder()
+            .with_service_name(otel_config.resource_name.clone())
+            .build(),
+    );
+
+    let sampler =
+        Sampler::ParentBased(Box::new(Sampler::TraceIdRatioBased(otel_config.sample_ratio)) as _);
+
+    let tracer_provider = match otel_config.protocol {
+        Protocol::Grpc => {
+            let exporter = exporter_builder
+                .with_tonic()
+                .with_export_config(otel_config.clone().into())
+                .build()?;
+            provider_builder
+                .with_batch_exporter(exporter)
+                .with_sampler(sampler)
+                .build()
+        }
+        Protocol::HttpBinary | Protocol::HttpJson => {
+            let exporter = exporter_builder
+                .with_http()
+                .with_export_config(otel_config.clone().into())
+                .build()?;
+            provider_builder
+                .with_batch_exporter(exporter)
+                .with_sampler(sampler)
+                .build()
+        }
+    };
+
+    global::set_tracer_provider(tracer_provider.clone());
+
+    let propagators: Vec<Box<dyn TextMapPropagator + Send + Sync>> = vec![
+        Box::new(opentelemetry_sdk::propagation::TraceContextPropagator::new()),
+        Box::new(opentelemetry_sdk::propagation::BaggagePropagator::new()),
+    ];
+    let propagator = TextMapCompositePropagator::new(propagators);
+    global::set_text_map_propagator(propagator);
+
+    let otel_layer = tracing_opentelemetry::layer()
+        .with_tracer(global::tracer(otel_config.tracer_name.clone()))
+        .with_target(otel_config.show_target)
+        .with_filter(LevelFilter::from_level(otel_config.log_level));
+
+    tracing_subscriber::registry()
+        .with(build_env_filter(log_level, otel_config.sdk_log_level))
+        .with(fmt_layer(show_target, log_level))
+        .with(otel_layer)
+        .init();
+
+    Ok(TracingGuard::with_otel(tracer_provider))
+}
+
+pub fn extract_inbound_context(headers: &HeaderMap) -> Context {
+    global::get_text_map_propagator(|p| p.extract(&HeaderExtractor(headers)))
+}
+
+pub fn inject_outbound_context(cx: &Context, headers: &mut HeaderMap) {
+    global::get_text_map_propagator(|p| p.inject_context(cx, &mut HeaderInjector(headers)))
+}
+
+pub fn inbound_span(name: &str, kind: SpanKind, parent_cx: Context) -> tracing::Span {
+    let kind_str = match kind {
+        SpanKind::Server => "server",
+        SpanKind::Client => "client",
+        SpanKind::Producer => "producer",
+        SpanKind::Consumer => "consumer",
+        SpanKind::Internal => "internal",
+    };
+
+    let span = tracing::info_span!("inbound", otel.name = name, otel.kind = kind_str);
+    if let Err(e) = span.set_parent(parent_cx) {
+        // TODO: maybe pass the error to the caller
+        tracing::error!("setting span parent failed: {e}");
+    };
+    span
 }

@@ -39,9 +39,10 @@ hyper = { version = "1.9.0", features = ["full"] }
 hyper-util = { version = "0.1.20", features = ["full"] }
 ipnet = "2.12.0"
 notify = "8.2.0"
-opentelemetry = { version = "0.32.0", features = ["metrics"] }
-opentelemetry-prometheus = "0.32.0"
-opentelemetry_sdk = { version = "0.32.0", features = ["metrics", "trace"] }
+opentelemetry = { version = "0.31.0", features = ["metrics"] }
+opentelemetry-otlp = { version = "0.31.0", features = ["grpc-tonic", "http-json"] }
+opentelemetry-prometheus = "0.31.0"
+opentelemetry_sdk = { version = "0.31.0", features = ["metrics", "trace"] }
 pingora-limits = "0.8.0"
 pingora-timeout = "0.8.0"
 prometheus = "0.14.0"
@@ -61,6 +62,7 @@ tokio-rustls = "0.26.4"
 tokio-util = { version = "0.7.18", features = ["rt"] }
 toml = "1.1.2"
 tracing = "0.1.44"
+tracing-opentelemetry = { version = "0.32.0" }
 tracing-subscriber = { version = "0.3.23", features = ["fmt", "env-filter"] }
 
 [profile.release]
