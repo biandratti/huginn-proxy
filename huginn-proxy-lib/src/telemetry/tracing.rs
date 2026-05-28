@@ -1,12 +1,17 @@
-use std::time::Duration;
+use http::HeaderMap;
 
-use opentelemetry::global;
+use opentelemetry::global::{self};
+use opentelemetry::propagation::{TextMapCompositePropagator, TextMapPropagator};
+use opentelemetry::trace::SpanKind;
+use opentelemetry::Context;
+use opentelemetry_http::{HeaderExtractor, HeaderInjector};
 use opentelemetry_otlp::{ExportConfig, Protocol, WithExportConfig};
-use opentelemetry_sdk::propagation::TraceContextPropagator;
 use opentelemetry_sdk::trace::{Sampler, SdkTracerProvider};
 use opentelemetry_sdk::Resource;
+use std::time::Duration;
 use tracing::level_filters::LevelFilter;
 use tracing::Level;
+use tracing_opentelemetry::OpenTelemetrySpanExt;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::{EnvFilter, Layer};
@@ -111,7 +116,6 @@ pub fn init_tracing_otel(
 
     let tracer_provider = match otel_config.protocol {
         Protocol::Grpc => {
-            println!("building grpc exporter");
             let exporter = exporter_builder
                 .with_tonic()
                 .with_export_config(otel_config.clone().into())
@@ -122,7 +126,6 @@ pub fn init_tracing_otel(
                 .build()
         }
         Protocol::HttpBinary | Protocol::HttpJson => {
-            println!("building http exporter");
             let exporter = exporter_builder
                 .with_http()
                 .with_export_config(otel_config.clone().into())
@@ -135,14 +138,16 @@ pub fn init_tracing_otel(
     };
 
     global::set_tracer_provider(tracer_provider.clone());
-    let propagator = TraceContextPropagator::new();
-    global::set_text_map_propagator(propagator);
-    let tracer = global::tracer(otel_config.tracer_name.clone());
 
-    println!("Tracer provider set {otel_config:?}");
+    let propagators: Vec<Box<dyn TextMapPropagator + Send + Sync>> = vec![
+        Box::new(opentelemetry_sdk::propagation::TraceContextPropagator::new()),
+        Box::new(opentelemetry_sdk::propagation::BaggagePropagator::new()),
+    ];
+    let propagator = TextMapCompositePropagator::new(propagators);
+    global::set_text_map_propagator(propagator);
 
     let otel_layer = tracing_opentelemetry::layer()
-        .with_tracer(tracer)
+        .with_tracer(global::tracer(otel_config.tracer_name.clone()))
         .with_target(otel_config.show_target)
         .with_filter(LevelFilter::from_level(otel_config.log_level));
 
@@ -153,4 +158,29 @@ pub fn init_tracing_otel(
         .init();
 
     Ok(TracingGuard::with_otel(tracer_provider))
+}
+
+pub fn extract_inbound_context(headers: &HeaderMap) -> Context {
+    global::get_text_map_propagator(|p| p.extract(&HeaderExtractor(headers)))
+}
+
+pub fn inject_outbound_context(cx: &Context, headers: &mut HeaderMap) {
+    global::get_text_map_propagator(|p| p.inject_context(cx, &mut HeaderInjector(headers)))
+}
+
+pub fn inbound_span(name: &str, kind: SpanKind, parent_cx: Context) -> tracing::Span {
+    let kind_str = match kind {
+        SpanKind::Server => "server",
+        SpanKind::Client => "client",
+        SpanKind::Producer => "producer",
+        SpanKind::Consumer => "consumer",
+        SpanKind::Internal => "internal",
+    };
+
+    let span = tracing::info_span!("inbound", otel.name = name, otel.kind = kind_str);
+    if let Err(e) = span.set_parent(parent_cx) {
+        // TODO: maybe pass the error to the caller
+        tracing::error!("setting span parent failed: {e}");
+    };
+    span
 }

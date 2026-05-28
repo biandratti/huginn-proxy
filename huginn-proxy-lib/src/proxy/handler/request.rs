@@ -11,19 +11,20 @@ use crate::proxy::handler::rate_limit_validation::check_rate_limit;
 use crate::proxy::http_result::{HttpError, HttpResult};
 use crate::proxy::ClientPool;
 use crate::telemetry::metrics::values;
+use crate::telemetry::tracing::{extract_inbound_context, inbound_span};
 use crate::telemetry::Metrics;
 use http::StatusCode;
 use http::Version;
 use hyper::body::Incoming;
 use hyper::header::HeaderName;
 use hyper::Request;
-use opentelemetry::global::{self, BoxedTracer};
-use opentelemetry::trace::{FutureExt, TraceContextExt, Tracer};
-use opentelemetry_http::HeaderExtractor;
+use opentelemetry::trace::{SpanKind, TraceContextExt};
+use opentelemetry::KeyValue;
 use std::sync::Arc;
 use tokio::sync::watch;
 use tokio::time::Instant;
-use tracing::{debug, info};
+use tracing::{debug, Instrument};
+use tracing_opentelemetry::OpenTelemetrySpanExt;
 
 type RespBody = http_body_util::combinators::BoxBody<bytes::Bytes, hyper::Error>;
 
@@ -63,19 +64,18 @@ pub async fn handle_proxy_request(
     client_pool: &Arc<ClientPool>,
     upstream: &UpstreamGateway,
 ) -> HttpResult<hyper::Response<RespBody>> {
-    let parent_cx = extract_request_context(&req);
-    let tracer = global::tracer("huggin-tracer");
-    let span = tracer
-        .span_builder("proxy-request")
-        .with_kind(opentelemetry::trace::SpanKind::Server)
-        .start_with_context(&tracer, &parent_cx);
-    let cx = parent_cx.with_span(span);
-
     let start = Instant::now();
+    let span =
+        inbound_span("proxy.request", SpanKind::Server, extract_inbound_context(req.headers()));
+    let cx = span.context();
     let method = req.method().to_string();
-
-    info!("started processing request {:?}", req);
     let protocol = format!("{:?}", req.version());
+    let otel_span = cx.span();
+
+    otel_span.set_attribute(KeyValue::new("http.method", req.method().to_string()));
+    otel_span.set_attribute(KeyValue::new("http.url", req.uri().to_string()));
+    otel_span.set_attribute(KeyValue::new("net.peer.ip", peer.to_string()));
+    otel_span.set_attribute(KeyValue::new("http.protocol", format!("{:?}", req.version())));
 
     if let Some(content_length) = req.headers().get(hyper::header::CONTENT_LENGTH) {
         if let Ok(length_str) = content_length.to_str() {
@@ -248,7 +248,7 @@ pub async fn handle_proxy_request(
             force_new_connection: route_match.force_new_connection,
         },
     )
-    .with_context(cx)
+    .instrument(span.clone())
     .await;
 
     let mut result = result;
@@ -270,6 +270,7 @@ pub async fn handle_proxy_request(
     }
 
     let duration = start.elapsed().as_secs_f64();
+    otel_span.set_attribute(KeyValue::new("http.request.duration", duration));
     let status_code = match &result {
         Ok(resp) => resp.status().as_u16(),
         Err(e) => {
@@ -277,6 +278,7 @@ pub async fn handle_proxy_request(
             code.as_u16()
         }
     };
+    otel_span.set_attribute(KeyValue::new("http.status", status_code as i64));
 
     metrics.record_entrypoint_request(&method, status_code, &protocol);
     metrics.record_request(&method, status_code, &protocol, route_match.matched_prefix);
@@ -289,10 +291,4 @@ pub async fn handle_proxy_request(
     );
 
     result
-}
-
-fn extract_request_context(req: &Request<Incoming>) -> opentelemetry::Context {
-    let extractor = &HeaderExtractor(req.headers());
-
-    global::get_text_map_propagator(|prop| prop.extract(extractor))
 }

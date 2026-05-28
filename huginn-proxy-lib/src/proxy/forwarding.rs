@@ -1,15 +1,17 @@
 use crate::config::{BackendHttpVersion, KeepAliveConfig};
 use crate::proxy::http_result::{HttpError, HttpResult};
 use crate::proxy::ClientPool;
+use crate::telemetry::tracing::inject_outbound_context;
 use crate::telemetry::Metrics;
 use http::{Request, Response, Version};
 use http_body_util::{combinators::BoxBody, BodyExt};
 use hyper::body::Incoming;
-use opentelemetry::global;
-use opentelemetry::trace::Tracer;
+use opentelemetry::trace::TraceContextExt;
+use opentelemetry::KeyValue;
 use std::sync::Arc;
 use tokio::time::Instant;
-use tracing::info;
+use tracing::Instrument;
+use tracing_opentelemetry::OpenTelemetrySpanExt;
 
 type RespBody = BoxBody<bytes::Bytes, hyper::Error>;
 
@@ -66,15 +68,11 @@ pub async fn forward(
     backend: String,
     config: ForwardConfig<'_>,
 ) -> HttpResult<Response<RespBody>> {
-    let tracer = global::tracer("huginn-tracer");
-    let _span = tracer
-        .span_builder("forward")
-        .with_kind(opentelemetry::trace::SpanKind::Internal)
-        .start(&tracer);
+    let span = tracing::info_span!("proxy.forward");
     let start = Instant::now();
     let protocol = format!("{:?}", req.version());
-
-    info!("started forward to {backend}");
+    let cx = span.context();
+    let otel_span = cx.span();
 
     let org_pq = req
         .uri()
@@ -136,19 +134,27 @@ pub async fn forward(
         parts.headers.insert("host", host);
     }
 
-    let out_req = Request::from_parts(parts, body);
+    let mut out_req = Request::from_parts(parts, body);
 
+    inject_outbound_context(&tracing::Span::current().context(), out_req.headers_mut());
+    otel_span.set_attribute(KeyValue::new("http.upstream.method", out_req.method().to_string()));
+    otel_span.set_attribute(KeyValue::new("http.upstream.url", out_req.uri().to_string()));
+    otel_span
+        .set_attribute(KeyValue::new("http.upstream.protocol", format!("{:?}", out_req.version())));
+
+    let span_c = span.clone();
     let result = if let Some(pooled_client) = config
         .client_pool
         .get_client(target_version, config.force_new_connection)
     {
-        pooled_client.request(out_req).await
+        pooled_client.request(out_req).instrument(span_c).await
     } else {
         let oneoff_client = config.client_pool.create_oneoff_client(target_version);
-        oneoff_client.request(out_req).await
+        oneoff_client.request(out_req).instrument(span_c).await
     };
 
     let duration = start.elapsed().as_secs_f64();
+    otel_span.set_attribute(KeyValue::new("http.upstream.elapsed", duration));
 
     match result {
         Ok(mut resp) => {
