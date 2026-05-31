@@ -22,9 +22,8 @@
 //! ```
 
 use tests_browsers::{
-    get_chrome_json, parse_backend_echo, verify_chrome_version, verify_fingerprint_headers,
-    CHROME_FINGERPRINTS, HEADER_HTTP2_AKAMAI, HEADER_TCP_SYN, HEADER_TLS_JA4, HEADER_TLS_JA4_R,
-    HEADER_TLS_JA4_S1, HEADER_TLS_JA4_S1R, PROXY_URL,
+    get_chrome_json, names, parse_backend_echo, verify_chrome_version, verify_fingerprint_headers,
+    CHROME_FINGERPRINTS, PROXY_URL,
 };
 use thirtyfour::prelude::*;
 
@@ -54,9 +53,9 @@ async fn test_chrome_fingerprint() -> Result<(), Box<dyn std::error::Error>> {
         let headers = parse_backend_echo(&content)?;
 
         let http2_fp = headers
-            .get(HEADER_HTTP2_AKAMAI)
+            .get(names::HTTP2_AKAMAI)
             .map(|s| s.as_str())
-            .ok_or(format!("Missing {} header", HEADER_HTTP2_AKAMAI))?;
+            .ok_or(format!("Missing {} header", names::HTTP2_AKAMAI))?;
 
         assert_eq!(
             http2_fp, CHROME_FINGERPRINTS.http2_akamai,
@@ -66,29 +65,29 @@ async fn test_chrome_fingerprint() -> Result<(), Box<dyn std::error::Error>> {
         );
 
         let ja4_fp = headers
-            .get(HEADER_TLS_JA4)
+            .get(names::TLS_JA4)
             .map(|s| s.as_str())
-            .ok_or(format!("Missing {} header", HEADER_TLS_JA4))?;
+            .ok_or(format!("Missing {} header", names::TLS_JA4))?;
 
         let ja4_fp_r = headers
-            .get(HEADER_TLS_JA4_R)
+            .get(names::TLS_JA4_R)
             .map(|s| s.as_str())
-            .ok_or(format!("Missing {} header", HEADER_TLS_JA4_R))?;
+            .ok_or(format!("Missing {} header", names::TLS_JA4_R))?;
 
         let ja4_fp_s1 = headers
-            .get(HEADER_TLS_JA4_S1)
+            .get(names::TLS_JA4_S1)
             .map(|s| s.as_str())
-            .ok_or(format!("Missing {} header", HEADER_TLS_JA4_S1))?;
+            .ok_or(format!("Missing {} header", names::TLS_JA4_S1))?;
 
         let ja4_fp_s1r = headers
-            .get(HEADER_TLS_JA4_S1R)
+            .get(names::TLS_JA4_S1R)
             .map(|s| s.as_str())
-            .ok_or(format!("Missing {} header", HEADER_TLS_JA4_S1R))?;
+            .ok_or(format!("Missing {} header", names::TLS_JA4_S1R))?;
 
         let tcp_syn_fp = headers
-            .get(HEADER_TCP_SYN)
+            .get(names::TCP_SYN)
             .map(|s| s.as_str())
-            .ok_or(format!("Missing {} header on first Chrome navigation", HEADER_TCP_SYN))?;
+            .ok_or(format!("Missing {} header on first Chrome navigation", names::TCP_SYN))?;
         assert!(!tcp_syn_fp.is_empty(), "TCP SYN fingerprint should not be empty");
         assert!(
             tcp_syn_fp.starts_with("4:") || tcp_syn_fp.starts_with("6:"),

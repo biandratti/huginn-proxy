@@ -38,18 +38,13 @@ use huginn_proxy_lib::config::{
     Backend, FingerprintConfig, KeepAliveConfig, ListenConfig, LoggingConfig, Route,
     SecurityConfig, TelemetryConfig, TimeoutConfig,
 };
+use huginn_proxy_lib::fingerprinting::names;
 use huginn_proxy_lib::{Config, TlsConfig};
 use hyper::service::service_fn;
 use hyper::Response;
 use hyper_util::rt::{TokioExecutor, TokioIo};
 use hyper_util::server::conn::auto::Builder as ConnBuilder;
 use tokio::net::TcpListener;
-
-// ---------------------------------------------------------------------------
-// Fingerprint header names (mirrors huginn_proxy_lib::fingerprinting::names)
-// ---------------------------------------------------------------------------
-const HEADER_JA4: &str = "x-tls-ja4";
-const HEADER_AKAMAI: &str = "x-http2-akamai";
 
 // ---------------------------------------------------------------------------
 // Expected fingerprint values - captured from a real reqwest/rustls connection.
@@ -467,8 +462,10 @@ fn bench_concurrency(c: &mut Criterion) {
 fn assert_fingerprint_ja4(resp: &reqwest::Response) {
     let value = resp
         .headers()
-        .get(HEADER_JA4)
-        .unwrap_or_else(|| panic!("missing {HEADER_JA4} header - fingerprinting may be broken"))
+        .get(names::TLS_JA4)
+        .unwrap_or_else(|| {
+            panic!("missing {} header - fingerprinting may be broken", names::TLS_JA4)
+        })
         .to_str()
         .unwrap_or_else(|e| panic!("non-UTF8 JA4 header: {e}"));
     assert_eq!(
@@ -482,9 +479,9 @@ fn assert_fingerprint_ja4(resp: &reqwest::Response) {
 fn assert_fingerprint_akamai(resp: &reqwest::Response) {
     let value = resp
         .headers()
-        .get(HEADER_AKAMAI)
+        .get(names::HTTP2_AKAMAI)
         .unwrap_or_else(|| {
-            panic!("missing {HEADER_AKAMAI} header - HTTP/2 fingerprinting may be broken")
+            panic!("missing {} header - HTTP/2 fingerprinting may be broken", names::HTTP2_AKAMAI)
         })
         .to_str()
         .unwrap_or_else(|e| panic!("non-UTF8 Akamai header: {e}"));
@@ -520,7 +517,7 @@ async fn start_backend() -> (tokio::task::JoinHandle<()>, SocketAddr) {
                 let svc = service_fn(|req: hyper::Request<hyper::body::Incoming>| async move {
                     let mut resp = Response::new(Full::new(Bytes::from("ok")));
                     // Echo fingerprinting headers so the benchmark can assert on them
-                    for name in [HEADER_JA4, HEADER_AKAMAI] {
+                    for name in [names::TLS_JA4, names::HTTP2_AKAMAI] {
                         if let Some(value) = req.headers().get(name) {
                             resp.headers_mut().insert(
                                 hyper::header::HeaderName::from_bytes(name.as_bytes())

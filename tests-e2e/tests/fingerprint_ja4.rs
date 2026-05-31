@@ -10,8 +10,6 @@ use tests_e2e::common::{
     PROXY_HTTPS_URL_IPV6,
 };
 
-// ── impl ──────────────────────────────────────────────────────────────────────
-
 async fn test_ja4_impl(
     url: &str,
     is_ipv6: bool,

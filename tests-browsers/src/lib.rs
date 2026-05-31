@@ -3,15 +3,9 @@
 use std::collections::HashMap;
 use thirtyfour::prelude::*;
 
+pub use huginn_proxy_lib::fingerprinting::names;
+
 pub const PROXY_URL: &str = "https://localhost:7000";
-pub const HEADER_HTTP2_AKAMAI: &str = "x-http2-akamai";
-pub const HEADER_TLS_JA4: &str = "x-tls-ja4";
-pub const HEADER_TLS_JA4_R: &str = "x-tls-ja4-r";
-pub const HEADER_TLS_JA4_O: &str = "x-tls-ja4-o";
-pub const HEADER_TLS_JA4_OR: &str = "x-tls-ja4-or";
-pub const HEADER_TLS_JA4_S1: &str = "x-tls-ja4-s1";
-pub const HEADER_TLS_JA4_S1R: &str = "x-tls-ja4-s1r";
-pub const HEADER_TCP_SYN: &str = "x-tcp-p0f";
 
 #[derive(Debug, Clone)]
 pub struct BrowserFingerprints {
@@ -87,13 +81,13 @@ pub fn verify_fingerprint_headers(
     headers: &HashMap<String, String>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     for key in [
-        HEADER_HTTP2_AKAMAI,
-        HEADER_TLS_JA4,
-        HEADER_TLS_JA4_R,
-        HEADER_TLS_JA4_O,
-        HEADER_TLS_JA4_OR,
-        HEADER_TLS_JA4_S1,
-        HEADER_TLS_JA4_S1R,
+        names::HTTP2_AKAMAI,
+        names::TLS_JA4,
+        names::TLS_JA4_R,
+        names::TLS_JA4_O,
+        names::TLS_JA4_OR,
+        names::TLS_JA4_S1,
+        names::TLS_JA4_S1R,
     ] {
         if !headers.contains_key(key) {
             return Err(format!("Missing {key} header").into());
@@ -103,7 +97,7 @@ pub fn verify_fingerprint_headers(
 }
 
 pub fn get_http2_fingerprint(headers: &HashMap<String, String>) -> Option<&str> {
-    headers.get(HEADER_HTTP2_AKAMAI).map(|s| s.as_str())
+    headers.get(names::HTTP2_AKAMAI).map(|s| s.as_str())
 }
 
 // ── browser helpers ───────────────────────────────────────────────────────────

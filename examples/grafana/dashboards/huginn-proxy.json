@@ -233,7 +233,9 @@
       ],
       "options": {
         "reduceOptions": {
-          "calcs": ["lastNotNull"]
+          "calcs": [
+            "lastNotNull"
+          ]
         },
         "colorMode": "background",
         "graphMode": "area"
@@ -245,7 +247,10 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "blue", "value": null }
+              {
+                "color": "blue",
+                "value": null
+              }
             ]
           }
         }
@@ -269,7 +274,9 @@
       ],
       "options": {
         "reduceOptions": {
-          "calcs": ["lastNotNull"]
+          "calcs": [
+            "lastNotNull"
+          ]
         },
         "colorMode": "background",
         "graphMode": "area"
@@ -281,7 +288,10 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "blue", "value": null }
+              {
+                "color": "blue",
+                "value": null
+              }
             ]
           }
         }
@@ -305,7 +315,9 @@
       ],
       "options": {
         "reduceOptions": {
-          "calcs": ["lastNotNull"]
+          "calcs": [
+            "lastNotNull"
+          ]
         },
         "colorMode": "background",
         "graphMode": "area"
@@ -317,7 +329,10 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "purple", "value": null }
+              {
+                "color": "purple",
+                "value": null
+              }
             ]
           }
         }
@@ -604,44 +619,6 @@
         {
           "expr": "sum(rate(huginn_entrypoint_requests_total_total{protocol=\"HTTP/2.0\"}[$__rate_interval])) or on() vector(0)",
           "legendFormat": "HTTP/2",
-          "refId": "B"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "reqps"
-        }
-      },
-      "options": {
-        "tooltip": {
-          "mode": "multi"
-        },
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom"
-        }
-      }
-    },
-    {
-      "id": 115,
-      "type": "timeseries",
-      "title": "Entrypoint vs Routed Requests",
-      "description": "Entrypoint = all requests arriving at the proxy. Routed = requests that matched a route. The gap represents unrouted traffic (404 no match, 403 blocked).",
-      "gridPos": {
-        "x": 0,
-        "y": 34,
-        "w": 24,
-        "h": 8
-      },
-      "targets": [
-        {
-          "expr": "sum(rate(huginn_entrypoint_requests_total_total[$__rate_interval])) or on() vector(0)",
-          "legendFormat": "entrypoint (all)",
-          "refId": "A"
-        },
-        {
-          "expr": "sum(rate(huginn_requests_total_total[$__rate_interval])) or on() vector(0)",
-          "legendFormat": "routed",
           "refId": "B"
         }
       ],
@@ -1106,13 +1083,127 @@
       }
     },
     {
+      "id": 114,
+      "type": "row",
+      "title": "Fingerprinting \u2014 Spoofing",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 56,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "id": 118,
+      "type": "timeseries",
+      "title": "TLS Fingerprint Spoofing (JA4)",
+      "description": "Rate per TLS JA4 header when clients supply proxy-authoritative values.",
+      "gridPos": {
+        "x": 0,
+        "y": 57,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "sum by (header) (rate(huginn_fingerprint_spoofing_attempts_total_total{header=~\"x-tls-ja4.*\"}[$__rate_interval])) or on() vector(0)",
+          "legendFormat": "{{header}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "min": 0
+        }
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 119,
+      "type": "timeseries",
+      "title": "HTTP/2 Fingerprint Spoofing (Akamai)",
+      "description": "Client-supplied x-http2-akamai headers stripped by the proxy.",
+      "gridPos": {
+        "x": 8,
+        "y": 57,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(huginn_fingerprint_spoofing_attempts_total_total{header=\"x-http2-akamai\"}[$__rate_interval])) or on() vector(0)",
+          "legendFormat": "x-http2-akamai",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "min": 0
+        }
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 120,
+      "type": "timeseries",
+      "title": "TCP SYN Fingerprint Spoofing (p0f)",
+      "description": "Client-supplied x-tcp-p0f headers stripped by the proxy.",
+      "gridPos": {
+        "x": 16,
+        "y": 57,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(huginn_fingerprint_spoofing_attempts_total_total{header=\"x-tcp-p0f\"}[$__rate_interval])) or on() vector(0)",
+          "legendFormat": "x-tcp-p0f",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "min": 0
+        }
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
       "id": 103,
       "type": "row",
       "title": "Fingerprinting \u2014 Extraction Rate",
       "collapsed": false,
       "gridPos": {
         "x": 0,
-        "y": 56,
+        "y": 65,
         "w": 24,
         "h": 1
       }
@@ -1123,7 +1214,7 @@
       "title": "TLS Fingerprint (JA4)",
       "gridPos": {
         "x": 0,
-        "y": 57,
+        "y": 66,
         "w": 8,
         "h": 8
       },
@@ -1160,7 +1251,7 @@
       "title": "HTTP/2 Fingerprint (Akamai)",
       "gridPos": {
         "x": 8,
-        "y": 57,
+        "y": 66,
         "w": 8,
         "h": 8
       },
@@ -1202,7 +1293,7 @@
       "title": "TCP SYN Fingerprint (eBPF)",
       "gridPos": {
         "x": 16,
-        "y": 57,
+        "y": 66,
         "w": 8,
         "h": 8
       },
@@ -1240,7 +1331,7 @@
       "collapsed": false,
       "gridPos": {
         "x": 0,
-        "y": 65,
+        "y": 74,
         "w": 24,
         "h": 1
       }
@@ -1251,7 +1342,7 @@
       "title": "TLS Fingerprint Duration (JA4)",
       "gridPos": {
         "x": 0,
-        "y": 66,
+        "y": 75,
         "w": 8,
         "h": 8
       },
@@ -1293,7 +1384,7 @@
       "title": "HTTP/2 Fingerprint Duration (Akamai)",
       "gridPos": {
         "x": 8,
-        "y": 66,
+        "y": 75,
         "w": 8,
         "h": 8
       },
@@ -1335,7 +1426,7 @@
       "title": "TCP SYN Fingerprint Duration (eBPF)",
       "gridPos": {
         "x": 16,
-        "y": 66,
+        "y": 75,
         "w": 8,
         "h": 8
       },
@@ -1378,7 +1469,7 @@
       "collapsed": false,
       "gridPos": {
         "x": 0,
-        "y": 74,
+        "y": 83,
         "w": 24,
         "h": 1
       }
@@ -1389,7 +1480,7 @@
       "title": "Backend Request Rate",
       "gridPos": {
         "x": 0,
-        "y": 75,
+        "y": 84,
         "w": 8,
         "h": 8
       },
@@ -1421,19 +1512,19 @@
       "title": "Backend Errors & Health-Gate Rejects (errors/s)",
       "gridPos": {
         "x": 8,
-        "y": 75,
+        "y": 84,
         "w": 8,
         "h": 8
       },
       "targets": [
         {
           "expr": "sum by (backend_address) (rate(huginn_backend_errors_total_total[$__rate_interval])) or on() vector(0)",
-          "legendFormat": "backend errors/s — {{backend_address}}",
+          "legendFormat": "backend errors/s \u2014 {{backend_address}}",
           "refId": "A"
         },
         {
           "expr": "sum by (backend_address) (rate(huginn_health_check_gate_rejects_total_total[$__rate_interval])) or on() vector(0)",
-          "legendFormat": "health-gate rejects/s — {{backend_address}}",
+          "legendFormat": "health-gate rejects/s \u2014 {{backend_address}}",
           "refId": "B"
         }
       ],
@@ -1470,7 +1561,7 @@
       "title": "Backend Latency P95",
       "gridPos": {
         "x": 16,
-        "y": 75,
+        "y": 84,
         "w": 8,
         "h": 8
       },
@@ -1502,7 +1593,7 @@
       "title": "Backend Throughput (bytes/s)",
       "gridPos": {
         "x": 0,
-        "y": 83,
+        "y": 92,
         "w": 12,
         "h": 8
       },
@@ -1539,14 +1630,14 @@
       "title": "Backend Selection Distribution",
       "gridPos": {
         "x": 12,
-        "y": 83,
+        "y": 92,
         "w": 12,
         "h": 8
       },
       "targets": [
         {
           "expr": "sum by (backend) (rate(huginn_backend_selections_total_total[$__rate_interval])) or on() vector(0)",
-          "legendFormat": "selections — {{backend}}",
+          "legendFormat": "selections \u2014 {{backend}}",
           "refId": "A"
         }
       ],
@@ -1572,7 +1663,7 @@
       "collapsed": false,
       "gridPos": {
         "x": 0,
-        "y": 91,
+        "y": 100,
         "w": 24,
         "h": 1
       }
@@ -1583,7 +1674,7 @@
       "title": "Rate Limit Evaluation vs Rejections",
       "gridPos": {
         "x": 0,
-        "y": 92,
+        "y": 101,
         "w": 12,
         "h": 8
       },
@@ -1625,7 +1716,7 @@
       "title": "Rejections by Strategy",
       "gridPos": {
         "x": 12,
-        "y": 92,
+        "y": 101,
         "w": 12,
         "h": 8
       },
@@ -1658,7 +1749,7 @@
       "collapsed": false,
       "gridPos": {
         "x": 0,
-        "y": 100,
+        "y": 109,
         "w": 24,
         "h": 1
       }
@@ -1669,7 +1760,7 @@
       "title": "TCP SYN Captured (agent)",
       "gridPos": {
         "x": 0,
-        "y": 101,
+        "y": 110,
         "w": 12,
         "h": 8
       },
@@ -1701,7 +1792,7 @@
       "title": "TCP SYN Failures (agent)",
       "gridPos": {
         "x": 12,
-        "y": 101,
+        "y": 110,
         "w": 12,
         "h": 8
       },
@@ -1739,7 +1830,7 @@
       "collapsed": false,
       "gridPos": {
         "x": 0,
-        "y": 109,
+        "y": 118,
         "w": 24,
         "h": 1
       }
@@ -1750,7 +1841,7 @@
       "title": "Error Rate by Type",
       "gridPos": {
         "x": 0,
-        "y": 110,
+        "y": 119,
         "w": 12,
         "h": 8
       },
@@ -1782,7 +1873,7 @@
       "title": "Error Rate by Component",
       "gridPos": {
         "x": 12,
-        "y": 110,
+        "y": 119,
         "w": 12,
         "h": 8
       },
@@ -1815,7 +1906,7 @@
       "collapsed": false,
       "gridPos": {
         "x": 0,
-        "y": 118,
+        "y": 127,
         "w": 24,
         "h": 1
       }
@@ -1826,7 +1917,7 @@
       "title": "IP Filter Denial Rate",
       "gridPos": {
         "x": 0,
-        "y": 119,
+        "y": 128,
         "w": 6,
         "h": 4
       },
@@ -1870,7 +1961,7 @@
       "title": "IP Filter: Allowed vs Denied",
       "gridPos": {
         "x": 6,
-        "y": 119,
+        "y": 128,
         "w": 18,
         "h": 8
       },
@@ -1913,46 +2004,9 @@
       "collapsed": false,
       "gridPos": {
         "x": 0,
-        "y": 127,
+        "y": 136,
         "w": 24,
         "h": 1
-      }
-    },
-    {
-      "id": 40,
-      "type": "timeseries",
-      "title": "Headers Added / Removed by Context",
-      "gridPos": {
-        "x": 0,
-        "y": 128,
-        "w": 24,
-        "h": 8
-      },
-      "targets": [
-        {
-          "expr": "sum by (context) (rate(huginn_headers_added_total_total[$__rate_interval])) or on() vector(0)",
-          "legendFormat": "added \u2014 {{context}}",
-          "refId": "A"
-        },
-        {
-          "expr": "sum by (context) (rate(huginn_headers_removed_total_total[$__rate_interval])) or on() vector(0)",
-          "legendFormat": "removed \u2014 {{context}}",
-          "refId": "B"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short"
-        }
-      },
-      "options": {
-        "tooltip": {
-          "mode": "multi"
-        },
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom"
-        }
       }
     },
     {
@@ -1962,7 +2016,7 @@
       "collapsed": false,
       "gridPos": {
         "x": 0,
-        "y": 136,
+        "y": 145,
         "w": 24,
         "h": 1
       }
@@ -1973,7 +2027,7 @@
       "title": "mTLS Connections by Protocol",
       "gridPos": {
         "x": 0,
-        "y": 137,
+        "y": 146,
         "w": 12,
         "h": 8
       },
@@ -2005,7 +2059,7 @@
       "title": "mTLS Usage (% of TLS handshakes)",
       "gridPos": {
         "x": 12,
-        "y": 137,
+        "y": 146,
         "w": 12,
         "h": 8
       },
@@ -2038,7 +2092,7 @@
       "collapsed": false,
       "gridPos": {
         "x": 0,
-        "y": 145,
+        "y": 154,
         "w": 24,
         "h": 1
       },
@@ -2050,7 +2104,7 @@
       "title": "Active Config Hash",
       "gridPos": {
         "x": 0,
-        "y": 146,
+        "y": 155,
         "w": 4,
         "h": 8
       },
@@ -2084,7 +2138,7 @@
       "title": "Time Since Last Successful Reload",
       "gridPos": {
         "x": 4,
-        "y": 146,
+        "y": 155,
         "w": 4,
         "h": 8
       },
@@ -2116,7 +2170,7 @@
       "title": "Total Reloads",
       "gridPos": {
         "x": 8,
-        "y": 146,
+        "y": 155,
         "w": 4,
         "h": 8
       },
@@ -2149,7 +2203,7 @@
       "title": "Config Reload Attempts",
       "gridPos": {
         "x": 12,
-        "y": 146,
+        "y": 155,
         "w": 12,
         "h": 8
       },
@@ -2187,7 +2241,7 @@
       "collapsed": false,
       "gridPos": {
         "x": 0,
-        "y": 162,
+        "y": 171,
         "w": 24,
         "h": 1
       }
@@ -2199,7 +2253,7 @@
       "description": "CPU usage from cAdvisor. Series are summed by Compose project and service (expects services named `proxy` and `ebpf-agent`, e.g. examples/docker-compose.ebpf.yml). Values are approximate cores (rate of cgroup CPU seconds). Requires docker-compose.observability.yml with cAdvisor.",
       "gridPos": {
         "x": 0,
-        "y": 163,
+        "y": 172,
         "w": 12,
         "h": 8
       },
@@ -2233,7 +2287,7 @@
       "description": "container_memory_working_set_bytes for the same Compose services as the CPU panel.",
       "gridPos": {
         "x": 12,
-        "y": 163,
+        "y": 172,
         "w": 12,
         "h": 8
       },
@@ -2265,7 +2319,7 @@
       "title": "Active Cert Hash",
       "gridPos": {
         "x": 0,
-        "y": 154,
+        "y": 163,
         "w": 4,
         "h": 8
       },
@@ -2299,7 +2353,7 @@
       "title": "Time Since Last Cert Reload",
       "gridPos": {
         "x": 4,
-        "y": 154,
+        "y": 163,
         "w": 4,
         "h": 8
       },
@@ -2331,7 +2385,7 @@
       "title": "Total Cert Reloads",
       "gridPos": {
         "x": 8,
-        "y": 154,
+        "y": 163,
         "w": 4,
         "h": 8
       },
@@ -2365,7 +2419,7 @@
       "title": "TLS Cert Reload Attempts",
       "gridPos": {
         "x": 12,
-        "y": 154,
+        "y": 163,
         "w": 12,
         "h": 8
       },

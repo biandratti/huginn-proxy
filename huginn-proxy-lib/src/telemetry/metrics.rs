@@ -18,6 +18,7 @@ pub mod labels {
     pub const CIPHER_SUITE: &str = "cipher_suite";
     pub const TIMEOUT_TYPE: &str = "timeout_type";
     pub const REASON: &str = "reason";
+    pub const HEADER: &str = "header";
     pub const COMPONENT: &str = "component";
     pub const VERSION: &str = "version";
     pub const RUST_VERSION: &str = "rust_version";
@@ -71,6 +72,10 @@ pub struct Metrics {
     pub tcp_syn_fingerprints_total: Counter<u64>,
     pub tcp_syn_fingerprint_duration_seconds: Histogram<f64>,
     pub tcp_syn_fingerprint_failures_total: Counter<u64>,
+
+    // Fingerprint spoofing detection metrics
+    // header label: the proxy-authoritative header name the client attempted to supply
+    pub fingerprint_spoofing_attempts_total: Counter<u64>,
 
     pub backend_requests_total: Counter<u64>,
     pub backend_errors_total: Counter<u64>,
@@ -215,6 +220,11 @@ impl Metrics {
             tcp_syn_fingerprint_failures_total: meter
                 .u64_counter("huginn_tcp_syn_fingerprint_failures_total")
                 .with_description("Total number of TCP SYN fingerprint extraction failures (malformed BPF map entries)")
+                .build(),
+
+            fingerprint_spoofing_attempts_total: meter
+                .u64_counter("huginn_fingerprint_spoofing_attempts_total")
+                .with_description("Total number of proxy-authoritative fingerprint headers supplied by clients (spoofing attempts). header=the stripped header name")
                 .build(),
 
             backend_requests_total: meter
@@ -685,6 +695,13 @@ impl Metrics {
     pub fn record_http2_fingerprint_not_applicable(&self) {
         self.http2_fingerprint_failures_total
             .add(1, &[KeyValue::new(labels::REASON, values::REASON_NOT_HTTP2)]);
+    }
+
+    /// Record a client-supplied proxy-authoritative fingerprint header (spoofing attempt).
+    /// `header` is the name of the header that was stripped (e.g. `names::HTTP2_AKAMAI`).
+    pub fn record_fingerprint_spoofing_attempt(&self, header: &'static str) {
+        self.fingerprint_spoofing_attempts_total
+            .add(1, &[KeyValue::new(labels::HEADER, header)]);
     }
 
     /// Record a TCP SYN fingerprint lookup result and its duration.

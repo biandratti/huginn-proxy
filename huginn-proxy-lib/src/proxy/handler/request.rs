@@ -12,6 +12,7 @@ use crate::proxy::http_result::{HttpError, HttpResult};
 use crate::proxy::ClientPool;
 use crate::telemetry::metrics::values;
 use crate::telemetry::Metrics;
+use http::HeaderMap;
 use http::StatusCode;
 use http::Version;
 use hyper::body::Incoming;
@@ -23,6 +24,24 @@ use tokio::time::Instant;
 use tracing::debug;
 
 type RespBody = http_body_util::combinators::BoxBody<bytes::Bytes, hyper::Error>;
+
+/// Strip all proxy-authoritative fingerprint headers from an incoming request.
+///
+/// Returns the names of the fingerprint headers the client actually supplied.
+/// A non-empty return value means the client attempted to spoof those signatures.
+///
+/// The detection header ([`names::SPOOFING_DETECTED`]) is also stripped here,
+/// so the client cannot forge or suppress the detection signal.
+pub fn strip_client_fingerprints(headers: &mut HeaderMap) -> Vec<&'static str> {
+    let mut spoofed = Vec::new();
+    for &name in names::FINGERPRINTS {
+        if headers.remove(name).is_some() {
+            spoofed.push(name);
+        }
+    }
+    headers.remove(names::SPOOFING_DETECTED);
+    spoofed
+}
 
 fn check_ip_access(
     peer: std::net::SocketAddr,
@@ -135,6 +154,13 @@ pub async fn handle_proxy_request(
         return Ok(rate_limited_response);
     }
 
+    // Strip proxy-authoritative fingerprint headers unconditionally, must run outside the
+    // fingerprinting gate, so routes with fingerprinting=false also strip spoofed values.
+    let spoofed = strip_client_fingerprints(req.headers_mut());
+    for &name in &spoofed {
+        metrics.record_fingerprint_spoofing_attempt(name);
+    }
+
     // Extract and inject fingerprints first (fingerprints are extracted from TLS handshake/HTTP2 frames,
     // not from HTTP headers, so adding X-Forwarded-* headers won't affect fingerprint generation)
     if route_match.fingerprinting {
@@ -204,6 +230,16 @@ pub async fn handle_proxy_request(
                     "Handler: no TCP SYN fingerprint available - keep-alive request or SYN not captured"
                 );
             }
+        }
+    }
+
+    // Signal which fingerprint signatures the client attempted to spoof.
+    // Runs outside the fingerprinting gate so backends on fingerprinting=false routes
+    // also receive the detection signal.
+    if !spoofed.is_empty() {
+        if let Ok(hv) = hyper::header::HeaderValue::from_str(&spoofed.join(",")) {
+            req.headers_mut()
+                .insert(HeaderName::from_static(names::SPOOFING_DETECTED), hv);
         }
     }
 

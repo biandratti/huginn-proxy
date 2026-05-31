@@ -3,7 +3,7 @@ use tests_e2e::common::{wait_for_service, DEFAULT_SERVICE_TIMEOUT_SECS, PROXY_HT
 
 /// Test the /fingerprint route with force_new_connection enabled
 /// This route forces new backend connections per request (bypassing connection pool)
-/// Note: Fingerprint headers (x-tls-ja4, x-http2-akamai) are extracted from client→proxy connection,
+/// Note: Fingerprint headers (names::TLS_JA4, names::HTTP2_AKAMAI) are extracted from client→proxy connection,
 /// not from proxy→backend connection. The force_new_connection setting affects only proxy→backend.
 #[tokio::test]
 async fn test_fingerprint_route_with_force_new_connection(
