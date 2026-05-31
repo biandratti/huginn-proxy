@@ -77,7 +77,7 @@ pub mod names {
     /// Header injected toward the backend listing which fingerprint signatures the
     /// client attempted to spoof (comma-separated). Absent when no spoofing is detected.
     ///
-    /// Example: `x-fingerprint-spoofing-detected: x-http2-akamai,x-tcp-p0f`
+    /// Example: [`SPOOFING_DETECTED`]: [`HTTP2_AKAMAI`],[`TCP_SYN`]
     ///
     /// This header is itself proxy-authoritative: it is stripped from client input so
     /// the client cannot forge or suppress the detection signal.

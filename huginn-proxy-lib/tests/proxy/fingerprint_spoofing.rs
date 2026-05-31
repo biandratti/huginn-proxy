@@ -48,7 +48,7 @@ fn strip_detection_header_only_yields_empty_list() {
     let mut headers = HeaderMap::new();
     headers.insert(
         HeaderName::from_static(names::SPOOFING_DETECTED),
-        HeaderValue::from_static("x-tls-ja4"),
+        HeaderValue::from_static(names::TLS_JA4),
     );
     let spoofed = strip_client_fingerprints(&mut headers);
     assert!(spoofed.is_empty(), "SPOOFING_DETECTED is not a fingerprint signature");

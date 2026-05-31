@@ -698,7 +698,7 @@ impl Metrics {
     }
 
     /// Record a client-supplied proxy-authoritative fingerprint header (spoofing attempt).
-    /// `header` is the name of the header that was stripped (e.g. `"x-http2-akamai"`).
+    /// `header` is the name of the header that was stripped (e.g. `names::HTTP2_AKAMAI`).
     pub fn record_fingerprint_spoofing_attempt(&self, header: &'static str) {
         self.fingerprint_spoofing_attempts_total
             .add(1, &[KeyValue::new(labels::HEADER, header)]);

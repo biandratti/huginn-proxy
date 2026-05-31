@@ -2,7 +2,7 @@
 //!
 //! Verifies that the proxy unconditionally strips all proxy-authoritative fingerprint
 //! headers supplied by the client and, when any were present, injects
-//! `x-fingerprint-spoofing-detected` listing the spoofed header names so the backend
+//! [`names::SPOOFING_DETECTED`] listing the spoofed header names so the backend
 //! can act on the detection signal.
 
 use huginn_proxy_lib::fingerprinting::names;
@@ -10,7 +10,7 @@ use tests_e2e::common::{
     parse_backend_echo, wait_for_service, DEFAULT_SERVICE_TIMEOUT_SECS, PROXY_HTTPS_URL_IPV4,
 };
 
-/// Parse `x-fingerprint-spoofing-detected` into a sorted vec of header names.
+/// Parse [`names::SPOOFING_DETECTED`] value into a sorted vec of header names.
 fn detected_list(value: &str) -> Vec<&str> {
     let mut v: Vec<&str> = value.split(',').collect();
     v.sort_unstable();
@@ -44,19 +44,29 @@ async fn test_spoof_akamai_and_p0f_over_http1(
 
     assert!(
         !echo.has_header(names::HTTP2_AKAMAI),
-        "forged x-http2-akamai must not reach the backend"
+        "forged {} must not reach the backend",
+        names::HTTP2_AKAMAI
     );
-    assert!(!echo.has_header(names::TCP_SYN), "forged x-tcp-p0f must not reach the backend");
+    assert!(
+        !echo.has_header(names::TCP_SYN),
+        "forged {} must not reach the backend",
+        names::TCP_SYN
+    );
 
     let detected = echo
         .header(names::SPOOFING_DETECTED)
-        .ok_or("x-fingerprint-spoofing-detected must be present")?;
+        .ok_or_else(|| format!("{} must be present", names::SPOOFING_DETECTED))?;
     let list = detected_list(detected);
     assert!(
         list.contains(&names::HTTP2_AKAMAI),
-        "detection must list x-http2-akamai; got: {detected}"
+        "detection must list {}; got: {detected}",
+        names::HTTP2_AKAMAI
     );
-    assert!(list.contains(&names::TCP_SYN), "detection must list x-tcp-p0f; got: {detected}");
+    assert!(
+        list.contains(&names::TCP_SYN),
+        "detection must list {}; got: {detected}",
+        names::TCP_SYN
+    );
     assert_eq!(list.len(), 2, "detection must list exactly 2 headers; got: {detected}");
 
     Ok(())
@@ -85,7 +95,11 @@ async fn test_spoof_p0f_over_http2() -> Result<(), Box<dyn std::error::Error + S
 
     let echo = parse_backend_echo(response).await?;
 
-    assert!(!echo.has_header(names::TCP_SYN), "forged x-tcp-p0f must not reach the backend");
+    assert!(
+        !echo.has_header(names::TCP_SYN),
+        "forged {} must not reach the backend",
+        names::TCP_SYN
+    );
     assert!(
         echo.has_header(names::HTTP2_AKAMAI),
         "real Akamai fingerprint must still be present"
@@ -94,12 +108,13 @@ async fn test_spoof_p0f_over_http2() -> Result<(), Box<dyn std::error::Error + S
 
     let detected = echo
         .header(names::SPOOFING_DETECTED)
-        .ok_or("x-fingerprint-spoofing-detected must be present")?;
+        .ok_or_else(|| format!("{} must be present", names::SPOOFING_DETECTED))?;
     let list = detected_list(detected);
     assert_eq!(
         list,
         vec![names::TCP_SYN],
-        "detection must list only x-tcp-p0f; got: {detected}"
+        "detection must list only {}; got: {detected}",
+        names::TCP_SYN
     );
 
     Ok(())
@@ -140,16 +155,28 @@ async fn test_spoof_on_no_fingerprinting_route(
         );
     }
 
-    let detected = echo.header(names::SPOOFING_DETECTED).ok_or(
-        "x-fingerprint-spoofing-detected must be present even on fingerprinting=false route",
-    )?;
+    let detected = echo.header(names::SPOOFING_DETECTED).ok_or_else(|| {
+        format!(
+            "{} must be present even on fingerprinting=false route",
+            names::SPOOFING_DETECTED
+        )
+    })?;
     let list = detected_list(detected);
-    assert!(list.contains(&names::TLS_JA4), "detection must list x-tls-ja4; got: {detected}");
+    assert!(
+        list.contains(&names::TLS_JA4),
+        "detection must list {}; got: {detected}",
+        names::TLS_JA4
+    );
     assert!(
         list.contains(&names::HTTP2_AKAMAI),
-        "detection must list x-http2-akamai; got: {detected}"
+        "detection must list {}; got: {detected}",
+        names::HTTP2_AKAMAI
     );
-    assert!(list.contains(&names::TCP_SYN), "detection must list x-tcp-p0f; got: {detected}");
+    assert!(
+        list.contains(&names::TCP_SYN),
+        "detection must list {}; got: {detected}",
+        names::TCP_SYN
+    );
 
     Ok(())
 }
@@ -179,7 +206,8 @@ async fn test_no_spoofing_detection_on_clean_request(
 
     assert!(
         !echo.has_header(names::SPOOFING_DETECTED),
-        "x-fingerprint-spoofing-detected must be absent when no spoofing occurred"
+        "{} must be absent when no spoofing occurred",
+        names::SPOOFING_DETECTED
     );
     assert!(echo.has_header(names::HTTP2_AKAMAI), "real Akamai fingerprint must be present");
     assert!(echo.has_header(names::TLS_JA4), "real JA4 fingerprint must be present");
@@ -215,7 +243,7 @@ async fn test_forged_ja4_replaced_by_real_value(
 
     let ja4 = echo
         .header(names::TLS_JA4)
-        .ok_or("x-tls-ja4 must be present (real value)")?;
+        .ok_or_else(|| format!("{} must be present (real value)", names::TLS_JA4))?;
     assert_ne!(
         ja4, FORGED_JA4,
         "backend must see the real proxy-computed JA4, not the forged client value"
@@ -223,12 +251,13 @@ async fn test_forged_ja4_replaced_by_real_value(
 
     let detected = echo
         .header(names::SPOOFING_DETECTED)
-        .ok_or("x-fingerprint-spoofing-detected must be present")?;
+        .ok_or_else(|| format!("{} must be present", names::SPOOFING_DETECTED))?;
     let list = detected_list(detected);
     assert_eq!(
         list,
         vec![names::TLS_JA4],
-        "detection must list only x-tls-ja4; got: {detected}"
+        "detection must list only {}; got: {detected}",
+        names::TLS_JA4
     );
 
     Ok(())
@@ -248,9 +277,10 @@ async fn test_forged_detection_header_stripped(
         "proxy should be ready"
     );
 
+    let forged_detection = format!("{},{}", names::TLS_JA4, names::HTTP2_AKAMAI);
     let response = client
         .get(PROXY_HTTPS_URL_IPV4)
-        .header(names::SPOOFING_DETECTED, "x-tls-ja4,x-http2-akamai")
+        .header(names::SPOOFING_DETECTED, forged_detection)
         .send()
         .await
         .map_err(|e| format!("Request failed: {e}"))?;
@@ -260,7 +290,8 @@ async fn test_forged_detection_header_stripped(
 
     assert!(
         !echo.has_header(names::SPOOFING_DETECTED),
-        "client-forged x-fingerprint-spoofing-detected must not reach the backend"
+        "client-forged {} must not reach the backend",
+        names::SPOOFING_DETECTED
     );
 
     Ok(())

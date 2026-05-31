@@ -30,7 +30,7 @@ type RespBody = http_body_util::combinators::BoxBody<bytes::Bytes, hyper::Error>
 /// Returns the names of the fingerprint headers the client actually supplied.
 /// A non-empty return value means the client attempted to spoof those signatures.
 ///
-/// The detection header (`x-fingerprint-spoofing-detected`) is also stripped here
+/// The detection header ([`names::SPOOFING_DETECTED`]) is also stripped here,
 /// so the client cannot forge or suppress the detection signal.
 pub fn strip_client_fingerprints(headers: &mut HeaderMap) -> Vec<&'static str> {
     let mut spoofed = Vec::new();
