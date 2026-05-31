@@ -91,9 +91,14 @@ Fingerprints are automatically extracted and injected as headers:
   captured once at TCP accept time and reused). IPv4 and IPv6 SYNs are captured when the next
   header after the fixed IPv6 header is TCP (see [FEATURES.md](FEATURES.md)).
   See [EBPF-SETUP.md](EBPF-SETUP.md) for setup, kernel requirements, and deployment options.
-- **Spoofing Signature Detection**: `x-fingerprint-spoofing-detected` - When a client attempts
-  to spoof its fingerprint, the proxy detects the mismatch and forwards the list of spoofed
-  fingerprint types to the backend.
+- **Spoofing Signature Detection**: `x-fingerprint-spoofing-detected` - If the client sends any
+  proxy-authoritative fingerprint header, the proxy strips it unconditionally and forwards a
+  comma-separated list of the header names it removed. Injected only when at least one was
+  present; absent on clean requests. The header itself is also stripped from client input (it
+  cannot be forged or suppressed). Monitored headers:
+  `x-tls-ja4`, `x-tls-ja4-r`, `x-tls-ja4-o`, `x-tls-ja4-or`, `x-tls-ja4-s1`, `x-tls-ja4-s1r`,
+  `x-http2-akamai`, `x-tcp-p0f`. Example:
+  `x-fingerprint-spoofing-detected: x-http2-akamai,x-tcp-p0f`
 - The proxy automatically injects standard `X-Forwarded-*` headers to inform backends about the original client request:
 
 **Examples:**
