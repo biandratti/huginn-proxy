@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="huginn-proxy.png" alt="Huginn Net Logo" width="250"/>
+  <img src="huginn-proxy.png" alt="Huginn Proxy Logo" width="350"/>
 
 # Huginn Proxy
 
