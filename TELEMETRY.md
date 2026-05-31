@@ -9,9 +9,9 @@ agent**.
 
 Huginn Proxy provides comprehensive telemetry through:
 
-- **Prometheus Metrics** - 47 metrics covering connections, requests, TLS, fingerprinting, backends, active health
-  checks, throughput, rate limiting, IP filtering, header manipulation, mTLS, config hot reload, and TLS certificate
-  hot reload
+- **Prometheus Metrics** - 48 metrics covering connections, requests, TLS, fingerprinting, backends, active health
+  checks, throughput, rate limiting, IP filtering, header manipulation, mTLS, config hot reload, TLS certificate
+  hot reload, and fingerprint spoofing detection
 - **Health Check Endpoints** - Kubernetes-ready: `/health`, `/ready`, `/live`, `/metrics`
 
 All proxy telemetry is exposed on a separate observability server (configurable via `telemetry.metrics_port`).
@@ -284,7 +284,34 @@ histogram_quantile(0.95, rate(huginn_tls_handshake_duration_seconds_bucket[5m]))
 maps; this metric covers the proxy-side lookup, not the agent-side capture (see eBPF Agent Metrics for capture
 counters).
 
+#### Fingerprint Spoofing Detection
+
+| Metric                                       | Type    | Description                                                                          | Labels   |
+|----------------------------------------------|---------|--------------------------------------------------------------------------------------|----------|
+| `huginn_fingerprint_spoofing_attempts_total` | Counter | Client-supplied proxy-authoritative fingerprint headers stripped (spoofing attempts) | `header` |
+
+**Labels**:
+
+- `header`: The header name the client attempted to supply (e.g. `x-http2-akamai`, `x-tcp-p0f`, `x-tls-ja4`)
+
+**Note**: All eight proxy-authoritative fingerprint headers are stripped unconditionally on every request. This counter
+is incremented only when the client actually sent one of those headers — i.e., when there was an active spoofing
+attempt. A zero value means no clients have tried to forge fingerprints. The companion request header
+`x-fingerprint-spoofing-detected` (forwarded to the backend) lists the spoofed names per-request; this metric
+aggregates the same signal across requests for alerting.
+
 **Example queries**:
+
+```promql
+# Rate of spoofing attempts (any header)
+rate(huginn_fingerprint_spoofing_attempts_total[5m])
+
+# Which fingerprint headers are being targeted
+sum by (header) (rate(huginn_fingerprint_spoofing_attempts_total[5m]))
+
+```
+
+**Example queries (original)**:
 
 ```promql
 # TLS fingerprint extraction rate

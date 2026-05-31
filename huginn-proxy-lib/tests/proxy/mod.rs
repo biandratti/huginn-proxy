@@ -1,6 +1,7 @@
 mod client_pool;
 mod connection_limit;
 mod edge_cases;
+mod fingerprint_spoofing;
 mod forwarding;
 mod h2c_forwarding;
 mod header_manipulation;

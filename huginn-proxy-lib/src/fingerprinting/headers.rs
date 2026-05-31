@@ -57,6 +57,31 @@ pub mod names {
     /// Example: `"4:64:0:1460:8192,6:mss,nop,ws,nop,nop,ts,sok"`
     /// Only injected when the `ebpf-tcp` feature is enabled and fingerprinting is configured.
     pub const TCP_SYN: &str = "x-tcp-p0f";
+
+    /// All proxy-authoritative fingerprint headers.
+    ///
+    /// Written exclusively by the proxy from data observed on the connection
+    /// (TLS ClientHello, HTTP/2 frames, TCP SYN). A client must never supply them,
+    /// they are stripped unconditionally on entry before any are (re)injected.
+    pub const FINGERPRINTS: &[&str] = &[
+        TLS_JA4,
+        TLS_JA4_R,
+        TLS_JA4_O,
+        TLS_JA4_OR,
+        TLS_JA4_S1,
+        TLS_JA4_S1R,
+        HTTP2_AKAMAI,
+        TCP_SYN,
+    ];
+
+    /// Header injected toward the backend listing which fingerprint signatures the
+    /// client attempted to spoof (comma-separated). Absent when no spoofing is detected.
+    ///
+    /// Example: `x-fingerprint-spoofing-detected: x-http2-akamai,x-tcp-p0f`
+    ///
+    /// This header is itself proxy-authoritative: it is stripped from client input so
+    /// the client cannot forge or suppress the detection signal.
+    pub const SPOOFING_DETECTED: &str = "x-fingerprint-spoofing-detected";
 }
 
 /// HTTP header names for X-Forwarded-* headers
