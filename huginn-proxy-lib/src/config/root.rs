@@ -20,7 +20,7 @@ pub struct Config {
     /// Listener configuration (addresses and socket options)
     pub listen: ListenConfig,
     /// List of backend servers for load balancing
-    /// At least one backend is required
+    #[serde(default)]
     pub backends: Vec<Backend>,
     /// Path-based routing rules (optional)
     /// If no routes match, requests return 404

@@ -15,9 +15,6 @@ pub enum ProxyError {
     #[error("Configuration error: {0}")]
     Config(String),
 
-    #[error("No backends configured")]
-    NoBackends,
-
     // HTTP body/response building errors (system-level, not forwarding)
     #[error("HTTP error: {0}")]
     Http(String),

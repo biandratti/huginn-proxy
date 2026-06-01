@@ -20,10 +20,6 @@ pub fn load_from_path<P: AsRef<Path>>(p: P) -> Result<Config> {
 }
 
 fn validate_config(cfg: &Config) -> Result<()> {
-    if cfg.backends.is_empty() {
-        return Err(ProxyError::NoBackends);
-    }
-
     if let Some(tls) = &cfg.tls {
         if !Path::new(&tls.cert_path).exists() {
             return Err(ProxyError::Config(format!(

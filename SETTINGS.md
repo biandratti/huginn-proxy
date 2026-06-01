@@ -107,7 +107,7 @@ listen:
 
 ## `[[backends]]`
 
-Backend servers for forwarding. Repeat the header for each backend. **Dynamic** (hot-reloadable).
+Backend servers for forwarding. Repeat the header for each backend. **Optional** — omitting all backends is valid; requests return 404 (no routes) or 502 (routes reference a backend with no healthy candidates). **Dynamic** (hot-reloadable).
 
 | Key            | Type   | Default           | Description                                                                                                                        |
 |----------------|--------|-------------------|------------------------------------------------------------------------------------------------------------------------------------|
