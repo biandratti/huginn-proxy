@@ -13,8 +13,8 @@ use tracing::{debug, error, info};
 
 /// Shared, hot-swappable rate-limit manager.
 ///
-/// - On reload with **no rate-limit change** → old manager is reused as-is (counters preserved).
-/// - On reload **with** rate-limit change → manager is rebuilt (counters reset).
+/// - On reload with no rate-limit or route change → old manager is reused as-is (counters preserved).
+/// - On reload with a rate-limit or route change → manager is rebuilt (counters reset).
 pub type SharedRateLimiter = Arc<ArcSwap<Option<Arc<RateLimitManager>>>>;
 
 /// Shared, hot-swappable HTTP client pool.
