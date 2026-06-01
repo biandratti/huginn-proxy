@@ -31,7 +31,7 @@ fn ip_no_trusted_uses_peer() {
 
 #[test]
 fn ip_spoof_rotation_pinned_to_peer() {
-    // Client rotates XFF values — result never changes without trusted_proxies.
+    // Client rotates XFF values, result never changes without trusted_proxies.
     let proxies: &[IpNet] = &[];
     let p = peer("1.2.3.4:1234");
     for xff in &["10.0.0.1", "172.16.0.1", "203.0.113.5, 10.0.0.1"] {

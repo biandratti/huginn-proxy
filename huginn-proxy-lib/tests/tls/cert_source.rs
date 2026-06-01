@@ -479,7 +479,7 @@ async fn shutdown_ordering_background_tasks_exit_before_signal(
 
     // Signal shutdown, await the handle, then set the flag.
     // If anything logged after the flag was set and before tracing teardown
-    // would be lost — here we verify ordering without touching tracing.
+    // would be lost, here we verify ordering without touching tracing.
     let tasks_exited = StdArc::new(AtomicBool::new(false));
     let flag = StdArc::clone(&tasks_exited);
 

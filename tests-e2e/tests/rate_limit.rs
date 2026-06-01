@@ -52,7 +52,7 @@ async fn test_rate_limit_xff_rotation_does_not_bypass(
     assert_eq!(
         limited,
         1,
-        "request {} must be rate-limited — XFF rotation must not bypass the limit (got {limited})",
+        "request {} must be rate-limited, XFF rotation must not bypass the limit (got {limited})",
         BURST + 1
     );
 

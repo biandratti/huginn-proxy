@@ -83,7 +83,7 @@ impl fmt::Display for ServiceName {
 ///
 /// # Migration path to multi-runtime. Conditions are already prepared in case of using multi-runtime.
 /// Add a `runtime: tokio::runtime::Runtime` field and change `shutdown()` to
-/// call `self.runtime.shutdown_timeout(timeout)` — the same mechanism Pingora
+/// call `self.runtime.shutdown_timeout(timeout)`, the same mechanism Pingora
 /// uses. Every background task's `select!` loop and the `Vec<ServiceHandle>`
 /// collection in `run()` stay unchanged; only this impl changes.
 pub struct ServiceHandle {

@@ -12,7 +12,7 @@ use huginn_proxy_lib::{ShutdownSender, ShutdownWatch};
 /// Rust keeps it alive until the end of the scope instead of dropping it immediately.
 /// Dropping the sender closes the channel and causes any task that calls
 /// `shutdown_rx.wait_for(|v| *v)` to receive `Err`, which is treated as a
-/// shutdown signal — the task exits without doing any useful work.
+/// shutdown signal, the task exits without doing any useful work.
 ///
 /// # Example
 /// ```rust
