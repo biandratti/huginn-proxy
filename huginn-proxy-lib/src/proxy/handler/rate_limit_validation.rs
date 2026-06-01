@@ -44,6 +44,7 @@ pub fn check_rate_limit(
         route_match.matched_prefix,
         limit_by_header,
         headers,
+        &rate_limit_config.trusted_proxies,
     );
 
     let strategy = format!("{:?}", limit_by).to_lowercase();

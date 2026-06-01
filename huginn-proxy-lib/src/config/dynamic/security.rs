@@ -212,6 +212,19 @@ pub struct RateLimitConfig {
     /// Custom header name for "header" limit_by mode
     /// Required when limit_by = "header"
     pub limit_by_header: Option<String>,
+    /// Trusted reverse-proxy CIDRs for IP resolution (opt-in).
+    ///
+    /// When empty (default), the rate-limit key is always the TCP peer IP, the only
+    /// non-forgeable identity available. When non-empty, the `X-Forwarded-For` header
+    /// is walked right-to-left and the first IP that is NOT in this list is used as
+    /// the real client IP. This lets you recover the original client IP behind a
+    /// trusted load balancer without allowing clients to spoof the key by injecting
+    /// arbitrary XFF values.
+    ///
+    /// Accepts CIDR notation: ["10.0.0.0/8", "172.16.0.0/12", "::1/128"]
+    #[serde(default)]
+    #[serde(deserialize_with = "deserialize_ip_networks")]
+    pub trusted_proxies: Vec<IpNet>,
 }
 
 impl Default for RateLimitConfig {
@@ -223,6 +236,7 @@ impl Default for RateLimitConfig {
             window_seconds: default_window_seconds(),
             limit_by: default_limit_by(),
             limit_by_header: None,
+            trusted_proxies: vec![],
         }
     }
 }
@@ -255,8 +269,9 @@ pub struct RouteRateLimitConfig {
 #[derive(Debug, Deserialize, Clone, Copy, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum LimitBy {
-    /// Rate limit by client IP address
-    /// Extracts IP from X-Forwarded-For or connection IP
+    /// Rate limit by client IP address.
+    /// Uses the TCP peer (connection) IP by default. When `trusted_proxies` is configured,
+    /// walks `X-Forwarded-For` right-to-left to find the first non-trusted IP.
     Ip,
     /// Rate limit by custom header value
     /// Requires limit_by_header to be specified

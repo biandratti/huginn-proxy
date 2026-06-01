@@ -1041,8 +1041,9 @@ Global rate limiting. **Dynamic** (hot-reloadable). Per-route overrides via `[ro
 | `requests_per_second` | integer | `1000`  | Sustained request rate allowed.                                                     |
 | `burst`               | integer | `2000`  | Maximum burst size above the sustained rate.                                        |
 | `window_seconds`      | integer | `1`     | Sliding window in seconds for the token bucket refill.                              |
-| `limit_by`            | string  | `"ip"`  | Key used to track limits: `"ip"`, `"header"`, `"route"`, `"combined"` (IP + route). |
-| `limit_by_header`     | string  | `null`  | Header name to use as the rate limit key when `limit_by = "header"`.                |
+| `limit_by`            | string       | `"ip"`  | Key used to track limits: `"ip"`, `"header"`, `"route"`, `"combined"` (IP + route). |
+| `limit_by_header`     | string       | `null`  | Header name to use as the rate limit key when `limit_by = "header"`.                |
+| `trusted_proxies`     | string array | `[]`    | Trusted reverse-proxy CIDRs. When empty (default), the TCP peer IP is always used as the rate-limit key — this is the secure default and cannot be spoofed. When set, `X-Forwarded-For` is walked right-to-left and the first IP **not** in this list is used, recovering the real client IP behind a trusted load balancer. Accepts CIDR notation. |
 
 <table>
 <thead>
@@ -1115,6 +1116,51 @@ security:
     burst: 400
     limit_by: "header"
     limit_by_header: "X-API-Key"
+```
+
+</td>
+</tr>
+</tbody>
+</table>
+
+<table>
+<thead>
+<tr>
+<th>TOML</th>
+<th>YAML</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td valign="top">
+
+```toml
+# Rate limit by real client IP behind a trusted load balancer.
+# Without trusted_proxies the TCP peer IP is used (secure default).
+# With trusted_proxies, XFF is walked right-to-left to find the
+# first non-trusted IP, which is treated as the client address.
+[security.rate_limit]
+enabled = true
+requests_per_second = 500
+burst = 1000
+limit_by = "ip"
+trusted_proxies = ["10.0.0.0/8", "172.16.0.0/12"]
+```
+
+</td>
+<td valign="top">
+
+```yaml
+# Rate limit by real client IP behind a trusted load balancer.
+security:
+  rate_limit:
+    enabled: true
+    requests_per_second: 500
+    burst: 1000
+    limit_by: "ip"
+    trusted_proxies:
+      - "10.0.0.0/8"
+      - "172.16.0.0/12"
 ```
 
 </td>

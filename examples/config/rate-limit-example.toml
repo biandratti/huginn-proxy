@@ -77,6 +77,12 @@ limit_by = "ip"             # Rate limit by client IP address
 # limit_by = "header"
 # limit_by_header = "X-API-Key"  # Header name to use for rate limiting
 
+# Trusted reverse-proxy CIDRs (opt-in, default: empty).
+# When empty, the TCP connection IP is always used as the rate-limit key —
+# this is the secure default and cannot be spoofed by clients.
+# Uncomment and set to recover the real client IP behind a trusted load balancer:
+# trusted_proxies = ["10.0.0.0/8", "172.16.0.0/12"]
+
 # TLS configuration (optional)
 [tls]
 cert_path = "/config/certs/server.crt"
@@ -126,8 +132,8 @@ metrics_port = 9090  # Prometheus metrics endpoint
 #
 # 1. By IP (limit_by = "ip"):
 #    - Tracks requests per client IP address
-#    - Uses X-Forwarded-For header if present (for proxied requests)
-#    - Falls back to connection IP address
+#    - Secure default: uses the TCP connection IP, which clients cannot spoof
+#    - Set trusted_proxies to recover the real client IP behind a trusted load balancer
 #    - Best for: Public APIs, preventing DDoS attacks
 #
 # 2. By Header (limit_by = "header"):

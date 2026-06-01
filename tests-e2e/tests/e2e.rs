@@ -16,6 +16,7 @@ mod header_override;
 mod health_checks;
 mod load_balance;
 mod path_manipulation;
+mod rate_limit;
 mod security_headers;
 mod tls;
 mod tls_cipher_curve_config;
