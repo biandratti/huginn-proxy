@@ -81,6 +81,29 @@ routes:
   - prefix: "/api/e2e-unhealthy"
     backend: "unreachable-backend:9000"
 
+  # Dedicated routes for rate-limit E2E tests.
+  # burst=3 so the 4th request in a window always returns 429.
+  # No other E2E test uses these prefixes.
+  - prefix: "/rl"
+    backend: "backend-a:9000"
+    rate_limit:
+      enabled: true
+      requests_per_second: 1
+      burst: 3
+      window_seconds: 1
+      limit_by: "ip"
+
+  # Separate bucket for the XFF bypass-attempt test so state doesn't bleed
+  # between test cases.
+  - prefix: "/rl-bypass"
+    backend: "backend-a:9000"
+    rate_limit:
+      enabled: true
+      requests_per_second: 1
+      burst: 3
+      window_seconds: 1
+      limit_by: "ip"
+
   # Default catch-all
   - prefix: "/"
     backend: "backend-b:9000"

@@ -79,13 +79,15 @@ pub async fn try_reload(
 
     audit_config_changes(&old_dynamic, &new_dynamic);
 
-    // rebuild rate-limiter only when the config actually changed
-    if old_dynamic.security.rate_limit != new_dynamic.security.rate_limit {
-        let new_mgr = if new_dynamic.security.rate_limit.enabled {
-            Some(Arc::new(RateLimitManager::new(
-                &new_dynamic.security.rate_limit,
-                &new_dynamic.routes,
-            )))
+    // Rebuild rate-limiter when the rate-limit config or routes change.
+    // Routes are included because per-route limiters are built from route definitions;
+    if old_dynamic.security.rate_limit != new_dynamic.security.rate_limit
+        || old_dynamic.routes != new_dynamic.routes
+    {
+        let candidate =
+            RateLimitManager::new(&new_dynamic.security.rate_limit, &new_dynamic.routes);
+        let new_mgr = if candidate.is_enabled() {
+            Some(Arc::new(candidate))
         } else {
             None
         };
@@ -237,8 +239,9 @@ fn fnv1a_hash(dynamic: &DynamicConfig) -> u64 {
 }
 
 pub fn initial_rate_limiter(dynamic: &DynamicConfig) -> SharedRateLimiter {
-    let mgr = if dynamic.security.rate_limit.enabled {
-        Some(Arc::new(RateLimitManager::new(&dynamic.security.rate_limit, &dynamic.routes)))
+    let candidate = RateLimitManager::new(&dynamic.security.rate_limit, &dynamic.routes);
+    let mgr = if candidate.is_enabled() {
+        Some(Arc::new(candidate))
     } else {
         None
     };
