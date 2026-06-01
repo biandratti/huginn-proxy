@@ -1,8 +1,9 @@
-use ahash::AHashMap;
-use std::time::Duration;
-
 use super::{RateLimitResult, RateLimiter};
 use crate::config::{LimitBy, RateLimitConfig, Route};
+use ahash::AHashMap;
+use ipnet::IpNet;
+use std::net::IpAddr;
+use std::time::Duration;
 
 /// Manager for rate limiters (global and per-route).
 ///
@@ -84,14 +85,48 @@ impl RateLimitManager {
     }
 }
 
-/// Extract rate limiting key from request context
+/// Resolve the effective client IP for rate limiting.
+///
+/// When `trusted_proxies` is empty, returns the TCP peer IP unconditionally,
+/// this is the secure default and cannot be spoofed by a client.
+///
+/// When `trusted_proxies` is non-empty and the peer itself is a trusted proxy,
+/// walks `X-Forwarded-For` right-to-left (our proxy appends the peer IP, so the
+/// rightmost entry is the most recently added and most trustworthy) and returns
+/// the first IP that it is NOT in the trusted set. Falls back to the peer IP if all
+/// XFF entries are trusted or the header is absent/malformed.
+fn resolve_client_ip(
+    peer: std::net::SocketAddr,
+    headers: &http::HeaderMap,
+    trusted_proxies: &[IpNet],
+) -> String {
+    let peer_ip = peer.ip();
+    if trusted_proxies.is_empty() || !trusted_proxies.iter().any(|net| net.contains(&peer_ip)) {
+        return peer_ip.to_string();
+    }
+    if let Some(xff) = headers.get("x-forwarded-for") {
+        if let Ok(xff_str) = xff.to_str() {
+            for raw in xff_str.rsplit(',') {
+                if let Ok(ip) = raw.trim().parse::<IpAddr>() {
+                    if !trusted_proxies.iter().any(|net| net.contains(&ip)) {
+                        return ip.to_string();
+                    }
+                }
+            }
+        }
+    }
+    peer_ip.to_string()
+}
+
+/// Extract rate limiting key from request context.
 ///
 /// # Arguments
 /// * `limit_by` - Key extraction strategy
-/// * `peer` - Client socket address
+/// * `peer` - Client socket address (TCP peer, non-forgeable)
 /// * `route_prefix` - Matched route prefix
 /// * `header_name` - Custom header name (for `LimitBy::Header`)
 /// * `headers` - HTTP request headers
+/// * `trusted_proxies` - CIDRs whose XFF additions are trusted (see `resolve_client_ip`)
 ///
 /// # Returns
 /// Rate limiting key as a string
@@ -101,19 +136,10 @@ pub fn extract_rate_limit_key(
     route_prefix: &str,
     header_name: Option<&str>,
     headers: &http::HeaderMap,
+    trusted_proxies: &[IpNet],
 ) -> String {
     match limit_by {
-        LimitBy::Ip => {
-            if let Some(xff) = headers.get("x-forwarded-for") {
-                if let Ok(xff_str) = xff.to_str() {
-                    if let Some(first_ip) = xff_str.split(',').next() {
-                        return first_ip.trim().to_string();
-                    }
-                }
-            }
-            // Fall back to peer IP
-            peer.ip().to_string()
-        }
+        LimitBy::Ip => resolve_client_ip(peer, headers, trusted_proxies),
         LimitBy::Header => {
             if let Some(name) = header_name {
                 if let Some(value) = headers.get(name) {
@@ -122,24 +148,11 @@ pub fn extract_rate_limit_key(
                     }
                 }
             }
-            // Fall back to IP if header not found
             peer.ip().to_string()
         }
-        LimitBy::Route => {
-            // Use route prefix as key (all clients share same limit)
-            route_prefix.to_string()
-        }
+        LimitBy::Route => route_prefix.to_string(),
         LimitBy::Combined => {
-            // Combine IP and route for per-IP, per-route limiting
-            let ip_str = if let Some(xff) = headers.get("x-forwarded-for") {
-                xff.to_str()
-                    .ok()
-                    .and_then(|s| s.split(',').next())
-                    .map(|s| s.trim().to_string())
-                    .unwrap_or_else(|| peer.ip().to_string())
-            } else {
-                peer.ip().to_string()
-            };
+            let ip_str = resolve_client_ip(peer, headers, trusted_proxies);
             format!("{ip_str}:{route_prefix}")
         }
     }
