@@ -21,7 +21,7 @@ type TestResult = Result<(), Box<dyn std::error::Error + Send + Sync>>;
 
 fn minimal_config(backend_addr: std::net::SocketAddr, listen_port: u16) -> Config {
     use huginn_proxy_lib::config::{
-        Backend, FingerprintConfig, KeepAliveConfig, ListenConfig, LoggingConfig, Route,
+        Backend, Domain, FingerprintConfig, KeepAliveConfig, ListenConfig, LoggingConfig, Route,
         SecurityConfig, TelemetryConfig, TimeoutConfig,
     };
 
@@ -37,14 +37,20 @@ fn minimal_config(backend_addr: std::net::SocketAddr, listen_port: u16) -> Confi
             http_version: None,
             health_check: None,
         }],
-        routes: vec![Route {
-            prefix: "/".to_string(),
-            backend: backend_addr.to_string(),
-            fingerprinting: false,
-            force_new_connection: false,
-            replace_path: None,
-            rate_limit: None,
+        domains: vec![Domain {
+            host: "_".to_string(),
+            cert_path: None,
+            key_path: None,
             headers: None,
+            routes: vec![Route {
+                prefix: "/".to_string(),
+                backend: backend_addr.to_string(),
+                fingerprinting: false,
+                force_new_connection: false,
+                replace_path: None,
+                rate_limit: None,
+                headers: None,
+            }],
         }],
         tls: None,
         fingerprint: FingerprintConfig {

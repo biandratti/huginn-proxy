@@ -227,6 +227,41 @@ pub fn sort_routes(routes: &mut [Route]) {
     routes.sort_by_key(|r| std::cmp::Reverse(r.prefix.len()));
 }
 
+/// A named domain entry grouping a TLS certificate and its path-based routes.
+///
+/// `host` drives SNI-based cert selection and request routing:
+/// - Exact: `"api.example.com"`
+/// - Wildcard (one level): `"*.example.com"`
+///
+/// `cert_path` / `key_path` are optional — omit both for plain-HTTP domains.
+/// Both must be present together; specifying only one is a validation error.
+#[derive(Debug, Deserialize, Clone, PartialEq)]
+pub struct Domain {
+    /// Domain pattern used for SNI matching and routing.
+    pub host: String,
+    /// Path to the TLS certificate PEM file for this domain (optional).
+    #[serde(default)]
+    pub cert_path: Option<String>,
+    /// Path to the TLS private key PEM file for this domain (optional).
+    #[serde(default)]
+    pub key_path: Option<String>,
+    /// Header manipulation applied to all routes in this domain (optional).
+    /// Merged with global headers; route-level headers take final precedence.
+    #[serde(default)]
+    pub headers: Option<HeaderManipulation>,
+    /// Path-based routing rules scoped to this domain.
+    #[serde(default)]
+    pub routes: Vec<Route>,
+}
+
+/// Sort routes within every domain longest-prefix first.
+/// Call once at config load time via `Config::into_parts`; do not call per-request.
+pub fn sort_domain_routes(domains: &mut [Domain]) {
+    for domain in domains.iter_mut() {
+        sort_routes(&mut domain.routes);
+    }
+}
+
 /// Configuration for backend connection pool
 ///
 /// Controls how the proxy manages connections to backend servers.

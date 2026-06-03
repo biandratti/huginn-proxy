@@ -13,7 +13,7 @@ fn create_test_config(listen: &str, backends: Vec<Backend>) -> Config {
             ..Default::default()
         },
         backends,
-        routes: vec![],
+        domains: vec![],
         preserve_host: false,
         backend_pool: Default::default(),
         tls: None,
@@ -70,6 +70,9 @@ backends = [
     {{ address = "backend-a:9000" }},
     {{ address = "backend-b:9000" }}
 ]
+
+[[domains]]
+host = "api.example.com"
 routes = [
     {{ prefix = "/api", backend = "backend-a:9000" }},
     {{ prefix = "/", backend = "backend-b:9000" }}
@@ -78,11 +81,13 @@ routes = [
     )?;
 
     let config = load_from_path(file.path())?;
-    assert_eq!(config.routes.len(), 2);
-    assert_eq!(config.routes[0].prefix, "/api");
-    assert_eq!(config.routes[0].backend, "backend-a:9000");
-    assert_eq!(config.routes[1].prefix, "/");
-    assert_eq!(config.routes[1].backend, "backend-b:9000");
+    assert_eq!(config.domains.len(), 1);
+    assert_eq!(config.domains[0].routes.len(), 2);
+    // routes are sorted longest-prefix first
+    assert_eq!(config.domains[0].routes[0].prefix, "/api");
+    assert_eq!(config.domains[0].routes[0].backend, "backend-a:9000");
+    assert_eq!(config.domains[0].routes[1].prefix, "/");
+    assert_eq!(config.domains[0].routes[1].backend, "backend-b:9000");
 
     Ok(())
 }

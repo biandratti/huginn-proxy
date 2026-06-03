@@ -15,7 +15,7 @@ use tokio::net::TcpStream;
 
 /// Configuration for handling plain HTTP connections
 pub struct PlainConnectionConfig {
-    pub routes: Arc<Vec<crate::config::Route>>,
+    pub domains: Arc<Vec<crate::config::Domain>>,
     pub backends: Arc<Vec<crate::config::Backend>>,
     pub keep_alive: crate::config::KeepAliveConfig,
     pub security: crate::proxy::SecurityContext,
@@ -36,7 +36,7 @@ pub async fn handle_plain_connection(
 ) {
     let backends = config.backends.clone();
     let metrics = config.metrics.clone();
-    let routes = config.routes.clone();
+    let domains = config.domains.clone();
     let keep_alive = config.keep_alive.clone();
     let security = config.security.clone();
     let client_pool = config.client_pool.clone();
@@ -44,7 +44,7 @@ pub async fn handle_plain_connection(
     let upstream = config.upstream.clone();
 
     let svc = hyper::service::service_fn(move |req: hyper::Request<hyper::body::Incoming>| {
-        let routes = routes.clone();
+        let domains = domains.clone();
         let backends = backends.clone();
         let syn_fingerprint = syn_fingerprint.clone();
         let metrics = metrics.clone();
@@ -58,7 +58,7 @@ pub async fn handle_plain_connection(
             let metrics_for_match = metrics.clone();
             let http_result = handle_proxy_request(
                 req,
-                routes,
+                domains,
                 backends,
                 None,
                 None,

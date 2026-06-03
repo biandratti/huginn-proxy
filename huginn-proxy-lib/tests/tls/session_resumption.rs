@@ -1,77 +1,38 @@
-use crate::helpers::{create_dummy_test_cert, generate_valid_test_cert_der};
+use crate::helpers::generate_valid_test_cert_der;
 use huginn_proxy_lib::config::{ClientAuth, SessionResumptionConfig, TlsConfig};
-use huginn_proxy_lib::tls::build_tls_acceptor;
 
 #[test]
-fn test_session_resumption_enabled_default() -> Result<(), Box<dyn std::error::Error + Send + Sync>>
-{
-    let (cert_path, key_path) = create_dummy_test_cert()?;
-
+fn test_session_resumption_enabled_default() {
+    // TlsConfig no longer holds cert paths — verify it can be constructed with defaults
     let config = TlsConfig {
-        cert_path: cert_path.display().to_string(),
-        key_path: key_path.display().to_string(),
         alpn: vec![],
         options: Default::default(),
         client_auth: ClientAuth::Disabled,
         session_resumption: Default::default(),
     };
-
-    let result = build_tls_acceptor(&config);
-
-    let _ = std::fs::remove_file(&cert_path);
-    let _ = std::fs::remove_file(&key_path);
-
-    // Note: This may fail due to invalid certs, but we're testing the configuration structure
-    // The important thing is that session_resumption is accepted
-    let _ = result;
-    Ok(())
+    assert!(config.session_resumption.enabled);
 }
 
 #[test]
-fn test_session_resumption_disabled() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let (cert_path, key_path) = create_dummy_test_cert()?;
-
+fn test_session_resumption_disabled() {
     let config = TlsConfig {
-        cert_path: cert_path.display().to_string(),
-        key_path: key_path.display().to_string(),
         alpn: vec![],
         options: Default::default(),
         client_auth: ClientAuth::Disabled,
         session_resumption: SessionResumptionConfig { enabled: false, max_sessions: 256 },
     };
-
-    let result = build_tls_acceptor(&config);
-
-    let _ = std::fs::remove_file(&cert_path);
-    let _ = std::fs::remove_file(&key_path);
-
-    // Note: This may fail due to invalid certs, but we're testing the configuration structure
-    let _ = result;
-    Ok(())
+    assert!(!config.session_resumption.enabled);
 }
 
 #[test]
-fn test_session_resumption_custom_cache_size(
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let (cert_path, key_path) = create_dummy_test_cert()?;
-
+fn test_session_resumption_custom_cache_size() {
     let config = TlsConfig {
-        cert_path: cert_path.display().to_string(),
-        key_path: key_path.display().to_string(),
         alpn: vec![],
         options: Default::default(),
         client_auth: ClientAuth::Disabled,
         session_resumption: SessionResumptionConfig { enabled: true, max_sessions: 512 },
     };
-
-    let result = build_tls_acceptor(&config);
-
-    let _ = std::fs::remove_file(&cert_path);
-    let _ = std::fs::remove_file(&key_path);
-
-    // Note: This may fail due to invalid certs, but we're testing the configuration structure
-    let _ = result;
-    Ok(())
+    assert_eq!(config.session_resumption.max_sessions, 512);
 }
 
 #[test]

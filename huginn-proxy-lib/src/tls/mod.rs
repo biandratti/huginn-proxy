@@ -6,7 +6,7 @@ pub mod metrics;
 pub mod session_resumption;
 pub mod setup;
 
-pub use acceptor::{build_server_config, build_tls_acceptor};
+pub use acceptor::build_server_config;
 pub use cert_source::{
     cert_chain_hash, CertSource, ServerCertsKeys, StaticCertSource, WatchedCertSource,
 };

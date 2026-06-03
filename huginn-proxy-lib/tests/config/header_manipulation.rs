@@ -199,17 +199,20 @@ async fn test_header_manipulation_per_route_defaults(
 listen = {{ addrs = ["127.0.0.1:0"] }}
 backends = [{{ address = "localhost:9000" }}]
 
-[[routes]]
-prefix = "/api"
-backend = "localhost:9000"
+[[domains]]
+host = "_"
 
-[routes.headers.request]
-add = [{{ name = "X-API", value = "v1" }}]
+  [[domains.routes]]
+  prefix = "/api"
+  backend = "localhost:9000"
+
+  [domains.routes.headers.request]
+  add = [{{ name = "X-API", value = "v1" }}]
 "#
     )?;
 
     let config = load_from_path(file.path())?;
-    let route = &config.routes[0];
+    let route = &config.domains[0].routes[0];
 
     if let Some(headers) = route.headers.as_ref() {
         assert_eq!(headers.request.add.len(), 1);

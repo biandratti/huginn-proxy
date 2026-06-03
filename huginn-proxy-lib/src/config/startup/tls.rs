@@ -134,12 +134,6 @@ fn default_session_cache_size() -> usize {
 
 #[derive(Debug, Deserialize, Clone, PartialEq)]
 pub struct TlsConfig {
-    /// Path to TLS certificate file (PEM format)
-    /// File must exist and be readable at startup
-    pub cert_path: String,
-    /// Path to TLS private key file (PEM format)
-    /// File must exist and be readable at startup
-    pub key_path: String,
     /// Application-Layer Protocol Negotiation (ALPN) protocols
     /// Common values: ["h2", "http/1.1"]
     /// Default: empty (no ALPN)

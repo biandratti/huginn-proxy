@@ -6,9 +6,8 @@ use tokio_rustls::rustls::crypto::CryptoProvider;
 use tokio_rustls::rustls::server::WebPkiClientVerifier;
 use tokio_rustls::rustls::RootCertStore;
 use tokio_rustls::rustls::ServerConfig;
-use tokio_rustls::TlsAcceptor;
 
-use crate::config::{ClientAuth, TlsConfig, TlsOptions, TlsVersion};
+use crate::config::{ClientAuth, TlsOptions, TlsVersion};
 use crate::error::{ProxyError, Result};
 use crate::tls::cipher_suites::{
     is_cipher_suite_supported, resolve_cipher_suites, supported_cipher_suites,
@@ -26,32 +25,10 @@ fn load_ca_certs(path: &str) -> Result<Vec<CertificateDer<'static>>> {
         .map_err(|e| ProxyError::Tls(format!("Failed to parse client CA certificates: {e}")))
 }
 
-fn read_certs_and_keys_sync(
-    cert_path: &str,
-    key_path: &str,
-) -> Result<(Vec<CertificateDer<'static>>, PrivateKeyDer<'static>)> {
-    let cert_bytes = std::fs::read(cert_path)
-        .map_err(|e| ProxyError::Tls(format!("Failed to read certificate: {e}")))?;
-    let certs: Vec<CertificateDer<'static>> = CertificateDer::pem_slice_iter(&cert_bytes)
-        .collect::<std::result::Result<Vec<_>, rustls_pki_types::pem::Error>>()
-        .map_err(|e| ProxyError::Tls(format!("Failed to parse certificates: {e}")))?;
-
-    let key_bytes =
-        std::fs::read(key_path).map_err(|e| ProxyError::Tls(format!("Failed to read key: {e}")))?;
-    let mut keys: Vec<PrivateKeyDer<'_>> = PrivateKeyDer::pem_slice_iter(&key_bytes)
-        .collect::<std::result::Result<Vec<_>, rustls_pki_types::pem::Error>>()
-        .map_err(|e| ProxyError::Tls(format!("Failed to parse private key: {e}")))?;
-    let Some(key) = keys.pop() else {
-        return Err(ProxyError::NoPrivateKey);
-    };
-    Ok((certs, key))
-}
-
 /// Builds a fully configured `ServerConfig` from in-memory certs + TLS settings.
 ///
-/// This is the single source of truth used by both startup (`build_tls_acceptor`)
-/// and the hot-reload path. Cipher suites, ALPN, client auth, and session
-/// resumption are all applied uniformly here.
+/// Cipher suites, ALPN, client auth, and session resumption are all applied here.
+/// Cert loading is handled by `DynamicCertResolver` (Step 2).
 pub fn build_server_config(
     certs: Vec<CertificateDer<'static>>,
     key: PrivateKeyDer<'static>,
@@ -108,20 +85,6 @@ pub fn build_server_config(
     configure_session_resumption(&mut server, session_resumption);
 
     Ok(server)
-}
-
-/// Builds a TLS acceptor from configuration, reading cert + key from disk.
-pub fn build_tls_acceptor(cfg: &TlsConfig) -> Result<TlsAcceptor> {
-    let (certs, key) = read_certs_and_keys_sync(&cfg.cert_path, &cfg.key_path)?;
-    let server = build_server_config(
-        certs,
-        key,
-        &cfg.alpn,
-        &cfg.options,
-        &cfg.client_auth,
-        &cfg.session_resumption,
-    )?;
-    Ok(TlsAcceptor::from(Arc::new(server)))
 }
 
 pub fn validate_tls_options(options: &TlsOptions) -> Result<()> {

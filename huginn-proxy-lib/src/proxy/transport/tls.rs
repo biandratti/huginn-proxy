@@ -23,7 +23,7 @@ use tracing::warn;
 pub struct TlsConnectionConfig {
     pub tls_acceptor: SharedTlsAcceptor,
     pub fingerprint_config: crate::config::FingerprintConfig,
-    pub routes: Arc<Vec<crate::config::Route>>,
+    pub domains: Arc<Vec<crate::config::Domain>>,
     pub backends: Arc<Vec<crate::config::Backend>>,
     pub keep_alive: crate::config::KeepAliveConfig,
     pub security: crate::proxy::SecurityContext,
@@ -106,7 +106,7 @@ pub async fn handle_tls_connection(
             );
 
             let backends = config.backends.clone();
-            let routes = config.routes.clone();
+            let domains = config.domains.clone();
             let keep_alive = config.keep_alive.clone();
             let security = config.security.clone();
             let client_pool = config.client_pool.clone();
@@ -114,7 +114,7 @@ pub async fn handle_tls_connection(
 
             let svc =
                 hyper::service::service_fn(move |req: hyper::Request<hyper::body::Incoming>| {
-                    let routes = routes.clone();
+                    let domains = domains.clone();
                     let backends = backends.clone();
                     let ja4_fingerprints = ja4_fingerprints.clone();
                     let fingerprint_rx = fingerprint_rx.clone();
@@ -130,7 +130,7 @@ pub async fn handle_tls_connection(
                         let preserve_host = config.preserve_host;
                         let http_result = handle_proxy_request(
                             req,
-                            routes,
+                            domains,
                             backends,
                             ja4_fingerprints,
                             Some(fingerprint_rx),
@@ -178,7 +178,7 @@ pub async fn handle_tls_connection(
                 .await;
         } else {
             let backends = config.backends.clone();
-            let routes = config.routes.clone();
+            let domains = config.domains.clone();
             let keep_alive = config.keep_alive.clone();
             let security = config.security.clone();
             let client_pool = config.client_pool.clone();
@@ -186,7 +186,7 @@ pub async fn handle_tls_connection(
 
             let svc =
                 hyper::service::service_fn(move |req: hyper::Request<hyper::body::Incoming>| {
-                    let routes = routes.clone();
+                    let domains = domains.clone();
                     let backends = backends.clone();
                     let ja4_fingerprints = ja4_fingerprints.clone();
                     let syn_fingerprint = syn_fingerprint.clone();
@@ -201,7 +201,7 @@ pub async fn handle_tls_connection(
                         let metrics_for_match = metrics.clone();
                         let http_result = handle_proxy_request(
                             req,
-                            routes,
+                            domains,
                             backends,
                             ja4_fingerprints,
                             None,

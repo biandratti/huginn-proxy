@@ -26,14 +26,14 @@ backends = [
     let cfg = load_from_path(&path)?;
     assert_eq!(cfg.listen.addrs[0].to_string(), "127.0.0.1:0");
     assert_eq!(cfg.backends.len(), 1);
-    assert!(cfg.routes.is_empty());
+    assert!(cfg.domains.is_empty());
     assert!(cfg.tls.is_none());
     Ok(())
 }
 
 #[test]
-fn loads_routes_and_tls() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let path = tmp_path("routes");
+fn loads_domains_and_tls() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let path = tmp_path("domains");
 
     let cert_path = tmp_path("server.crt");
     let key_path = tmp_path("server.key");
@@ -47,15 +47,18 @@ backends = [
   {{ address = "backend-a:9000" }},
   {{ address = "backend-b:9000" }}
 ]
+
+[tls]
+alpn = ["h2"]
+
+[[domains]]
+host = "api.example.com"
+cert_path = "{}"
+key_path  = "{}"
 routes = [
   {{ prefix = "/api", backend = "backend-a:9000" }},
   {{ prefix = "/", backend = "backend-b:9000" }}
 ]
-
-[tls]
-cert_path = "{}"
-key_path  = "{}"
-alpn = ["h2"]
 "#,
         cert_path.display(),
         key_path.display()
@@ -64,9 +67,13 @@ alpn = ["h2"]
 
     let cfg = load_from_path(&path)?;
     assert_eq!(cfg.backends.len(), 2);
-    assert_eq!(cfg.routes.len(), 2);
+    assert_eq!(cfg.domains.len(), 1);
+    assert_eq!(cfg.domains[0].routes.len(), 2);
+    assert_eq!(
+        cfg.domains[0].cert_path.as_deref(),
+        Some(cert_path.display().to_string().as_str())
+    );
     let tls = cfg.tls.ok_or("tls missing")?;
-    assert_eq!(tls.cert_path, cert_path.display().to_string());
     assert_eq!(tls.alpn, vec!["h2"]);
 
     let _ = fs::remove_file(&cert_path);

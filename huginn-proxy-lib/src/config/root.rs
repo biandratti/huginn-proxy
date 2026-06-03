@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use serde::Deserialize;
 
-use super::dynamic::backend::{Backend, BackendPoolConfig, Route};
+use super::dynamic::backend::{Backend, BackendPoolConfig, Domain};
 use super::dynamic::headers::HeaderManipulation;
 use super::dynamic::security::{SecurityConfig, SecurityDynamicConfig};
 use super::dynamic::DynamicConfig;
@@ -22,10 +22,9 @@ pub struct Config {
     /// List of backend servers for load balancing
     #[serde(default)]
     pub backends: Vec<Backend>,
-    /// Path-based routing rules (optional)
-    /// If no routes match, requests return 404
+    /// Domain entries — each groups a TLS cert with its path-based routes (optional)
     #[serde(default)]
-    pub routes: Vec<Route>,
+    pub domains: Vec<Domain>,
     /// Preserve the original Host header from clients when forwarding to backends
     /// When true: Backend receives the original Host header (useful for virtual hosting)
     /// When false: Backend receives the backend address as Host header (default)
@@ -79,14 +78,17 @@ impl Config {
         let backend_addrs: HashSet<&str> =
             self.backends.iter().map(|b| b.address.as_str()).collect();
 
-        for route in &self.routes {
-            if !backend_addrs.contains(route.backend.as_str()) {
-                return Err(crate::error::ProxyError::Config(format!(
-                    "Route '{}' references unknown backend '{}' (known: [{}])",
-                    route.prefix,
-                    route.backend,
-                    backend_addrs.iter().copied().collect::<Vec<_>>().join(", ")
-                )));
+        for domain in &self.domains {
+            for route in &domain.routes {
+                if !backend_addrs.contains(route.backend.as_str()) {
+                    return Err(crate::error::ProxyError::Config(format!(
+                        "Domain '{}' route '{}' references unknown backend '{}' (known: [{}])",
+                        domain.host,
+                        route.prefix,
+                        route.backend,
+                        backend_addrs.iter().copied().collect::<Vec<_>>().join(", ")
+                    )));
+                }
             }
         }
         for backend in &self.backends {
@@ -101,7 +103,7 @@ impl Config {
     ///
     /// - `StaticConfig` holds process-level settings (listen addrs, TLS stack,
     ///   logging, timeouts, `max_connections`). Changing these requires a restart.
-    /// - `DynamicConfig` holds hot-reloadable settings (routes, backends, headers,
+    /// - `DynamicConfig` holds hot-reloadable settings (domains, backends, headers,
     ///   security policy). Wrap the returned value in `ArcSwap` to support
     ///   atomic hot-swaps at runtime.
     pub fn into_parts(self) -> ConfigParts {
@@ -117,10 +119,10 @@ impl Config {
             },
             dynamic_cfg: DynamicConfig {
                 backends: Arc::new(self.backends),
-                routes: {
-                    let mut routes = self.routes;
-                    super::sort_routes(&mut routes);
-                    Arc::new(routes)
+                domains: {
+                    let mut domains = self.domains;
+                    super::sort_domain_routes(&mut domains);
+                    Arc::new(domains)
                 },
                 preserve_host: self.preserve_host,
                 headers: self.headers,

@@ -1,5 +1,5 @@
 use super::{RateLimitResult, RateLimiter};
-use crate::config::{LimitBy, RateLimitConfig, Route};
+use crate::config::{Domain, LimitBy, RateLimitConfig};
 use ahash::AHashMap;
 use ipnet::IpNet;
 use std::net::IpAddr;
@@ -21,12 +21,10 @@ pub struct RateLimitManager {
 }
 
 impl RateLimitManager {
-    /// Create a new rate limit manager from configuration
+    /// Create a new rate limit manager from configuration.
     ///
-    /// # Arguments
-    /// * `global_config` - Global rate limiting configuration
-    /// * `routes` - Route configurations (with optional per-route rate limits)
-    pub fn new(global_config: &RateLimitConfig, routes: &[Route]) -> Self {
+    /// Iterates all routes across all domains to build per-route limiters.
+    pub fn new(global_config: &RateLimitConfig, domains: &[Domain]) -> Self {
         let global = if global_config.enabled {
             let window = Duration::from_secs(global_config.window_seconds);
             Some(RateLimiter::new(global_config.requests_per_second, global_config.burst, window))
@@ -35,20 +33,17 @@ impl RateLimitManager {
         };
 
         let mut route_limiters = AHashMap::new();
-        for route in routes {
-            if let Some(ref route_rate_limit) = route.rate_limit {
-                let enabled = route_rate_limit.enabled.unwrap_or(global_config.enabled);
+        for route in domains.iter().flat_map(|d| d.routes.iter()) {
+            if let Some(ref rl) = route.rate_limit {
+                let enabled = rl.enabled.unwrap_or(global_config.enabled);
                 if enabled {
-                    let rps = route_rate_limit
+                    let rps = rl
                         .requests_per_second
                         .unwrap_or(global_config.requests_per_second);
-                    let burst = route_rate_limit.burst.unwrap_or(global_config.burst);
+                    let burst = rl.burst.unwrap_or(global_config.burst);
                     let window = Duration::from_secs(
-                        route_rate_limit
-                            .window_seconds
-                            .unwrap_or(global_config.window_seconds),
+                        rl.window_seconds.unwrap_or(global_config.window_seconds),
                     );
-
                     route_limiters
                         .insert(route.prefix.clone(), RateLimiter::new(rps, burst, window));
                 }

@@ -20,15 +20,29 @@ pub fn load_from_path<P: AsRef<Path>>(p: P) -> Result<Config> {
 }
 
 fn validate_config(cfg: &Config) -> Result<()> {
-    if let Some(tls) = &cfg.tls {
-        if !Path::new(&tls.cert_path).exists() {
-            return Err(ProxyError::Config(format!(
-                "Certificate file not found: {}",
-                tls.cert_path
-            )));
-        }
-        if !Path::new(&tls.key_path).exists() {
-            return Err(ProxyError::Config(format!("Key file not found: {}", tls.key_path)));
+    for domain in &cfg.domains {
+        match (&domain.cert_path, &domain.key_path) {
+            (Some(cert), Some(key)) => {
+                if !Path::new(cert).exists() {
+                    return Err(ProxyError::Config(format!(
+                        "Domain '{}': certificate file not found: {}",
+                        domain.host, cert
+                    )));
+                }
+                if !Path::new(key).exists() {
+                    return Err(ProxyError::Config(format!(
+                        "Domain '{}': key file not found: {}",
+                        domain.host, key
+                    )));
+                }
+            }
+            (None, None) => {}
+            _ => {
+                return Err(ProxyError::Config(format!(
+                    "Domain '{}': cert_path and key_path must both be set or both omitted",
+                    domain.host
+                )));
+            }
         }
     }
 

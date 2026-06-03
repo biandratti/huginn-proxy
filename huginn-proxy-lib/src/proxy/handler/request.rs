@@ -1,5 +1,5 @@
 use crate::backend::UpstreamGateway;
-use crate::config::{Backend, KeepAliveConfig, Route};
+use crate::config::{Backend, Domain, KeepAliveConfig};
 use crate::fingerprinting::names;
 use crate::fingerprinting::TcpObservation;
 use crate::proxy::forwarding::forward;
@@ -65,7 +65,7 @@ fn check_ip_access(
 #[allow(clippy::too_many_arguments)]
 pub async fn handle_proxy_request(
     mut req: Request<Incoming>,
-    routes: Arc<Vec<Route>>,
+    domains: Arc<Vec<Domain>>,
     backends: Arc<Vec<Backend>>,
     ja4_fingerprints: Option<crate::fingerprinting::Ja4Fingerprints>,
     fingerprint_rx: Option<watch::Receiver<Option<huginn_net_http::AkamaiFingerprint>>>,
@@ -98,16 +98,22 @@ pub async fn handle_proxy_request(
     }
 
     let path = req.uri().path();
-    let route_match =
-        if let Some(route) = crate::proxy::router::pick_route_with_fingerprinting(path, &routes) {
-            route
-        } else {
-            let error = HttpError::NoMatchingRoute;
-            metrics.record_error(error.error_type());
-            let status_code = StatusCode::from(error.clone()).as_u16();
-            metrics.record_entrypoint_request(&method, status_code, &protocol);
-            return Err(error);
-        };
+    // TODO(step3): replace flat lookup with two-phase domain+path match
+    let all_routes: Vec<crate::config::Route> = domains
+        .iter()
+        .flat_map(|d| d.routes.iter().cloned())
+        .collect();
+    let route_match = if let Some(route) =
+        crate::proxy::router::pick_route_with_fingerprinting(path, &all_routes)
+    {
+        route
+    } else {
+        let error = HttpError::NoMatchingRoute;
+        metrics.record_error(error.error_type());
+        let status_code = StatusCode::from(error.clone()).as_u16();
+        metrics.record_entrypoint_request(&method, status_code, &protocol);
+        return Err(error);
+    };
 
     let selected_upstream = match upstream.selector.select(
         route_match.matched_prefix,

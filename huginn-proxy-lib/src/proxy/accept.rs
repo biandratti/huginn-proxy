@@ -96,7 +96,7 @@ pub async fn accept_loop(
             dynamic.headers.clone(),
         );
         let backends = Arc::clone(&dynamic.backends);
-        let routes = Arc::clone(&dynamic.routes);
+        let domains = Arc::clone(&dynamic.domains);
         let preserve_host = dynamic.preserve_host;
         let upstream =
             UpstreamGateway::new(ctx.health_registry.clone(), ctx.backend_selector.clone());
@@ -112,7 +112,7 @@ pub async fn accept_loop(
                     TlsConnectionConfig {
                         tls_acceptor: tls_acceptor.clone(),
                         fingerprint_config: ctx_task.fingerprint_config.clone(),
-                        routes,
+                        domains: domains.clone(),
                         backends,
                         keep_alive: ctx_task.keep_alive_config.clone(),
                         security: security.clone(),
@@ -132,7 +132,7 @@ pub async fn accept_loop(
                     stream,
                     peer,
                     PlainConnectionConfig {
-                        routes,
+                        domains,
                         backends,
                         keep_alive: ctx_task.keep_alive_config.clone(),
                         security,

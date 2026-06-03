@@ -79,13 +79,12 @@ pub async fn try_reload(
 
     audit_config_changes(&old_dynamic, &new_dynamic);
 
-    // Rebuild rate-limiter when the rate-limit config or routes change.
-    // Routes are included because per-route limiters are built from route definitions;
+    // Rebuild rate-limiter when the rate-limit config or domains/routes change.
     if old_dynamic.security.rate_limit != new_dynamic.security.rate_limit
-        || old_dynamic.routes != new_dynamic.routes
+        || old_dynamic.domains != new_dynamic.domains
     {
         let candidate =
-            RateLimitManager::new(&new_dynamic.security.rate_limit, &new_dynamic.routes);
+            RateLimitManager::new(&new_dynamic.security.rate_limit, &new_dynamic.domains);
         let new_mgr = if candidate.is_enabled() {
             Some(Arc::new(candidate))
         } else {
@@ -147,18 +146,18 @@ fn audit_config_changes(old: &DynamicConfig, new: &DynamicConfig) {
         info!(backend = addr, "Config diff: backend added");
     }
 
-    let old_routes: HashSet<&str> = old.routes.iter().map(|r| r.prefix.as_str()).collect();
-    let new_routes: HashSet<&str> = new.routes.iter().map(|r| r.prefix.as_str()).collect();
-    for prefix in old_routes.difference(&new_routes) {
-        info!(prefix = prefix, "Config diff: route removed");
+    let old_domains: HashSet<&str> = old.domains.iter().map(|d| d.host.as_str()).collect();
+    let new_domains: HashSet<&str> = new.domains.iter().map(|d| d.host.as_str()).collect();
+    for host in old_domains.difference(&new_domains) {
+        info!(host = host, "Config diff: domain removed");
     }
-    for prefix in new_routes.difference(&old_routes) {
-        info!(prefix = prefix, "Config diff: route added");
+    for host in new_domains.difference(&old_domains) {
+        info!(host = host, "Config diff: domain added");
     }
-    for route in new.routes.iter() {
-        if let Some(old_route) = old.routes.iter().find(|r| r.prefix == route.prefix) {
-            if old_route != route {
-                info!(prefix = route.prefix, "Config diff: route changed");
+    for domain in new.domains.iter() {
+        if let Some(old_domain) = old.domains.iter().find(|d| d.host == domain.host) {
+            if old_domain != domain {
+                info!(host = domain.host, "Config diff: domain changed");
             }
         }
     }
@@ -239,7 +238,7 @@ fn fnv1a_hash(dynamic: &DynamicConfig) -> u64 {
 }
 
 pub fn initial_rate_limiter(dynamic: &DynamicConfig) -> SharedRateLimiter {
-    let candidate = RateLimitManager::new(&dynamic.security.rate_limit, &dynamic.routes);
+    let candidate = RateLimitManager::new(&dynamic.security.rate_limit, &dynamic.domains);
     let mgr = if candidate.is_enabled() {
         Some(Arc::new(candidate))
     } else {

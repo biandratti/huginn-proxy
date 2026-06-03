@@ -35,7 +35,7 @@ use bytes::Bytes;
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use http_body_util::Full;
 use huginn_proxy_lib::config::{
-    Backend, FingerprintConfig, KeepAliveConfig, ListenConfig, LoggingConfig, Route,
+    Backend, Domain, FingerprintConfig, KeepAliveConfig, ListenConfig, LoggingConfig, Route,
     SecurityConfig, TelemetryConfig, TimeoutConfig,
 };
 use huginn_proxy_lib::fingerprinting::names;
@@ -107,38 +107,42 @@ impl BenchFixture {
                 http_version: None,
                 health_check: None,
             }],
-            routes: vec![
-                Route {
-                    prefix: "/bench/fp".to_string(),
-                    backend: backend_address.clone(),
-                    fingerprinting: true,
-                    force_new_connection: false,
-                    replace_path: Some("/".to_string()),
-                    rate_limit: None,
-                    headers: None,
-                },
-                Route {
-                    prefix: "/bench/nofp".to_string(),
-                    backend: backend_address.clone(),
-                    fingerprinting: false,
-                    force_new_connection: false,
-                    replace_path: Some("/".to_string()),
-                    rate_limit: None,
-                    headers: None,
-                },
-                Route {
-                    prefix: "/".to_string(),
-                    backend: backend_address,
-                    fingerprinting: true,
-                    force_new_connection: false,
-                    replace_path: None,
-                    rate_limit: None,
-                    headers: None,
-                },
-            ],
+            domains: vec![Domain {
+                host: "_".to_string(),
+                cert_path: Some(cert_file.path().to_string_lossy().into_owned()),
+                key_path: Some(key_file.path().to_string_lossy().into_owned()),
+                headers: None,
+                routes: vec![
+                    Route {
+                        prefix: "/bench/fp".to_string(),
+                        backend: backend_address.clone(),
+                        fingerprinting: true,
+                        force_new_connection: false,
+                        replace_path: Some("/".to_string()),
+                        rate_limit: None,
+                        headers: None,
+                    },
+                    Route {
+                        prefix: "/bench/nofp".to_string(),
+                        backend: backend_address.clone(),
+                        fingerprinting: false,
+                        force_new_connection: false,
+                        replace_path: Some("/".to_string()),
+                        rate_limit: None,
+                        headers: None,
+                    },
+                    Route {
+                        prefix: "/".to_string(),
+                        backend: backend_address,
+                        fingerprinting: true,
+                        force_new_connection: false,
+                        replace_path: None,
+                        rate_limit: None,
+                        headers: None,
+                    },
+                ],
+            }],
             tls: Some(TlsConfig {
-                cert_path: cert_file.path().to_string_lossy().into_owned(),
-                key_path: key_file.path().to_string_lossy().into_owned(),
                 alpn: vec!["h2".to_string(), "http/1.1".to_string()],
                 options: Default::default(),
                 client_auth: Default::default(),

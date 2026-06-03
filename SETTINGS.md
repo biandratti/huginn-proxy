@@ -205,19 +205,24 @@ backends:
 
 ---
 
-## `[[routes]]`
+## `[[domains]]`
 
-Path-prefix routing rules. **First match wins** — order matters. **Dynamic** (hot-reloadable).
+Domain entries group a TLS certificate with its path-based routes. Each entry handles one
+hostname (or wildcard). **Dynamic** (hot-reloadable). **Optional** — omitting all domains
+is valid; the proxy binds but returns 404 for all requests.
 
-| Key                    | Type   | Default | Description                                                                                                                                                                                    |
-|------------------------|--------|---------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `prefix`               | string | —       | URL path prefix to match. Use `"/"` as a catch-all default route.                                                                                                                              |
-| `backend`              | string | —       | Backend address to forward to. Must match a `[[backends]].address` exactly.                                                                                                                    |
-| `fingerprinting`       | bool   | `true`  | Inject TLS/HTTP fingerprint headers (`x-tls-ja4*`, `x-http2-akamai`, `x-tcp-p0f`) for this route.                                                                                                                         |
-| `force_new_connection` | bool   | `false` | Bypass the connection pool — opens a fresh TCP+TLS connection per request. Required when you need a fresh TLS handshake for each request (e.g. JA4 extraction on every request). Adds latency. |
-| `replace_path`         | string | `null`  | Path prefix replacement. Empty string (`""`) strips the prefix. Any other value replaces the matched prefix. Absent = forward as-is.                                                           |
-| `rate_limit`           | table  | —       | Per-route rate limit overrides. See [`[routes.rate_limit]`](#routesrate_limit) below.                                                                                                          |
-| `headers`              | table  | —       | Per-route header manipulation. Same shape as [`[headers]`](#headers).                                                                                                                          |
+SNI matching order per incoming connection:
+1. Exact match — `"api.example.com"`
+2. Wildcard match — `"*.example.com"` (one level only; does not match `a.b.example.com`)
+3. No match → TLS alert `unrecognized_name` (TLS) or HTTP 421 (plain HTTP)
+
+| Key         | Type   | Default | Description                                                                                      |
+|-------------|--------|---------|--------------------------------------------------------------------------------------------------|
+| `host`      | string | —       | Domain pattern for SNI matching. Exact or single-level wildcard (`*.example.com`).               |
+| `cert_path` | string | `null`  | Path to the TLS certificate PEM file. Omit for plain-HTTP-only domains.                          |
+| `key_path`  | string | `null`  | Path to the TLS private key PEM file. Must be set together with `cert_path` or both omitted.     |
+| `headers`   | table  | —       | Domain-level header manipulation. Merged between global and route-level headers.                 |
+| `routes`    | array  | `[]`    | Path-based routing rules scoped to this domain. Same fields as the former `[[routes]]` entries.  |
 
 <table>
 <thead>
@@ -231,53 +236,51 @@ Path-prefix routing rules. **First match wins** — order matters. **Dynamic** (
 <td valign="top">
 
 ```toml
-# Forward /api to backend-a, with fingerprinting
-[[routes]]
-prefix = "/api"
-backend = "backend-a:9000"
-fingerprinting = true
+[[domains]]
+host = "api.example.com"
+cert_path = "/config/certs/api.crt"
+key_path  = "/config/certs/api.key"
 
-# Strip /strip prefix: /strip/users → /users
-[[routes]]
-prefix = "/strip"
-backend = "backend-a:9000"
-replace_path = ""
+  [[domains.routes]]
+  prefix = "/v2"
+  backend = "api-backend:9000"
+  fingerprinting = true
 
-# Rewrite /old prefix: /old/data → /new/data
-[[routes]]
-prefix = "/old"
-backend = "backend-b:9000"
-replace_path = "/new"
+  [[domains.routes]]
+  prefix = "/"
+  backend = "web-backend:8080"
 
-# Catch-all
-[[routes]]
-prefix = "/"
-backend = "backend-b:9000"
+[[domains]]
+host = "*.example.com"
+cert_path = "/config/certs/wildcard.crt"
+key_path  = "/config/certs/wildcard.key"
+
+  [[domains.routes]]
+  prefix = "/"
+  backend = "web-backend:8080"
 ```
 
 </td>
 <td valign="top">
 
 ```yaml
-routes:
-  # Forward /api to backend-a, with fingerprinting
-  - prefix: "/api"
-    backend: "backend-a:9000"
-    fingerprinting: true
+domains:
+  - host: "api.example.com"
+    cert_path: "/config/certs/api.crt"
+    key_path:  "/config/certs/api.key"
+    routes:
+      - prefix: "/v2"
+        backend: "api-backend:9000"
+        fingerprinting: true
+      - prefix: "/"
+        backend: "web-backend:8080"
 
-  # Strip /strip prefix: /strip/users → /users
-  - prefix: "/strip"
-    backend: "backend-a:9000"
-    replace_path: ""
-
-  # Rewrite /old prefix: /old/data → /new/data
-  - prefix: "/old"
-    backend: "backend-b:9000"
-    replace_path: "/new"
-
-  # Catch-all
-  - prefix: "/"
-    backend: "backend-b:9000"
+  - host: "*.example.com"
+    cert_path: "/config/certs/wildcard.crt"
+    key_path:  "/config/certs/wildcard.key"
+    routes:
+      - prefix: "/"
+        backend: "web-backend:8080"
 ```
 
 </td>
@@ -285,10 +288,25 @@ routes:
 </tbody>
 </table>
 
-### `[routes.rate_limit]`
+### `[domains.routes]`
 
-Overrides the global `[security.rate_limit]` for this specific route. Only the keys you set override the global; unset
-keys fall back to the global config.
+Path-prefix routing rules scoped to the parent domain. Longest prefix wins; declaration
+order does not matter within a domain.
+
+| Key                    | Type   | Default | Description                                                                                                                                                                                    |
+|------------------------|--------|---------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `prefix`               | string | —       | URL path prefix to match. Use `"/"` as a catch-all.                                                                                                                                            |
+| `backend`              | string | —       | Backend address to forward to. Must match a `[[backends]].address` exactly.                                                                                                                    |
+| `fingerprinting`       | bool   | `true`  | Inject TLS/HTTP fingerprint headers (`x-tls-ja4*`, `x-http2-akamai`, `x-tcp-p0f`) for this route.                                                                                             |
+| `force_new_connection` | bool   | `false` | Bypass the connection pool — opens a fresh TCP+TLS connection per request.                                                                                                                     |
+| `replace_path`         | string | `null`  | Path prefix replacement. Empty string (`""`) strips the prefix. Absent = forward as-is.                                                                                                       |
+| `rate_limit`           | table  | —       | Per-route rate limit overrides. See [`[domains.routes.rate_limit]`](#domainsroutesrate_limit) below.                                                                                           |
+| `headers`              | table  | —       | Per-route header manipulation. Applied after global and domain-level headers.                                                                                                                  |
+
+### `[domains.routes.rate_limit]`
+
+Overrides the global `[security.rate_limit]` for this specific route. Only the keys you
+set override the global; unset keys fall back to the global config.
 
 | Key                   | Type    | Default | Description                                                               |
 |-----------------------|---------|---------|---------------------------------------------------------------------------|
@@ -298,62 +316,10 @@ keys fall back to the global config.
 | `limit_by`            | string  | `null`  | Override limit key strategy: `"ip"`, `"header"`, `"route"`, `"combined"`. |
 | `limit_by_header`     | string  | `null`  | Override header name when `limit_by = "header"`.                          |
 
-<table>
-<thead>
-<tr>
-<th>TOML</th>
-<th>YAML</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td valign="top">
+### `[domains.headers]`
 
-```toml
-[[routes]]
-prefix = "/api"
-backend = "backend-a:9000"
-
-[routes.rate_limit]
-enabled = true
-requests_per_second = 50
-burst = 100
-limit_by = "combined"
-
-[[routes]]
-prefix = "/public"
-backend = "backend-b:9000"
-
-[routes.rate_limit]
-enabled = false   # disable rate limiting for this route
-```
-
-</td>
-<td valign="top">
-
-```yaml
-routes:
-  - prefix: "/api"
-    backend: "backend-a:9000"
-    rate_limit:
-      enabled: true
-      requests_per_second: 50
-      burst: 100
-      limit_by: combined
-  - prefix: "/public"
-    backend: "backend-b:9000"
-    rate_limit:
-      enabled: false # disable rate limiting for this route
-```
-
-</td>
-</tr>
-</tbody>
-</table>
-
-### `[routes.headers]`
-
-Per-route header manipulation. Same shape as [`[headers]`](#headers). Applied after global headers.
+Domain-level header manipulation. Applied after global `[headers]` and before
+route-level `[domains.routes.headers]`. Same shape as [`[headers]`](#headers).
 
 <table>
 <thead>
@@ -367,32 +333,48 @@ Per-route header manipulation. Same shape as [`[headers]`](#headers). Applied af
 <td valign="top">
 
 ```toml
-[[routes]]
-prefix = "/api"
-backend = "backend-a:9000"
+[[domains]]
+host = "api.example.com"
+cert_path = "/config/certs/api.crt"
+key_path  = "/config/certs/api.key"
 
-[routes.headers.request]
-add = [{ name = "X-Internal-Route", value = "api" }]
+[domains.headers.response]
+add = [
+  { name = "Strict-Transport-Security", value = "max-age=31536000" },
+  { name = "Content-Security-Policy",   value = "default-src 'self'" },
+]
 
-[routes.headers.response]
-remove = ["X-Backend-Id"]
+  [[domains.routes]]
+  prefix = "/v2"
+  backend = "api-backend:9000"
+
+  [domains.routes.headers.request]
+  add = [{ name = "X-API-Version", value = "2" }]
 ```
 
 </td>
 <td valign="top">
 
 ```yaml
-routes:
-  - prefix: "/api"
-    backend: "backend-a:9000"
+domains:
+  - host: "api.example.com"
+    cert_path: "/config/certs/api.crt"
+    key_path:  "/config/certs/api.key"
     headers:
-      request:
-        add:
-          - name: "X-Internal-Route"
-            value: "api"
       response:
-        remove:
-          - "X-Backend-Id"
+        add:
+          - name: "Strict-Transport-Security"
+            value: "max-age=31536000"
+          - name: "Content-Security-Policy"
+            value: "default-src 'self'"
+    routes:
+      - prefix: "/v2"
+        backend: "api-backend:9000"
+        headers:
+          request:
+            add:
+              - name: "X-API-Version"
+                value: "2"
 ```
 
 </td>
@@ -474,14 +456,12 @@ headers:
 
 ## `[tls]`
 
-TLS termination. Omit the entire section to run as plain HTTP. **Static** — requires restart to change (cert/key file
-contents are hot-reloaded separately via file watcher).
+TLS termination options. Omit the entire section to run as plain HTTP. **Static** — requires
+restart to change. Certificates are configured per domain under `[[domains]]` (see below).
 
-| Key         | Type             | Default | Description                                                                                                 |
-|-------------|------------------|---------|-------------------------------------------------------------------------------------------------------------|
-| `cert_path` | string           | —       | Path to the server certificate PEM file.                                                                    |
-| `key_path`  | string           | —       | Path to the private key PEM file.                                                                           |
-| `alpn`      | array of strings | `[]`    | ALPN protocols to advertise. Use `["h2", "http/1.1"]` to support both HTTP/2 and HTTP/1.1 with negotiation. |
+| Key    | Type             | Default | Description                                                                                                 |
+|--------|------------------|---------|-------------------------------------------------------------------------------------------------------------|
+| `alpn` | array of strings | `[]`    | ALPN protocols to advertise. Use `["h2", "http/1.1"]` to support both HTTP/2 and HTTP/1.1 with negotiation. |
 
 <table>
 <thead>
@@ -496,8 +476,6 @@ contents are hot-reloaded separately via file watcher).
 
 ```toml
 [tls]
-cert_path = "/config/certs/server.crt"
-key_path = "/config/certs/server.key"
 alpn = ["h2", "http/1.1"]
 ```
 
@@ -506,8 +484,6 @@ alpn = ["h2", "http/1.1"]
 
 ```yaml
 tls:
-  cert_path: "/config/certs/server.crt"
-  key_path: "/config/certs/server.key"
   alpn:
     - "h2"
     - "http/1.1"
