@@ -30,7 +30,7 @@ backends:
       healthy_threshold: 2
 
 domains:
-  - host: "example.com"
+  - host: "localhost"
     cert_path: "/config/certs/server.crt"
     key_path: "/config/certs/server.key"
 
