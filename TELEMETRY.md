@@ -586,34 +586,34 @@ sum by (protocol) (rate(huginn_mtls_connections_total[5m]))
 
 ### 13. TLS Certificate Hot Reload Metrics
 
-| Metric                                          | Type    | Description                                                       | Labels   |
-|-------------------------------------------------|---------|-------------------------------------------------------------------|----------|
-| `huginn_tls_cert_reload_total`                  | Counter | TLS certificate load/reload attempts (includes initial load)      | `result` |
-| `huginn_tls_cert_last_reload_timestamp_seconds` | Gauge   | Unix timestamp of the last successful TLS cert load or reload     | -        |
-| `huginn_tls_cert_hash`                          | Gauge   | FNV-1a hash of the currently active certificate chain (DER bytes) | -        |
+| Metric                                          | Type    | Description                                                            | Labels            |
+|-------------------------------------------------|---------|------------------------------------------------------------------------|-------------------|
+| `huginn_tls_cert_reload_total`                  | Counter | TLS certificate load/reload attempts per domain (includes initial load) | `result`, `domain` |
+| `huginn_tls_cert_last_reload_timestamp_seconds` | Gauge   | Unix timestamp of the last successful TLS cert load or reload          | `domain`          |
+| `huginn_tls_cert_hash`                          | Gauge   | FNV-1a hash of the active certificate chain for a domain (DER bytes)  | `domain`          |
 
 **Labels**:
 
 - `result`: Outcome of the reload attempt — `success` or `error`
+- `domain`: The domain host pattern the certificate belongs to (e.g. `api.example.com`, `*.example.com`)
 
 **Notes**:
 
-- This metric trio is **independent** from the config hot reload trio (§12). Modifying the TOML config does not bump
-  these gauges; replacing the cert/key files does. The two subsystems run in separate background tasks.
-- The hash and timestamp gauges are populated **immediately at boot** with the initial certificate, so
-  `time() - huginn_tls_cert_last_reload_timestamp_seconds` is meaningful from the first scrape (unlike §12, which only
-  populates on the first hot reload event).
-- `huginn_tls_cert_hash` hashes the certificate chain DER bytes. The private key is intentionally not part of the hash
-  (cert/key are always rotated together, and hashing key material in a process-wide gauge is a security smell).
-- A failed reload (cert/key parse error, validation failure, or `ServerConfig` rebuild error) bumps the
-  `result="error"` counter but leaves the hash and timestamp gauges untouched, so dashboards continue to advertise the
-  last *good* certificate that is actually serving traffic.
+- Cert loading is driven by config hot-reload (`DynamicCertResolver::update`) — each SIGHUP or config file change
+  reloads all domain certs. This replaces the former per-file watcher model.
+- All three metrics are **per-domain** so you can track cert rotation independently for each domain.
+- The hash and timestamp gauges are populated **at boot** for every configured domain, so
+  `time() - huginn_tls_cert_last_reload_timestamp_seconds{domain="..."}` is meaningful from the first scrape.
+- `huginn_tls_cert_hash` hashes the certificate chain DER bytes. Private key material is intentionally excluded.
+- A failed reload bumps `result="error"` for that domain but leaves the hash/timestamp gauges unchanged — dashboards
+  continue to show the last good certificate actually serving traffic.
 
 **Example queries**:
 
-- Detect a rotation in the last 5 minutes: `changes(huginn_tls_cert_hash[5m]) > 0`
-- Alert on stuck reloads (rotation attempted but failed): `rate(huginn_tls_cert_reload_total{result="error"}[5m]) > 0`
-- Cert age proxy (time since last successful load): `time() - huginn_tls_cert_last_reload_timestamp_seconds`
+- Detect a rotation for a domain in the last 5 minutes: `changes(huginn_tls_cert_hash{domain="api.example.com"}[5m]) > 0`
+- Alert on failed reload for any domain: `rate(huginn_tls_cert_reload_total{result="error"}[5m]) > 0`
+- Cert age by domain: `time() - huginn_tls_cert_last_reload_timestamp_seconds`
+- Domains with a cert loaded: `count by (domain)(huginn_tls_cert_hash)`
 
 ---
 
@@ -715,9 +715,8 @@ TLS certificate row (each panel aligned column-wise under its config counterpart
 
 - Cert reload success rate: `rate(huginn_tls_cert_reload_total{result="success"}[1h])`
 - Cert reload error rate: `rate(huginn_tls_cert_reload_total{result="error"}[1h])`
-- Time since last successful cert load: `time() - huginn_tls_cert_last_reload_timestamp_seconds`
-- Active cert hash: `huginn_tls_cert_hash` (changes on every rotation; content hash for change detection, not a
-  JA4-style client fingerprint)
+- Time since last successful cert load per domain: `time() - huginn_tls_cert_last_reload_timestamp_seconds`
+- Active cert hash per domain: `huginn_tls_cert_hash` (changes on every rotation; content hash for change detection)
 - Detect rotation in last 5 min: `changes(huginn_tls_cert_hash[5m]) > 0`
 
 **eBPF Agent Panel** (DaemonSet, one agent per node):

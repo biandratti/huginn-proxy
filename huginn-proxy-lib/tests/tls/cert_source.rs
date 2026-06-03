@@ -6,8 +6,8 @@ use crate::helpers::{create_valid_test_cert, generate_dummy_test_cert_der, never
 use huginn_proxy_lib::config::{ClientAuth, TlsConfig, TlsOptions};
 use huginn_proxy_lib::telemetry::Metrics;
 use huginn_proxy_lib::tls::{
-    build_server_config, cert_chain_hash, setup_tls_with_hot_reload, CertSource, ServerCertsKeys,
-    StaticCertSource, WatchedCertSource,
+    build_server_config, cert_chain_hash, setup_tls_with_hot_reload, CertSource,
+    DynamicCertResolver, ServerCertsKeys, StaticCertSource, WatchedCertSource,
 };
 use tokio_rustls::rustls::{CipherSuite, ServerConfig};
 
@@ -165,8 +165,15 @@ async fn setup_tls_static_no_spurious_reloads(
     };
 
     let (_shutdown_tx, shutdown_rx) = never_shutdown();
-    let setup =
-        setup_tls_with_hot_reload(&config, false, 1, Metrics::new_noop(), shutdown_rx).await?;
+    let setup = setup_tls_with_hot_reload(
+        &config,
+        Arc::new(DynamicCertResolver::new()),
+        false,
+        1,
+        Metrics::new_noop(),
+        shutdown_rx,
+    )
+    .await?;
     let initial_ptr = Arc::as_ptr(&setup.acceptor.load());
 
     tokio::time::sleep(Duration::from_millis(300)).await;
@@ -261,8 +268,15 @@ async fn cipher_suites_applied_after_reload() -> Result<(), Box<dyn std::error::
     };
 
     let (_shutdown_tx, shutdown_rx) = never_shutdown();
-    let setup =
-        setup_tls_with_hot_reload(&config, true, 1, Metrics::new_noop(), shutdown_rx).await?;
+    let setup = setup_tls_with_hot_reload(
+        &config,
+        Arc::new(DynamicCertResolver::new()),
+        true,
+        1,
+        Metrics::new_noop(),
+        shutdown_rx,
+    )
+    .await?;
     let initial_acceptor = setup.acceptor.load_full();
     let initial_ptr = Arc::as_ptr(&initial_acceptor);
 
@@ -320,9 +334,16 @@ async fn hot_reload_survives_dropping_tls_setup_keeping_only_acceptor(
 
     // Simulate the proxy::server caller: keep only the acceptor.
     let (_shutdown_tx, shutdown_rx) = never_shutdown();
-    let acceptor = setup_tls_with_hot_reload(&config, true, 1, Metrics::new_noop(), shutdown_rx)
-        .await?
-        .acceptor;
+    let acceptor = setup_tls_with_hot_reload(
+        &config,
+        Arc::new(DynamicCertResolver::new()),
+        true,
+        1,
+        Metrics::new_noop(),
+        shutdown_rx,
+    )
+    .await?
+    .acceptor;
     let initial_ptr = Arc::as_ptr(&acceptor.load_full());
 
     // Rotate the cert and assert the acceptor is swapped in. If the
@@ -411,8 +432,15 @@ async fn cert_reload_task_exits_on_shutdown_signal(
     };
 
     let (shutdown_tx, shutdown_rx) = huginn_proxy_lib::shutdown_channel();
-    let setup =
-        setup_tls_with_hot_reload(&config, true, 60, Metrics::new_noop(), shutdown_rx).await?;
+    let setup = setup_tls_with_hot_reload(
+        &config,
+        Arc::new(DynamicCertResolver::new()),
+        true,
+        60,
+        Metrics::new_noop(),
+        shutdown_rx,
+    )
+    .await?;
 
     let handle = setup
         .reload_handle
@@ -444,8 +472,15 @@ async fn cert_reload_task_none_in_static_mode(
     };
 
     let (_shutdown_tx, shutdown_rx) = never_shutdown();
-    let setup =
-        setup_tls_with_hot_reload(&config, false, 60, Metrics::new_noop(), shutdown_rx).await?;
+    let setup = setup_tls_with_hot_reload(
+        &config,
+        Arc::new(DynamicCertResolver::new()),
+        false,
+        60,
+        Metrics::new_noop(),
+        shutdown_rx,
+    )
+    .await?;
 
     assert!(setup.reload_handle.is_none(), "static mode must not spawn a reload task");
 
@@ -471,8 +506,15 @@ async fn shutdown_ordering_background_tasks_exit_before_signal(
     };
 
     let (shutdown_tx, shutdown_rx) = huginn_proxy_lib::shutdown_channel();
-    let setup =
-        setup_tls_with_hot_reload(&config, true, 60, Metrics::new_noop(), shutdown_rx).await?;
+    let setup = setup_tls_with_hot_reload(
+        &config,
+        Arc::new(DynamicCertResolver::new()),
+        true,
+        60,
+        Metrics::new_noop(),
+        shutdown_rx,
+    )
+    .await?;
 
     let svc = setup
         .reload_handle

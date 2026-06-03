@@ -1,4 +1,5 @@
 pub mod acceptor;
+pub mod cert_resolver;
 pub mod cert_source;
 pub mod cipher_suites;
 pub mod curves;
@@ -6,7 +7,8 @@ pub mod metrics;
 pub mod session_resumption;
 pub mod setup;
 
-pub use acceptor::build_server_config;
+pub use acceptor::{build_server_config, build_server_config_with_resolver};
+pub use cert_resolver::DynamicCertResolver;
 pub use cert_source::{
     cert_chain_hash, CertSource, ServerCertsKeys, StaticCertSource, WatchedCertSource,
 };

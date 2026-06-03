@@ -24,6 +24,7 @@ pub mod labels {
     pub const RUST_VERSION: &str = "rust_version";
     pub const BACKEND: &str = "backend";
     pub const RESULT: &str = "result";
+    pub const DOMAIN: &str = "domain";
 }
 
 pub mod values {
@@ -654,24 +655,32 @@ impl Metrics {
             .add(1, &[KeyValue::new(labels::RESULT, values::RELOAD_ERROR)]);
     }
 
-    /// Record a successful TLS certificate load or hot reload.
-    /// `cert_hash` is the FNV-1a hash of the certificate chain DER bytes;
-    pub fn record_tls_cert_reload_success(&self, cert_hash: u64) {
+    /// Record a successful TLS certificate load or hot reload for a specific domain.
+    /// `cert_hash` is the FNV-1a hash of the certificate chain DER bytes.
+    pub fn record_tls_cert_reload_success(&self, domain: &str, cert_hash: u64) {
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default()
             .as_secs_f64();
-        self.tls_cert_reload_total
-            .add(1, &[KeyValue::new(labels::RESULT, values::RELOAD_SUCCESS)]);
-        self.tls_cert_last_reload_timestamp_seconds.record(now, &[]);
-        self.tls_cert_hash.record(cert_hash, &[]);
+        let attrs = [
+            KeyValue::new(labels::RESULT, values::RELOAD_SUCCESS),
+            KeyValue::new(labels::DOMAIN, domain.to_string()),
+        ];
+        self.tls_cert_reload_total.add(1, &attrs);
+        self.tls_cert_last_reload_timestamp_seconds
+            .record(now, &attrs[1..]);
+        self.tls_cert_hash.record(cert_hash, &attrs[1..]);
     }
 
-    /// Record a failed TLS certificate reload (parse error, validation error,
-    /// or any failure rebuilding the `ServerConfig`).
-    pub fn record_tls_cert_reload_error(&self) {
-        self.tls_cert_reload_total
-            .add(1, &[KeyValue::new(labels::RESULT, values::RELOAD_ERROR)]);
+    /// Record a failed TLS certificate reload for a specific domain.
+    pub fn record_tls_cert_reload_error(&self, domain: &str) {
+        self.tls_cert_reload_total.add(
+            1,
+            &[
+                KeyValue::new(labels::RESULT, values::RELOAD_ERROR),
+                KeyValue::new(labels::DOMAIN, domain.to_string()),
+            ],
+        );
     }
 
     /// Record a rejected incoming connection.

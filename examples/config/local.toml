@@ -10,15 +10,18 @@ addrs = ["127.0.0.1:7000"]
 address = "127.0.0.1:9000"
 http_version = "http11"
 
-[[routes]]
+[[domains]]
+host = "localhost"
+cert_path = "examples/certs/server.crt"
+key_path  = "examples/certs/server.key"
+
+[[domains.routes]]
 prefix = "/"
 backend = "127.0.0.1:9000"
 fingerprinting = true
 force_new_connection = false
 
 [tls]
-cert_path = "examples/certs/server.crt"
-key_path = "examples/certs/server.key"
 alpn = ["h2", "http/1.1"]
 
 [logging]

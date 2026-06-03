@@ -117,6 +117,7 @@ async fn reload_invalid_toml_keeps_current_config() -> TestResult {
         &reload_mutex,
         &metrics,
         &health_supervisor,
+        None,
     )
     .await;
 
@@ -163,6 +164,7 @@ async fn drain_removed_backend_replaces_pool() -> TestResult {
         &reload_mutex,
         &metrics,
         &health_supervisor,
+        None,
     )
     .await;
 
@@ -208,6 +210,7 @@ async fn reload_static_change_proceeds_without_crash() -> TestResult {
         &reload_mutex,
         &metrics,
         &health_supervisor,
+        None,
     )
     .await;
 
@@ -257,6 +260,7 @@ async fn concurrent_reloads_are_serialized() -> TestResult {
                 &reload_mutex,
                 &metrics,
                 health_supervisor.as_ref(),
+                None,
             )
             .await;
         }));
@@ -304,6 +308,7 @@ async fn reload_toggles_rate_limiter() -> TestResult {
         &reload_mutex,
         &metrics,
         &health_supervisor,
+        None,
     )
     .await;
 
@@ -323,6 +328,7 @@ async fn reload_toggles_rate_limiter() -> TestResult {
         &reload_mutex,
         &metrics,
         &health_supervisor,
+        None,
     )
     .await;
 

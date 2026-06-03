@@ -3,6 +3,7 @@ use crate::config::{load_from_path, Backend, BackendPoolConfig, DynamicConfig, S
 use crate::proxy::client_pool::ClientPool;
 use crate::security::RateLimitManager;
 use crate::telemetry::Metrics;
+use crate::tls::DynamicCertResolver;
 use arc_swap::ArcSwap;
 use std::collections::HashSet;
 use std::hash::{Hash, Hasher};
@@ -44,6 +45,7 @@ pub async fn try_reload(
     reload_mutex: &tokio::sync::Mutex<()>,
     metrics: &Arc<Metrics>,
     health_supervisor: &HealthCheckSupervisor,
+    cert_resolver: Option<&Arc<DynamicCertResolver>>,
 ) {
     let _guard = reload_mutex.lock().await;
 
@@ -115,6 +117,15 @@ pub async fn try_reload(
     // for backend additions/removals and health_check configuration changes.
     let fresh = dynamic_cfg.load();
     health_supervisor.reconcile(&fresh.backends, metrics, &Handle::current());
+
+    // Reload certs for any domain whose cert_path / key_path changed.
+    // Errors are logged and metric but do not abort the reload, new routes/backends
+    // are already live; keeping old certs is better than reverting the whole config.
+    if let Some(resolver) = cert_resolver {
+        if let Err(e) = resolver.update(&fresh.domains, metrics).await {
+            error!(error = %e, "Cert reload failed after config swap; serving old certificates");
+        }
+    }
 
     metrics.record_reload_success(hash);
     if hash == old_hash {

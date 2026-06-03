@@ -13,7 +13,7 @@ use crate::proxy::reload::{
 use crate::proxy::shutdown::{wait_for_drain, ServiceHandle, ShutdownSender};
 pub use crate::proxy::watch::WatchOptions;
 use crate::telemetry::Metrics;
-use crate::tls::setup_tls_with_hot_reload;
+use crate::tls::{setup_tls_with_hot_reload, DynamicCertResolver};
 use hyper_util::rt::{TokioExecutor, TokioTimer};
 use hyper_util::server::conn::auto::Builder as ConnBuilder;
 use std::net::SocketAddr;
@@ -62,10 +62,23 @@ pub async fn run(
     // Collect background service handles for ordered cooperative shutdown.
     let mut services: Vec<ServiceHandle> = Vec::new();
 
-    let tls_acceptor = match &static_cfg.tls {
-        Some(tls_config) => {
+    // Build the cert resolver and load initial certs from the current dynamic config.
+    // `None` when TLS is not configured (plain HTTP mode).
+    let cert_resolver: Option<Arc<DynamicCertResolver>> = if static_cfg.tls.is_some() {
+        let resolver = Arc::new(DynamicCertResolver::new());
+        resolver
+            .update(&dynamic_cfg.load().domains, &metrics)
+            .await?;
+        Some(resolver)
+    } else {
+        None
+    };
+
+    let tls_acceptor = match (&static_cfg.tls, &cert_resolver) {
+        (Some(tls_config), Some(resolver)) => {
             let tls_setup = setup_tls_with_hot_reload(
                 tls_config,
+                Arc::clone(resolver),
                 watch_opts.watch,
                 watch_opts.watch_delay_secs,
                 Arc::clone(&metrics),
@@ -77,7 +90,7 @@ pub async fn run(
             }
             Some(tls_setup.acceptor)
         }
-        None => None,
+        _ => None,
     };
 
     let shutdown_signal = Arc::new(AtomicUsize::new(0));
@@ -185,6 +198,7 @@ pub async fn run(
                         &reload_mutex,
                         &metrics,
                         &health_supervisor,
+                        cert_resolver.as_ref(),
                     )
                     .await;
                 }
