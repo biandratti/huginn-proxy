@@ -98,21 +98,28 @@ pub async fn handle_proxy_request(
     }
 
     let path = req.uri().path();
-    // TODO(step3): replace flat lookup with two-phase domain+path match
-    let all_routes: Vec<crate::config::Route> = domains
-        .iter()
-        .flat_map(|d| d.routes.iter().cloned())
-        .collect();
-    let route_match = if let Some(route) =
-        crate::proxy::router::pick_route_with_fingerprinting(path, &all_routes)
-    {
-        route
-    } else {
-        let error = HttpError::NoMatchingRoute;
-        metrics.record_error(error.error_type());
-        let status_code = StatusCode::from(error.clone()).as_u16();
-        metrics.record_entrypoint_request(&method, status_code, &protocol);
-        return Err(error);
+    let host = extract_request_host(&req, ja4_fingerprints.as_ref(), is_https);
+
+    let domain = crate::proxy::router::pick_domain(&domains, &host);
+
+    let route_match = match domain {
+        None => {
+            let error = HttpError::MisdirectedRequest;
+            metrics.record_error(error.error_type());
+            let status_code = StatusCode::from(error.clone()).as_u16();
+            metrics.record_entrypoint_request(&method, status_code, &protocol);
+            return Err(error);
+        }
+        Some(d) => match crate::proxy::router::pick_route_with_fingerprinting(path, &d.routes) {
+            Some(r) => r,
+            None => {
+                let error = HttpError::NoMatchingRoute;
+                metrics.record_error(error.error_type());
+                let status_code = StatusCode::from(error.clone()).as_u16();
+                metrics.record_entrypoint_request(&method, status_code, &protocol);
+                return Err(error);
+            }
+        },
     };
 
     let selected_upstream = match upstream.selector.select(
@@ -317,4 +324,62 @@ pub async fn handle_proxy_request(
     );
 
     result
+}
+
+// TODO: WIP
+/// Extract the effective hostname for domain matching.
+///
+/// Priority:
+/// 1. TLS SNI — authoritative; set by the TLS layer before any HTTP is read.
+/// 2. HTTP/2 URI authority — `:authority` pseudo-header is part of the HTTP/2
+///    framing and reflects the real connection target. The `Host` header is a
+///    regular application-level header that a client can set to anything; it is
+///    deliberately NOT used for HTTP/2 to prevent spoofing.
+/// 3. HTTP/1.1 `Host` header — only option available for HTTP/1.1 connections.
+///
+/// IPv6 addresses are returned WITHOUT brackets (`::1` not `[::1]`) matching
+/// what `http::Uri::host()` and the domain config both use as canonical form.
+fn extract_request_host(
+    req: &Request<Incoming>,
+    ja4: Option<&crate::fingerprinting::Ja4Fingerprints>,
+    is_https: bool,
+) -> String {
+    // 1. TLS SNI
+    if is_https {
+        if let Some(sni) = ja4.and_then(|fp| fp.sni.as_deref()) {
+            return sni.to_string();
+        }
+    }
+    // 2. URI authority — present for HTTP/2 and absolute-form HTTP/1.1.
+    //    strip_host_port normalises IPv6: http::Uri::host() returns "[::1]" (with
+    //    brackets); strip_host_port strips them to "::1" to match the domain config.
+    if let Some(raw) = req.uri().host() {
+        let host = strip_host_port(raw);
+        if !host.is_empty() {
+            return host.to_string();
+        }
+    }
+    // 3. Host header fallback (HTTP/1.1 origin-form, or HTTP/2 without :authority)
+    req.headers()
+        .get(hyper::header::HOST)
+        .and_then(|v| v.to_str().ok())
+        .map(strip_host_port)
+        .map(str::to_string)
+        .unwrap_or_default()
+}
+
+/// Strip port from a `Host` header value and normalise IPv6 addresses.
+///
+/// Returns the bare hostname without port and without IPv6 brackets:
+/// - `"[::1]:8080"` → `"::1"`
+/// - `"[::1]"` → `"::1"`
+/// - `"example.com:8080"` → `"example.com"`
+/// - `"127.0.0.1:7000"` → `"127.0.0.1"`
+fn strip_host_port(host: &str) -> &str {
+    if host.starts_with('[') {
+        // IPv6: strip leading '[' and everything from ']' onward.
+        host.find(']').map_or(host, |end| &host[1..end])
+    } else {
+        host.split_once(':').map_or(host, |(h, _)| h)
+    }
 }

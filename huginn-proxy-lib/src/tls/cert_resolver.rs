@@ -100,8 +100,20 @@ impl DynamicCertResolver {
 
 impl ResolvesServerCert for DynamicCertResolver {
     fn resolve(&self, client_hello: ClientHello<'_>) -> Option<Arc<CertifiedKey>> {
-        let sni = client_hello.server_name()?;
         let map = self.inner.load();
+
+        // RFC 6066: IP address connections do not carry an SNI extension.
+        // When there is no SNI, fall back to the first available cert so that
+        // clients connecting via IP (e.g. `https://127.0.0.1:7000`) can still
+        // complete the TLS handshake (routing uses the Host header instead).
+        let Some(sni) = client_hello.server_name() else {
+            return map
+                .exact
+                .values()
+                .next()
+                .or_else(|| map.wildcard.values().next())
+                .map(Arc::clone);
+        };
 
         if let Some(key) = map.exact.get(sni) {
             return Some(Arc::clone(key));

@@ -62,7 +62,7 @@ pub fn toml_single_backend(listen_port: u16, backend: SocketAddr) -> String {
 backends = [{{ address = "{backend}" }}]
 
 [[domains]]
-host = "_"
+host = "127.0.0.1"
 routes = [{{ prefix = "/", backend = "{backend}" }}]
 "#
     )
@@ -83,7 +83,7 @@ pub fn toml_with_routes(
         .collect();
 
     format!(
-        "listen = {{ addrs = [\"127.0.0.1:{listen_port}\"] }}\nbackends = [{}]\n\n[[domains]]\nhost = \"_\"\nroutes = [{}]\n",
+        "listen = {{ addrs = [\"127.0.0.1:{listen_port}\"] }}\nbackends = [{}]\n\n[[domains]]\nhost = \"127.0.0.1\"\nroutes = [{}]\n",
         be.join(", "),
         rt.join(", ")
     )
@@ -95,7 +95,7 @@ pub fn toml_with_rate_limit(listen_port: u16, backend: SocketAddr) -> String {
 backends = [{{ address = "{backend}" }}]
 
 [[domains]]
-host = "_"
+host = "127.0.0.1"
 routes = [{{ prefix = "/", backend = "{backend}" }}]
 
 [security.rate_limit]

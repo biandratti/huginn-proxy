@@ -1,4 +1,4 @@
-use crate::config::Route;
+use crate::config::{Domain, Route};
 
 #[derive(Debug, Clone)]
 pub struct RouteMatch<'a> {
@@ -34,6 +34,25 @@ fn longest_match<'a>(path: &str, routes: &'a [Route]) -> Option<&'a Route> {
 
 pub fn pick_route<'a>(path: &str, routes: &'a [Route]) -> Option<&'a str> {
     longest_match(path, routes).map(|r| r.backend.as_str())
+}
+
+/// Finds the domain entry that matches `host`.
+///
+/// Matching order:
+/// 1. Exact: `"api.example.com"` == host
+/// 2. Wildcard: `"*.example.com"` where host is `"sub.example.com"` (one level only)
+/// 3. `None` — caller returns 421 (plain HTTP) or the TLS cert resolver already rejected
+pub fn pick_domain<'a>(domains: &'a [Domain], host: &str) -> Option<&'a Domain> {
+    // 1. Exact match
+    if let Some(d) = domains.iter().find(|d| d.host == host) {
+        return Some(d);
+    }
+    // 2. Wildcard: strip leftmost label and compare base domain
+    let dot = host.find('.')?;
+    let base = &host[dot.saturating_add(1)..];
+    domains
+        .iter()
+        .find(|d| d.host.starts_with("*.") && d.host.get(2..) == Some(base))
 }
 
 pub fn pick_route_with_fingerprinting<'a>(

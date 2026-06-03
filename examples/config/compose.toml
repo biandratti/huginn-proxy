@@ -130,6 +130,175 @@ prefix = "/"
 backend = "backend-b:9000"
 
 # ---------------------------------------------------------------------------
+# IP access: 127.0.0.1 — no SNI sent (RFC 6066), cert comes from resolver
+# fallback (the localhost cert above). Routing uses the Host header.
+# Same routes as localhost so either address works transparently.
+# ---------------------------------------------------------------------------
+
+[[domains]]
+host = "127.0.0.1"
+
+[[domains.routes]]
+prefix = "/api"
+backend = "backend-a:9000"
+fingerprinting = true
+force_new_connection = false
+
+[[domains.routes]]
+prefix = "/static"
+backend = "backend-b:9000"
+fingerprinting = false
+force_new_connection = false
+
+[[domains.routes]]
+prefix = "/fingerprint"
+backend = "backend-a:9000"
+fingerprinting = true
+force_new_connection = true
+
+[[domains.routes]]
+prefix = "/strip"
+backend = "backend-a:9000"
+fingerprinting = true
+replace_path = ""
+
+[[domains.routes]]
+prefix = "/old"
+backend = "backend-b:9000"
+fingerprinting = true
+replace_path = "/new"
+
+[[domains.routes]]
+prefix = "/v1"
+backend = "backend-a:9000"
+fingerprinting = true
+replace_path = "/api/v1"
+
+[[domains.routes]]
+prefix = "/lb"
+backend = "backend-a:9000"
+fingerprinting = true
+
+[[domains.routes]]
+prefix = "/lb"
+backend = "backend-b:9000"
+fingerprinting = true
+
+[[domains.routes]]
+prefix = "/api/e2e-unhealthy"
+backend = "unreachable-backend:9000"
+
+[[domains.routes]]
+prefix = "/rl"
+backend = "backend-a:9000"
+
+[domains.routes.rate_limit]
+enabled = true
+requests_per_second = 1
+burst = 3
+window_seconds = 1
+limit_by = "ip"
+
+[[domains.routes]]
+prefix = "/rl-bypass"
+backend = "backend-a:9000"
+
+[domains.routes.rate_limit]
+enabled = true
+requests_per_second = 1
+burst = 3
+window_seconds = 1
+limit_by = "ip"
+
+[[domains.routes]]
+prefix = "/"
+backend = "backend-b:9000"
+
+# ---------------------------------------------------------------------------
+# IPv6 loopback: ::1 — same rules as 127.0.0.1, cert from resolver fallback.
+# Note: host is "::1" (no brackets) — canonical form used by uri().host().
+# ---------------------------------------------------------------------------
+
+[[domains]]
+host = "::1"
+
+[[domains.routes]]
+prefix = "/api"
+backend = "backend-a:9000"
+fingerprinting = true
+force_new_connection = false
+
+[[domains.routes]]
+prefix = "/static"
+backend = "backend-b:9000"
+fingerprinting = false
+force_new_connection = false
+
+[[domains.routes]]
+prefix = "/fingerprint"
+backend = "backend-a:9000"
+fingerprinting = true
+force_new_connection = true
+
+[[domains.routes]]
+prefix = "/strip"
+backend = "backend-a:9000"
+fingerprinting = true
+replace_path = ""
+
+[[domains.routes]]
+prefix = "/old"
+backend = "backend-b:9000"
+fingerprinting = true
+replace_path = "/new"
+
+[[domains.routes]]
+prefix = "/v1"
+backend = "backend-a:9000"
+fingerprinting = true
+replace_path = "/api/v1"
+
+[[domains.routes]]
+prefix = "/lb"
+backend = "backend-a:9000"
+fingerprinting = true
+
+[[domains.routes]]
+prefix = "/lb"
+backend = "backend-b:9000"
+fingerprinting = true
+
+[[domains.routes]]
+prefix = "/api/e2e-unhealthy"
+backend = "unreachable-backend:9000"
+
+[[domains.routes]]
+prefix = "/rl"
+backend = "backend-a:9000"
+
+[domains.routes.rate_limit]
+enabled = true
+requests_per_second = 1
+burst = 3
+window_seconds = 1
+limit_by = "ip"
+
+[[domains.routes]]
+prefix = "/rl-bypass"
+backend = "backend-a:9000"
+
+[domains.routes.rate_limit]
+enabled = true
+requests_per_second = 1
+burst = 3
+window_seconds = 1
+limit_by = "ip"
+
+[[domains.routes]]
+prefix = "/"
+backend = "backend-b:9000"
+
+# ---------------------------------------------------------------------------
 # Global headers applied before domain-level and route-level headers.
 # ---------------------------------------------------------------------------
 
