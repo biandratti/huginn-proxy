@@ -5,7 +5,7 @@ mod fingerprint_spoofing;
 mod forwarding;
 mod h2c_forwarding;
 mod header_manipulation;
+mod host;
 mod http_result;
 mod path_manipulation;
-mod request_host;
 mod router;
