@@ -326,31 +326,38 @@ pub async fn handle_proxy_request(
     result
 }
 
-// TODO: WIP
 /// Extract the effective hostname for domain matching.
 ///
 /// Priority:
-/// 1. TLS SNI — authoritative; set by the TLS layer before any HTTP is read.
-/// 2. HTTP/2 URI authority — `:authority` pseudo-header is part of the HTTP/2
-///    framing and reflects the real connection target. The `Host` header is a
-///    regular application-level header that a client can set to anything; it is
-///    deliberately NOT used for HTTP/2 to prevent spoofing.
-/// 3. HTTP/1.1 `Host` header — only option available for HTTP/1.1 connections.
+/// 1. TLS SNI - authoritative; set by the TLS layer before any HTTP is read.
+/// 2. URI authority - `:authority` pseudo-header (HTTP/2) or absolute-form URI (HTTP/1.1).
+///    Cannot be forged via application-level headers.
+/// 3. `Host` header - fallback for HTTP/1.1 origin-form requests.
 ///
-/// IPv6 addresses are returned WITHOUT brackets (`::1` not `[::1]`) matching
-/// what `http::Uri::host()` and the domain config both use as canonical form.
-fn extract_request_host(
-    req: &Request<Incoming>,
+/// IPv6 addresses are returned WITHOUT brackets (`::1` not `[::1]`) to match
+/// domain config entries and `http::Uri::host()` canonical form.
+pub(crate) fn extract_request_host<B>(
+    req: &Request<B>,
     ja4: Option<&crate::fingerprinting::Ja4Fingerprints>,
+    is_https: bool,
+) -> String {
+    let sni = ja4.and_then(|fp| fp.sni.as_deref());
+    extract_request_host_inner(req, sni, is_https)
+}
+
+#[doc(hidden)]
+pub fn extract_request_host_inner<B>(
+    req: &Request<B>,
+    sni: Option<&str>,
     is_https: bool,
 ) -> String {
     // 1. TLS SNI
     if is_https {
-        if let Some(sni) = ja4.and_then(|fp| fp.sni.as_deref()) {
+        if let Some(sni) = sni {
             return sni.to_string();
         }
     }
-    // 2. URI authority — present for HTTP/2 and absolute-form HTTP/1.1.
+    // 2. URI authority - present for HTTP/2 and absolute-form HTTP/1.1.
     //    strip_host_port normalises IPv6: http::Uri::host() returns "[::1]" (with
     //    brackets); strip_host_port strips them to "::1" to match the domain config.
     if let Some(raw) = req.uri().host() {
@@ -375,7 +382,8 @@ fn extract_request_host(
 /// - `"[::1]"` → `"::1"`
 /// - `"example.com:8080"` → `"example.com"`
 /// - `"127.0.0.1:7000"` → `"127.0.0.1"`
-fn strip_host_port(host: &str) -> &str {
+#[doc(hidden)]
+pub fn strip_host_port(host: &str) -> &str {
     if host.starts_with('[') {
         // IPv6: strip leading '[' and everything from ']' onward.
         host.find(']').map_or(host, |end| &host[1..end])

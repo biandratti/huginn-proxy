@@ -1,5 +1,7 @@
-use huginn_proxy_lib::config::{sort_routes, Route};
-use huginn_proxy_lib::proxy::router::{pick_route, pick_route_with_fingerprinting, prefix_matches};
+use huginn_proxy_lib::config::{sort_domain_routes, sort_routes, Domain, Route};
+use huginn_proxy_lib::proxy::router::{
+    pick_domain, pick_route, pick_route_with_fingerprinting, prefix_matches,
+};
 
 fn route(prefix: &str, backend: &str) -> Route {
     Route {
@@ -16,6 +18,15 @@ fn route(prefix: &str, backend: &str) -> Route {
 fn sorted_routes(mut routes: Vec<Route>) -> Vec<Route> {
     sort_routes(&mut routes);
     routes
+}
+
+fn domain(host: &str, routes: Vec<Route>) -> Domain {
+    Domain { host: host.to_string(), cert_path: None, key_path: None, headers: None, routes }
+}
+
+fn sorted_domains(mut domains: Vec<Domain>) -> Vec<Domain> {
+    sort_domain_routes(&mut domains);
+    domains
 }
 
 #[test]
@@ -260,4 +271,97 @@ fn fingerprinting_same_depth_different_prefix_not_included_in_candidates() {
     };
     assert_eq!(r.matched_prefix, "/api");
     assert_eq!(r.backend_candidates, vec!["api-a:9000", "api-b:9000"]);
+}
+
+#[test]
+fn exact_domain_match() {
+    let domains = vec![domain("api.example.com", vec![]), domain("web.example.com", vec![])];
+    let Some(d) = pick_domain(&domains, "api.example.com") else {
+        panic!("expected exact match for api.example.com");
+    };
+    assert_eq!(d.host, "api.example.com");
+}
+
+#[test]
+fn wildcard_domain_matches_subdomain() {
+    let domains = vec![domain("*.example.com", vec![])];
+    let Some(d) = pick_domain(&domains, "sub.example.com") else {
+        panic!("expected wildcard match for sub.example.com");
+    };
+    assert_eq!(d.host, "*.example.com");
+}
+
+#[test]
+fn wildcard_does_not_match_multilevel_subdomain() {
+    // *.example.com must NOT match a.b.example.com (only one level)
+    let domains = vec![domain("*.example.com", vec![])];
+    assert!(pick_domain(&domains, "a.b.example.com").is_none());
+}
+
+#[test]
+fn wildcard_does_not_match_base_domain() {
+    // *.example.com must NOT match example.com itself
+    let domains = vec![domain("*.example.com", vec![])];
+    assert!(pick_domain(&domains, "example.com").is_none());
+}
+
+#[test]
+fn exact_match_takes_priority_over_wildcard() {
+    let domains = vec![
+        domain("*.example.com", vec![route("/wildcard", "wc:9000")]),
+        domain("api.example.com", vec![route("/exact", "exact:9000")]),
+    ];
+    let Some(d) = pick_domain(&domains, "api.example.com") else {
+        panic!("expected exact match for api.example.com");
+    };
+    assert_eq!(d.host, "api.example.com");
+}
+
+#[test]
+fn no_match_returns_none() {
+    let domains = vec![domain("api.example.com", vec![]), domain("web.example.com", vec![])];
+    assert!(pick_domain(&domains, "other.example.com").is_none());
+}
+
+#[test]
+fn empty_domains_returns_none() {
+    let domains: Vec<Domain> = vec![];
+    assert!(pick_domain(&domains, "api.example.com").is_none());
+}
+
+#[test]
+fn ipv4_exact_match() {
+    let domains = vec![domain("127.0.0.1", vec![])];
+    assert!(pick_domain(&domains, "127.0.0.1").is_some());
+}
+
+#[test]
+fn ipv6_exact_match() {
+    let domains = vec![domain("::1", vec![])];
+    assert!(pick_domain(&domains, "::1").is_some());
+}
+
+#[test]
+fn domain_routes_are_accessible_after_pick() {
+    let domains = sorted_domains(vec![domain(
+        "api.example.com",
+        vec![route("/api", "backend-a:9000"), route("/", "backend-b:9000")],
+    )]);
+    let Some(d) = pick_domain(&domains, "api.example.com") else {
+        panic!("expected domain api.example.com");
+    };
+    assert_eq!(pick_route("/api/users", &d.routes), Some("backend-a:9000"));
+}
+
+#[test]
+fn wildcard_and_two_phase_routing() {
+    let domains = sorted_domains(vec![domain(
+        "*.example.com",
+        vec![route("/api", "api:9000"), route("/", "web:9000")],
+    )]);
+    let Some(d) = pick_domain(&domains, "tenant.example.com") else {
+        panic!("expected wildcard match for tenant.example.com");
+    };
+    assert_eq!(pick_route("/api/data", &d.routes), Some("api:9000"));
+    assert_eq!(pick_route("/home", &d.routes), Some("web:9000"));
 }
