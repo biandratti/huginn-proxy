@@ -53,18 +53,24 @@ pub fn apply_header_manipulation_group(
 /// # Arguments
 /// * `headers` - The header map to modify
 /// * `global_manipulation` - Global header manipulation configuration (optional)
+/// * `domain_manipulation` - Per-domain header manipulation configuration (optional)
 /// * `route_manipulation` - Per-route header manipulation configuration (optional)
 ///
-/// Applies global manipulation first, then route-specific manipulation.
-/// This allows route-specific configuration to override global settings.
+/// Applies the three scopes in order: global → domain → route. Because `add`
+/// overwrites, the most specific scope wins for a given header name.
 pub fn apply_request_header_manipulation(
     headers: &mut HeaderMap,
     global_manipulation: Option<&HeaderManipulation>,
+    domain_manipulation: Option<&HeaderManipulation>,
     route_manipulation: Option<&HeaderManipulation>,
     metrics: &Arc<Metrics>,
 ) {
     if let Some(global) = global_manipulation {
         apply_header_manipulation_group(headers, &global.request, values::CONTEXT_REQUEST, metrics);
+    }
+
+    if let Some(domain) = domain_manipulation {
+        apply_header_manipulation_group(headers, &domain.request, values::CONTEXT_REQUEST, metrics);
     }
 
     if let Some(route) = route_manipulation {
@@ -77,13 +83,15 @@ pub fn apply_request_header_manipulation(
 /// # Arguments
 /// * `headers` - The header map to modify
 /// * `global_manipulation` - Global header manipulation configuration (optional)
+/// * `domain_manipulation` - Per-domain header manipulation configuration (optional)
 /// * `route_manipulation` - Per-route header manipulation configuration (optional)
 ///
-/// Applies global manipulation first, then route-specific manipulation.
-/// This allows route-specific configuration to override global settings.
+/// Applies the three scopes in order: global → domain → route. Because `add`
+/// overwrites, the most specific scope wins for a given header name.
 pub fn apply_response_header_manipulation(
     headers: &mut HeaderMap,
     global_manipulation: Option<&HeaderManipulation>,
+    domain_manipulation: Option<&HeaderManipulation>,
     route_manipulation: Option<&HeaderManipulation>,
     metrics: &Arc<Metrics>,
 ) {
@@ -91,6 +99,15 @@ pub fn apply_response_header_manipulation(
         apply_header_manipulation_group(
             headers,
             &global.response,
+            values::CONTEXT_RESPONSE,
+            metrics,
+        );
+    }
+
+    if let Some(domain) = domain_manipulation {
+        apply_header_manipulation_group(
+            headers,
+            &domain.response,
             values::CONTEXT_RESPONSE,
             metrics,
         );

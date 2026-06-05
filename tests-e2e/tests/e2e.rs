@@ -9,6 +9,7 @@
 
 mod basic;
 mod catch_all;
+mod domain_headers;
 mod fingerprint_akamai;
 mod fingerprint_isolation;
 mod fingerprint_ja4;

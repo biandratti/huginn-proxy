@@ -102,6 +102,7 @@ pub async fn handle_proxy_request(
     let host = extract_request_host(&req, ja4_fingerprints.as_ref(), is_https);
 
     let domain = crate::proxy::router::pick_domain(&domains, &host);
+    let domain_headers = domain.and_then(|d| d.headers.as_ref());
 
     let route_match = match domain {
         None => {
@@ -264,6 +265,7 @@ pub async fn handle_proxy_request(
     apply_request_header_manipulation(
         req.headers_mut(),
         security.global_header_manipulation.as_ref(),
+        domain_headers,
         route_match.headers,
         &metrics,
     );
@@ -300,6 +302,7 @@ pub async fn handle_proxy_request(
         apply_response_header_manipulation(
             response.headers_mut(),
             security.global_header_manipulation.as_ref(),
+            domain_headers,
             route_match.headers,
             &metrics,
         );
