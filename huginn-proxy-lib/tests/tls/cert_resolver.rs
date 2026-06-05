@@ -20,11 +20,11 @@ async fn catch_all_cert_becomes_default() -> Result<(), Box<dyn std::error::Erro
     let resolver = DynamicCertResolver::new(false);
 
     let domains = vec![domain(None, &cert, &key)];
-    let result = resolver.update(&domains, &Metrics::new_noop()).await;
+    let report = resolver.update(&domains, &Metrics::new_noop()).await;
 
     let _ = std::fs::remove_file(&cert);
     let _ = std::fs::remove_file(&key);
-    result?;
+    assert_eq!(report.failed, 0, "valid cert must load");
 
     let (exact, wildcard, has_default) = resolver.cert_map_summary();
     assert_eq!(exact, 0, "catch-all must not land in the exact map");
@@ -44,11 +44,11 @@ async fn certs_routed_by_host_shape() -> Result<(), Box<dyn std::error::Error + 
         domain(Some("*.example.com"), &cert, &key),
         domain(None, &cert, &key),
     ];
-    let result = resolver.update(&domains, &Metrics::new_noop()).await;
+    let report = resolver.update(&domains, &Metrics::new_noop()).await;
 
     let _ = std::fs::remove_file(&cert);
     let _ = std::fs::remove_file(&key);
-    result?;
+    assert_eq!(report.failed, 0, "all valid certs must load");
 
     let (exact, wildcard, has_default) = resolver.cert_map_summary();
     assert_eq!(exact, 1, "exact host → exact map");
@@ -64,11 +64,11 @@ async fn no_catch_all_means_no_default() -> Result<(), Box<dyn std::error::Error
     let resolver = DynamicCertResolver::new(false);
 
     let domains = vec![domain(Some("api.example.com"), &cert, &key)];
-    let result = resolver.update(&domains, &Metrics::new_noop()).await;
+    let report = resolver.update(&domains, &Metrics::new_noop()).await;
 
     let _ = std::fs::remove_file(&cert);
     let _ = std::fs::remove_file(&key);
-    result?;
+    assert_eq!(report.failed, 0, "valid cert must load");
 
     let (_, _, has_default) = resolver.cert_map_summary();
     assert!(!has_default, "no host-less domain ⇒ no default cert ⇒ strict SNI");
@@ -84,10 +84,10 @@ async fn lenient_serves_default_for_unmatched_sni(
     let resolver = DynamicCertResolver::new(false);
 
     let domains = vec![domain(Some("api.example.com"), &cert, &key), domain(None, &cert, &key)];
-    let result = resolver.update(&domains, &Metrics::new_noop()).await;
+    let report = resolver.update(&domains, &Metrics::new_noop()).await;
     let _ = std::fs::remove_file(&cert);
     let _ = std::fs::remove_file(&key);
-    result?;
+    assert_eq!(report.failed, 0, "all valid certs must load");
 
     assert!(resolver.resolves_for(Some("api.example.com")), "exact match resolves");
     assert!(
@@ -106,10 +106,10 @@ async fn strict_rejects_unmatched_sni_but_keeps_no_sni(
     let resolver = DynamicCertResolver::new(true);
 
     let domains = vec![domain(Some("api.example.com"), &cert, &key), domain(None, &cert, &key)];
-    let result = resolver.update(&domains, &Metrics::new_noop()).await;
+    let report = resolver.update(&domains, &Metrics::new_noop()).await;
     let _ = std::fs::remove_file(&cert);
     let _ = std::fs::remove_file(&key);
-    result?;
+    assert_eq!(report.failed, 0, "all valid certs must load");
 
     assert!(resolver.resolves_for(Some("api.example.com")), "exact match still resolves");
     assert!(
@@ -119,6 +119,68 @@ async fn strict_rejects_unmatched_sni_but_keeps_no_sni(
     assert!(
         resolver.resolves_for(None),
         "strict still serves the default cert to no-SNI (IP) clients"
+    );
+    Ok(())
+}
+
+/// Best-effort: one domain's bad cert does not block the others. The valid cert loads,
+/// the bad one is reported as failed, and the swap still happens.
+#[tokio::test]
+async fn bad_cert_does_not_block_other_domains(
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let (cert, key) = create_valid_test_cert()?;
+    let resolver = DynamicCertResolver::new(false);
+
+    let missing = std::path::Path::new("/nonexistent/huginn-test/missing.pem");
+    let domains = vec![
+        domain(Some("api.example.com"), &cert, &key),
+        domain(None, missing, missing), // catch-all with an unreadable cert
+    ];
+    let report = resolver.update(&domains, &Metrics::new_noop()).await;
+
+    let _ = std::fs::remove_file(&cert);
+    let _ = std::fs::remove_file(&key);
+
+    assert_eq!(report.loaded, 1, "the valid domain cert must load");
+    assert_eq!(report.failed, 1, "the unreadable catch-all cert must be reported as failed");
+    assert!(report.is_partial(), "a failed cert makes the report partial");
+
+    let (exact, _, has_default) = resolver.cert_map_summary();
+    assert_eq!(exact, 1, "valid exact cert went live despite the other failure");
+    assert!(!has_default, "first-time failed catch-all has no prior cert to carry over");
+    assert!(resolver.resolves_for(Some("api.example.com")), "valid domain still resolves");
+    Ok(())
+}
+
+/// Best-effort carry-over: a domain that loaded a cert, then fails on a later reload,
+/// keeps serving its previously loaded cert instead of going dark.
+#[tokio::test]
+async fn failed_reload_keeps_previous_cert() -> Result<(), Box<dyn std::error::Error + Send + Sync>>
+{
+    let (cert, key) = create_valid_test_cert()?;
+    let resolver = DynamicCertResolver::new(false);
+
+    // First reload: the catch-all loads a valid default cert.
+    let good = vec![domain(None, &cert, &key)];
+    let first = resolver.update(&good, &Metrics::new_noop()).await;
+    assert_eq!(first.failed, 0, "initial load succeeds");
+    assert!(resolver.resolves_for(None), "default cert is serving after first load");
+
+    let _ = std::fs::remove_file(&cert);
+    let _ = std::fs::remove_file(&key);
+
+    // Second reload: same domain, but the cert file is now gone (simulates a bad rotation).
+    let missing = std::path::Path::new("/nonexistent/huginn-test/missing.pem");
+    let bad = vec![domain(None, missing, missing)];
+    let second = resolver.update(&bad, &Metrics::new_noop()).await;
+
+    assert_eq!(second.failed, 1, "the failed cert is reported");
+    assert_eq!(second.loaded, 0, "nothing new loaded this reload");
+    let (_, _, has_default) = resolver.cert_map_summary();
+    assert!(has_default, "previously loaded default cert is carried over");
+    assert!(
+        resolver.resolves_for(None),
+        "no-SNI clients keep getting the last-good cert despite the failed reload"
     );
     Ok(())
 }

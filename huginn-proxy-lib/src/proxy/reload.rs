@@ -118,13 +118,23 @@ pub async fn try_reload(
     let fresh = dynamic_cfg.load();
     health_supervisor.reconcile(&fresh.backends, metrics, &Handle::current());
 
-    // Reload certs for any domain whose cert_path / key_path changed.
-    // Errors are logged and metric but do not abort the reload, new routes/backends
-    // are already live; keeping old certs is better than reverting the whole config.
-    if let Some(resolver) = cert_resolver {
-        if let Err(e) = resolver.update(&fresh.domains, metrics).await {
-            error!(error = %e, "Cert reload failed after config swap; serving old certificates");
-        }
+    // Reload certs best-effort, per-domain (Traefik-style): a domain whose cert fails to load
+    // does not abort the reload and keeps its previously serving cert (see
+    // `DynamicCertResolver::update`). The config reload still counts as success — the only
+    // signal for a failed cert is the per-domain `tls_cert_reload_total{result="error"}` metric
+    // (emitted inside `update`) plus the error log below.
+    let cert_report = match cert_resolver {
+        Some(resolver) => resolver.update(&fresh.domains, metrics).await,
+        None => crate::tls::CertReloadReport::default(),
+    };
+
+    if cert_report.is_partial() {
+        error!(
+            failed = cert_report.failed,
+            loaded = cert_report.loaded,
+            "Some domain certificates failed to load on reload; new routes/backends are live and \
+             failed domains keep their previous certificates (alert on tls_cert_reload_total{{result=\"error\"}})"
+        );
     }
 
     metrics.record_reload_success(hash);

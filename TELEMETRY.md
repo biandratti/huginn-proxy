@@ -579,6 +579,9 @@ sum by (protocol) (rate(huginn_mtls_connections_total[5m]))
   regardless of outcome.
 - `huginn_config_last_reload_timestamp_seconds` is only updated on success; use it together with
   `huginn_config_reload_total{result="error"}` to detect stuck reloads.
+- Cert handling on reload is **best-effort** (Traefik-style): a domain whose certificate fails to load does
+  **not** flip this counter to `error` (which tracks config parse/validation only). The reload still counts as
+  `success`; the bad cert surfaces as `huginn_tls_cert_reload_total{result="error", domain="..."}` (see §13).
 - `huginn_config_hash` changes whenever the deserialized `DynamicConfig` changes. It is unaffected by TOML formatting
   changes (whitespace, comments, field ordering within a table) since it hashes the parsed struct, not the raw file.
 
@@ -610,11 +613,15 @@ sum by (protocol) (rate(huginn_mtls_connections_total[5m]))
 - `huginn_tls_cert_hash` hashes the certificate chain DER bytes. Private key material is intentionally excluded.
   The value is a `u64`; over the Prometheus exposition format (float64) hashes above 2^53 lose low-bit precision,
   so use `changes()` for rotation detection rather than comparing the literal value.
-- Success metrics are emitted only **after** the new cert map goes live (atomic swap). A failed reload bumps
-  `result="error"` for the failing domain and emits no success for that reload, so the hash/timestamp gauges always
-  reflect the certificate actually serving traffic.
+- Success metrics are emitted only **after** the new cert map goes live (atomic swap). A failing domain bumps
+  `result="error"` and emits no success for that reload, so the hash/timestamp gauges always reflect the
+  certificate actually serving traffic.
+- Cert reload is **best-effort, per-domain**: one domain's failure does not abort the others. A failing domain
+  keeps its *previously serving* cert (carried over from the last-good map), so its `huginn_tls_cert_hash` and
+  timestamp gauges stay at their last-good value — no spurious success is emitted for a carried-over cert.
 - A **cert** reload failure does *not* flip `huginn_config_reload_total` to `error` (that counter tracks config
-  parse/validation only). Alert on `huginn_tls_cert_reload_total{result="error"}` separately to catch cert failures.
+  parse/validation only); the config reload still counts as `success` (Traefik-style best-effort, see §12).
+  Alert on `huginn_tls_cert_reload_total{result="error"}` to catch cert failures.
 
 **Example queries**:
 
