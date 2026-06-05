@@ -64,8 +64,8 @@ pub async fn run(
 
     // Build the cert resolver and load initial certs from the current dynamic config.
     // `None` when TLS is not configured (plain HTTP mode).
-    let cert_resolver: Option<Arc<DynamicCertResolver>> = if static_cfg.tls.is_some() {
-        let resolver = Arc::new(DynamicCertResolver::new());
+    let cert_resolver: Option<Arc<DynamicCertResolver>> = if let Some(tls) = &static_cfg.tls {
+        let resolver = Arc::new(DynamicCertResolver::new(tls.options.sni_strict));
         resolver
             .update(&dynamic_cfg.load().domains, &metrics)
             .await?;

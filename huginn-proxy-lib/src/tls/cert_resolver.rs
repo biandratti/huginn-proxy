@@ -31,6 +31,11 @@ struct CertMap {
 /// then swaps them in with a single pointer store.
 pub struct DynamicCertResolver {
     inner: ArcSwap<CertMap>,
+    /// Strict SNI mode. When `true`, an SNI that matches no exact/wildcard cert is
+    /// rejected (`resolve` returns `None` → rustls `unrecognized_name`) instead of
+    /// falling back to the default cert. Connections with no SNI (IP clients) still
+    /// get the default cert, which also rejects those.
+    sni_strict: bool,
 }
 
 impl std::fmt::Debug for DynamicCertResolver {
@@ -39,19 +44,20 @@ impl std::fmt::Debug for DynamicCertResolver {
         f.debug_struct("DynamicCertResolver")
             .field("exact_domains", &map.exact.len())
             .field("wildcard_domains", &map.wildcard.len())
+            .field("sni_strict", &self.sni_strict)
             .finish()
     }
 }
 
 impl Default for DynamicCertResolver {
     fn default() -> Self {
-        Self { inner: ArcSwap::new(Arc::new(CertMap::default())) }
+        Self::new(false)
     }
 }
 
 impl DynamicCertResolver {
-    pub fn new() -> Self {
-        Self::default()
+    pub fn new(sni_strict: bool) -> Self {
+        Self { inner: ArcSwap::new(Arc::new(CertMap::default())), sni_strict }
     }
 
     /// Reload cert maps from `domains`. Domains without `cert_path`/`key_path` are skipped.
@@ -111,24 +117,17 @@ impl DynamicCertResolver {
         Ok(())
     }
 
-    /// Test-only snapshot of the cert map: `(exact_count, wildcard_count, has_default)`.
-    /// The default cert is the one from a host-less (catch-all) domain.
-    #[doc(hidden)]
-    pub fn cert_map_summary(&self) -> (usize, usize, bool) {
-        let m = self.inner.load();
-        (m.exact.len(), m.wildcard.len(), m.default.is_some())
-    }
-}
-
-impl ResolvesServerCert for DynamicCertResolver {
-    fn resolve(&self, client_hello: ClientHello<'_>) -> Option<Arc<CertifiedKey>> {
+    /// Core SNI → cert resolution. Separated from [`ResolvesServerCert::resolve`]
+    /// so it can be unit-tested without constructing a rustls `ClientHello`.
+    fn resolve_sni(&self, sni: Option<&str>) -> Option<Arc<CertifiedKey>> {
         let map = self.inner.load();
 
         // RFC 6066: IP address connections do not carry an SNI extension.
         // With no SNI, serve the default cert (catch-all domain) so clients
         // connecting via IP (e.g. `https://127.0.0.1:7000`) can complete the
         // handshake; routing then uses the Host header. No default ⇒ reject.
-        let Some(sni) = client_hello.server_name() else {
+        // `sni_strict` does NOT reject the no-SNI case, on purpose.
+        let Some(sni) = sni else {
             return map.default.clone();
         };
 
@@ -145,8 +144,31 @@ impl ResolvesServerCert for DynamicCertResolver {
             }
         }
 
-        // No exact/wildcard match: serve the default cert if configured,
-        // else `None` ⇒ rustls sends `unrecognized_name` (Traefik sniStrict).
+        // SNI matched nothing. Strict ⇒ reject (`None` → rustls `unrecognized_name`).
+        // Otherwise serve the default cert if one exists (Traefik default behavior).
+        if self.sni_strict {
+            return None;
+        }
         map.default.clone()
+    }
+
+    /// Test-only snapshot of the cert map: `(exact_count, wildcard_count, has_default)`.
+    /// The default cert is the one from a host-less (catch-all) domain.
+    #[doc(hidden)]
+    pub fn cert_map_summary(&self) -> (usize, usize, bool) {
+        let m = self.inner.load();
+        (m.exact.len(), m.wildcard.len(), m.default.is_some())
+    }
+
+    /// Test-only: does an SNI (or no SNI = `None`) resolve to a certificate?
+    #[doc(hidden)]
+    pub fn resolves_for(&self, sni: Option<&str>) -> bool {
+        self.resolve_sni(sni).is_some()
+    }
+}
+
+impl ResolvesServerCert for DynamicCertResolver {
+    fn resolve(&self, client_hello: ClientHello<'_>) -> Option<Arc<CertifiedKey>> {
+        self.resolve_sni(client_hello.server_name())
     }
 }

@@ -167,7 +167,7 @@ async fn setup_tls_static_no_spurious_reloads(
     let (_shutdown_tx, shutdown_rx) = never_shutdown();
     let setup = setup_tls_with_hot_reload(
         &config,
-        Arc::new(DynamicCertResolver::new()),
+        Arc::new(DynamicCertResolver::new(false)),
         false,
         1,
         Metrics::new_noop(),
@@ -270,7 +270,7 @@ async fn cipher_suites_applied_after_reload() -> Result<(), Box<dyn std::error::
     let (_shutdown_tx, shutdown_rx) = never_shutdown();
     let setup = setup_tls_with_hot_reload(
         &config,
-        Arc::new(DynamicCertResolver::new()),
+        Arc::new(DynamicCertResolver::new(false)),
         true,
         1,
         Metrics::new_noop(),
@@ -336,7 +336,7 @@ async fn hot_reload_survives_dropping_tls_setup_keeping_only_acceptor(
     let (_shutdown_tx, shutdown_rx) = never_shutdown();
     let acceptor = setup_tls_with_hot_reload(
         &config,
-        Arc::new(DynamicCertResolver::new()),
+        Arc::new(DynamicCertResolver::new(false)),
         true,
         1,
         Metrics::new_noop(),
@@ -434,7 +434,7 @@ async fn cert_reload_task_exits_on_shutdown_signal(
     let (shutdown_tx, shutdown_rx) = huginn_proxy_lib::shutdown_channel();
     let setup = setup_tls_with_hot_reload(
         &config,
-        Arc::new(DynamicCertResolver::new()),
+        Arc::new(DynamicCertResolver::new(false)),
         true,
         60,
         Metrics::new_noop(),
@@ -474,7 +474,7 @@ async fn cert_reload_task_none_in_static_mode(
     let (_shutdown_tx, shutdown_rx) = never_shutdown();
     let setup = setup_tls_with_hot_reload(
         &config,
-        Arc::new(DynamicCertResolver::new()),
+        Arc::new(DynamicCertResolver::new(false)),
         false,
         60,
         Metrics::new_noop(),
@@ -508,7 +508,7 @@ async fn shutdown_ordering_background_tasks_exit_before_signal(
     let (shutdown_tx, shutdown_rx) = huginn_proxy_lib::shutdown_channel();
     let setup = setup_tls_with_hot_reload(
         &config,
-        Arc::new(DynamicCertResolver::new()),
+        Arc::new(DynamicCertResolver::new(false)),
         true,
         60,
         Metrics::new_noop(),

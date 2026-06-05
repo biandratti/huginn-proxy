@@ -525,6 +525,7 @@ tls:
 | `versions`          | array of strings | `["1.2", "1.3"]` | Allowed TLS versions. Values: `"1.2"`, `"1.3"`.            |
 | `cipher_suites`     | array of strings | all supported    | Named cipher suites. Restrict to tighten security posture. |
 | `curve_preferences` | array of strings | all supported    | Named elliptic curves for key exchange.                    |
+| `sni_strict`        | bool             | `false`          | When `true`, reject (`unrecognized_name`) a TLS connection whose SNI matches no domain cert, instead of serving the default cert. Connections with **no** SNI (IP clients) still get the default cert. Production hardening against unknown-hostname SNI. |
 
 <table>
 <thead>
@@ -548,6 +549,7 @@ cipher_suites = [
     "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256",
 ]
 curve_preferences = ["X25519", "secp256r1", "secp384r1"]
+sni_strict = false   # set true in production to reject unknown-hostname SNI
 ```
 
 </td>
@@ -569,6 +571,7 @@ tls:
       - "X25519"
       - "secp256r1"
       - "secp384r1"
+    sni_strict: false   # set true in production to reject unknown-hostname SNI
 ```
 
 </td>

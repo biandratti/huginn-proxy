@@ -17,7 +17,7 @@ fn domain(host: Option<&str>, cert: &std::path::Path, key: &std::path::Path) -> 
 #[tokio::test]
 async fn catch_all_cert_becomes_default() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let (cert, key) = create_valid_test_cert()?;
-    let resolver = DynamicCertResolver::new();
+    let resolver = DynamicCertResolver::new(false);
 
     let domains = vec![domain(None, &cert, &key)];
     let result = resolver.update(&domains, &Metrics::new_noop()).await;
@@ -37,7 +37,7 @@ async fn catch_all_cert_becomes_default() -> Result<(), Box<dyn std::error::Erro
 #[tokio::test]
 async fn certs_routed_by_host_shape() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let (cert, key) = create_valid_test_cert()?;
-    let resolver = DynamicCertResolver::new();
+    let resolver = DynamicCertResolver::new(false);
 
     let domains = vec![
         domain(Some("api.example.com"), &cert, &key),
@@ -58,11 +58,10 @@ async fn certs_routed_by_host_shape() -> Result<(), Box<dyn std::error::Error + 
 }
 
 /// Without a catch-all, there is no default cert ⇒ unknown/absent SNI is rejected
-/// (strict mode, equivalent to Traefik `sniStrict: true`).
 #[tokio::test]
 async fn no_catch_all_means_no_default() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let (cert, key) = create_valid_test_cert()?;
-    let resolver = DynamicCertResolver::new();
+    let resolver = DynamicCertResolver::new(false);
 
     let domains = vec![domain(Some("api.example.com"), &cert, &key)];
     let result = resolver.update(&domains, &Metrics::new_noop()).await;
@@ -73,5 +72,53 @@ async fn no_catch_all_means_no_default() -> Result<(), Box<dyn std::error::Error
 
     let (_, _, has_default) = resolver.cert_map_summary();
     assert!(!has_default, "no host-less domain ⇒ no default cert ⇒ strict SNI");
+    Ok(())
+}
+
+/// Lenient (default): unmatched SNI falls back to the default cert; matched SNI and
+/// no-SNI both resolve too.
+#[tokio::test]
+async fn lenient_serves_default_for_unmatched_sni(
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let (cert, key) = create_valid_test_cert()?;
+    let resolver = DynamicCertResolver::new(false);
+
+    let domains = vec![domain(Some("api.example.com"), &cert, &key), domain(None, &cert, &key)];
+    let result = resolver.update(&domains, &Metrics::new_noop()).await;
+    let _ = std::fs::remove_file(&cert);
+    let _ = std::fs::remove_file(&key);
+    result?;
+
+    assert!(resolver.resolves_for(Some("api.example.com")), "exact match resolves");
+    assert!(
+        resolver.resolves_for(Some("unknown.example.org")),
+        "unmatched SNI → default cert"
+    );
+    assert!(resolver.resolves_for(None), "no SNI → default cert");
+    Ok(())
+}
+
+/// Strict: unmatched SNI is rejected, but matched SNI and no-SNI (IP clients) still resolve.
+#[tokio::test]
+async fn strict_rejects_unmatched_sni_but_keeps_no_sni(
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let (cert, key) = create_valid_test_cert()?;
+    let resolver = DynamicCertResolver::new(true);
+
+    let domains = vec![domain(Some("api.example.com"), &cert, &key), domain(None, &cert, &key)];
+    let result = resolver.update(&domains, &Metrics::new_noop()).await;
+    let _ = std::fs::remove_file(&cert);
+    let _ = std::fs::remove_file(&key);
+    result?;
+
+    assert!(resolver.resolves_for(Some("api.example.com")), "exact match still resolves");
+    assert!(
+        !resolver.resolves_for(Some("unknown.example.org")),
+        "strict: unmatched hostname SNI is rejected"
+    );
+    assert!(
+        resolver.resolves_for(None),
+        "strict still serves the default cert to no-SNI (IP) clients"
+    );
     Ok(())
 }
