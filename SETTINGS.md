@@ -208,17 +208,28 @@ backends:
 ## `[[domains]]`
 
 Domain entries group a TLS certificate with its path-based routes. Each entry handles one
-hostname (or wildcard). **Dynamic** (hot-reloadable). **Optional** — omitting all domains
-is valid; the proxy binds but returns 404 for all requests.
+hostname (or wildcard), or acts as a catch-all. **Dynamic** (hot-reloadable). **Optional** —
+omitting all domains is valid; the proxy binds but returns 404 for all requests.
 
-SNI matching order per incoming connection:
+Host matching order per incoming connection (host = SNI for TLS, `Host` header for plain HTTP):
 1. Exact match — `"api.example.com"`
 2. Wildcard match — `"*.example.com"` (one level only; does not match `a.b.example.com`)
-3. No match → TLS alert `unrecognized_name` (TLS) or HTTP 421 (plain HTTP)
+3. **Catch-all** — the entry with no `host` key, if present. Matches any host, including IP
+   literals (`127.0.0.1`, `::1`) and `localhost`. Mirrors a Traefik router with no `Host()`
+   rule. At most one catch-all is used (the first one).
+4. No match → HTTP 421 (Misdirected Request).
+
+**TLS certificate selection** is independent of routing and driven by SNI:
+- SNI matches an exact/wildcard domain → that domain's cert.
+- No SNI (IP clients, RFC 6066) or SNI matches nothing → the **default certificate**, i.e. the
+  cert on the catch-all (`host`-less) entry. Equivalent to Traefik's `defaultCertificate`.
+- If there is no catch-all cert, an unknown/absent SNI is rejected with TLS `unrecognized_name`
+  (equivalent to Traefik `sniStrict: true`). To run strict, simply give the catch-all no cert
+  (or define no catch-all).
 
 | Key         | Type   | Default | Description                                                                                      |
 |-------------|--------|---------|--------------------------------------------------------------------------------------------------|
-| `host`      | string | —       | Domain pattern for SNI matching. Exact or single-level wildcard (`*.example.com`).               |
+| `host`      | string | `null`  | Domain pattern for host matching: exact (`api.example.com`) or single-level wildcard (`*.example.com`). **Omit for a catch-all** that matches any host; its cert (if any) is the TLS default certificate. |
 | `cert_path` | string | `null`  | Path to the TLS certificate PEM file. Omit for plain-HTTP-only domains.                          |
 | `key_path`  | string | `null`  | Path to the TLS private key PEM file. Must be set together with `cert_path` or both omitted.     |
 | `headers`   | table  | —       | Domain-level header manipulation. Merged between global and route-level headers.                 |
@@ -287,6 +298,19 @@ domains:
 </tr>
 </tbody>
 </table>
+
+**Catch-all example** — one host-less entry serves any host (handy for local/IP access or a
+default site). Its cert becomes the TLS default certificate:
+
+```yaml
+domains:
+  # No `host:` → matches localhost, 127.0.0.1, ::1, or any other host.
+  - cert_path: "/config/certs/server.crt"
+    key_path:  "/config/certs/server.key"
+    routes:
+      - prefix: "/"
+        backend: "web-backend:8080"
+```
 
 ### `[domains.routes]`
 

@@ -83,7 +83,7 @@ impl Config {
                 if !backend_addrs.contains(route.backend.as_str()) {
                     return Err(crate::error::ProxyError::Config(format!(
                         "Domain '{}' route '{}' references unknown backend '{}' (known: [{}])",
-                        domain.host,
+                        domain.host.as_deref().unwrap_or("_default_"),
                         route.prefix,
                         route.backend,
                         backend_addrs.iter().copied().collect::<Vec<_>>().join(", ")

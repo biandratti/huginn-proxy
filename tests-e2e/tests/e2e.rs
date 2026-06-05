@@ -8,6 +8,7 @@
 //! 2. Run tests: `cargo test --package tests-e2e --test e2e`
 
 mod basic;
+mod catch_all;
 mod fingerprint_akamai;
 mod fingerprint_isolation;
 mod fingerprint_ja4;

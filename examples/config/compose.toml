@@ -25,10 +25,15 @@ health_check = { type = "tcp", interval_secs = 1, timeout_secs = 1, unhealthy_th
 # ---------------------------------------------------------------------------
 # Domains — TLS cert + routes scoped to each domain.
 # cert_path / key_path are optional: omit both for plain-HTTP domains.
+#
+# Single catch-all domain (no `host` key) — matches any host, so it serves
+# localhost, 127.0.0.1 and ::1 transparently with one route set. Its cert is
+# the TLS default certificate: served for connections with no SNI (IP clients,
+# RFC 6066) and for any SNI that matches no other domain. Equivalent to a
+# Traefik router with no Host() rule + a defaultCertificate.
 # ---------------------------------------------------------------------------
 
 [[domains]]
-host = "localhost"
 cert_path = "/config/certs/server.crt"
 key_path  = "/config/certs/server.key"
 
@@ -124,176 +129,7 @@ burst = 3
 window_seconds = 1
 limit_by = "ip"
 
-# Default catch-all.
-[[domains.routes]]
-prefix = "/"
-backend = "backend-b:9000"
-
-# ---------------------------------------------------------------------------
-# IP access: 127.0.0.1 — no SNI sent (RFC 6066), cert comes from resolver
-# fallback (the localhost cert above). Routing uses the Host header.
-# Same routes as localhost so either address works transparently.
-# ---------------------------------------------------------------------------
-
-[[domains]]
-host = "127.0.0.1"
-
-[[domains.routes]]
-prefix = "/api"
-backend = "backend-a:9000"
-fingerprinting = true
-force_new_connection = false
-
-[[domains.routes]]
-prefix = "/static"
-backend = "backend-b:9000"
-fingerprinting = false
-force_new_connection = false
-
-[[domains.routes]]
-prefix = "/fingerprint"
-backend = "backend-a:9000"
-fingerprinting = true
-force_new_connection = true
-
-[[domains.routes]]
-prefix = "/strip"
-backend = "backend-a:9000"
-fingerprinting = true
-replace_path = ""
-
-[[domains.routes]]
-prefix = "/old"
-backend = "backend-b:9000"
-fingerprinting = true
-replace_path = "/new"
-
-[[domains.routes]]
-prefix = "/v1"
-backend = "backend-a:9000"
-fingerprinting = true
-replace_path = "/api/v1"
-
-[[domains.routes]]
-prefix = "/lb"
-backend = "backend-a:9000"
-fingerprinting = true
-
-[[domains.routes]]
-prefix = "/lb"
-backend = "backend-b:9000"
-fingerprinting = true
-
-[[domains.routes]]
-prefix = "/api/e2e-unhealthy"
-backend = "unreachable-backend:9000"
-
-[[domains.routes]]
-prefix = "/rl"
-backend = "backend-a:9000"
-
-[domains.routes.rate_limit]
-enabled = true
-requests_per_second = 1
-burst = 3
-window_seconds = 1
-limit_by = "ip"
-
-[[domains.routes]]
-prefix = "/rl-bypass"
-backend = "backend-a:9000"
-
-[domains.routes.rate_limit]
-enabled = true
-requests_per_second = 1
-burst = 3
-window_seconds = 1
-limit_by = "ip"
-
-[[domains.routes]]
-prefix = "/"
-backend = "backend-b:9000"
-
-# ---------------------------------------------------------------------------
-# IPv6 loopback: ::1 — same rules as 127.0.0.1, cert from resolver fallback.
-# Note: host is "::1" (no brackets) — canonical form used by uri().host().
-# ---------------------------------------------------------------------------
-
-[[domains]]
-host = "::1"
-
-[[domains.routes]]
-prefix = "/api"
-backend = "backend-a:9000"
-fingerprinting = true
-force_new_connection = false
-
-[[domains.routes]]
-prefix = "/static"
-backend = "backend-b:9000"
-fingerprinting = false
-force_new_connection = false
-
-[[domains.routes]]
-prefix = "/fingerprint"
-backend = "backend-a:9000"
-fingerprinting = true
-force_new_connection = true
-
-[[domains.routes]]
-prefix = "/strip"
-backend = "backend-a:9000"
-fingerprinting = true
-replace_path = ""
-
-[[domains.routes]]
-prefix = "/old"
-backend = "backend-b:9000"
-fingerprinting = true
-replace_path = "/new"
-
-[[domains.routes]]
-prefix = "/v1"
-backend = "backend-a:9000"
-fingerprinting = true
-replace_path = "/api/v1"
-
-[[domains.routes]]
-prefix = "/lb"
-backend = "backend-a:9000"
-fingerprinting = true
-
-[[domains.routes]]
-prefix = "/lb"
-backend = "backend-b:9000"
-fingerprinting = true
-
-[[domains.routes]]
-prefix = "/api/e2e-unhealthy"
-backend = "unreachable-backend:9000"
-
-[[domains.routes]]
-prefix = "/rl"
-backend = "backend-a:9000"
-
-[domains.routes.rate_limit]
-enabled = true
-requests_per_second = 1
-burst = 3
-window_seconds = 1
-limit_by = "ip"
-
-[[domains.routes]]
-prefix = "/rl-bypass"
-backend = "backend-a:9000"
-
-[domains.routes.rate_limit]
-enabled = true
-requests_per_second = 1
-burst = 3
-window_seconds = 1
-limit_by = "ip"
-
+# Default catch-all route.
 [[domains.routes]]
 prefix = "/"
 backend = "backend-b:9000"

@@ -238,7 +238,15 @@ pub fn sort_routes(routes: &mut [Route]) {
 #[derive(Debug, Deserialize, Clone, PartialEq)]
 pub struct Domain {
     /// Domain pattern used for SNI matching and routing.
-    pub host: String,
+    ///
+    /// `Some("api.example.com")` — exact host match.
+    /// `Some("*.example.com")`   — single-label wildcard.
+    /// `None` (omit `host:`)     — catch-all: matches any host not matched by an
+    ///                             exact or wildcard entry. Mirrors a Traefik router
+    ///                             with no `Host()` rule. A catch-all with a cert
+    ///                             also acts as the TLS default certificate.
+    #[serde(default)]
+    pub host: Option<String>,
     /// Path to the TLS certificate PEM file for this domain (optional).
     #[serde(default)]
     pub cert_path: Option<String>,

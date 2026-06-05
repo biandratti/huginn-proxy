@@ -21,26 +21,24 @@ pub fn load_from_path<P: AsRef<Path>>(p: P) -> Result<Config> {
 
 fn validate_config(cfg: &Config) -> Result<()> {
     for domain in &cfg.domains {
+        let host = domain.host.as_deref().unwrap_or("_default_");
         match (&domain.cert_path, &domain.key_path) {
             (Some(cert), Some(key)) => {
                 if !Path::new(cert).exists() {
                     return Err(ProxyError::Config(format!(
-                        "Domain '{}': certificate file not found: {}",
-                        domain.host, cert
+                        "Domain '{host}': certificate file not found: {cert}"
                     )));
                 }
                 if !Path::new(key).exists() {
                     return Err(ProxyError::Config(format!(
-                        "Domain '{}': key file not found: {}",
-                        domain.host, key
+                        "Domain '{host}': key file not found: {key}"
                     )));
                 }
             }
             (None, None) => {}
             _ => {
                 return Err(ProxyError::Config(format!(
-                    "Domain '{}': cert_path and key_path must both be set or both omitted",
-                    domain.host
+                    "Domain '{host}': cert_path and key_path must both be set or both omitted"
                 )));
             }
         }

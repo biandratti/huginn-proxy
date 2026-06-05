@@ -21,7 +21,18 @@ fn sorted_routes(mut routes: Vec<Route>) -> Vec<Route> {
 }
 
 fn domain(host: &str, routes: Vec<Route>) -> Domain {
-    Domain { host: host.to_string(), cert_path: None, key_path: None, headers: None, routes }
+    Domain {
+        host: Some(host.to_string()),
+        cert_path: None,
+        key_path: None,
+        headers: None,
+        routes,
+    }
+}
+
+/// A host-less (catch-all) domain — matches any host not matched exactly/by wildcard.
+fn catch_all(routes: Vec<Route>) -> Domain {
+    Domain { host: None, cert_path: None, key_path: None, headers: None, routes }
 }
 
 fn sorted_domains(mut domains: Vec<Domain>) -> Vec<Domain> {
@@ -279,7 +290,7 @@ fn exact_domain_match() {
     let Some(d) = pick_domain(&domains, "api.example.com") else {
         panic!("expected exact match for api.example.com");
     };
-    assert_eq!(d.host, "api.example.com");
+    assert_eq!(d.host.as_deref(), Some("api.example.com"));
 }
 
 #[test]
@@ -288,7 +299,7 @@ fn wildcard_domain_matches_subdomain() {
     let Some(d) = pick_domain(&domains, "sub.example.com") else {
         panic!("expected wildcard match for sub.example.com");
     };
-    assert_eq!(d.host, "*.example.com");
+    assert_eq!(d.host.as_deref(), Some("*.example.com"));
 }
 
 #[test]
@@ -314,7 +325,7 @@ fn exact_match_takes_priority_over_wildcard() {
     let Some(d) = pick_domain(&domains, "api.example.com") else {
         panic!("expected exact match for api.example.com");
     };
-    assert_eq!(d.host, "api.example.com");
+    assert_eq!(d.host.as_deref(), Some("api.example.com"));
 }
 
 #[test]
@@ -364,4 +375,51 @@ fn wildcard_and_two_phase_routing() {
     };
     assert_eq!(pick_route("/api/data", &d.routes), Some("api:9000"));
     assert_eq!(pick_route("/home", &d.routes), Some("web:9000"));
+}
+
+#[test]
+fn catch_all_matches_unknown_host() {
+    let domains = vec![domain("api.example.com", vec![]), catch_all(vec![])];
+    let Some(d) = pick_domain(&domains, "anything.else.com") else {
+        panic!("expected catch-all to match unknown host");
+    };
+    assert!(d.host.is_none());
+}
+
+#[test]
+fn catch_all_matches_ip_literals_and_localhost() {
+    // The whole point: one host-less domain serves IPv4, IPv6 and localhost
+    // without enumerating each as its own domain.
+    let domains = vec![catch_all(vec![])];
+    assert!(pick_domain(&domains, "127.0.0.1").is_some());
+    assert!(pick_domain(&domains, "::1").is_some());
+    assert!(pick_domain(&domains, "localhost").is_some());
+}
+
+#[test]
+fn exact_and_wildcard_win_over_catch_all() {
+    let domains = vec![
+        domain("api.example.com", vec![]),
+        domain("*.example.com", vec![]),
+        catch_all(vec![]),
+    ];
+    // exact beats catch-all
+    assert_eq!(
+        pick_domain(&domains, "api.example.com").and_then(|d| d.host.as_deref()),
+        Some("api.example.com")
+    );
+    // wildcard beats catch-all
+    assert_eq!(
+        pick_domain(&domains, "sub.example.com").and_then(|d| d.host.as_deref()),
+        Some("*.example.com")
+    );
+    // everything else falls through to catch-all
+    assert!(pick_domain(&domains, "other.org").is_some_and(|d| d.host.is_none()));
+}
+
+#[test]
+fn no_catch_all_still_returns_none_for_unknown() {
+    let domains = vec![domain("api.example.com", vec![])];
+    assert!(pick_domain(&domains, "127.0.0.1").is_none());
+    assert!(pick_domain(&domains, "unknown.com").is_none());
 }

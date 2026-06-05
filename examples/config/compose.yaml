@@ -30,16 +30,14 @@ backends:
       healthy_threshold: 2
 
 domains:
-  # Routes and headers shared by both hostname and IP domains.
-  # localhost: hostname access — curl sends SNI, cert is selected by name.
-  # 127.0.0.1: IP access — no SNI is sent (RFC 6066), cert resolver falls back
-  #            to the first available cert (the localhost cert). Routing uses
-  #            the Host header, which for IP connections is "127.0.0.1".
+  # Single catch-all domain (no `host:`) — matches any host, so it serves
+  # localhost, 127.0.0.1 and ::1 transparently with one route set instead of
+  # one duplicated block per address.
   #
-  # Both domains carry the same routes, so either address works transparently.
-
-  - host: "localhost"
-    cert_path: "/config/certs/server.crt"
+  # Its cert is the TLS default certificate: served for connections with no SNI
+  # (IP clients, RFC 6066) and for any SNI that matches no other domain.
+  # Equivalent to a Traefik router with no Host() rule + a defaultCertificate.
+  - cert_path: "/config/certs/server.crt"
     key_path: "/config/certs/server.key"
     headers:
       response:
@@ -50,115 +48,6 @@ domains:
         add:
           - name: "X-Proxy"
             value: "huginn-proxy"
-    routes:
-      - prefix: "/api"
-        backend: "backend-a:9000"
-        fingerprinting: true
-        force_new_connection: false
-      - prefix: "/static"
-        backend: "backend-b:9000"
-        fingerprinting: false
-        force_new_connection: false
-      - prefix: "/fingerprint"
-        backend: "backend-a:9000"
-        fingerprinting: true
-        force_new_connection: true
-      - prefix: "/strip"
-        backend: "backend-a:9000"
-        fingerprinting: true
-        replace_path: ""
-      - prefix: "/old"
-        backend: "backend-b:9000"
-        fingerprinting: true
-        replace_path: "/new"
-      - prefix: "/v1"
-        backend: "backend-a:9000"
-        fingerprinting: true
-        replace_path: "/api/v1"
-      - prefix: "/lb"
-        backend: "backend-a:9000"
-        fingerprinting: true
-      - prefix: "/lb"
-        backend: "backend-b:9000"
-        fingerprinting: true
-      - prefix: "/api/e2e-unhealthy"
-        backend: "unreachable-backend:9000"
-      - prefix: "/rl"
-        backend: "backend-a:9000"
-        rate_limit:
-          enabled: true
-          requests_per_second: 1
-          burst: 3
-          window_seconds: 1
-          limit_by: "ip"
-      - prefix: "/rl-bypass"
-        backend: "backend-a:9000"
-        rate_limit:
-          enabled: true
-          requests_per_second: 1
-          burst: 3
-          window_seconds: 1
-          limit_by: "ip"
-      - prefix: "/"
-        backend: "backend-b:9000"
-
-  - host: "127.0.0.1"
-    # No cert here: IP connections don't send SNI, so the resolver automatically
-    # uses the first available cert (from the localhost domain above).
-    routes:
-      - prefix: "/api"
-        backend: "backend-a:9000"
-        fingerprinting: true
-        force_new_connection: false
-      - prefix: "/static"
-        backend: "backend-b:9000"
-        fingerprinting: false
-        force_new_connection: false
-      - prefix: "/fingerprint"
-        backend: "backend-a:9000"
-        fingerprinting: true
-        force_new_connection: true
-      - prefix: "/strip"
-        backend: "backend-a:9000"
-        fingerprinting: true
-        replace_path: ""
-      - prefix: "/old"
-        backend: "backend-b:9000"
-        fingerprinting: true
-        replace_path: "/new"
-      - prefix: "/v1"
-        backend: "backend-a:9000"
-        fingerprinting: true
-        replace_path: "/api/v1"
-      - prefix: "/lb"
-        backend: "backend-a:9000"
-        fingerprinting: true
-      - prefix: "/lb"
-        backend: "backend-b:9000"
-        fingerprinting: true
-      - prefix: "/api/e2e-unhealthy"
-        backend: "unreachable-backend:9000"
-      - prefix: "/rl"
-        backend: "backend-a:9000"
-        rate_limit:
-          enabled: true
-          requests_per_second: 1
-          burst: 3
-          window_seconds: 1
-          limit_by: "ip"
-      - prefix: "/rl-bypass"
-        backend: "backend-a:9000"
-        rate_limit:
-          enabled: true
-          requests_per_second: 1
-          burst: 3
-          window_seconds: 1
-          limit_by: "ip"
-      - prefix: "/"
-        backend: "backend-b:9000"
-
-  - host: "::1"
-    # IPv6 loopback — same rules as 127.0.0.1, cert from resolver fallback.
     routes:
       - prefix: "/api"
         backend: "backend-a:9000"

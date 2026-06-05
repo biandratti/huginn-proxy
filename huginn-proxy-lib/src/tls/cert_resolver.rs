@@ -16,6 +16,12 @@ struct CertMap {
     exact: HashMap<String, Arc<CertifiedKey>>,
     /// Keyed by base domain (e.g. `"example.com"` for `"*.example.com"`).
     wildcard: HashMap<String, Arc<CertifiedKey>>,
+    /// Cert from the catch-all (host-less) domain, if it declares one.
+    /// Served for connections with no SNI (IP clients, RFC 6066) and for SNI
+    /// that matches no exact/wildcard entry — equivalent to Traefik's
+    /// `defaultCertificate`. `None` ⇒ unknown SNI is rejected (rustls sends
+    /// `unrecognized_name`), equivalent to Traefik `sniStrict: true`.
+    default: Option<Arc<CertifiedKey>>,
 }
 
 /// SNI-based certificate resolver populated from `DynamicConfig.domains`.
@@ -55,8 +61,11 @@ impl DynamicCertResolver {
     pub async fn update(&self, domains: &[Domain], metrics: &Metrics) -> Result<()> {
         let mut exact: HashMap<String, Arc<CertifiedKey>> = HashMap::new();
         let mut wildcard: HashMap<String, Arc<CertifiedKey>> = HashMap::new();
+        let mut default: Option<Arc<CertifiedKey>> = None;
 
         for domain in domains {
+            // Label for metrics/logs; the catch-all domain has no host string.
+            let host = domain.host.as_deref().unwrap_or("_default_");
             let (cert_path, key_path) = match (&domain.cert_path, &domain.key_path) {
                 (Some(c), Some(k)) => (c.as_str(), k.as_str()),
                 _ => continue,
@@ -66,7 +75,7 @@ impl DynamicCertResolver {
                 match read_certs_and_keys(Path::new(cert_path), Path::new(key_path)).await {
                     Ok(ck) => ck,
                     Err(e) => {
-                        metrics.record_tls_cert_reload_error(&domain.host);
+                        metrics.record_tls_cert_reload_error(host);
                         return Err(e);
                     }
                 };
@@ -74,27 +83,40 @@ impl DynamicCertResolver {
             let signing_key =
                 tokio_rustls::rustls::crypto::aws_lc_rs::sign::any_supported_type(&certs_keys.key)
                     .map_err(|e| {
-                        metrics.record_tls_cert_reload_error(&domain.host);
-                        ProxyError::Tls(format!(
-                            "Failed to build signing key for '{}': {e}",
-                            domain.host
-                        ))
+                        metrics.record_tls_cert_reload_error(host);
+                        ProxyError::Tls(format!("Failed to build signing key for '{host}': {e}"))
                     })?;
 
             let cert_hash = cert_chain_hash(&certs_keys.certs);
             let certified_key = Arc::new(CertifiedKey::new(certs_keys.certs, signing_key));
 
-            if let Some(base) = domain.host.strip_prefix("*.") {
-                wildcard.insert(base.to_string(), certified_key);
-            } else {
-                exact.insert(domain.host.clone(), certified_key);
+            match domain.host.as_deref() {
+                Some(h) => match h.strip_prefix("*.") {
+                    Some(base) => {
+                        wildcard.insert(base.to_string(), certified_key);
+                    }
+                    None => {
+                        exact.insert(h.to_string(), certified_key);
+                    }
+                },
+                // Catch-all domain's cert is the TLS default certificate.
+                None => default = Some(certified_key),
             }
 
-            metrics.record_tls_cert_reload_success(&domain.host, cert_hash);
+            metrics.record_tls_cert_reload_success(host, cert_hash);
         }
 
-        self.inner.store(Arc::new(CertMap { exact, wildcard }));
+        self.inner
+            .store(Arc::new(CertMap { exact, wildcard, default }));
         Ok(())
+    }
+
+    /// Test-only snapshot of the cert map: `(exact_count, wildcard_count, has_default)`.
+    /// The default cert is the one from a host-less (catch-all) domain.
+    #[doc(hidden)]
+    pub fn cert_map_summary(&self) -> (usize, usize, bool) {
+        let m = self.inner.load();
+        (m.exact.len(), m.wildcard.len(), m.default.is_some())
     }
 }
 
@@ -103,16 +125,11 @@ impl ResolvesServerCert for DynamicCertResolver {
         let map = self.inner.load();
 
         // RFC 6066: IP address connections do not carry an SNI extension.
-        // When there is no SNI, fall back to the first available cert so that
-        // clients connecting via IP (e.g. `https://127.0.0.1:7000`) can still
-        // complete the TLS handshake (routing uses the Host header instead).
+        // With no SNI, serve the default cert (catch-all domain) so clients
+        // connecting via IP (e.g. `https://127.0.0.1:7000`) can complete the
+        // handshake; routing then uses the Host header. No default ⇒ reject.
         let Some(sni) = client_hello.server_name() else {
-            return map
-                .exact
-                .values()
-                .next()
-                .or_else(|| map.wildcard.values().next())
-                .map(Arc::clone);
+            return map.default.clone();
         };
 
         if let Some(key) = map.exact.get(sni) {
@@ -121,8 +138,15 @@ impl ResolvesServerCert for DynamicCertResolver {
 
         // Wildcard: strip the leftmost label and look up the base domain.
         // `*.example.com` matches `sub.example.com` but NOT `a.b.example.com`.
-        let dot = sni.find('.')?;
-        let base = &sni[dot.saturating_add(1)..];
-        map.wildcard.get(base).map(Arc::clone)
+        if let Some(dot) = sni.find('.') {
+            let base = &sni[dot.saturating_add(1)..];
+            if let Some(key) = map.wildcard.get(base) {
+                return Some(Arc::clone(key));
+            }
+        }
+
+        // No exact/wildcard match: serve the default cert if configured,
+        // else `None` ⇒ rustls sends `unrecognized_name` (Traefik sniStrict).
+        map.default.clone()
     }
 }

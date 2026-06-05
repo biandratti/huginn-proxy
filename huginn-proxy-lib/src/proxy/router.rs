@@ -38,21 +38,33 @@ pub fn pick_route<'a>(path: &str, routes: &'a [Route]) -> Option<&'a str> {
 
 /// Finds the domain entry that matches `host`.
 ///
-/// Matching order:
+/// Matching order (most specific first):
 /// 1. Exact: `"api.example.com"` == host
 /// 2. Wildcard: `"*.example.com"` where host is `"sub.example.com"` (one level only)
-/// 3. `None` — caller returns 421 (plain HTTP) or the TLS cert resolver already rejected
+/// 3. Catch-all: the first domain with no `host` (mirrors a Traefik router with no
+///    `Host()` rule). Lets a single route set serve any host — including IP literals
+///    like `127.0.0.1` / `::1` — without enumerating each as its own domain.
+/// 4. `None` — no exact/wildcard/catch-all entry; caller returns 421.
 pub fn pick_domain<'a>(domains: &'a [Domain], host: &str) -> Option<&'a Domain> {
     // 1. Exact match
-    if let Some(d) = domains.iter().find(|d| d.host == host) {
+    if let Some(d) = domains.iter().find(|d| d.host.as_deref() == Some(host)) {
         return Some(d);
     }
-    // 2. Wildcard: strip leftmost label and compare base domain
-    let dot = host.find('.')?;
-    let base = &host[dot.saturating_add(1)..];
-    domains
-        .iter()
-        .find(|d| d.host.starts_with("*.") && d.host.get(2..) == Some(base))
+    // 2. Wildcard: strip leftmost label and compare base domain.
+    //    Skipped (not early-returned) when `host` has no dot, so labels like
+    //    "localhost" still fall through to the catch-all below.
+    if let Some(dot) = host.find('.') {
+        let base = &host[dot.saturating_add(1)..];
+        if let Some(d) = domains.iter().find(|d| {
+            d.host
+                .as_deref()
+                .is_some_and(|h| h.starts_with("*.") && h.get(2..) == Some(base))
+        }) {
+            return Some(d);
+        }
+    }
+    // 3. Catch-all: first host-less domain.
+    domains.iter().find(|d| d.host.is_none())
 }
 
 pub fn pick_route_with_fingerprinting<'a>(

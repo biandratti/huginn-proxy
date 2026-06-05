@@ -157,8 +157,16 @@ fn audit_config_changes(old: &DynamicConfig, new: &DynamicConfig) {
         info!(backend = addr, "Config diff: backend added");
     }
 
-    let old_domains: HashSet<&str> = old.domains.iter().map(|d| d.host.as_str()).collect();
-    let new_domains: HashSet<&str> = new.domains.iter().map(|d| d.host.as_str()).collect();
+    let old_domains: HashSet<&str> = old
+        .domains
+        .iter()
+        .map(|d| d.host.as_deref().unwrap_or("_default_"))
+        .collect();
+    let new_domains: HashSet<&str> = new
+        .domains
+        .iter()
+        .map(|d| d.host.as_deref().unwrap_or("_default_"))
+        .collect();
     for host in old_domains.difference(&new_domains) {
         info!(host = host, "Config diff: domain removed");
     }
@@ -168,7 +176,10 @@ fn audit_config_changes(old: &DynamicConfig, new: &DynamicConfig) {
     for domain in new.domains.iter() {
         if let Some(old_domain) = old.domains.iter().find(|d| d.host == domain.host) {
             if old_domain != domain {
-                info!(host = domain.host, "Config diff: domain changed");
+                info!(
+                    host = domain.host.as_deref().unwrap_or("_default_"),
+                    "Config diff: domain changed"
+                );
             }
         }
     }
