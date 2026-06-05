@@ -171,3 +171,25 @@ fn h1_host_header_ipv6_without_port() {
     let req = req_h1("[2001:db8::1]");
     assert_eq!(extract_request_host_inner(&req, None, false), "2001:db8::1");
 }
+
+#[test]
+fn host_header_is_lowercased() {
+    // RFC 7230: Host is case-insensitive. We lowercase so it matches lowercased config.
+    let req = req_h1("API.Example.COM:8080");
+    assert_eq!(extract_request_host_inner(&req, None, false), "api.example.com");
+}
+
+#[test]
+fn sni_is_lowercased() {
+    let req = req_h2("https://127.0.0.1:7000/");
+    assert_eq!(
+        extract_request_host_inner(&req, Some("API.Example.COM"), true),
+        "api.example.com"
+    );
+}
+
+#[test]
+fn uri_authority_is_lowercased() {
+    let req = req_h2("https://EXAMPLE.com/path");
+    assert_eq!(extract_request_host_inner(&req, None, true), "example.com");
+}

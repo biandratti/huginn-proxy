@@ -216,8 +216,12 @@ Host matching order per incoming connection (host = SNI for TLS, `Host` header f
 2. Wildcard match — `"*.example.com"` (one level only; does not match `a.b.example.com`)
 3. **Catch-all** — the entry with no `host` key, if present. Matches any host, including IP
    literals (`127.0.0.1`, `::1`) and `localhost`. Mirrors a Traefik router with no `Host()`
-   rule. At most one catch-all is used (the first one).
+   rule.
 4. No match → HTTP 421 (Misdirected Request).
+
+Host matching is **case-insensitive**: `host` values are lowercased at load and compared
+against the lowercased request host. The config is rejected at load if two domains share the
+same `host` (after lowercasing) or if more than one catch-all (host-less) domain is defined.
 
 **TLS certificate selection** is independent of routing and driven by SNI:
 - SNI matches an exact/wildcard domain → that domain's cert.

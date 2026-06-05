@@ -82,6 +82,70 @@ routes = [
 }
 
 #[test]
+fn normalizes_domain_host_to_lowercase() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let path = tmp_path("host-case");
+    let toml = r#"
+listen = { addrs = ["127.0.0.1:0"] }
+backends = [{ address = "b:9000" }]
+
+[[domains]]
+host = "API.Example.COM"
+"#;
+    fs::write(&path, toml)?;
+    let cfg = load_from_path(&path)?;
+    assert_eq!(cfg.domains[0].host.as_deref(), Some("api.example.com"));
+    let _ = fs::remove_file(&path);
+    Ok(())
+}
+
+#[test]
+fn rejects_duplicate_domain_host() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let path = tmp_path("dup-host");
+    // Different case → still a duplicate after normalization.
+    let toml = r#"
+listen = { addrs = ["127.0.0.1:0"] }
+backends = [{ address = "b:9000" }]
+
+[[domains]]
+host = "API.example.com"
+
+[[domains]]
+host = "api.example.com"
+"#;
+    fs::write(&path, toml)?;
+    let err = match load_from_path(&path) {
+        Ok(_) => panic!("should reject duplicate domain host"),
+        Err(e) => e.to_string(),
+    };
+    assert!(err.contains("Duplicate domain host"), "got: {err}");
+    let _ = fs::remove_file(&path);
+    Ok(())
+}
+
+#[test]
+fn rejects_multiple_catch_all_domains() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let path = tmp_path("multi-catchall");
+    let toml = r#"
+listen = { addrs = ["127.0.0.1:0"] }
+backends = [{ address = "b:9000" }]
+
+[[domains]]
+# no host → catch-all
+
+[[domains]]
+# no host → second catch-all
+"#;
+    fs::write(&path, toml)?;
+    let err = match load_from_path(&path) {
+        Ok(_) => panic!("should reject multiple catch-all domains"),
+        Err(e) => e.to_string(),
+    };
+    assert!(err.contains("Multiple catch-all"), "got: {err}");
+    let _ = fs::remove_file(&path);
+    Ok(())
+}
+
+#[test]
 fn rejects_invalid_health_check_timeout_greater_than_interval(
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let path = tmp_path("bad-hc");

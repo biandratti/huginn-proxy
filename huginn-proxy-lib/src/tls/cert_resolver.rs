@@ -34,7 +34,7 @@ pub struct DynamicCertResolver {
     /// Strict SNI mode. When `true`, an SNI that matches no exact/wildcard cert is
     /// rejected (`resolve` returns `None` → rustls `unrecognized_name`) instead of
     /// falling back to the default cert. Connections with no SNI (IP clients) still
-    /// get the default cert, which also rejects those.
+    /// get the default cert — unlike Traefik's `sniStrict`, which also rejects those.
     sni_strict: bool,
 }
 
@@ -62,12 +62,16 @@ impl DynamicCertResolver {
 
     /// Reload cert maps from `domains`. Domains without `cert_path`/`key_path` are skipped.
     ///
-    /// On error the function returns early and the old cert map stays in place.
-    /// Metrics are emitted per-domain.
+    /// On error the function returns early and the old cert map stays in place — no success
+    /// metric is emitted for that reload. Success metrics are recorded only *after* the
+    /// atomic swap, so the `tls_cert_hash`/timestamp gauges always reflect the certificate
+    /// actually serving traffic (never a cert that a later failure prevented from going live).
     pub async fn update(&self, domains: &[Domain], metrics: &Metrics) -> Result<()> {
         let mut exact: HashMap<String, Arc<CertifiedKey>> = HashMap::new();
         let mut wildcard: HashMap<String, Arc<CertifiedKey>> = HashMap::new();
         let mut default: Option<Arc<CertifiedKey>> = None;
+        // Buffered until after the swap; (host, cert_hash) per successfully loaded cert.
+        let mut loaded: Vec<(String, u64)> = Vec::new();
 
         for domain in domains {
             // Label for metrics/logs; the catch-all domain has no host string.
@@ -109,11 +113,17 @@ impl DynamicCertResolver {
                 None => default = Some(certified_key),
             }
 
-            metrics.record_tls_cert_reload_success(host, cert_hash);
+            loaded.push((host.to_string(), cert_hash));
         }
 
         self.inner
             .store(Arc::new(CertMap { exact, wildcard, default }));
+
+        // Emit success metrics only now that the new map is live, so the gauges
+        // never advertise a cert that didn't actually go into service.
+        for (host, cert_hash) in &loaded {
+            metrics.record_tls_cert_reload_success(host, *cert_hash);
+        }
         Ok(())
     }
 

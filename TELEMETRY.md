@@ -595,18 +595,26 @@ sum by (protocol) (rate(huginn_mtls_connections_total[5m]))
 **Labels**:
 
 - `result`: Outcome of the reload attempt — `success` or `error`
-- `domain`: The domain host pattern the certificate belongs to (e.g. `api.example.com`, `*.example.com`)
+- `domain`: The domain host pattern the certificate belongs to (e.g. `api.example.com`, `*.example.com`).
+  The catch-all (host-less) domain reports its certs under `domain="_default_"`.
 
 **Notes**:
 
 - Cert loading is driven by config hot-reload (`DynamicCertResolver::update`) — each SIGHUP or config file change
   reloads all domain certs. This replaces the former per-file watcher model.
 - All three metrics are **per-domain** so you can track cert rotation independently for each domain.
-- The hash and timestamp gauges are populated **at boot** for every configured domain, so
+- Only domains that declare a certificate emit these metrics. Plain-HTTP domains and a cert-less catch-all
+  produce no cert series.
+- The hash and timestamp gauges are populated **at boot** for every domain with a certificate, so
   `time() - huginn_tls_cert_last_reload_timestamp_seconds{domain="..."}` is meaningful from the first scrape.
 - `huginn_tls_cert_hash` hashes the certificate chain DER bytes. Private key material is intentionally excluded.
-- A failed reload bumps `result="error"` for that domain but leaves the hash/timestamp gauges unchanged — dashboards
-  continue to show the last good certificate actually serving traffic.
+  The value is a `u64`; over the Prometheus exposition format (float64) hashes above 2^53 lose low-bit precision,
+  so use `changes()` for rotation detection rather than comparing the literal value.
+- Success metrics are emitted only **after** the new cert map goes live (atomic swap). A failed reload bumps
+  `result="error"` for the failing domain and emits no success for that reload, so the hash/timestamp gauges always
+  reflect the certificate actually serving traffic.
+- A **cert** reload failure does *not* flip `huginn_config_reload_total` to `error` (that counter tracks config
+  parse/validation only). Alert on `huginn_tls_cert_reload_total{result="error"}` separately to catch cert failures.
 
 **Example queries**:
 

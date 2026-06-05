@@ -10,6 +10,10 @@ use hyper::Request;
 ///
 /// IPv6 addresses are returned WITHOUT brackets (`::1` not `[::1]`) to match
 /// domain config entries and `http::Uri::host()` canonical form.
+///
+/// The result is ASCII-lowercased: DNS names and the `Host` header are
+/// case-insensitive (RFC 4343 / RFC 7230), and domain config hosts are
+/// lowercased at load time, so both sides compare consistently.
 pub(crate) fn extract_request_host<B>(
     req: &Request<B>,
     ja4: Option<&crate::fingerprinting::Ja4Fingerprints>,
@@ -30,7 +34,7 @@ pub fn extract_request_host_inner<B>(
     // 1. TLS SNI
     if is_https {
         if let Some(s) = sni {
-            return s.to_string();
+            return s.to_ascii_lowercase();
         }
     }
     // 2. URI authority — present for HTTP/2 and absolute-form HTTP/1.1.
@@ -39,7 +43,7 @@ pub fn extract_request_host_inner<B>(
     if let Some(raw) = req.uri().host() {
         let host = strip_host_port(raw);
         if !host.is_empty() {
-            return host.to_string();
+            return host.to_ascii_lowercase();
         }
     }
     // 3. Host header fallback (HTTP/1.1 origin-form, or HTTP/2 without :authority)
@@ -47,7 +51,7 @@ pub fn extract_request_host_inner<B>(
         .get(hyper::header::HOST)
         .and_then(|v| v.to_str().ok())
         .map(strip_host_port)
-        .map(str::to_string)
+        .map(str::to_ascii_lowercase)
         .unwrap_or_default()
 }
 
