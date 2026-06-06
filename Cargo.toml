@@ -43,7 +43,7 @@ opentelemetry = { version = "0.32.0", features = ["metrics"] }
 opentelemetry-prometheus = "0.32.0"
 opentelemetry_sdk = { version = "0.32.0", features = ["metrics", "trace"] }
 pingora-limits = "0.8.0"
-pingora-timeout = "0.8.0"
+pingora-timeout = "0.8.1"
 prometheus = "0.14.0"
 rcgen = "0.14.8"
 reqwest = { version = "0.13.4", features = ["json", "http2"] }
