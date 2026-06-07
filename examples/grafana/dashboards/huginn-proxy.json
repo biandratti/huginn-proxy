@@ -16,6 +16,38 @@
     "from": "now-1h",
     "to": "now"
   },
+  "templating": {
+    "list": [
+      {
+        "name": "domain",
+        "label": "Domain",
+        "description": "Matched domain (configured host, or _default_ for the catch-all). Filters the request, backend and rate-limit panels.",
+        "type": "query",
+        "datasource": null,
+        "definition": "label_values(huginn_requests_total_total, domain)",
+        "query": {
+          "query": "label_values(huginn_requests_total_total, domain)",
+          "refId": "HuginnDomainVariable"
+        },
+        "refresh": 2,
+        "sort": 1,
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "current": {
+          "selected": true,
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "options": [],
+        "hide": 0
+      }
+    ]
+  },
   "panels": [
     {
       "id": 100,
@@ -431,17 +463,17 @@
       },
       "targets": [
         {
-          "expr": "histogram_quantile(0.50, sum(rate(huginn_requests_duration_seconds_bucket[$__rate_interval])) by (le))",
+          "expr": "histogram_quantile(0.50, sum(rate(huginn_requests_duration_seconds_bucket{domain=~\"$domain\"}[$__rate_interval])) by (le))",
           "legendFormat": "P50",
           "refId": "A"
         },
         {
-          "expr": "histogram_quantile(0.95, sum(rate(huginn_requests_duration_seconds_bucket[$__rate_interval])) by (le))",
+          "expr": "histogram_quantile(0.95, sum(rate(huginn_requests_duration_seconds_bucket{domain=~\"$domain\"}[$__rate_interval])) by (le))",
           "legendFormat": "P95",
           "refId": "B"
         },
         {
-          "expr": "histogram_quantile(0.99, sum(rate(huginn_requests_duration_seconds_bucket[$__rate_interval])) by (le))",
+          "expr": "histogram_quantile(0.99, sum(rate(huginn_requests_duration_seconds_bucket{domain=~\"$domain\"}[$__rate_interval])) by (le))",
           "legendFormat": "P99",
           "refId": "C"
         }
@@ -580,8 +612,8 @@
       },
       "targets": [
         {
-          "expr": "sum by (route) (rate(huginn_requests_total_total[$__rate_interval])) or on() vector(0)",
-          "legendFormat": "{{route}}",
+          "expr": "sum by (domain, route) (rate(huginn_requests_total_total{domain=~\"$domain\"}[$__rate_interval])) or on() vector(0)",
+          "legendFormat": "{{domain}} {{route}}",
           "refId": "A"
         }
       ],
@@ -1486,7 +1518,7 @@
       },
       "targets": [
         {
-          "expr": "sum by (backend_address) (rate(huginn_backend_requests_total_total[$__rate_interval])) or on() vector(0)",
+          "expr": "sum by (backend_address) (rate(huginn_backend_requests_total_total{domain=~\"$domain\"}[$__rate_interval])) or on() vector(0)",
           "legendFormat": "{{backend_address}}",
           "refId": "A"
         }
@@ -1518,7 +1550,7 @@
       },
       "targets": [
         {
-          "expr": "sum by (backend_address) (rate(huginn_backend_errors_total_total[$__rate_interval])) or on() vector(0)",
+          "expr": "sum by (backend_address) (rate(huginn_backend_errors_total_total{domain=~\"$domain\"}[$__rate_interval])) or on() vector(0)",
           "legendFormat": "backend errors/s \u2014 {{backend_address}}",
           "refId": "A"
         },
@@ -1567,7 +1599,7 @@
       },
       "targets": [
         {
-          "expr": "histogram_quantile(0.95, sum by (backend_address, le) (rate(huginn_backend_duration_seconds_bucket[$__rate_interval])))",
+          "expr": "histogram_quantile(0.95, sum by (backend_address, le) (rate(huginn_backend_duration_seconds_bucket{domain=~\"$domain\"}[$__rate_interval])))",
           "legendFormat": "P95 \u2014 {{backend_address}}",
           "refId": "A"
         }
@@ -1599,12 +1631,12 @@
       },
       "targets": [
         {
-          "expr": "sum by (backend_address) (rate(huginn_backend_bytes_received_total_total[$__rate_interval])) or on() vector(0)",
+          "expr": "sum by (backend_address) (rate(huginn_backend_bytes_received_total_total{domain=~\"$domain\"}[$__rate_interval])) or on() vector(0)",
           "legendFormat": "in \u2014 {{backend_address}}",
           "refId": "A"
         },
         {
-          "expr": "sum by (backend_address) (rate(huginn_backend_bytes_sent_total_total[$__rate_interval])) or on() vector(0)",
+          "expr": "sum by (backend_address) (rate(huginn_backend_bytes_sent_total_total{domain=~\"$domain\"}[$__rate_interval])) or on() vector(0)",
           "legendFormat": "out \u2014 {{backend_address}}",
           "refId": "B"
         }
@@ -1680,17 +1712,17 @@
       },
       "targets": [
         {
-          "expr": "sum(rate(huginn_rate_limit_requests_total_total[$__rate_interval]) or on() vector(0))",
+          "expr": "sum(rate(huginn_rate_limit_requests_total_total{domain=~\"$domain\"}[$__rate_interval]) or on() vector(0))",
           "legendFormat": "evaluated",
           "refId": "A"
         },
         {
-          "expr": "sum(rate(huginn_rate_limit_allowed_total_total[$__rate_interval]) or on() vector(0))",
+          "expr": "sum(rate(huginn_rate_limit_allowed_total_total{domain=~\"$domain\"}[$__rate_interval]) or on() vector(0))",
           "legendFormat": "allowed",
           "refId": "B"
         },
         {
-          "expr": "sum(rate(huginn_rate_limit_rejected_total_total[$__rate_interval]) or on() vector(0))",
+          "expr": "sum(rate(huginn_rate_limit_rejected_total_total{domain=~\"$domain\"}[$__rate_interval]) or on() vector(0))",
           "legendFormat": "rejected (429)",
           "refId": "C"
         }
@@ -1722,7 +1754,7 @@
       },
       "targets": [
         {
-          "expr": "sum by (strategy) (rate(huginn_rate_limit_rejected_total_total[$__rate_interval])) or on() vector(0)",
+          "expr": "sum by (strategy) (rate(huginn_rate_limit_rejected_total_total{domain=~\"$domain\"}[$__rate_interval])) or on() vector(0)",
           "legendFormat": "{{strategy}}",
           "refId": "A"
         }
@@ -2007,6 +2039,44 @@
         "y": 136,
         "w": 24,
         "h": 1
+      }
+    },
+    {
+      "id": 55,
+      "type": "timeseries",
+      "title": "Headers Added / Removed (ops/s) by Context",
+      "description": "Header manipulation operations applied to requests/responses. Only emitted when at least one header was added/removed (global → domain → route rules). No series means no header manipulation is configured.",
+      "gridPos": {
+        "x": 0,
+        "y": 137,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "sum by (context) (rate(huginn_headers_added_total_total[$__rate_interval])) or on() vector(0)",
+          "legendFormat": "added {{context}}",
+          "refId": "A"
+        },
+        {
+          "expr": "sum by (context) (rate(huginn_headers_removed_total_total[$__rate_interval])) or on() vector(0)",
+          "legendFormat": "removed {{context}}",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops"
+        }
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
       }
     },
     {
@@ -2325,7 +2395,8 @@
       },
       "targets": [
         {
-          "expr": "huginn_tls_cert_hash",
+          "expr": "huginn_tls_cert_hash{domain=~\"$domain\"}",
+          "legendFormat": "{{domain}}",
           "refId": "A"
         }
       ],
@@ -2359,7 +2430,8 @@
       },
       "targets": [
         {
-          "expr": "time() - huginn_tls_cert_last_reload_timestamp_seconds",
+          "expr": "time() - huginn_tls_cert_last_reload_timestamp_seconds{domain=~\"$domain\"}",
+          "legendFormat": "{{domain}}",
           "refId": "A"
         }
       ],
@@ -2391,7 +2463,8 @@
       },
       "targets": [
         {
-          "expr": "huginn_tls_cert_reload_total_total{result=\"success\"}",
+          "expr": "huginn_tls_cert_reload_total_total{result=\"success\", domain=~\"$domain\"}",
+          "legendFormat": "{{domain}}",
           "refId": "A"
         }
       ],
@@ -2425,13 +2498,13 @@
       },
       "targets": [
         {
-          "expr": "rate(huginn_tls_cert_reload_total_total{result=\"success\"}[$__rate_interval]) or on() vector(0)",
-          "legendFormat": "success",
+          "expr": "rate(huginn_tls_cert_reload_total_total{result=\"success\", domain=~\"$domain\"}[$__rate_interval]) or on() vector(0)",
+          "legendFormat": "{{domain}} success",
           "refId": "A"
         },
         {
-          "expr": "rate(huginn_tls_cert_reload_total_total{result=\"error\"}[$__rate_interval]) or on() vector(0)",
-          "legendFormat": "error",
+          "expr": "rate(huginn_tls_cert_reload_total_total{result=\"error\", domain=~\"$domain\"}[$__rate_interval]) or on() vector(0)",
+          "legendFormat": "{{domain}} error",
           "refId": "B"
         }
       ],

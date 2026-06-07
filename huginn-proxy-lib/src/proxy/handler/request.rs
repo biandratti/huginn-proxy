@@ -103,6 +103,9 @@ pub async fn handle_proxy_request(
 
     let domain = crate::proxy::router::pick_domain(&domains, &host);
     let domain_headers = domain.and_then(|d| d.headers.as_ref());
+    let domain_label: &str = domain
+        .and_then(|d| d.host.as_deref())
+        .unwrap_or("_default_");
 
     let route_match = match domain {
         None => {
@@ -135,13 +138,20 @@ pub async fn handle_proxy_request(
             let error = HttpError::UpstreamUnhealthy;
             let status_code = StatusCode::from(error.clone()).as_u16();
             metrics.record_entrypoint_request(&method, status_code, &protocol);
-            metrics.record_request(&method, status_code, &protocol, route_match.matched_prefix);
+            metrics.record_request(
+                &method,
+                status_code,
+                &protocol,
+                route_match.matched_prefix,
+                domain_label,
+            );
             metrics.record_request_duration(
                 start.elapsed().as_secs_f64(),
                 &method,
                 status_code,
                 &protocol,
                 route_match.matched_prefix,
+                domain_label,
             );
             return Err(error);
         }
@@ -155,16 +165,24 @@ pub async fn handle_proxy_request(
         peer,
         req.headers(),
         &metrics,
+        domain_label,
     ) {
         let status_code = rate_limited_response.status().as_u16();
         metrics.record_entrypoint_request(&method, status_code, &protocol);
-        metrics.record_request(&method, status_code, &protocol, route_match.matched_prefix);
+        metrics.record_request(
+            &method,
+            status_code,
+            &protocol,
+            route_match.matched_prefix,
+            domain_label,
+        );
         metrics.record_request_duration(
             start.elapsed().as_secs_f64(),
             &method,
             status_code,
             &protocol,
             route_match.matched_prefix,
+            domain_label,
         );
         return Ok(rate_limited_response);
     }
@@ -283,6 +301,7 @@ pub async fn handle_proxy_request(
             is_https,
             preserve_host,
             route: route_match.matched_prefix,
+            domain: domain_label,
             client_pool,
             force_new_connection: route_match.force_new_connection,
         },
@@ -318,13 +337,20 @@ pub async fn handle_proxy_request(
     };
 
     metrics.record_entrypoint_request(&method, status_code, &protocol);
-    metrics.record_request(&method, status_code, &protocol, route_match.matched_prefix);
+    metrics.record_request(
+        &method,
+        status_code,
+        &protocol,
+        route_match.matched_prefix,
+        domain_label,
+    );
     metrics.record_request_duration(
         duration,
         &method,
         status_code,
         &protocol,
         route_match.matched_prefix,
+        domain_label,
     );
 
     result

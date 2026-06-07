@@ -405,7 +405,7 @@ impl Metrics {
             .add(1, &[KeyValue::new(labels::BACKEND, backend.to_string())]);
     }
 
-    pub fn record_rate_limit_rejection(&self, strategy: &str, route: &str) {
+    pub fn record_rate_limit_rejection(&self, strategy: &str, route: &str, domain: &str) {
         self.errors_total
             .add(1, &[KeyValue::new(labels::ERROR_TYPE, values::ERROR_RATE_LIMITED)]);
         self.rate_limit_rejected_total.add(
@@ -413,26 +413,29 @@ impl Metrics {
             &[
                 KeyValue::new(labels::STRATEGY, strategy.to_string()),
                 KeyValue::new(labels::ROUTE, route.to_string()),
+                KeyValue::new(labels::DOMAIN, domain.to_string()),
             ],
         );
     }
 
-    pub fn record_rate_limit_allowed(&self, strategy: &str, route: &str) {
+    pub fn record_rate_limit_allowed(&self, strategy: &str, route: &str, domain: &str) {
         self.rate_limit_allowed_total.add(
             1,
             &[
                 KeyValue::new(labels::STRATEGY, strategy.to_string()),
                 KeyValue::new(labels::ROUTE, route.to_string()),
+                KeyValue::new(labels::DOMAIN, domain.to_string()),
             ],
         );
     }
 
-    pub fn record_rate_limit_request(&self, strategy: &str, route: &str) {
+    pub fn record_rate_limit_request(&self, strategy: &str, route: &str, domain: &str) {
         self.rate_limit_requests_total.add(
             1,
             &[
                 KeyValue::new(labels::STRATEGY, strategy.to_string()),
                 KeyValue::new(labels::ROUTE, route.to_string()),
+                KeyValue::new(labels::DOMAIN, domain.to_string()),
             ],
         );
     }
@@ -475,25 +478,33 @@ impl Metrics {
         }
     }
 
-    pub fn record_backend_bytes_received(&self, bytes: u64, backend: &str, route: &str) {
+    pub fn record_backend_bytes_received(
+        &self,
+        bytes: u64,
+        backend: &str,
+        route: &str,
+        domain: &str,
+    ) {
         if bytes > 0 {
             self.backend_bytes_received_total.add(
                 bytes,
                 &[
                     KeyValue::new(labels::BACKEND_ADDRESS, backend.to_string()),
                     KeyValue::new(labels::ROUTE, route.to_string()),
+                    KeyValue::new(labels::DOMAIN, domain.to_string()),
                 ],
             );
         }
     }
 
-    pub fn record_backend_bytes_sent(&self, bytes: u64, backend: &str, route: &str) {
+    pub fn record_backend_bytes_sent(&self, bytes: u64, backend: &str, route: &str, domain: &str) {
         if bytes > 0 {
             self.backend_bytes_sent_total.add(
                 bytes,
                 &[
                     KeyValue::new(labels::BACKEND_ADDRESS, backend.to_string()),
                     KeyValue::new(labels::ROUTE, route.to_string()),
+                    KeyValue::new(labels::DOMAIN, domain.to_string()),
                 ],
             );
         }
@@ -505,6 +516,7 @@ impl Metrics {
         status_code: u16,
         protocol: &str,
         route: &str,
+        domain: &str,
     ) {
         self.backend_requests_total.add(
             1,
@@ -513,6 +525,7 @@ impl Metrics {
                 KeyValue::new(labels::STATUS_CODE, status_code.to_string()),
                 KeyValue::new(labels::PROTOCOL, protocol.to_string()),
                 KeyValue::new(labels::ROUTE, route.to_string()),
+                KeyValue::new(labels::DOMAIN, domain.to_string()),
             ],
         );
     }
@@ -524,6 +537,7 @@ impl Metrics {
         status_code: u16,
         protocol: &str,
         route: &str,
+        domain: &str,
     ) {
         self.backend_duration_seconds.record(
             duration,
@@ -532,17 +546,19 @@ impl Metrics {
                 KeyValue::new(labels::STATUS_CODE, status_code.to_string()),
                 KeyValue::new(labels::PROTOCOL, protocol.to_string()),
                 KeyValue::new(labels::ROUTE, route.to_string()),
+                KeyValue::new(labels::DOMAIN, domain.to_string()),
             ],
         );
     }
 
-    pub fn record_backend_error(&self, backend: &str, error_type: &str, route: &str) {
+    pub fn record_backend_error(&self, backend: &str, error_type: &str, route: &str, domain: &str) {
         self.backend_errors_total.add(
             1,
             &[
                 KeyValue::new(labels::BACKEND_ADDRESS, backend.to_string()),
                 KeyValue::new(labels::ERROR_TYPE, error_type.to_string()),
                 KeyValue::new(labels::ROUTE, route.to_string()),
+                KeyValue::new(labels::DOMAIN, domain.to_string()),
             ],
         );
     }
@@ -558,7 +574,14 @@ impl Metrics {
         );
     }
 
-    pub fn record_request(&self, method: &str, status_code: u16, protocol: &str, route: &str) {
+    pub fn record_request(
+        &self,
+        method: &str,
+        status_code: u16,
+        protocol: &str,
+        route: &str,
+        domain: &str,
+    ) {
         self.requests_total.add(
             1,
             &[
@@ -566,6 +589,7 @@ impl Metrics {
                 KeyValue::new(labels::STATUS_CODE, status_code.to_string()),
                 KeyValue::new(labels::PROTOCOL, protocol.to_string()),
                 KeyValue::new(labels::ROUTE, route.to_string()),
+                KeyValue::new(labels::DOMAIN, domain.to_string()),
             ],
         );
     }
@@ -577,6 +601,7 @@ impl Metrics {
         status_code: u16,
         protocol: &str,
         route: &str,
+        domain: &str,
     ) {
         self.requests_duration_seconds.record(
             duration,
@@ -585,6 +610,7 @@ impl Metrics {
                 KeyValue::new(labels::STATUS_CODE, status_code.to_string()),
                 KeyValue::new(labels::PROTOCOL, protocol.to_string()),
                 KeyValue::new(labels::ROUTE, route.to_string()),
+                KeyValue::new(labels::DOMAIN, domain.to_string()),
             ],
         );
     }
