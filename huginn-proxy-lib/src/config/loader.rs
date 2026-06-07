@@ -64,7 +64,7 @@ fn validate_config(cfg: &Config) -> Result<()> {
     validate_unique_hosts(cfg)?;
 
     for domain in &cfg.domains {
-        let host = domain.host.as_deref().unwrap_or("_default_");
+        let host = domain.label();
         match (&domain.cert_path, &domain.key_path) {
             (Some(cert), Some(key)) => {
                 if !Path::new(cert).exists() {

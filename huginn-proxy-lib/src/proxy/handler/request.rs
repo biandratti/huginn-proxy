@@ -1,6 +1,6 @@
 use super::host::extract_request_host;
 use crate::backend::UpstreamGateway;
-use crate::config::{Backend, Domain, KeepAliveConfig};
+use crate::config::{Backend, Domain, KeepAliveConfig, DEFAULT_DOMAIN_LABEL};
 use crate::fingerprinting::names;
 use crate::fingerprinting::TcpObservation;
 use crate::proxy::forwarding::forward;
@@ -103,9 +103,7 @@ pub async fn handle_proxy_request(
 
     let domain = crate::proxy::router::pick_domain(&domains, &host);
     let domain_headers = domain.and_then(|d| d.headers.as_ref());
-    let domain_label: &str = domain
-        .and_then(|d| d.host.as_deref())
-        .unwrap_or("_default_");
+    let domain_label: &str = domain.map_or(DEFAULT_DOMAIN_LABEL, Domain::label);
 
     let route_match = match domain {
         None => {

@@ -3,7 +3,7 @@ pub mod headers;
 pub mod security;
 pub use backend::{
     sort_domain_routes, sort_routes, Backend, BackendHttpVersion, BackendPoolConfig, Domain,
-    HealthCheckConfig, HealthCheckType, Route,
+    HealthCheckConfig, HealthCheckType, Route, DEFAULT_DOMAIN_LABEL,
 };
 pub use headers::{CustomHeader, HeaderManipulation, HeaderManipulationGroup};
 pub use security::{

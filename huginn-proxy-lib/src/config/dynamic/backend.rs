@@ -227,6 +227,10 @@ pub fn sort_routes(routes: &mut [Route]) {
     routes.sort_by_key(|r| std::cmp::Reverse(r.prefix.len()));
 }
 
+/// Identifier used for the catch-all (host-less) domain — the entry with `host: None` —
+/// in metrics labels and logs. Mirrors Traefik's `_default_` TLS-cert/router naming.
+pub const DEFAULT_DOMAIN_LABEL: &str = "_default_";
+
 /// A named domain entry grouping a TLS certificate and its path-based routes.
 ///
 /// `host` drives SNI-based cert selection and request routing:
@@ -260,6 +264,14 @@ pub struct Domain {
     /// Path-based routing rules scoped to this domain.
     #[serde(default)]
     pub routes: Vec<Route>,
+}
+
+impl Domain {
+    /// Identifier for this domain in metrics labels and logs: the configured `host`,
+    /// or [`DEFAULT_DOMAIN_LABEL`] (`"_default_"`) for the catch-all (host-less) domain.
+    pub fn label(&self) -> &str {
+        self.host.as_deref().unwrap_or(DEFAULT_DOMAIN_LABEL)
+    }
 }
 
 /// Sort routes within every domain longest-prefix first.

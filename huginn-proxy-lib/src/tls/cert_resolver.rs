@@ -146,7 +146,7 @@ impl DynamicCertResolver {
 
         for domain in domains {
             // Label for metrics/logs; the catch-all domain has no host string.
-            let host = domain.host.as_deref().unwrap_or("_default_");
+            let host = domain.label();
             let (cert_path, key_path) = match (&domain.cert_path, &domain.key_path) {
                 (Some(c), Some(k)) => (c.as_str(), k.as_str()),
                 _ => continue,
