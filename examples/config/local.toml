@@ -13,7 +13,7 @@ http_version = "http11"
 [[domains]]
 host = "localhost"
 cert_path = "examples/certs/server.crt"
-key_path  = "examples/certs/server.key"
+key_path = "examples/certs/server.key"
 
 [[domains.routes]]
 prefix = "/"

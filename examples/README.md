@@ -216,7 +216,6 @@ eBPF compose examples map agent HTTP on the proxy service (`9091:9091`).
 The `config/` directory contains example configurations:
 
 - **`compose.toml`** - Basic proxy setup (default for Docker Compose)
-- **`rate-limit-example.toml`** - Advanced rate limiting configuration
 
 To switch configurations, edit `docker-compose.ebpf.yml` and change the `command` and `volumes` sections.
 
@@ -253,42 +252,6 @@ docker compose -f examples/docker-compose.observability.yml up -d
 ---
 
 ## Advanced Examples
-
-### Rate Limiting
-
-To test rate limiting, switch to `rate-limit-example.toml` in `docker-compose.ebpf.yml`:
-
-```yaml
-environment:
-  - HUGINN_CONFIG_PATH=/config/rate-limit-example.toml
-volumes:
-  - ./config/rate-limit-example.toml:/config/rate-limit-example.toml:ro
-  - ./certs:/config/certs:ro
-```
-
-This configuration demonstrates:
-
-- IP-based rate limiting
-- Per-route rate limits
-- Header-based limits (API keys)
-- Combined strategies
-
-**Test rate limiting:**
-
-```bash
-# Send 150 parallel requests to trigger rate limits
-# /api endpoint: 50 req/s limit, burst of 100
-seq 1 150 | xargs -P 50 -I {} curl -sk https://127.0.0.1:7000/api/test 2>&1 \
-  | grep -c "Too Many Requests"
-
-# View a 429 response
-seq 1 150 | xargs -P 50 -I {} curl -sk https://127.0.0.1:7000/api/test 2>&1 \
-  | grep "Too Many Requests" | head -1
-
-# Test different endpoints with different limits
-curl -sk https://127.0.0.1:7000/public/test     # 200 req/s
-curl -sk https://127.0.0.1:7000/premium/test    # Header-based
-```
 
 ### TLS Fingerprinting
 

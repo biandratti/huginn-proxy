@@ -108,7 +108,7 @@ impl BenchFixture {
                 health_check: None,
             }],
             domains: vec![Domain {
-                host: Some("_".to_string()),
+                host: None,
                 cert_path: Some(cert_file.path().to_string_lossy().into_owned()),
                 key_path: Some(key_file.path().to_string_lossy().into_owned()),
                 headers: None,

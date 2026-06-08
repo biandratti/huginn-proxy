@@ -30,13 +30,6 @@ backends:
       healthy_threshold: 2
 
 domains:
-  # Single catch-all domain (no `host:`) — matches any host, so it serves
-  # localhost, 127.0.0.1 and ::1 transparently with one route set instead of
-  # one duplicated block per address.
-  #
-  # Its cert is the TLS default certificate: served for connections with no SNI
-  # (IP clients, RFC 6066) and for any SNI that matches no other domain.
-  # Equivalent to a Traefik router with no Host() rule + a defaultCertificate.
   - cert_path: "/config/certs/server.crt"
     key_path: "/config/certs/server.key"
     headers:
