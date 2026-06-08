@@ -22,7 +22,7 @@ use std::sync::Arc;
 pub struct DynamicConfig {
     /// List of backend servers
     pub backends: Arc<Vec<Backend>>,
-    /// Domain entries — each groups a TLS cert with its path-based routes
+    /// Domain entries, each groups a TLS cert with its path-based routes
     pub domains: Arc<Vec<Domain>>,
     /// Preserve the original Host header from clients when forwarding
     pub preserve_host: bool,

@@ -227,7 +227,7 @@ pub fn sort_routes(routes: &mut [Route]) {
     routes.sort_by_key(|r| std::cmp::Reverse(r.prefix.len()));
 }
 
-/// Identifier used for the catch-all (host-less) domain — the entry with `host: None` —
+/// Identifier used for the catch-all (host-less) domain, the entry with `host: None` —
 /// in metrics labels and logs. Mirrors Traefik's `_default_` TLS-cert/router naming.
 pub const DEFAULT_DOMAIN_LABEL: &str = "_default_";
 
@@ -243,12 +243,10 @@ pub const DEFAULT_DOMAIN_LABEL: &str = "_default_";
 pub struct Domain {
     /// Domain pattern used for SNI matching and routing.
     ///
-    /// `Some("api.example.com")` — exact host match.
-    /// `Some("*.example.com")`   — single-label wildcard.
-    /// `None` (omit `host:`)     — catch-all: matches any host not matched by an
-    ///                             exact or wildcard entry. Mirrors a Traefik router
-    ///                             with no `Host()` rule. A catch-all with a cert
-    ///                             also acts as the TLS default certificate.
+    /// `Some("api.example.com")` : exact host match.
+    /// `Some("*.example.com")`   : single-label wildcard.
+    /// `None` (omit `host:`)     : catch-all: matches any host not matched by an exact or wildcard entry.
+    ///                             A catch-all with a cert also acts as the TLS default certificate.
     #[serde(default)]
     pub host: Option<String>,
     /// Path to the TLS certificate PEM file for this domain (optional).

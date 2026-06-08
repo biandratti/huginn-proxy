@@ -22,7 +22,7 @@ pub struct Config {
     /// List of backend servers for load balancing
     #[serde(default)]
     pub backends: Vec<Backend>,
-    /// Domain entries — each groups a TLS cert with its path-based routes (optional)
+    /// Domain entries, each groups a TLS cert with its path-based routes (optional)
     #[serde(default)]
     pub domains: Vec<Domain>,
     /// Preserve the original Host header from clients when forwarding to backends

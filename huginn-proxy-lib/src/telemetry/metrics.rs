@@ -666,8 +666,7 @@ impl Metrics {
     /// FNV-1a hash of the new `DynamicConfig` for dashboard verification.
     ///
     /// Note: a hot reload that applied routes/backends but failed to load one or more
-    /// domain certificates still counts as `success` here (Traefik-style best-effort). The
-    /// per-domain `tls_cert_reload_total{result="error"}` series is the signal for a bad cert.
+    /// domain certificates still counts as `success` here (Traefik-style best-effort).
     pub fn record_reload_success(&self, config_hash: u64) {
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)

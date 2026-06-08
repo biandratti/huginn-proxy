@@ -50,12 +50,9 @@ pub struct TlsOptions {
     ///
     /// When `true`, a TLS connection whose SNI matches no configured domain cert is
     /// rejected (`unrecognized_name`) instead of being served the default certificate
-    /// (the catch-all domain's cert). Connections with no SNI (IP clients, RFC 6066)
-    /// are still served the default cert — unlike Traefik's `sniStrict`, which also
-    /// drops those. Useful in production to reject unknown-hostname SNI (anti
-    /// domain-fronting / scanning) while keeping IP-based health checks working.
+    /// (the catch-all domain's cert).
     ///
-    /// Default: false (lenient — serve the default cert for unmatched SNI).
+    /// Default: false (lenient, serve the default cert for unmatched SNI).
     #[serde(default)]
     pub sni_strict: bool,
 }

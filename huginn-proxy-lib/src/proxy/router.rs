@@ -40,11 +40,11 @@ pub fn pick_route<'a>(path: &str, routes: &'a [Route]) -> Option<&'a str> {
 ///
 /// Matching order (most specific first):
 /// 1. Exact: `"api.example.com"` == host
-/// 2. Wildcard: `"*.example.com"` where host is `"sub.example.com"` (one level only)
-/// 3. Catch-all: the first domain with no `host` (mirrors a Traefik router with no
-///    `Host()` rule). Lets a single route set serve any host — including IP literals
-///    like `127.0.0.1` / `::1` — without enumerating each as its own domain.
-/// 4. `None` — no exact/wildcard/catch-all entry; caller returns 421.
+/// 2. Wildcard: `"*.example.com"` where host is `"sub.example.com"` (one level only;
+///    skipped for dotless hosts like `localhost`, which fall through to the catch-all)
+/// 3. Catch-all: the first domain with no `host`
+/// 4. `None` — no exact/wildcard match and no catch-all configured.
+///    (The request handler maps this to HTTP 421 Misdirected Request.)
 pub fn pick_domain<'a>(domains: &'a [Domain], host: &str) -> Option<&'a Domain> {
     // 1. Exact match
     if let Some(d) = domains.iter().find(|d| d.host.as_deref() == Some(host)) {

@@ -149,8 +149,6 @@ async fn static_source_does_not_expose_subscription(
     Ok(())
 }
 
-// TODO(step2): restore when DynamicCertResolver is implemented and
-// setup_tls_with_hot_reload no longer returns Err unconditionally.
 #[ignore]
 #[tokio::test]
 async fn setup_tls_static_no_spurious_reloads(

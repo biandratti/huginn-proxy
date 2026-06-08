@@ -120,9 +120,7 @@ pub async fn try_reload(
 
     // Reload certs best-effort, per-domain (Traefik-style): a domain whose cert fails to load
     // does not abort the reload and keeps its previously serving cert (see
-    // `DynamicCertResolver::update`). The config reload still counts as success — the only
-    // signal for a failed cert is the per-domain `tls_cert_reload_total{result="error"}` metric
-    // (emitted inside `update`) plus the error log below.
+    // `DynamicCertResolver::update`).
     let cert_report = match cert_resolver {
         Some(resolver) => resolver.update(&fresh.domains, metrics).await,
         None => crate::tls::CertReloadReport::default(),

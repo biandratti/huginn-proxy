@@ -3,10 +3,10 @@ use hyper::Request;
 /// Extract the effective hostname for domain matching.
 ///
 /// Priority:
-/// 1. TLS SNI — authoritative; set by the TLS layer before any HTTP is read.
-/// 2. URI authority — `:authority` pseudo-header (HTTP/2) or absolute-form URI (HTTP/1.1).
+/// 1. TLS SNI - authoritative; set by the TLS layer before any HTTP is read.
+/// 2. URI authority - `:authority` pseudo-header (HTTP/2) or absolute-form URI (HTTP/1.1).
 ///    Cannot be forged via application-level headers.
-/// 3. `Host` header — fallback for HTTP/1.1 origin-form requests.
+/// 3. `Host` header - fallback for HTTP/1.1 origin-form requests.
 ///
 /// IPv6 addresses are returned WITHOUT brackets (`::1` not `[::1]`) to match
 /// domain config entries and `http::Uri::host()` canonical form.
@@ -23,9 +23,6 @@ pub(crate) fn extract_request_host<B>(
     extract_request_host_inner(req, sni, is_https)
 }
 
-/// Testable core of [`extract_request_host`] — accepts SNI as a plain `&str`
-/// so tests don't need to construct a full `Ja4Fingerprints`.
-#[doc(hidden)]
 pub fn extract_request_host_inner<B>(
     req: &Request<B>,
     sni: Option<&str>,
@@ -37,8 +34,8 @@ pub fn extract_request_host_inner<B>(
             return s.to_ascii_lowercase();
         }
     }
-    // 2. URI authority — present for HTTP/2 and absolute-form HTTP/1.1.
-    //    strip_host_port normalises IPv6: http::Uri::host() returns "[::1]" (with
+    // 2. URI authority - present for HTTP/2 and absolute-form HTTP/1.1.
+    //    strip_host_port normalizes IPv6: http::Uri::host() returns "[::1]" (with
     //    brackets); strip_host_port strips them to "::1" to match the domain config.
     if let Some(raw) = req.uri().host() {
         let host = strip_host_port(raw);

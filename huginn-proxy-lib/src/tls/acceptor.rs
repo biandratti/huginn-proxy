@@ -30,7 +30,6 @@ fn load_ca_certs(path: &str) -> Result<Vec<CertificateDer<'static>>> {
 /// Builds a fully configured `ServerConfig` from in-memory certs + TLS settings.
 ///
 /// Cipher suites, ALPN, client auth, and session resumption are all applied here.
-/// Cert loading is handled by `DynamicCertResolver` (Step 2).
 pub fn build_server_config(
     certs: Vec<CertificateDer<'static>>,
     key: PrivateKeyDer<'static>,
