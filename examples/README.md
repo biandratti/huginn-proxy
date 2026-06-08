@@ -224,7 +224,8 @@ To switch configurations, edit `docker-compose.ebpf.yml` and change the `command
 ## Telemetry
 
 The observability stack runs **Prometheus** (`prom/prometheus`), **Grafana**, and **cAdvisor** as a separate Docker
-Compose project alongside the main proxy stack. Prometheus scrapes metrics from the proxy (`port 9090`) and the eBPF
+Compose project alongside the main proxy stack. Prometheus scrape config lives in `prometheus/prometheus.yml`; Grafana
+provisioning and dashboards live under `grafana/`. Prometheus scrapes metrics from the proxy (`port 9090`) and the eBPF
 agent (`port 9091`) via `host.docker.internal`, and scrapes **cAdvisor** on the compose network for per-container CPU
 and memory. Grafana is pre-provisioned with a data source and a dashboard (including a **Docker resources (cAdvisor)**
 row) — no manual setup needed. Optional cAdvisor UI: `http://localhost:8099/`.
