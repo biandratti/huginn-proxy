@@ -1,7 +1,8 @@
-use crate::helpers::{create_dummy_test_cert, create_valid_test_cert, tmp_path};
+use crate::helpers::{
+    create_dummy_test_cert, create_valid_test_cert, load_certs_keys_from_pem, tmp_path,
+};
 use huginn_proxy_lib::config::ClientAuth;
 use huginn_proxy_lib::tls::build_server_config;
-use huginn_proxy_lib::tls::cert_source::{CertSource, StaticCertSource};
 use std::fs;
 
 async fn build_from_files(
@@ -9,17 +10,9 @@ async fn build_from_files(
     key_path: &std::path::Path,
     alpn: Vec<String>,
     client_auth: ClientAuth,
-) -> huginn_proxy_lib::error::Result<()> {
-    let source = CertSource::Static(StaticCertSource::load(cert_path, key_path).await?);
-    let certs = source.current();
-    build_server_config(
-        certs.certs.clone(),
-        certs.key.clone_key(),
-        &alpn,
-        &Default::default(),
-        &client_auth,
-        &Default::default(),
-    )?;
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let (certs, key) = load_certs_keys_from_pem(cert_path, key_path).await?;
+    build_server_config(certs, key, &alpn, &Default::default(), &client_auth, &Default::default())?;
     Ok(())
 }
 

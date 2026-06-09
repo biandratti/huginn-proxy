@@ -13,7 +13,7 @@ use crate::proxy::reload::{
 use crate::proxy::shutdown::{wait_for_drain, ServiceHandle, ShutdownSender};
 pub use crate::proxy::watch::WatchOptions;
 use crate::telemetry::Metrics;
-use crate::tls::{setup_tls_with_hot_reload, DynamicCertResolver};
+use crate::tls::{build_tls_acceptor, DynamicCertResolver};
 use hyper_util::rt::{TokioExecutor, TokioTimer};
 use hyper_util::server::conn::auto::Builder as ConnBuilder;
 use std::net::SocketAddr;
@@ -84,19 +84,7 @@ pub async fn run(
 
     let tls_acceptor = match (&static_cfg.tls, &cert_resolver) {
         (Some(tls_config), Some(resolver)) => {
-            let tls_setup = setup_tls_with_hot_reload(
-                tls_config,
-                Arc::clone(resolver),
-                watch_opts.watch,
-                watch_opts.watch_delay_secs,
-                Arc::clone(&metrics),
-                shutdown_rx.clone(),
-            )
-            .await?;
-            if let Some(svc) = tls_setup.reload_handle {
-                services.push(svc);
-            }
-            Some(tls_setup.acceptor)
+            Some(build_tls_acceptor(tls_config, Arc::clone(resolver)).await?)
         }
         _ => None,
     };

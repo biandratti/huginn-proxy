@@ -1,7 +1,6 @@
-use crate::helpers::create_valid_test_cert;
+use crate::helpers::{create_valid_test_cert, load_certs_keys_from_pem};
 use huginn_proxy_lib::config::{ClientAuth, TlsOptions};
 use huginn_proxy_lib::tls::build_server_config;
-use huginn_proxy_lib::tls::cert_source::{CertSource, StaticCertSource};
 use huginn_proxy_lib::tls::cipher_suites::supported_cipher_suites;
 use huginn_proxy_lib::tls::curves::supported_curves;
 
@@ -11,16 +10,8 @@ async fn build_acceptor_from_files(
     options: TlsOptions,
     alpn: Vec<String>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let source = CertSource::Static(StaticCertSource::load(cert_path, key_path).await?);
-    let certs = source.current();
-    build_server_config(
-        certs.certs.clone(),
-        certs.key.clone_key(),
-        &alpn,
-        &options,
-        &ClientAuth::Disabled,
-        &Default::default(),
-    )?;
+    let (certs, key) = load_certs_keys_from_pem(cert_path, key_path).await?;
+    build_server_config(certs, key, &alpn, &options, &ClientAuth::Disabled, &Default::default())?;
     Ok(())
 }
 

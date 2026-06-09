@@ -1,26 +1,38 @@
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use huginn_proxy_lib::{ShutdownSender, ShutdownWatch};
+use rustls_pki_types::pem::PemObject;
+use rustls_pki_types::{CertificateDer, PrivateKeyDer};
 
-/// Return a `(ShutdownSender, ShutdownWatch)` pair that never fires.
-///
-/// Both halves must be kept alive for the duration of the test.
-/// Assign the sender to a named variable (`_shutdown_tx`, not `_`) so that
-/// Rust keeps it alive until the end of the scope instead of dropping it immediately.
-/// Dropping the sender closes the channel and causes any task that calls
-/// `shutdown_rx.wait_for(|v| *v)` to receive `Err`, which is treated as a
-/// shutdown signal, the task exits without doing any useful work.
-///
-/// # Example
-/// ```rust
-/// let (_shutdown_tx, shutdown_rx) = never_shutdown();
-/// let setup = setup_tls_with_hot_reload(&config, true, 60, metrics, shutdown_rx).await?;
-/// ```
-pub fn never_shutdown() -> (ShutdownSender, ShutdownWatch) {
-    huginn_proxy_lib::shutdown_channel()
+/// Load a certificate chain and private key from PEM files on disk.
+pub async fn load_certs_keys_from_pem(
+    cert_path: &Path,
+    key_path: &Path,
+) -> Result<
+    (Vec<CertificateDer<'static>>, PrivateKeyDer<'static>),
+    Box<dyn std::error::Error + Send + Sync>,
+> {
+    let cert_bytes = tokio::fs::read(cert_path).await?;
+    let certs: Vec<CertificateDer<'static>> = CertificateDer::pem_slice_iter(&cert_bytes)
+        .collect::<Result<Vec<_>, _>>()?
+        .into_iter()
+        .map(|c| c.into_owned())
+        .collect();
+    if certs.is_empty() {
+        return Err("No certificates found".into());
+    }
+
+    let key_bytes = tokio::fs::read(key_path).await?;
+    let mut keys: Vec<PrivateKeyDer<'static>> = PrivateKeyDer::pem_slice_iter(&key_bytes)
+        .collect::<Result<Vec<_>, _>>()?
+        .into_iter()
+        .map(|k| k.clone_key())
+        .collect();
+    let key = keys.pop().ok_or("No private keys found")?;
+
+    Ok((certs, key))
 }
 
 /// Generate a temporary file path for testing
@@ -80,25 +92,18 @@ pub fn create_valid_test_cert(
 /// The bytes are syntactically arbitrary rustls will reject them.
 /// Use for tests that exercise the error path of `build_tls_acceptor` or
 /// similar functions without needing cryptographically valid material.
-pub fn generate_dummy_test_cert_der() -> (
-    rustls_pki_types::CertificateDer<'static>,
-    rustls_pki_types::PrivateKeyDer<'static>,
-) {
+pub fn generate_dummy_test_cert_der() -> (CertificateDer<'static>, PrivateKeyDer<'static>) {
     ensure_crypto_provider();
-    let cert = rustls_pki_types::CertificateDer::from(b"dummy cert".to_vec());
-    let key = rustls_pki_types::PrivateKeyDer::Pkcs8(rustls_pki_types::PrivatePkcs8KeyDer::from(
-        b"dummy key".to_vec(),
-    ));
+    let cert = CertificateDer::from(b"dummy cert".to_vec());
+    let key =
+        PrivateKeyDer::Pkcs8(rustls_pki_types::PrivatePkcs8KeyDer::from(b"dummy key".to_vec()));
     (cert, key)
 }
 
 /// Generate valid test certificates as DER (for direct use with rustls)
 /// Returns CertificateDer and PrivateKeyDer for direct use in ServerConfig
 pub fn generate_valid_test_cert_der() -> Result<
-    (
-        rustls_pki_types::CertificateDer<'static>,
-        rustls_pki_types::PrivateKeyDer<'static>,
-    ),
+    (CertificateDer<'static>, PrivateKeyDer<'static>),
     Box<dyn std::error::Error + Send + Sync>,
 > {
     ensure_crypto_provider();
@@ -106,10 +111,10 @@ pub fn generate_valid_test_cert_der() -> Result<
     let rcgen::CertifiedKey { cert, signing_key } =
         rcgen::generate_simple_self_signed(subject_alt_names)?;
 
-    let cert_der = rustls_pki_types::CertificateDer::from(cert.der().to_vec());
-    let key_der = rustls_pki_types::PrivateKeyDer::Pkcs8(
-        rustls_pki_types::PrivatePkcs8KeyDer::from(signing_key.serialize_der()),
-    );
+    let cert_der = CertificateDer::from(cert.der().to_vec());
+    let key_der = PrivateKeyDer::Pkcs8(rustls_pki_types::PrivatePkcs8KeyDer::from(
+        signing_key.serialize_der(),
+    ));
 
     Ok((cert_der, key_der))
 }

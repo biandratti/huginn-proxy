@@ -30,7 +30,7 @@ fn domain(host: &str, routes: Vec<Route>) -> Domain {
     }
 }
 
-/// A host-less (catch-all) domain — matches any host not matched exactly/by wildcard.
+/// A host-less (catch-all) domain matches any host not matched exactly/by wildcard.
 fn catch_all(routes: Vec<Route>) -> Domain {
     Domain { host: None, cert_path: None, key_path: None, headers: None, routes }
 }
