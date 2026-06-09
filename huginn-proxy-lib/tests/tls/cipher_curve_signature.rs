@@ -1,24 +1,19 @@
-use crate::helpers::{create_valid_test_cert, load_certs_keys_from_pem};
+use super::build_acceptor;
 use huginn_proxy_lib::config::{ClientAuth, TlsOptions};
-use huginn_proxy_lib::tls::build_server_config;
 use huginn_proxy_lib::tls::cipher_suites::supported_cipher_suites;
 use huginn_proxy_lib::tls::curves::supported_curves;
 
-async fn build_acceptor_from_files(
-    cert_path: &std::path::Path,
-    key_path: &std::path::Path,
-    options: TlsOptions,
-    alpn: Vec<String>,
+fn build_with_options(
+    options: &TlsOptions,
+    alpn: &[String],
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let (certs, key) = load_certs_keys_from_pem(cert_path, key_path).await?;
-    build_server_config(certs, key, &alpn, &options, &ClientAuth::Disabled, &Default::default())?;
+    build_acceptor(alpn, options, &ClientAuth::Disabled)?;
     Ok(())
 }
 
-#[tokio::test]
-async fn test_different_cipher_suites_produce_different_configs(
+#[test]
+fn test_different_cipher_suites_produce_different_configs(
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let (cert_path, key_path) = create_valid_test_cert()?;
     let supported = supported_cipher_suites();
 
     let options1 = TlsOptions {
@@ -38,15 +33,8 @@ async fn test_different_cipher_suites_produce_different_configs(
         ..Default::default()
     };
 
-    let result1 =
-        build_acceptor_from_files(&cert_path, &key_path, options1.clone(), vec!["h2".to_string()])
-            .await;
-    let result2 =
-        build_acceptor_from_files(&cert_path, &key_path, options2.clone(), vec!["h2".to_string()])
-            .await;
-
-    let _ = std::fs::remove_file(&cert_path);
-    let _ = std::fs::remove_file(&key_path);
+    let result1 = build_with_options(&options1, &["h2".to_string()]);
+    let result2 = build_with_options(&options2, &["h2".to_string()]);
 
     assert!(result1.is_ok(), "should succeed with TLS 1.3 cipher suites");
     assert!(result2.is_ok(), "should succeed with TLS 1.2 cipher suites");
@@ -63,25 +51,16 @@ async fn test_different_cipher_suites_produce_different_configs(
     Ok(())
 }
 
-#[tokio::test]
-async fn test_different_curve_preferences_produce_different_configs(
+#[test]
+fn test_different_curve_preferences_produce_different_configs(
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let (cert_path, key_path) = create_valid_test_cert()?;
-
     let options1 =
         TlsOptions { curve_preferences: vec!["X25519".to_string()], ..Default::default() };
     let options2 =
         TlsOptions { curve_preferences: vec!["secp256r1".to_string()], ..Default::default() };
 
-    let result1 =
-        build_acceptor_from_files(&cert_path, &key_path, options1.clone(), vec!["h2".to_string()])
-            .await;
-    let result2 =
-        build_acceptor_from_files(&cert_path, &key_path, options2.clone(), vec!["h2".to_string()])
-            .await;
-
-    let _ = std::fs::remove_file(&cert_path);
-    let _ = std::fs::remove_file(&key_path);
+    let result1 = build_with_options(&options1, &["h2".to_string()]);
+    let result2 = build_with_options(&options2, &["h2".to_string()]);
 
     assert!(result1.is_ok(), "should succeed with X25519 curve");
     assert!(result2.is_ok(), "should succeed with secp256r1 curve");
@@ -92,10 +71,9 @@ async fn test_different_curve_preferences_produce_different_configs(
     Ok(())
 }
 
-#[tokio::test]
-async fn test_combined_cipher_and_curve_configs(
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let (cert_path, key_path) = create_valid_test_cert()?;
+#[test]
+fn test_combined_cipher_and_curve_configs() -> Result<(), Box<dyn std::error::Error + Send + Sync>>
+{
     let supported_suites = supported_cipher_suites();
     let supported_curves_list = supported_curves();
 
@@ -105,12 +83,7 @@ async fn test_combined_cipher_and_curve_configs(
         ..Default::default()
     };
 
-    let result =
-        build_acceptor_from_files(&cert_path, &key_path, options.clone(), vec!["h2".to_string()])
-            .await;
-
-    let _ = std::fs::remove_file(&cert_path);
-    let _ = std::fs::remove_file(&key_path);
+    let result = build_with_options(&options, &["h2".to_string()]);
 
     assert!(result.is_ok(), "should succeed with combined cipher and curve configs");
     assert_eq!(options.cipher_suites.len(), 2);

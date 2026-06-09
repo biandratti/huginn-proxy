@@ -6,8 +6,7 @@ pub mod curves;
 pub mod metrics;
 pub mod session_resumption;
 pub mod setup;
-
-pub use acceptor::{build_server_config, build_server_config_with_resolver};
+pub use acceptor::build_server_config_with_resolver;
 pub use cert_resolver::{CertReloadReport, DynamicCertResolver};
 pub use cert_source::{cert_chain_hash, ServerCertsKeys};
 pub use cipher_suites::{is_cipher_suite_supported, supported_cipher_suites};

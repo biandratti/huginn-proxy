@@ -1,10 +1,8 @@
 use std::sync::Arc;
 
-use crate::helpers::{generate_dummy_test_cert_der, generate_valid_test_cert_der};
+use super::build_acceptor;
 use huginn_proxy_lib::config::{ClientAuth, TlsConfig, TlsOptions};
-use huginn_proxy_lib::tls::{
-    build_server_config, build_tls_acceptor, cert_chain_hash, DynamicCertResolver, ServerCertsKeys,
-};
+use huginn_proxy_lib::tls::{build_tls_acceptor, cert_chain_hash, DynamicCertResolver};
 use tokio_rustls::rustls::{CipherSuite, ServerConfig};
 
 /// `build_tls_acceptor` builds a working acceptor from a populated
@@ -22,27 +20,8 @@ async fn build_tls_acceptor_produces_usable_acceptor(
     };
 
     let acceptor = build_tls_acceptor(&config, Arc::new(DynamicCertResolver::new(false))).await?;
+    // Acceptor must have been built successfully and be loadable.
     let _ = acceptor.load();
-    Ok(())
-}
-
-#[test]
-fn build_server_config_rejects_invalid_certs(
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let (cert, key) = generate_dummy_test_cert_der();
-    let server_certs_keys = ServerCertsKeys { certs: vec![cert], key };
-    let alpn = vec!["h2".to_string()];
-    let options = TlsOptions::default();
-
-    let result = build_server_config(
-        server_certs_keys.certs.clone(),
-        server_certs_keys.key.clone_key(),
-        &alpn,
-        &options,
-        &ClientAuth::Disabled,
-        &Default::default(),
-    );
-    assert!(result.is_err(), "dummy DER bytes must fail to build a ServerConfig");
     Ok(())
 }
 
@@ -55,34 +34,25 @@ fn cipher_suites_of(server: &ServerConfig) -> Vec<CipherSuite> {
         .collect()
 }
 
-#[tokio::test]
-async fn cipher_suites_applied_on_initial_build(
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let (cert, key) = generate_valid_test_cert_der()?;
-
+#[test]
+fn cipher_suites_applied_on_initial_build() -> Result<(), Box<dyn std::error::Error + Send + Sync>>
+{
     let options = TlsOptions {
         cipher_suites: vec!["TLS13_AES_128_GCM_SHA256".to_string()],
         ..Default::default()
     };
-    let server = build_server_config(
-        vec![cert],
-        key,
-        &[],
-        &options,
-        &ClientAuth::Disabled,
-        &Default::default(),
-    )?;
+    let acceptor = build_acceptor(&[], &options, &ClientAuth::Disabled)?;
 
     assert_eq!(
-        cipher_suites_of(&server),
+        cipher_suites_of(acceptor.config()),
         vec![CipherSuite::TLS13_AES_128_GCM_SHA256],
-        "build_server_config must apply the configured cipher suites, not the provider defaults"
+        "the resolver acceptor must apply the configured cipher suites, not the provider defaults"
     );
     Ok(())
 }
 
-#[tokio::test]
-async fn cert_chain_hash_changes_when_certificate_chain_changes(
+#[test]
+fn cert_chain_hash_changes_when_certificate_chain_changes(
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     use rustls_pki_types::CertificateDer;
 

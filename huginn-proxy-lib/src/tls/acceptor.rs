@@ -1,5 +1,5 @@
 use rustls_pki_types::pem::PemObject;
-use rustls_pki_types::{CertificateDer, PrivateKeyDer};
+use rustls_pki_types::CertificateDer;
 use std::sync::Arc;
 use tokio_rustls::rustls::crypto::aws_lc_rs as aws_lc_provider;
 use tokio_rustls::rustls::crypto::CryptoProvider;
@@ -27,71 +27,10 @@ fn load_ca_certs(path: &str) -> Result<Vec<CertificateDer<'static>>> {
         .map_err(|e| ProxyError::Tls(format!("Failed to parse client CA certificates: {e}")))
 }
 
-/// Builds a fully configured `ServerConfig` from in-memory certs + TLS settings.
-///
-/// Cipher suites, ALPN, client auth, and session resumption are all applied here.
-pub fn build_server_config(
-    certs: Vec<CertificateDer<'static>>,
-    key: PrivateKeyDer<'static>,
-    alpn: &[String],
-    options: &TlsOptions,
-    client_auth: &ClientAuth,
-    session_resumption: &crate::config::SessionResumptionConfig,
-) -> Result<ServerConfig> {
-    validate_tls_options(options)?;
-
-    // Build a CryptoProvider with the requested cipher suites, falling back to
-    // aws-lc-rs defaults when none are specified. All other provider fields
-    // (key exchange groups, signature algorithms, …) keep the defaults.
-    let provider = if options.cipher_suites.is_empty() {
-        aws_lc_provider::default_provider()
-    } else {
-        CryptoProvider {
-            cipher_suites: resolve_cipher_suites(&options.cipher_suites),
-            ..aws_lc_provider::default_provider()
-        }
-    };
-
-    let builder = ServerConfig::builder_with_provider(Arc::new(provider))
-        .with_safe_default_protocol_versions()
-        .map_err(|e| ProxyError::Tls(format!("Failed to set TLS protocol versions: {e}")))?;
-
-    let mut server = match client_auth {
-        ClientAuth::Required { ca_cert_path } => {
-            let client_ca_certs = load_ca_certs(ca_cert_path)?;
-            let mut root_store = RootCertStore::empty();
-            for cert in client_ca_certs {
-                root_store
-                    .add(cert)
-                    .map_err(|e| ProxyError::Tls(format!("Failed to add CA certificate: {e}")))?;
-            }
-            let client_verifier = WebPkiClientVerifier::builder(Arc::new(root_store))
-                .build()
-                .map_err(|e| ProxyError::Tls(format!("Failed to build client verifier: {e}")))?;
-            builder
-                .with_client_cert_verifier(client_verifier)
-                .with_single_cert(certs, key)
-                .map_err(|e| ProxyError::Tls(format!("Failed to build TLS config: {e}")))?
-        }
-        ClientAuth::Disabled => builder
-            .with_no_client_auth()
-            .with_single_cert(certs, key)
-            .map_err(|e| ProxyError::Tls(format!("Failed to build TLS config: {e}")))?,
-    };
-
-    if !alpn.is_empty() {
-        server.alpn_protocols = alpn.iter().map(|s| s.as_bytes().to_vec()).collect();
-    }
-
-    configure_session_resumption(&mut server, session_resumption);
-
-    Ok(server)
-}
-
 /// Builds a `ServerConfig` that uses a `DynamicCertResolver` for SNI-based cert selection.
 ///
-/// All TLS options (cipher suites, ALPN, client auth, session resumption) are applied
-/// exactly as in `build_server_config`; only cert provisioning differs.
+/// Cipher suites, ALPN, client auth, and session resumption are all applied here; cert
+/// provisioning is delegated to the resolver (populated via `DynamicCertResolver::update`).
 pub fn build_server_config_with_resolver(
     resolver: Arc<dyn ResolvesServerCert>,
     alpn: &[String],
