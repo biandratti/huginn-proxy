@@ -65,6 +65,28 @@ round-robin selection (multi-upstream groups).
 
 Limitation: No regex support. Only simple prefix matching.
 
+## Multi-Domain Routing
+
+**Virtual hosting with per-domain certificates and routes**
+
+Routes are grouped under `[[domains]]` entries. Each domain owns a `host` pattern, an optional TLS certificate
+(`cert_path` / `key_path`), optional domain-scoped `headers`, and its own set of `routes`. A request is first matched to
+a domain by host, then to a route by prefix within that domain.
+
+Host matching order is **exact host → single-label wildcard (`*.example.com`) → catch-all**. The catch-all is the entry
+with no `host` field (at most one is allowed); it matches any host not claimed by an exact or wildcard entry, including
+IP literals and `localhost`. A request whose host matches no domain is answered with **421 Misdirected Request**.
+
+The host itself is resolved from the most trustworthy source available: TLS SNI first, then the request URI authority
+(`:authority` / absolute-form URI), then the `Host` header. SNI and authority cannot be forged by a downstream `Host`
+header, so cert selection and routing stay consistent. Host comparison is case-insensitive and IPv6 brackets are
+stripped before matching (`[::1]` matches a domain configured as `::1`).
+
+`cert_path` and `key_path` are optional but must be supplied together — omit both for a plain-HTTP domain. Specifying
+only one is a validation error. Duplicate hosts and more than one catch-all are also rejected at config load.
+
+Limitation: Wildcard is one label deep only. Routing is host + path prefix; no header- or method-based routing.
+
 ## Rate Limiting
 
 **Token bucket algorithm**
@@ -84,9 +106,12 @@ Limitation: No distributed rate limiting across multiple proxy instances. Limits
 HSTS is configurable with max-age, includeSubdomains, and preload directives. CSP policies are customizable. Any custom
 header can be added to all responses.
 
-Headers are added on the way out, not on the way in. They apply to all routes globally.
+Header manipulation (add/remove on both request and response) can be configured at three scopes: **global**,
+**per-domain** (`[domains.headers]`), and **per-route** (`[domains.routes.headers]`). They are applied in the order
+**global → domain → route**, with the most specific scope winning when the same header name is set at multiple levels.
+Within each scope, removals are applied before additions.
 
-Limitation: No per-route header configuration.
+Limitation: No header-value templating; values are static strings.
 
 ## IP Filtering
 
@@ -104,10 +129,23 @@ Limitation: No geographic filtering or ASN-based rules.
 Configurable cipher suites, curve preferences, and TLS version restrictions (1.2 and 1.3 supported). ALPN works for
 HTTP/2 negotiation.
 
+**SNI-based multi-certificate selection.** The proxy serves a different certificate per domain, selected from the TLS
+ClientHello SNI. Each `[[domains]]` entry carries its own `cert_path` / `key_path`. The resolver picks a certificate by
+**exact host → single-label wildcard (`*.example.com`) → default**. The default certificate is the one attached to the
+catch-all (host-less) domain, and it is also served to clients that send no SNI (e.g. connecting by IP). When
+`[tls.options].sni_strict = true`, an SNI hostname that matches no configured domain is rejected with
+`unrecognized_name` instead of falling back to the default cert (mirrors Traefik's `sniStrict`); the no-SNI case still
+gets the default cert on purpose. Default is `sni_strict = false`. See the **Multi-Domain Routing** section below for
+how domains tie certificates to routes.
+
 Certificate hot reload watches the cert files and reloads them when they change. Uses a configurable delay to avoid
 reloading too frequently. The same `ServerConfig` builder is used at startup and on every hot reload, so cipher suites,
 ALPN, client auth, and session resumption settings are applied identically in both paths — no drift between the initial
 configuration and reloaded certificates.
+
+Reloading is **best-effort and per-domain** (Traefik-style): if one domain's new certificate fails to load, the other
+domains still swap to their fresh certs, and the failing domain keeps serving its previously loaded certificate so a
+transient file issue never drops TLS for that domain.
 
 Each successful load or rotation increments `huginn_tls_cert_reload_total{result="success"}`, updates
 `huginn_tls_cert_last_reload_timestamp_seconds`, and publishes the new certificate-chain content hash via
@@ -122,9 +160,9 @@ exact set offered to clients. Names are validated at startup against the suites 
 is no silent fallback. When `cipher_suites` is empty or omitted, the proxy uses the safe defaults provided by
 `aws-lc-rs`.
 
-Limitation: Only one certificate per proxy instance. No SNI support for serving multiple domains with different certs.
-Cipher suite list is global, not per-route or per-listener; the provider itself (`aws-lc-rs`) is not configurable from
-the TOML file.
+Limitation: Wildcard matching is single-label only (`*.example.com` matches `api.example.com` but not
+`a.b.example.com`). The cipher suite list is global — the same set is offered for every domain, since SNI selects the
+certificate but not the TLS parameters.
 
 ## TLS Session Resumption
 
@@ -241,9 +279,10 @@ lifecycle.
 
 **TOML-based config files**
 
-Single config file for everything. Dynamic sections (backends, routes, rate limits, IP filtering, headers, security
-headers, connection pool) are hot-reloaded via SIGHUP or file watcher — no connections are dropped. Static sections (
-listen addresses, TLS options, fingerprinting flags, logging, telemetry, timeouts) require a restart.
+Single config file for everything. Dynamic sections (domains, certificates, backends, routes, rate limits, IP
+filtering, headers, security headers, connection pool) are hot-reloaded via SIGHUP or file watcher, no connections are
+dropped. Static sections (listen addresses, TLS options, fingerprinting flags, logging, telemetry, timeouts) require a
+restart.
 
 Config validation available via `--validate` flag (like `nginx -t`) for use in CI/CD pipelines.
 
@@ -256,6 +295,11 @@ Limitation: No API for dynamic config changes.
 Metrics server runs on a separate port (configurable via `telemetry.metrics_port`). Covers connections, requests, TLS,
 fingerprinting, backends, throughput, rate limiting, IP filtering, header manipulation, mTLS, config hot reload, and
 TLS certificate hot reload (cert hash + last-reload timestamp + attempt counter).
+
+Request and backend metrics carry a `domain` label so traffic can be broken down per virtual host. The catch-all
+(host-less) domain reports as `_default_`, and wildcard domains collapse all their subdomains into the configured
+pattern (e.g. `*.example.com`), keeping cardinality bounded by the number of configured domains rather than by request
+hosts.
 
 Health endpoints: `/health` (general), `/ready` (Kubernetes readiness), `/live` (Kubernetes liveness), `/metrics` (
 Prometheus).

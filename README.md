@@ -47,13 +47,17 @@ See [`examples/`](examples/).
 - **Connection Pooling** - Automatic connection reuse to backends for reduced latency (bypasses pooling per-route for
   fingerprinting)
 - **Path-based Routing** - Route matching with prefix support, path stripping, and path rewriting
+- **Multi-Domain (SNI)** - Virtual hosting with per-domain certificates and routes; SNI-based cert selection (exact →
+  `*.wildcard` → default catch-all), optional `sni_strict`, best-effort per-domain cert reload, and a `domain` metric
+  label
 - **Backend health checks** - Optional TCP or HTTP `GET` probes with 502 fast-fail when an upstream is unhealthy
 - **Rate Limiting** - Token bucket algorithm with multiple strategies (IP, Header, Route, Combined), global and
   per-route limits
-- **Header Manipulation** - Add or remove request/response headers globally or per-route for security and customization
+- **Header Manipulation** - Add or remove request/response headers at global, per-domain, or per-route scope
+  (global → domain → route precedence)
 - **Security Headers** - HSTS, CSP, X-Frame-Options, and custom headers
 - **IP Filtering (ACL)** - Allowlist/denylist with CIDR notation support
-- **TLS Termination** - Server-side TLS with ALPN, certificate hot reload (single certificate per configuration)
+- **TLS Termination** - Server-side TLS with ALPN and per-domain certificate hot reload (SNI-based multi-cert selection)
 - **TLS Session Resumption** - Support for TLS 1.2 session IDs and TLS 1.3 session tickets
 - **mTLS (Mutual TLS)** - Client certificate authentication for secure service-to-service communication
 - **Granular Timeouts** - TLS handshake and connection handling timeouts for resource protection

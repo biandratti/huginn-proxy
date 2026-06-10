@@ -227,9 +227,12 @@ same `host` (after lowercasing) or if more than one catch-all (host-less) domain
 - SNI matches an exact/wildcard domain → that domain's cert.
 - No SNI (IP clients, RFC 6066) or SNI matches nothing → the **default certificate**, i.e. the
   cert on the catch-all (`host`-less) entry. Equivalent to Traefik's `defaultCertificate`.
-- If there is no catch-all cert, an unknown/absent SNI is rejected with TLS `unrecognized_name`
-  (equivalent to Traefik `sniStrict: true`). To run strict, simply give the catch-all no cert
-  (or define no catch-all).
+- Unknown/absent SNI with no default cert → rejected with TLS `unrecognized_name` (nothing to
+  serve).
+- For strict hostname enforcement while keeping IP/no-SNI access working, set
+  `[tls.options].sni_strict = true` (see below) — unknown-hostname SNI is rejected, but no-SNI
+  clients still receive the default cert. This is the true equivalent of Traefik's
+  `sniStrict: true`.
 
 | Key         | Type   | Default | Description                                                                                      |
 |-------------|--------|---------|--------------------------------------------------------------------------------------------------|
