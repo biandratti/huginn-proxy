@@ -9,6 +9,7 @@ fn domain(host: Option<&str>, cert: &std::path::Path, key: &std::path::Path) -> 
         cert_path: Some(cert.display().to_string()),
         key_path: Some(key.display().to_string()),
         headers: None,
+        security: None,
         routes: vec![],
     }
 }

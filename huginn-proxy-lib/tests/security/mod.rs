@@ -5,4 +5,5 @@ pub mod rate_limit_config;
 pub mod rate_limit_estimator;
 pub mod rate_limit_key;
 pub mod rate_limit_limiter;
+pub mod rate_limit_manager;
 pub mod rate_limit_rate;

@@ -31,6 +31,19 @@ add = [
     { name = "X-Proxy", value = "huginn-proxy" },
 ]
 
+# [domains.security.ip_filter]
+# mode = "allowlist"
+# allowlist = ["10.0.0.0/8", "192.168.0.0/16"]
+#
+# [domains.security.rate_limit]
+# enabled = true
+# requests_per_second = 50
+# burst = 100
+#
+# [domains.security.headers.hsts]
+# enabled = true
+# max_age = 63072000
+
 [[domains.routes]]
 prefix = "/api"
 backend = "backend-a:9000"
@@ -85,7 +98,7 @@ backend = "unreachable-backend:9000"
 prefix = "/rl"
 backend = "backend-a:9000"
 
-[domains.routes.rate_limit]
+[domains.routes.security.rate_limit]
 enabled = true
 requests_per_second = 1
 burst = 3
@@ -96,7 +109,7 @@ limit_by = "ip"
 prefix = "/rl-bypass"
 backend = "backend-a:9000"
 
-[domains.routes.rate_limit]
+[domains.routes.security.rate_limit]
 enabled = true
 requests_per_second = 1
 burst = 3

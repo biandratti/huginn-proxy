@@ -92,18 +92,35 @@ pub async fn handle_proxy_request(
         }
     }
 
-    if let Err(e) = check_ip_access(peer, &security.ip_filter, &metrics) {
-        let status_code = StatusCode::from(e.clone()).as_u16();
-        metrics.record_entrypoint_request(&method, status_code, &protocol);
-        return Err(e);
-    }
-
     let path = req.uri().path();
     let host = extract_request_host(&req, ja4_fingerprints.as_ref(), is_https);
 
     let domain = crate::proxy::router::pick_domain(&domains, &host);
     let domain_headers = domain.and_then(|d| d.headers.as_ref());
     let domain_label: &str = domain.map_or(DEFAULT_DOMAIN_LABEL, Domain::label);
+
+    // Resolve the effective security policy for this request. A per-domain `security` block
+    // fully replaces the matching global policy (whole-block override); a sub-block the domain
+    // does not set inherits the global `[security]` policy. The no-domain (421) path has no
+    // override, so the global policy applies, preserving "IP filtering applies to everything".
+    let domain_security = domain.and_then(|d| d.security.as_ref());
+    let effective_ip_filter = domain_security
+        .and_then(|s| s.ip_filter.as_ref())
+        .unwrap_or(&security.ip_filter);
+    let effective_rate_limit = domain_security
+        .and_then(|s| s.rate_limit.as_ref())
+        .unwrap_or(&security.rate_limit_config);
+    let effective_security_headers = domain_security
+        .and_then(|s| s.headers.as_ref())
+        .unwrap_or(&security.headers);
+
+    // IP filter runs after domain resolution so a domain can override the ACL, but still before
+    // route selection / 421 so a blocked client never learns whether a route exists.
+    if let Err(e) = check_ip_access(peer, effective_ip_filter, &metrics) {
+        let status_code = StatusCode::from(e.clone()).as_u16();
+        metrics.record_entrypoint_request(&method, status_code, &protocol);
+        return Err(e);
+    }
 
     let route_match = match domain {
         None => {
@@ -158,7 +175,7 @@ pub async fn handle_proxy_request(
 
     if let Some(rate_limited_response) = check_rate_limit(
         security.rate_limit_manager.as_ref(),
-        &security.rate_limit_config,
+        effective_rate_limit,
         &route_match,
         peer,
         req.headers(),
@@ -295,7 +312,7 @@ pub async fn handle_proxy_request(
             metrics: Arc::clone(&metrics),
             matched_prefix: route_match.matched_prefix,
             replace_path: route_match.replace_path,
-            security_headers: Some(&security.headers),
+            security_headers: Some(effective_security_headers),
             is_https,
             preserve_host,
             route: route_match.matched_prefix,

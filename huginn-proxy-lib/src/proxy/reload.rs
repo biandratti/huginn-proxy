@@ -177,6 +177,12 @@ fn audit_config_changes(old: &DynamicConfig, new: &DynamicConfig) {
         if let Some(old_domain) = old.domains.iter().find(|d| d.host == domain.host) {
             if old_domain != domain {
                 info!(host = domain.label(), "Config diff: domain changed");
+                if old_domain.security != domain.security {
+                    info!(
+                        host = domain.label(),
+                        "Config diff: domain security policy changed (ip_filter / rate_limit / headers)"
+                    );
+                }
             }
         }
     }

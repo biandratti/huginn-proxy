@@ -146,6 +146,75 @@ backends = [{ address = "b:9000" }]
 }
 
 #[test]
+fn loads_per_domain_security_override() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    use huginn_proxy_lib::config::IpFilterMode;
+
+    let path = tmp_path("domain-security");
+    let toml = r#"
+listen = { addrs = ["127.0.0.1:0"] }
+backends = [{ address = "backend:9000" }]
+
+[security.ip_filter]
+mode = "denylist"
+denylist = ["10.0.0.0/8"]
+
+[security.rate_limit]
+enabled = true
+requests_per_second = 1000
+
+[[domains]]
+host = "api.example.com"
+routes = [{ prefix = "/", backend = "backend:9000" }]
+
+[domains.security.ip_filter]
+mode = "allowlist"
+allowlist = ["192.168.0.0/16"]
+
+[domains.security.rate_limit]
+enabled = true
+requests_per_second = 5
+burst = 5
+
+[domains.security.headers.hsts]
+enabled = true
+max_age = 600
+"#;
+    fs::write(&path, toml)?;
+
+    let cfg = load_from_path(&path)?;
+    let security = cfg.domains[0]
+        .security
+        .as_ref()
+        .ok_or("domain security should be present")?;
+
+    let ip_filter = security
+        .ip_filter
+        .as_ref()
+        .ok_or("ip_filter should be present")?;
+    assert_eq!(ip_filter.mode, IpFilterMode::Allowlist);
+    assert_eq!(ip_filter.allowlist.len(), 1);
+    assert!(ip_filter.denylist.is_empty());
+
+    let rate_limit = security
+        .rate_limit
+        .as_ref()
+        .ok_or("rate_limit should be present")?;
+    assert!(rate_limit.enabled);
+    assert_eq!(rate_limit.requests_per_second, 5);
+    assert_eq!(rate_limit.burst, 5);
+
+    let headers = security
+        .headers
+        .as_ref()
+        .ok_or("headers should be present")?;
+    assert!(headers.hsts.enabled);
+    assert_eq!(headers.hsts.max_age, 600);
+
+    let _ = fs::remove_file(&path);
+    Ok(())
+}
+
+#[test]
 fn rejects_invalid_health_check_timeout_greater_than_interval(
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let path = tmp_path("bad-hc");

@@ -35,6 +35,27 @@ pub(crate) fn default_max_connections() -> usize {
     512
 }
 
+/// Per-domain security policy override (`[domains.security]`).
+///
+/// Each field, when present, **fully replaces** the corresponding global policy for that
+/// domain (whole-block replace, including the ability to disable a globally-enabled policy —
+/// e.g. an `ip_filter` with `mode = "disabled"` or a `rate_limit` with `enabled = false`).
+/// Fields left unset inherit the global `[security]` policy. `max_connections` is global only
+/// (process-level, static) and is intentionally not part of this block.
+#[derive(Debug, Deserialize, Clone, PartialEq, Default)]
+pub struct DomainSecurityConfig {
+    /// Security headers for this domain. Replaces global `[security.headers]` when present.
+    #[serde(default)]
+    pub headers: Option<SecurityHeaders>,
+    /// IP filter (ACL) for this domain. Replaces global `[security.ip_filter]` when present.
+    #[serde(default)]
+    pub ip_filter: Option<IpFilterConfig>,
+    /// Rate limit policy for this domain. Replaces global `[security.rate_limit]` when present.
+    /// Per-route rate-limit overrides then overlay onto this domain-effective config.
+    #[serde(default)]
+    pub rate_limit: Option<RateLimitConfig>,
+}
+
 /// Dynamic security configuration (hot-reloadable at runtime via ArcSwap)
 ///
 /// Contains only the fields that can change without restart. `max_connections`
@@ -239,6 +260,18 @@ impl Default for RateLimitConfig {
             trusted_proxies: vec![],
         }
     }
+}
+
+/// Per-route security policy override (`[domains.routes.security]`).
+///
+/// Mirrors the per-domain `security` block so a security policy always lives under `security`
+/// at every scope (global → domain → route). Currently only `rate_limit` is supported at the
+/// route scope; the wrapper keeps room for `ip_filter` / `headers` to be added symmetrically.
+#[derive(Debug, Deserialize, Clone, PartialEq, Default)]
+pub struct RouteSecurityConfig {
+    /// Rate limit overrides for this route. Overlays onto the domain-effective rate-limit config.
+    #[serde(default)]
+    pub rate_limit: Option<RouteRateLimitConfig>,
 }
 
 /// Per-route rate limiting configuration

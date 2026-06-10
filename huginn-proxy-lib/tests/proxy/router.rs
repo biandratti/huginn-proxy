@@ -10,7 +10,7 @@ fn route(prefix: &str, backend: &str) -> Route {
         fingerprinting: true,
         force_new_connection: false,
         replace_path: None,
-        rate_limit: None,
+        security: None,
         headers: None,
     }
 }
@@ -26,13 +26,21 @@ fn domain(host: &str, routes: Vec<Route>) -> Domain {
         cert_path: None,
         key_path: None,
         headers: None,
+        security: None,
         routes,
     }
 }
 
 /// A host-less (catch-all) domain matches any host not matched exactly/by wildcard.
 fn catch_all(routes: Vec<Route>) -> Domain {
-    Domain { host: None, cert_path: None, key_path: None, headers: None, routes }
+    Domain {
+        host: None,
+        cert_path: None,
+        key_path: None,
+        headers: None,
+        security: None,
+        routes,
+    }
 }
 
 fn sorted_domains(mut domains: Vec<Domain>) -> Vec<Domain> {
@@ -83,7 +91,7 @@ fn test_pick_route_with_fingerprinting_with_replace_path() {
         backend: "backend-a:9000".to_string(),
         fingerprinting: true,
         replace_path: Some("/v1".to_string()),
-        rate_limit: None,
+        security: None,
         headers: None,
         force_new_connection: false,
     }];
@@ -104,7 +112,7 @@ fn test_pick_route_with_fingerprinting_path_stripping() {
         backend: "backend-a:9000".to_string(),
         fingerprinting: false,
         replace_path: Some("".to_string()),
-        rate_limit: None,
+        security: None,
         headers: None,
         force_new_connection: false,
     }];

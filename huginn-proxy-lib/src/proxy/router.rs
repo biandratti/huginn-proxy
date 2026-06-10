@@ -89,7 +89,7 @@ pub fn pick_route_with_fingerprinting<'a>(
         fingerprinting: first.fingerprinting,
         matched_prefix: first.prefix.as_str(),
         replace_path: first.replace_path.as_deref(),
-        rate_limit: first.rate_limit.as_ref(),
+        rate_limit: first.security.as_ref().and_then(|s| s.rate_limit.as_ref()),
         headers: first.headers.as_ref(),
         force_new_connection: first.force_new_connection,
     })

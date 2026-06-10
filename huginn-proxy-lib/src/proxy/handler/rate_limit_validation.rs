@@ -51,7 +51,8 @@ pub fn check_rate_limit(
     let strategy = format!("{:?}", limit_by).to_lowercase();
     metrics.record_rate_limit_request(&strategy, route_match.matched_prefix, domain);
 
-    let rate_limit_result = manager.check(&rate_limit_key, Some(route_match.matched_prefix));
+    let rate_limit_result =
+        manager.check(&rate_limit_key, domain, Some(route_match.matched_prefix));
 
     match rate_limit_result {
         RateLimitResult::Limited { limit, reset_after, .. } => {

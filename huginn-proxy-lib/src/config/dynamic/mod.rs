@@ -7,8 +7,9 @@ pub use backend::{
 };
 pub use headers::{CustomHeader, HeaderManipulation, HeaderManipulationGroup};
 pub use security::{
-    CspConfig, HstsConfig, IpFilterConfig, IpFilterMode, LimitBy, RateLimitConfig,
-    RouteRateLimitConfig, SecurityConfig, SecurityDynamicConfig, SecurityHeaders,
+    CspConfig, DomainSecurityConfig, HstsConfig, IpFilterConfig, IpFilterMode, LimitBy,
+    RateLimitConfig, RouteRateLimitConfig, RouteSecurityConfig, SecurityConfig,
+    SecurityDynamicConfig, SecurityHeaders,
 };
 use std::sync::Arc;
 

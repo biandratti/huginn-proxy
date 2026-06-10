@@ -7,8 +7,9 @@ mod loader;
 mod root;
 
 pub use dynamic::security::{
-    CspConfig, HstsConfig, IpFilterConfig, IpFilterMode, LimitBy, RateLimitConfig,
-    RouteRateLimitConfig, SecurityConfig, SecurityDynamicConfig, SecurityHeaders,
+    CspConfig, DomainSecurityConfig, HstsConfig, IpFilterConfig, IpFilterMode, LimitBy,
+    RateLimitConfig, RouteRateLimitConfig, RouteSecurityConfig, SecurityConfig,
+    SecurityDynamicConfig, SecurityHeaders,
 };
 pub use dynamic::{
     sort_domain_routes, sort_routes, Backend, BackendHttpVersion, BackendPoolConfig, CustomHeader,

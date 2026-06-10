@@ -112,6 +112,7 @@ impl BenchFixture {
                 cert_path: Some(cert_file.path().to_string_lossy().into_owned()),
                 key_path: Some(key_file.path().to_string_lossy().into_owned()),
                 headers: None,
+                security: None,
                 routes: vec![
                     Route {
                         prefix: "/bench/fp".to_string(),
@@ -119,7 +120,7 @@ impl BenchFixture {
                         fingerprinting: true,
                         force_new_connection: false,
                         replace_path: Some("/".to_string()),
-                        rate_limit: None,
+                        security: None,
                         headers: None,
                     },
                     Route {
@@ -128,7 +129,7 @@ impl BenchFixture {
                         fingerprinting: false,
                         force_new_connection: false,
                         replace_path: Some("/".to_string()),
-                        rate_limit: None,
+                        security: None,
                         headers: None,
                     },
                     Route {
@@ -137,7 +138,7 @@ impl BenchFixture {
                         fingerprinting: true,
                         force_new_connection: false,
                         replace_path: None,
-                        rate_limit: None,
+                        security: None,
                         headers: None,
                     },
                 ],

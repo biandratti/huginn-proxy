@@ -240,6 +240,7 @@ same `host` (after lowercasing) or if more than one catch-all (host-less) domain
 | `cert_path` | string | `null`  | Path to the TLS certificate PEM file. Omit for plain-HTTP-only domains.                          |
 | `key_path`  | string | `null`  | Path to the TLS private key PEM file. Must be set together with `cert_path` or both omitted.     |
 | `headers`   | table  | —       | Domain-level header manipulation. Merged between global and route-level headers.                 |
+| `security`  | table  | —       | Per-domain security overrides (`ip_filter`, `rate_limit`, `headers`). See [`[domains.security]`](#domainssecurity) below. |
 | `routes`    | array  | `[]`    | Path-based routing rules scoped to this domain. Same fields as the former `[[routes]]` entries.  |
 
 <table>
@@ -331,13 +332,16 @@ order does not matter within a domain.
 | `fingerprinting`       | bool   | `true`  | Inject TLS/HTTP fingerprint headers (`x-tls-ja4*`, `x-http2-akamai`, `x-tcp-p0f`) for this route.                                                                                             |
 | `force_new_connection` | bool   | `false` | Bypass the connection pool — opens a fresh TCP+TLS connection per request.                                                                                                                     |
 | `replace_path`         | string | `null`  | Path prefix replacement. Empty string (`""`) strips the prefix. Absent = forward as-is.                                                                                                       |
-| `rate_limit`           | table  | —       | Per-route rate limit overrides. See [`[domains.routes.rate_limit]`](#domainsroutesrate_limit) below.                                                                                           |
+| `security`             | table  | —       | Per-route security overrides (currently `rate_limit`). See [`[domains.routes.security.rate_limit]`](#domainsroutessecurityrate_limit) below.                                                    |
 | `headers`              | table  | —       | Per-route header manipulation. Applied after global and domain-level headers.                                                                                                                  |
 
-### `[domains.routes.rate_limit]`
+### `[domains.routes.security.rate_limit]`
 
-Overrides the global `[security.rate_limit]` for this specific route. Only the keys you
-set override the global; unset keys fall back to the global config.
+Overrides the **domain-effective** rate limit (the domain's `[domains.security.rate_limit]` if
+set, otherwise the global `[security.rate_limit]`) for this specific route. Only the keys you set
+override; unset keys fall back to that effective config. Security policy lives under `security` at
+every scope — global (`[security]`), domain (`[domains.security]`), and route here — so the path
+is consistent.
 
 | Key                   | Type    | Default | Description                                                               |
 |-----------------------|---------|---------|---------------------------------------------------------------------------|
@@ -346,6 +350,90 @@ set override the global; unset keys fall back to the global config.
 | `burst`               | integer | `null`  | Override burst size.                                                      |
 | `limit_by`            | string  | `null`  | Override limit key strategy: `"ip"`, `"header"`, `"route"`, `"combined"`. |
 | `limit_by_header`     | string  | `null`  | Override header name when `limit_by = "header"`.                          |
+
+### `[domains.security]`
+
+Per-domain security policy. Each sub-block, **when present, fully replaces** the matching
+global `[security]` policy for this domain (whole-block replace — not a field-level merge), and
+can also *disable* a globally-enabled policy (e.g. `ip_filter.mode = "disabled"` or
+`rate_limit.enabled = false`). A sub-block you omit inherits the global policy. `max_connections`
+is global only (process-level) and is not part of this block.
+
+| Key          | Type  | Default | Description                                                                                                   |
+|--------------|-------|---------|---------------------------------------------------------------------------------------------------------------|
+| `ip_filter`  | table | —       | IP ACL for this domain. Replaces global [`[security.ip_filter]`](#securityip_filter) when present.            |
+| `rate_limit` | table | —       | Rate limit policy for this domain. Replaces global [`[security.rate_limit]`](#securityrate_limit) when present. Per-route `[domains.routes.security.rate_limit]` then overlays onto this domain-effective config. |
+| `headers`    | table | —       | Security headers for this domain. Replaces global [`[security.headers]`](#securityheaders) when present.      |
+
+Precedence: **global → domain** for `ip_filter` and `headers`; **global → domain → route** for
+`rate_limit`. Rate limiters are keyed per domain, so the same route prefix under two domains is
+tracked independently.
+
+<table>
+<thead>
+<tr>
+<th>TOML</th>
+<th>YAML</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td valign="top">
+
+```toml
+[[domains]]
+host = "api.example.com"
+cert_path = "/config/certs/api.crt"
+key_path  = "/config/certs/api.key"
+
+  [[domains.routes]]
+  prefix = "/"
+  backend = "api-backend:9000"
+
+  # Only this domain: allowlist + tighter rate limit + its own HSTS.
+  [domains.security.ip_filter]
+  mode = "allowlist"
+  allowlist = ["10.0.0.0/8"]
+
+  [domains.security.rate_limit]
+  enabled = true
+  requests_per_second = 50
+  burst = 100
+
+  [domains.security.headers.hsts]
+  enabled = true
+  max_age = 63072000
+```
+
+</td>
+<td valign="top">
+
+```yaml
+domains:
+  - host: "api.example.com"
+    cert_path: "/config/certs/api.crt"
+    key_path:  "/config/certs/api.key"
+    routes:
+      - prefix: "/"
+        backend: "api-backend:9000"
+    security:
+      ip_filter:
+        mode: "allowlist"
+        allowlist: ["10.0.0.0/8"]
+      rate_limit:
+        enabled: true
+        requests_per_second: 50
+        burst: 100
+      headers:
+        hsts:
+          enabled: true
+          max_age: 63072000
+```
+
+</td>
+</tr>
+</tbody>
+</table>
 
 ### `[domains.headers]`
 
@@ -1043,7 +1131,8 @@ security:
 
 ### `[security.rate_limit]`
 
-Global rate limiting. **Dynamic** (hot-reloadable). Per-route overrides via `[routes.rate_limit]`.
+Global rate limiting. **Dynamic** (hot-reloadable). Per-domain override via
+`[domains.security.rate_limit]`; per-route override via `[domains.routes.security.rate_limit]`.
 
 | Key                   | Type    | Default | Description                                                                         |
 |-----------------------|---------|---------|-------------------------------------------------------------------------------------|

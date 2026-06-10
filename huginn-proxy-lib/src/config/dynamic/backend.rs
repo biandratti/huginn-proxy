@@ -1,7 +1,7 @@
 use std::convert::TryFrom;
 
 use super::headers::HeaderManipulation;
-use super::security::RouteRateLimitConfig;
+use super::security::{DomainSecurityConfig, RouteSecurityConfig};
 use crate::error::{ProxyError, Result};
 use serde::{Deserialize, Deserializer};
 
@@ -208,10 +208,10 @@ pub struct Route {
     /// Example: prefix = "/api", replace_path = "" (or "/")
     ///   Request: /api/users → Backend: /users (path stripping)
     pub replace_path: Option<String>,
-    /// Rate limiting configuration for this route (optional)
-    /// If not specified, uses global rate limit settings
+    /// Per-route security policy override (optional). Currently carries `rate_limit`.
+    /// Overlays onto the domain-effective (or global) policy.
     #[serde(default)]
-    pub rate_limit: Option<RouteRateLimitConfig>,
+    pub security: Option<RouteSecurityConfig>,
     /// Header manipulation for this route (optional)
     /// Allows adding or removing headers for specific routes
     #[serde(default)]
@@ -259,6 +259,10 @@ pub struct Domain {
     /// Merged with global headers; route-level headers take final precedence.
     #[serde(default)]
     pub headers: Option<HeaderManipulation>,
+    /// Per-domain security policy override (IP filter, rate limit, security headers).
+    /// Each present sub-block fully replaces the corresponding global policy for this domain.
+    #[serde(default)]
+    pub security: Option<DomainSecurityConfig>,
     /// Path-based routing rules scoped to this domain.
     #[serde(default)]
     pub routes: Vec<Route>,

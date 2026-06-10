@@ -9,8 +9,8 @@ fn test_path_stripping_basic() {
         prefix: "/api".to_string(),
         backend: "backend:9000".to_string(),
         fingerprinting: true,
-        replace_path: Some("".to_string()),
-        rate_limit: None, // Empty string means strip prefix
+        replace_path: Some("".to_string()), // Empty string means strip prefix
+        security: None,
         headers: None,
         force_new_connection: false,
     }];
@@ -33,7 +33,7 @@ fn test_path_stripping_with_query_params() {
         backend: "backend:9000".to_string(),
         fingerprinting: true,
         replace_path: Some("".to_string()),
-        rate_limit: None,
+        security: None,
         headers: None,
         force_new_connection: false,
     }];
@@ -57,7 +57,7 @@ fn test_path_rewriting_basic() {
         backend: "backend:9000".to_string(),
         fingerprinting: true,
         replace_path: Some("/replacing/path1".to_string()),
-        rate_limit: None,
+        security: None,
         headers: None,
         force_new_connection: false,
     }];
@@ -80,7 +80,7 @@ fn test_path_rewriting_with_versioned_api() {
         backend: "backend:9000".to_string(),
         fingerprinting: true,
         replace_path: Some("/v1/api".to_string()),
-        rate_limit: None,
+        security: None,
         headers: None,
         force_new_connection: false,
     }];
@@ -103,7 +103,7 @@ fn test_no_path_manipulation() {
         backend: "backend:9000".to_string(),
         fingerprinting: true,
         replace_path: None,
-        rate_limit: None,
+        security: None,
         headers: None,
         force_new_connection: false,
     }];
@@ -125,7 +125,7 @@ fn test_path_manipulation_with_nested_paths() {
         backend: "backend:9000".to_string(),
         fingerprinting: true,
         replace_path: Some("/backend/v1".to_string()),
-        rate_limit: None,
+        security: None,
         headers: None,
         force_new_connection: false,
     }];
@@ -147,7 +147,7 @@ fn test_path_manipulation_root_path() {
         backend: "backend:9000".to_string(),
         fingerprinting: true,
         replace_path: Some("/api".to_string()),
-        rate_limit: None,
+        security: None,
         headers: None,
         force_new_connection: false,
     }];
@@ -170,7 +170,7 @@ fn test_multiple_routes_matching_priority() {
             backend: "backend-v1:9000".to_string(),
             fingerprinting: true,
             replace_path: Some("/v1".to_string()),
-            rate_limit: None,
+            security: None,
             headers: None,
             force_new_connection: false,
         },
@@ -179,7 +179,7 @@ fn test_multiple_routes_matching_priority() {
             backend: "backend-api:9000".to_string(),
             fingerprinting: true,
             replace_path: Some("/".to_string()),
-            rate_limit: None,
+            security: None,
             headers: None,
             force_new_connection: false,
         },
@@ -205,7 +205,7 @@ fn test_path_manipulation_exact_prefix_match() {
         backend: "backend:9000".to_string(),
         fingerprinting: true,
         replace_path: Some("/v1".to_string()),
-        rate_limit: None,
+        security: None,
         headers: None,
         force_new_connection: false,
     }];
@@ -228,7 +228,7 @@ fn test_path_stripping_to_root() {
         backend: "backend:9000".to_string(),
         fingerprinting: true,
         replace_path: Some("".to_string()),
-        rate_limit: None,
+        security: None,
         headers: None,
         force_new_connection: false,
     }];
@@ -251,7 +251,7 @@ fn test_path_manipulation_with_special_characters() {
         backend: "backend:9000".to_string(),
         fingerprinting: true,
         replace_path: Some("/v1".to_string()),
-        rate_limit: None,
+        security: None,
         headers: None,
         force_new_connection: false,
     }];
