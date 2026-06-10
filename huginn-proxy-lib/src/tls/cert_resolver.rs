@@ -56,9 +56,10 @@ struct CertMap {
     /// Keyed by base domain (e.g. `"example.com"` for `"*.example.com"`).
     wildcard: HashMap<String, Arc<CertifiedKey>>,
     /// Cert from the catch-all (host-less) domain, if it declares one.
-    /// Served for connections with no SNI (IP clients, RFC 6066) and for SNI
-    /// that matches no exact/wildcard entry — equivalent to Traefik's
-    /// `defaultCertificate`. `None` ⇒ unknown SNI is rejected (rustls sends
+    /// In lenient mode it is served for connections with no SNI (IP clients,
+    /// RFC 6066) and for SNI that matches no exact/wildcard entry, equivalent to
+    /// Traefik's `defaultCertificate`. `None` (no catch-all cert), or `sni_strict`,
+    /// disables this fallback so those connections are rejected (rustls sends
     /// `unrecognized_name`), equivalent to Traefik `sniStrict: true`.
     default: Option<Arc<CertifiedKey>>,
 }
@@ -95,10 +96,11 @@ impl CertMap {
 /// then swaps them in with a single pointer store.
 pub struct DynamicCertResolver {
     inner: ArcSwap<CertMap>,
-    /// Strict SNI mode. When `true`, an SNI that matches no exact/wildcard cert is
-    /// rejected (`resolve` returns `None` → rustls `unrecognized_name`) instead of
-    /// falling back to the default cert. Connections with no SNI (IP clients) still
-    /// get the default cert — unlike Traefik's `sniStrict`, which also rejects those.
+    /// Strict SNI mode - full parity with Traefik's `sniStrict`. When `true`, the
+    /// default-cert fallback is disabled for *both* cases: an SNI that matches no
+    /// exact/wildcard cert is rejected, and a connection with **no** SNI (IP-literal
+    /// clients, RFC 6066) is rejected too (`resolve` returns `None` → rustls
+    /// `unrecognized_name`). When `false`, both cases fall back to the default cert.
     sni_strict: bool,
 }
 
@@ -131,7 +133,7 @@ impl DynamicCertResolver {
     /// failing domain keeps its *previously serving* cert (carried over from the old map) so
     /// a bad file mid-rotation never takes that domain offline. The returned
     /// [`CertReloadReport`] reports how many certs loaded vs. failed; `failed > 0` is a
-    /// partial reload (caller emits the partial signal — see `proxy/reload.rs`).
+    /// partial reload (caller emits the partial signal, see `proxy/reload.rs`).
     ///
     /// A per-domain error metric fires for each failure. Success metrics are recorded only
     /// *after* the atomic swap, so the `tls_cert_hash`/timestamp gauges always reflect a
@@ -192,12 +194,16 @@ impl DynamicCertResolver {
     fn resolve_sni(&self, sni: Option<&str>) -> Option<Arc<CertifiedKey>> {
         let map = self.inner.load();
 
-        // RFC 6066: IP address connections do not carry an SNI extension.
-        // With no SNI, serve the default cert (catch-all domain) so clients
+        // RFC 6066: IP-literal connections do not carry an SNI extension.
+        // Strict mode (Traefik `sniStrict` parity) disables the default-cert
+        // fallback, so a no-SNI client is rejected (`None` → rustls
+        // `unrecognized_name`). Lenient mode serves the default cert so clients
         // connecting via IP (e.g. `https://127.0.0.1:7000`) can complete the
-        // handshake; routing then uses the Host header. No default ⇒ reject.
-        // `sni_strict` does NOT reject the no-SNI case, on purpose.
+        // handshake and route by Host header. No default ⇒ reject either way.
         let Some(sni) = sni else {
+            if self.sni_strict {
+                return None;
+            }
             return map.default.clone();
         };
 

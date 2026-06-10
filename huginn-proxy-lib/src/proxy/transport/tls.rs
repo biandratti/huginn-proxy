@@ -79,6 +79,11 @@ pub async fn handle_tls_connection(
         let handshake_duration = handshake_start.elapsed().as_secs_f64();
         record_tls_handshake_metrics(&tls, handshake_duration, &metrics);
 
+        // SNI negotiated by the TLS connection (the name that selected the served cert).
+        // Captured once here; HTTP/2 may carry many requests with differing `:authority`,
+        // and the always-on misdirected-request (421) check compares each against this value.
+        let connection_sni: Option<Arc<str>> = tls.get_ref().1.server_name().map(Arc::from);
+
         // Guard decrements TLS connection metrics counter when connection closes.
         // The main active_connections counter is handled by ConnectionGuard.
         let tls_connection_guard =
@@ -124,6 +129,7 @@ pub async fn handle_tls_connection(
                     let security = security.clone();
                     let client_pool_for_request = client_pool.clone();
                     let upstream = upstream.clone();
+                    let connection_sni = connection_sni.clone();
 
                     async move {
                         let metrics_for_match = metrics.clone();
@@ -143,6 +149,7 @@ pub async fn handle_tls_connection(
                             preserve_host,
                             &client_pool_for_request,
                             &upstream,
+                            connection_sni.as_deref(),
                         )
                         .await;
 
@@ -195,6 +202,7 @@ pub async fn handle_tls_connection(
                     let security = security.clone();
                     let client_pool = client_pool.clone();
                     let upstream = upstream.clone();
+                    let connection_sni = connection_sni.clone();
 
                     async move {
                         let preserve_host = config.preserve_host;
@@ -214,6 +222,7 @@ pub async fn handle_tls_connection(
                             preserve_host,
                             &client_pool,
                             &upstream,
+                            connection_sni.as_deref(),
                         )
                         .await;
 

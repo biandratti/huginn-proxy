@@ -1,8 +1,8 @@
 //! Domain-level header manipulation.
 //!
 //! The compose config sets a domain-level response header (`X-Proxy: huginn-proxy`)
-//! on the catch-all domain. This header comes *only* from the domain scope — not from
-//! the global `headers` block or `security.headers` — so it proves domain-level headers
+//! on the catch-all domain. This header comes *only* from the domain scope, not from
+//! the global `headers` block or `security.headers`, so it proves domain-level headers
 //! are actually applied. (They used to be parsed and silently ignored.)
 
 use tests_e2e::common::{wait_for_service, DEFAULT_SERVICE_TIMEOUT_SECS, PROXY_HTTPS_URL_IPV4};

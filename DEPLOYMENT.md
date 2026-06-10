@@ -228,21 +228,33 @@ continues running with the old values.
 | `[timeout]` | `upstream_connect_ms` (TCP connect to backend; absent = no timeout), `proxy_idle_ms` (inbound idle), `tls_handshake_secs`, `connection_handling_secs`, `shutdown_secs`, `keep_alive.upstream_idle_timeout` |
 | `[security].max_connections` | Maximum concurrent connections |
 
-> **TLS certificate rotation** is the exception: cert and key files are watched
-> independently of the main config. New connections pick up the new certificate
-> without a restart; existing connections are unaffected.
+> **TLS certificates** are re-read as part of a **config reload**, not by an
+> independent cert-file watcher. A reload (SIGHUP, or a change to the *config file*
+> when `HUGINN_WATCH=true`) re-reads the cert and key files from their configured
+> paths. New connections pick up the new certificate without a restart; existing
+> connections are unaffected. Reload is best-effort per domain: a domain whose cert
+> fails to load keeps its previously serving certificate.
 
 ## TLS Certificate Management
 
 ### Certificate Rotation
 
-Huginn Proxy supports hot reload for TLS certificates:
+TLS certificates are re-read from disk on every **config reload** — they are **not**
+watched independently. Replacing only the cert files (e.g. a Kubernetes Secret) does
+**not** trigger a reload on its own; you must trigger a config reload so the proxy
+re-reads them from their configured paths.
 
-1. Enable the file watcher (`HUGINN_WATCH=true`)
-2. Update certificate files (Secret in Kubernetes, volume in Docker)
-3. Proxy detects changes after the debounce window (`HUGINN_WATCH_DELAY_SECS`, default: 60s)
-4. New connections use new certificates
-5. Existing connections continue with old certificates until closed
+To rotate a certificate:
+
+1. Replace the certificate/key files at their configured paths (Secret in Kubernetes, volume in Docker). Keep the paths unchanged.
+2. Trigger a config reload, either:
+   - **SIGHUP** — `kill -HUP <pid>` (e.g. `kubectl exec <pod> -- kill -HUP 1`), or
+   - **Config-file watch** — with `HUGINN_WATCH=true`, touch or re-write the *config
+     file* (not the cert files); the reload fires after the debounce window (`HUGINN_WATCH_DELAY_SECS`, default: 60s).
+3. New connections use the new certificate; existing connections continue with the old one until they close.
+
+Reload is best-effort per domain: if a domain's new cert fails to load, that domain
+keeps its previously serving certificate while the rest still reload (alert on `tls_cert_reload_total{result="error"}`).
 
 No restart required.
 

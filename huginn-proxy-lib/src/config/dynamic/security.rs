@@ -38,7 +38,7 @@ pub(crate) fn default_max_connections() -> usize {
 /// Per-domain security policy override (`[domains.security]`).
 ///
 /// Each field, when present, **fully replaces** the corresponding global policy for that
-/// domain (whole-block replace, including the ability to disable a globally-enabled policy —
+/// domain (whole-block replace, including the ability to disable a globally-enabled policy,
 /// e.g. an `ip_filter` with `mode = "disabled"` or a `rate_limit` with `enabled = false`).
 /// Fields left unset inherit the global `[security]` policy. `max_connections` is global only
 /// (process-level, static) and is intentionally not part of this block.

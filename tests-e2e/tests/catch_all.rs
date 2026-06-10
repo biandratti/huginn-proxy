@@ -39,7 +39,7 @@ async fn catch_all_serves_arbitrary_host() -> Result<(), Box<dyn std::error::Err
         "an unconfigured host must be served by the catch-all domain, not rejected with 421"
     );
 
-    // "/" routes to backend-b (traefik/whoami) — confirm we actually reached it.
+    // "/" routes to backend-b (traefik/whoami) - confirm we actually reached it.
     let echo = parse_backend_echo(response).await?;
     assert_eq!(echo.path, "/");
     Ok(())

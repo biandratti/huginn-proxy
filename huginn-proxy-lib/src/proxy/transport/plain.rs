@@ -71,6 +71,7 @@ pub async fn handle_plain_connection(
                 preserve_host,
                 &client_pool,
                 &upstream,
+                None,
             )
             .await;
 

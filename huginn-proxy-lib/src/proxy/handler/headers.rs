@@ -20,16 +20,14 @@ pub fn tls_header_value(value: Option<&huginn_net_tls::Ja4Payload>) -> Option<He
 ///
 /// This function:
 /// 1. Appends client IP to X-Forwarded-For (or creates it if missing)
-/// 2. Sets X-Forwarded-Host from the TLS SNI extension (only present for TLS connections)
+/// 2. Sets X-Forwarded-Host from the resolved routing host
 /// 3. Sets X-Forwarded-Port from the peer's port
 /// 4. Sets X-Forwarded-Proto based on is_https flag
-///
-/// This matches the behavior of Go's httputil.ProxyRequest.SetXForwarded()
 pub fn add_forwarded_headers(
     req: &mut Request<Incoming>,
     peer: SocketAddr,
     is_https: bool,
-    sni: Option<&str>,
+    forwarded_host: &str,
 ) {
     // X-Forwarded-For: Append client IP to existing header, or create new one
     let client_ip = peer.ip().to_string();
@@ -48,12 +46,15 @@ pub fn add_forwarded_headers(
         }
     }
 
-    // X-Forwarded-Host: never trust a client-supplied value; strip first, then set from SNI.
-    // If SNI is absent (some clients omit it for IP literals), leave the header unset rather
-    // than forwarding a spoofed `X-Forwarded-Host` from the client.
+    // X-Forwarded-Host: strip any client-supplied value first, then set it to the host the
+    // proxy actually routed on. This is the trusted precedence from `extract_request_host`
+    // (SNI for HTTP/1.1 over TLS, `:authority` for HTTP/2, `Host` fallback), so it stays
+    // consistent with the backend the request is forwarded to, including coalesced HTTP/2
+    // connections where `:authority` differs from the connection's SNI. If the resolved host
+    // is empty (e.g. an IP client that sent no SNI/authority/Host), leave the header unset.
     req.headers_mut().remove(forwarded::HOST);
-    if let Some(host) = sni {
-        if let Ok(header_value) = HeaderValue::from_str(host) {
+    if !forwarded_host.is_empty() {
+        if let Ok(header_value) = HeaderValue::from_str(forwarded_host) {
             req.headers_mut().insert(forwarded::HOST, header_value);
         }
     }

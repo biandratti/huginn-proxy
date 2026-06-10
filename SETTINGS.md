@@ -211,7 +211,14 @@ Domain entries group a TLS certificate with its path-based routes. Each entry ha
 hostname (or wildcard), or acts as a catch-all. **Dynamic** (hot-reloadable). **Optional** —
 omitting all domains is valid; the proxy binds but returns 404 for all requests.
 
-Host matching order per incoming connection (host = SNI for TLS, `Host` header for plain HTTP):
+The request host is resolved from the HTTP-layer authority for **all** protocol versions —
+`:authority` (HTTP/2) or absolute-form target → `Host` header (RFC 7230 §5.4) — exactly like
+nginx/Traefik. TLS SNI is **not** used for routing; it only selects the certificate at the TLS
+layer (and drives `sni_strict`). This keeps routing correct for coalesced HTTP/2 connections,
+where one TLS session is reused across origins under the same certificate and each request
+carries its own `:authority`.
+
+Host matching order, against that resolved host:
 1. Exact match — `"api.example.com"`
 2. Wildcard match — `"*.example.com"` (one level only; does not match `a.b.example.com`)
 3. **Catch-all** — the entry with no `host` key, if present. Matches any host, including IP
@@ -223,16 +230,33 @@ Host matching is **case-insensitive**: `host` values are lowercased at load and 
 against the lowercased request host. The config is rejected at load if two domains share the
 same `host` (after lowercasing) or if more than one catch-all (host-less) domain is defined.
 
+`X-Forwarded-Host` sent to the backend mirrors this resolved routing host (never a
+client-supplied `X-Forwarded-Host`), so it always agrees with the backend the request reaches.
+
+Because routing follows the request authority rather than SNI, a reused (coalesced) HTTP/2
+connection can in principle carry a request for a host served by a *different* certificate.
+Huginn rejects that with **`421 Misdirected Request`**, always — the same default protection
+nginx and Apache `mod_http2` apply (RFC 9110 §15.5.20 / RFC 7540 §9.1.2). The check is on a
+TLS connection that presented an SNI: if the request's resolved host is not covered by the
+**same certificate** the SNI selected, it gets 421. It compares certificate coverage, **not**
+literal `authority == SNI`, so legitimate coalescing keeps working — a shared wildcard entry
+(`api`/`docs.example.com` under `*.example.com`) or distinct `[[domains]]` pointing at the same
+SAN cert file both resolve to the same certificate and are allowed. It is not configurable: it
+only fires on genuinely cross-certificate requests, so there is no legitimate traffic to exempt.
+Plain HTTP and TLS connections without SNI are unaffected (there is no certificate scope to
+enforce).
+
 **TLS certificate selection** is independent of routing and driven by SNI:
 - SNI matches an exact/wildcard domain → that domain's cert.
 - No SNI (IP clients, RFC 6066) or SNI matches nothing → the **default certificate**, i.e. the
   cert on the catch-all (`host`-less) entry. Equivalent to Traefik's `defaultCertificate`.
 - Unknown/absent SNI with no default cert → rejected with TLS `unrecognized_name` (nothing to
   serve).
-- For strict hostname enforcement while keeping IP/no-SNI access working, set
-  `[tls.options].sni_strict = true` (see below) — unknown-hostname SNI is rejected, but no-SNI
-  clients still receive the default cert. This is the true equivalent of Traefik's
-  `sniStrict: true`.
+- For strict hostname enforcement, set `[tls.options].sni_strict = true` (see below). This is
+  full parity with Traefik's `sniStrict: true`: the default-cert fallback is disabled for
+  **both** unmatched-hostname SNI **and** no-SNI connections, so IP-literal HTTPS clients (and
+  any client that omits SNI) are rejected with `unrecognized_name`. Leave it `false` (default)
+  if you need IP-literal access or no-SNI clients to keep working via the default cert.
 
 | Key         | Type   | Default | Description                                                                                      |
 |-------------|--------|---------|--------------------------------------------------------------------------------------------------|
@@ -620,7 +644,13 @@ tls:
 | `versions`          | array of strings | `["1.2", "1.3"]` | Allowed TLS versions. Values: `"1.2"`, `"1.3"`.            |
 | `cipher_suites`     | array of strings | all supported    | Named cipher suites. Restrict to tighten security posture. |
 | `curve_preferences` | array of strings | all supported    | Named elliptic curves for key exchange.                    |
-| `sni_strict`        | bool             | `false`          | When `true`, reject (`unrecognized_name`) a TLS connection whose SNI matches no domain cert, instead of serving the default cert. Connections with **no** SNI (IP clients) still get the default cert. Production hardening against unknown-hostname SNI. |
+| `sni_strict`        | bool             | `false`          | When `true`, disable the default-cert fallback entirely (full parity with Traefik's `sniStrict`): reject (`unrecognized_name`) both a TLS connection whose SNI matches no domain cert **and** a connection that sends no SNI (IP-literal clients). When `false`, both fall back to the default cert. Production hardening against unknown-hostname / no-SNI access. |
+
+> **Misdirected requests (HTTP 421)** are handled automatically and are not configurable. On a
+> coalesced HTTP/2 connection, any request whose host is served by a different certificate than
+> the connection's SNI selected is rejected with `421 Misdirected Request` — the same default
+> behaviour as nginx and Apache `mod_http2`. Hosts sharing one certificate (wildcard or SAN)
+> still coalesce. See the `[[domains]]` section above.
 
 <table>
 <thead>

@@ -79,6 +79,7 @@ pub async fn handle_proxy_request(
     preserve_host: bool,
     client_pool: &Arc<ClientPool>,
     upstream: &UpstreamGateway,
+    connection_sni: Option<&str>,
 ) -> HttpResult<hyper::Response<RespBody>> {
     let start = Instant::now();
     let method = req.method().to_string();
@@ -93,7 +94,7 @@ pub async fn handle_proxy_request(
     }
 
     let path = req.uri().path();
-    let host = extract_request_host(&req, ja4_fingerprints.as_ref(), is_https);
+    let host = extract_request_host(&req);
 
     let domain = crate::proxy::router::pick_domain(&domains, &host);
     let domain_headers = domain.and_then(|d| d.headers.as_ref());
@@ -114,12 +115,35 @@ pub async fn handle_proxy_request(
         .and_then(|s| s.headers.as_ref())
         .unwrap_or(&security.headers);
 
-    // IP filter runs after domain resolution so a domain can override the ACL, but still before
-    // route selection / 421 so a blocked client never learns whether a route exists.
+    // IP filter runs after domain resolution, so a domain can override the ACL, but still before
+    // route selection / 421, so a blocked client never learns whether a route exists.
     if let Err(e) = check_ip_access(peer, effective_ip_filter, &metrics) {
         let status_code = StatusCode::from(e.clone()).as_u16();
         metrics.record_entrypoint_request(&method, status_code, &protocol);
         return Err(e);
+    }
+
+    // Misdirected-request enforcement (RFC 9110 §15.5.20 / RFC 7540 §9.1.2), always on,
+    // the same default protection nginx and Apache `mod_http2` apply: a reused (coalesced)
+    // TLS connection may carry requests whose `:authority` / `Host` differs from the SNI
+    // that selected the connection's certificate. Reject with 421 when that host is served
+    // by a *different* certificate (same-cert / wildcard / SAN coalescing is allowed). Only
+    // fires on TLS connections that presented an SNI; runs after the IP filter so a blocked
+    // client never learns whether a host exists.
+    if let Some(sni) = connection_sni {
+        if !crate::proxy::router::authority_matches_sni(&domains, sni, &host) {
+            debug!(
+                ?peer,
+                sni,
+                host = %host,
+                "421 Misdirected Request: host not covered by the connection's certificate (SNI)"
+            );
+            let error = HttpError::MisdirectedRequest;
+            metrics.record_error(error.error_type());
+            let status_code = StatusCode::from(error.clone()).as_u16();
+            metrics.record_entrypoint_request(&method, status_code, &protocol);
+            return Err(error);
+        }
     }
 
     let route_match = match domain {
@@ -291,9 +315,10 @@ pub async fn handle_proxy_request(
         }
     }
 
-    // Add X-Forwarded-* headers after fingerprinting
-    let sni = ja4_fingerprints.as_ref().and_then(|fp| fp.sni.as_deref());
-    add_forwarded_headers(&mut req, peer, is_https, sni);
+    // Add X-Forwarded-* headers after fingerprinting. X-Forwarded-Host mirrors the resolved
+    // routing host (`host`) so it agrees with the backend the request is sent to, even for
+    // coalesced HTTP/2 connections where `:authority` differs from the connection SNI.
+    add_forwarded_headers(&mut req, peer, is_https, &host);
 
     apply_request_header_manipulation(
         req.headers_mut(),

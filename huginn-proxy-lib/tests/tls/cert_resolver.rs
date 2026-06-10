@@ -99,9 +99,10 @@ async fn lenient_serves_default_for_unmatched_sni(
     Ok(())
 }
 
-/// Strict: unmatched SNI is rejected, but matched SNI and no-SNI (IP clients) still resolve.
+/// Strict (Traefik `sniStrict` parity): matched SNI resolves, but both unmatched SNI
+/// and no-SNI (IP-literal) connections are rejected - the default-cert fallback is off.
 #[tokio::test]
-async fn strict_rejects_unmatched_sni_but_keeps_no_sni(
+async fn strict_rejects_unmatched_and_no_sni(
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let (cert, key) = create_valid_test_cert()?;
     let resolver = DynamicCertResolver::new(true);
@@ -118,8 +119,8 @@ async fn strict_rejects_unmatched_sni_but_keeps_no_sni(
         "strict: unmatched hostname SNI is rejected"
     );
     assert!(
-        resolver.resolves_for(None),
-        "strict still serves the default cert to no-SNI (IP) clients"
+        !resolver.resolves_for(None),
+        "strict: no-SNI (IP-literal) clients are rejected too, even with a default cert present"
     );
     Ok(())
 }

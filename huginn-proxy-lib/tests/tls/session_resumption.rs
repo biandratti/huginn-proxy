@@ -3,7 +3,6 @@ use huginn_proxy_lib::config::{ClientAuth, SessionResumptionConfig, TlsConfig};
 
 #[test]
 fn test_session_resumption_enabled_default() {
-    // TlsConfig no longer holds cert paths — verify it can be constructed with defaults
     let config = TlsConfig {
         alpn: vec![],
         options: Default::default(),

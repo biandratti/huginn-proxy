@@ -1,6 +1,6 @@
 use huginn_proxy_lib::config::{sort_domain_routes, sort_routes, Domain, Route};
 use huginn_proxy_lib::proxy::router::{
-    pick_domain, pick_route, pick_route_with_fingerprinting, prefix_matches,
+    authority_matches_sni, pick_domain, pick_route, pick_route_with_fingerprinting, prefix_matches,
 };
 
 fn route(prefix: &str, backend: &str) -> Route {
@@ -28,6 +28,17 @@ fn domain(host: &str, routes: Vec<Route>) -> Domain {
         headers: None,
         security: None,
         routes,
+    }
+}
+
+fn domain_with_cert(host: &str, cert_path: &str) -> Domain {
+    Domain {
+        host: Some(host.to_string()),
+        cert_path: Some(cert_path.to_string()),
+        key_path: Some(format!("{cert_path}.key")),
+        headers: None,
+        security: None,
+        routes: vec![],
     }
 }
 
@@ -430,4 +441,90 @@ fn no_catch_all_still_returns_none_for_unknown() {
     let domains = vec![domain("api.example.com", vec![])];
     assert!(pick_domain(&domains, "127.0.0.1").is_none());
     assert!(pick_domain(&domains, "unknown.com").is_none());
+}
+
+#[test]
+fn authority_matches_sni_same_host() {
+    let domains = vec![domain("api.example.com", vec![])];
+    assert!(authority_matches_sni(&domains, "api.example.com", "api.example.com"));
+}
+
+#[test]
+fn authority_matches_sni_is_case_insensitive_on_sni() {
+    let domains = vec![domain("api.example.com", vec![])];
+    // `host` arrives already lowercased; the SNI is lowercased internally.
+    assert!(authority_matches_sni(&domains, "API.Example.COM", "api.example.com"));
+}
+
+#[test]
+fn authority_matches_sni_allows_wildcard_coalescing() {
+    // The coalescing case we must NOT break: two hosts served by one *.example.com cert.
+    let domains = vec![domain("*.example.com", vec![])];
+    assert!(authority_matches_sni(&domains, "api.example.com", "docs.example.com"));
+}
+
+#[test]
+fn authority_matches_sni_rejects_cross_certificate() {
+    // SNI selected the exact api cert; a request for a host on a *different* cert is rejected.
+    let domains = vec![domain("api.example.com", vec![]), domain("*.example.com", vec![])];
+    // SNI -> exact api.example.com; authority -> *.example.com (different domain/cert).
+    assert!(!authority_matches_sni(&domains, "api.example.com", "docs.example.com"));
+}
+
+#[test]
+fn authority_matches_sni_rejects_unrelated_host() {
+    let domains = vec![domain("api.example.com", vec![])];
+    // authority resolves to no domain at all -> not authoritative.
+    assert!(!authority_matches_sni(&domains, "api.example.com", "evil.com"));
+}
+
+#[test]
+fn authority_matches_sni_both_catch_all_match() {
+    let domains = vec![catch_all(vec![])];
+    assert!(authority_matches_sni(&domains, "anything.com", "other.com"));
+}
+
+#[test]
+fn authority_matches_sni_specific_sni_vs_catch_all_host() {
+    let domains = vec![domain("api.example.com", vec![]), catch_all(vec![])];
+    // SNI -> exact domain, authority -> catch-all: different cert, reject.
+    assert!(!authority_matches_sni(&domains, "api.example.com", "other.com"));
+}
+
+#[test]
+fn authority_matches_sni_same_cert_file_coalesces() {
+    // Two distinct domain entries pointing at the same SAN certificate file: the
+    // connection's cert covers both, so coalescing must be allowed (no false 421).
+    let domains = vec![
+        domain_with_cert("api.example.com", "/certs/san.pem"),
+        domain_with_cert("docs.example.com", "/certs/san.pem"),
+    ];
+    assert!(authority_matches_sni(&domains, "api.example.com", "docs.example.com"));
+}
+
+#[test]
+fn authority_matches_sni_different_cert_files_rejected() {
+    let domains = vec![
+        domain_with_cert("api.example.com", "/certs/api.pem"),
+        domain_with_cert("other.com", "/certs/other.pem"),
+    ];
+    // SNI selected api's cert; a request for other.com (a different cert) is misdirected.
+    assert!(!authority_matches_sni(&domains, "api.example.com", "other.com"));
+}
+
+#[test]
+fn authority_matches_sni_certless_host_uses_default_cert() {
+    // A certless named domain is served by the default (catch-all) cert. A request for it
+    // over a connection that also presented the default cert coalesces.
+    let catch_all_with_cert = Domain {
+        host: None,
+        cert_path: Some("/certs/default.pem".to_string()),
+        key_path: Some("/certs/default.key".to_string()),
+        headers: None,
+        security: None,
+        routes: vec![],
+    };
+    let domains = vec![domain("api.example.com", vec![]), catch_all_with_cert];
+    // SNI=api.example.com -> certless -> default cert; authority=other -> catch-all -> default cert.
+    assert!(authority_matches_sni(&domains, "api.example.com", "other.com"));
 }

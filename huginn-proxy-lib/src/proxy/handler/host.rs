@@ -2,11 +2,25 @@ use hyper::Request;
 
 /// Extract the effective hostname for domain matching.
 ///
-/// Priority:
-/// 1. TLS SNI - authoritative; set by the TLS layer before any HTTP is read.
-/// 2. URI authority - `:authority` pseudo-header (HTTP/2) or absolute-form URI (HTTP/1.1).
-///    Cannot be forged via application-level headers.
-/// 3. `Host` header - fallback for HTTP/1.1 origin-form requests.
+/// Routing is by the HTTP-layer authority for **all** protocol versions, which
+/// mirrors nginx/Traefik/Envoy:
+/// 1. URI authority - `:authority` pseudo-header (HTTP/2) or absolute-form request
+///    target (HTTP/1.1). For HTTP/2 this is per-request, so a coalesced connection
+///    (one TLS session reused across origins under the same cert - RFC 9113 §9.1.1)
+///    routes each request to the correct backend. For HTTP/1.1 it honours the host
+///    of an absolute-form request target (RFC 7230 §5.3.2).
+/// 2. `Host` header - fallback (HTTP/1.1 origin-form, or HTTP/2 without `:authority`).
+///
+/// TLS SNI is intentionally NOT a routing input. It is used only for certificate
+/// selection at the TLS layer ([`crate::tls::DynamicCertResolver`]) and the optional
+/// `sni_strict` handshake rejection (exactly like Traefik), whose routers match on
+/// the HTTP host while SNI only drives cert / TLS-option selection. Routing uniformly
+/// by authority (instead of SNI-first for HTTP/1.1) keeps both protocol versions
+/// consistent and follows HTTP host semantics (RFC 7230 §5.4).
+///
+/// The resolved host returned here is also what `add_forwarded_headers` uses for
+/// `X-Forwarded-Host`, so the forwarded host always agrees with the backend the
+/// request is routed to.
 ///
 /// IPv6 addresses are returned WITHOUT brackets (`::1` not `[::1]`) to match
 /// domain config entries and `http::Uri::host()` canonical form.
@@ -14,36 +28,22 @@ use hyper::Request;
 /// The result is ASCII-lowercased: DNS names and the `Host` header are
 /// case-insensitive (RFC 4343 / RFC 7230), and domain config hosts are
 /// lowercased at load time, so both sides compare consistently.
-pub(crate) fn extract_request_host<B>(
-    req: &Request<B>,
-    ja4: Option<&crate::fingerprinting::Ja4Fingerprints>,
-    is_https: bool,
-) -> String {
-    let sni = ja4.and_then(|fp| fp.sni.as_deref());
-    extract_request_host_inner(req, sni, is_https)
+pub(crate) fn extract_request_host<B>(req: &Request<B>) -> String {
+    extract_request_host_inner(req)
 }
 
-pub fn extract_request_host_inner<B>(
-    req: &Request<B>,
-    sni: Option<&str>,
-    is_https: bool,
-) -> String {
-    // 1. TLS SNI
-    if is_https {
-        if let Some(s) = sni {
-            return s.to_ascii_lowercase();
-        }
-    }
-    // 2. URI authority - present for HTTP/2 and absolute-form HTTP/1.1.
-    //    strip_host_port normalizes IPv6: http::Uri::host() returns "[::1]" (with
-    //    brackets); strip_host_port strips them to "::1" to match the domain config.
+pub fn extract_request_host_inner<B>(req: &Request<B>) -> String {
+    // URI authority - :authority (HTTP/2) or absolute-form target (HTTP/1.1).
+    // strip_host_port normalizes IPv6: http::Uri::host() returns "[::1]" (with
+    // brackets); strip_host_port strips them to "::1" to match the domain config.
     if let Some(raw) = req.uri().host() {
         let host = strip_host_port(raw);
         if !host.is_empty() {
             return host.to_ascii_lowercase();
         }
     }
-    // 3. Host header fallback (HTTP/1.1 origin-form, or HTTP/2 without :authority)
+
+    // Host header fallback (HTTP/1.1 origin-form, or HTTP/2 without :authority).
     req.headers()
         .get(hyper::header::HOST)
         .and_then(|v| v.to_str().ok())

@@ -107,12 +107,13 @@ async fn test_injected_headers_override_client_headers(
         );
         assert_eq!(
             host, "127.0.0.1",
-            "X-Forwarded-Host should be the TLS SNI value (127.0.0.1). Current value: {host}"
+            "X-Forwarded-Host should be the resolved routing host \
+             (HTTP/2 `:authority`, 127.0.0.1 here, matches the SNI). Current value: {host}"
         );
-        println!("✓ X-Forwarded-Host correctly uses TLS SNI: {host}");
+        println!("X-Forwarded-Host correctly uses the resolved routing host: {host}");
         Some(host)
     } else {
-        println!("i X-Forwarded-Host not present (only set when TLS SNI is available)");
+        println!("X-Forwarded-Host not present (only set when a routing host was resolved)");
         None
     };
 
@@ -292,7 +293,7 @@ async fn test_injected_headers_override_client_headers_ipv6(
         assert_ne!(host, "evil.example.com", "X-Forwarded-Host must not be spoofed");
         println!("✓ IPv6 X-Forwarded-Host: {host}");
     } else {
-        println!("i X-Forwarded-Host not present (valid for IPv6 IP-literal with no SNI)");
+        println!("i X-Forwarded-Host not present (valid when no routing host was resolved)");
     }
 
     println!("\n✓ IPv6 header-override test passed");

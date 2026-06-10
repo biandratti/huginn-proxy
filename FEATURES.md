@@ -145,15 +145,21 @@ HTTP/2 negotiation.
 ClientHello SNI. Each `[[domains]]` entry carries its own `cert_path` / `key_path`. The resolver picks a certificate by
 **exact host → single-label wildcard (`*.example.com`) → default**. The default certificate is the one attached to the
 catch-all (host-less) domain, and it is also served to clients that send no SNI (e.g. connecting by IP). When
-`[tls.options].sni_strict = true`, an SNI hostname that matches no configured domain is rejected with
-`unrecognized_name` instead of falling back to the default cert (mirrors Traefik's `sniStrict`); the no-SNI case still
-gets the default cert on purpose. Default is `sni_strict = false`. See the **Multi-Domain Routing** section below for
-how domains tie certificates to routes.
+`[tls.options].sni_strict = true`, the default-cert fallback is disabled entirely (full parity with Traefik's
+`sniStrict`): both an SNI hostname that matches no configured domain **and** a connection that sends no SNI are
+rejected with `unrecognized_name` — IP-literal HTTPS clients no longer get the default cert in this mode. Default is `sni_strict = false`, where both cases fall back to the default cert. See the **Multi-Domain Routing** section below for how domains tie certificates to routes.
 
-Certificate hot reload watches the cert files and reloads them when they change. Uses a configurable delay to avoid
-reloading too frequently. The same `ServerConfig` builder is used at startup and on every hot reload, so cipher suites,
-ALPN, client auth, and session resumption settings are applied identically in both paths — no drift between the initial
-configuration and reloaded certificates.
+**Misdirected-request enforcement (HTTP 421, always on).** Routing follows the request `:authority` / `Host`, not SNI, so
+a reused (coalesced) HTTP/2 connection could carry a request for a host served by a different certificate. Huginn rejects
+that with `421 Misdirected Request` — the same default protection nginx and Apache `mod_http2` apply (RFC 9110 §15.5.20 /
+RFC 7540 §9.1.2). Because huginn uses a single global TLS configuration, "authoritative" reduces to "served by the same
+certificate": a request whose host is not covered by the certificate the connection's SNI selected is rejected. The check
+compares certificate coverage rather than literal `authority == SNI`, so hosts sharing a single certificate (a `*.example.com`
+wildcard, or distinct domains pointing at the same SAN cert file) still coalesce. It is not configurable — it only fires on
+genuinely cross-certificate requests, and plain HTTP / no-SNI connections are unaffected.
+
+Certificates are re-read as part of a **config reload** — driven by SIGHUP or by a change to the *config file* (when the `--watch` file watcher is enabled, debounced by a configurable delay), not by an independent cert-file watcher. Each reload re-reads the cert/key files from their configured paths. The `DynamicCertResolver` is updated in place and its cert map is swapped atomically (`ArcSwap`); the acceptor's `ServerConfig` itself is built once at startup, so cipher suites, ALPN, client auth, and session resumption settings never drift between the initial configuration and reloaded
+certificates.
 
 Reloading is **best-effort and per-domain** (Traefik-style): if one domain's new certificate fails to load, the other
 domains still swap to their fresh certs, and the failing domain keeps serving its previously loaded certificate so a
