@@ -10,7 +10,7 @@ use crate::config::Domain;
 use crate::error::{ProxyError, Result};
 use crate::telemetry::Metrics;
 use crate::tls::cert_source::{cert_chain_hash, read_certs_and_keys};
-use tracing::error;
+use tracing::info;
 
 /// Outcome of a [`DynamicCertResolver::update`] call.
 ///
@@ -151,7 +151,13 @@ impl DynamicCertResolver {
             let host = domain.label();
             let (cert_path, key_path) = match (&domain.cert_path, &domain.key_path) {
                 (Some(c), Some(k)) => (c.as_str(), k.as_str()),
-                _ => continue,
+                _ => {
+                    info!(
+                        host,
+                        "Domain has no cert_path/key_path; it will serve TLS only if a default certificate exists"
+                    );
+                    continue;
+                }
             };
 
             let slot = classify(domain.host.as_deref());
@@ -167,11 +173,11 @@ impl DynamicCertResolver {
                     // transient bad cert does not drop TLS for a host that was working.
                     match old.get(&slot) {
                         Some(prev) => {
-                            error!(host, error = %e, "Cert reload failed; keeping previously loaded certificate");
+                            info!(host, error = %e, "Cert load failed; keeping previously loaded certificate");
                             next.place(&slot, prev);
                         }
                         None => {
-                            error!(host, error = %e, "Cert reload failed; domain has no previously loaded certificate to fall back on");
+                            info!(host, error = %e, "Cert load failed; domain has no previous certificate and will not serve TLS");
                         }
                     }
                 }
@@ -226,6 +232,13 @@ impl DynamicCertResolver {
             return None;
         }
         map.default.clone()
+    }
+
+    /// `true` when the live cert map holds at least one certificate (exact, wildcard, or
+    /// default). When `false` in HTTPS mode, every TLS handshake is rejected.
+    pub fn has_serviceable_cert(&self) -> bool {
+        let m = self.inner.load();
+        !m.exact.is_empty() || !m.wildcard.is_empty() || m.default.is_some()
     }
 
     /// Test-only snapshot of the cert map: `(exact_count, wildcard_count, has_default)`.

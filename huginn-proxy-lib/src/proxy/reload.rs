@@ -122,16 +122,25 @@ pub async fn try_reload(
     // Reload certs per-domain, best-effort: a domain whose cert fails to load keeps its previous
     // cert instead of aborting the whole reload.
     let cert_report = match cert_resolver {
-        Some(resolver) => resolver.update(&fresh.domains, metrics).await,
+        Some(resolver) => {
+            let report = resolver.update(&fresh.domains, metrics).await;
+            if !resolver.has_serviceable_cert() && !fresh.domains.is_empty() {
+                info!(
+                    "TLS is configured but no certificate is serviceable after reload; all TLS \
+                     handshakes will be rejected until a cert is provided"
+                );
+            }
+            report
+        }
         None => crate::tls::CertReloadReport::default(),
     };
 
     if cert_report.is_partial() {
-        error!(
+        info!(
             failed = cert_report.failed,
             loaded = cert_report.loaded,
             "Some domain certificates failed to load on reload; new routes/backends are live and \
-             failed domains keep their previous certificates (alert on tls_cert_reload_total{{result=\"error\"}})"
+             failed domains keep their previous certificates"
         );
     }
 

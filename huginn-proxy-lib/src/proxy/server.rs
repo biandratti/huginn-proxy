@@ -66,16 +66,19 @@ pub async fn run(
     // `None` when TLS is not configured (plain HTTP mode).
     let cert_resolver: Option<Arc<DynamicCertResolver>> = if let Some(tls) = &static_cfg.tls {
         let resolver = Arc::new(DynamicCertResolver::new(tls.options.sni_strict));
-        // Boot is fail-fast: unlike hot reload (best-effort, keeps old certs), a
-        // misconfigured certificate at startup has no previous cert to fall back on,
-        // so any failure aborts startup rather than starting a half-serving proxy.
         let report = resolver.update(&dynamic_cfg.load().domains, &metrics).await;
         if report.is_partial() {
-            return Err(crate::error::ProxyError::Tls(format!(
-                "{} of {} domain certificate(s) failed to load at startup",
-                report.failed,
-                report.failed.saturating_add(report.loaded)
-            )));
+            info!(
+                failed = report.failed,
+                loaded = report.loaded,
+                "Some domain certificates failed to load at startup; those domains will not serve TLS"
+            );
+        }
+        if !resolver.has_serviceable_cert() && !dynamic_cfg.load().domains.is_empty() {
+            info!(
+                "TLS is configured but no certificate is serviceable; all TLS handshakes will be \
+                 rejected until a cert is provided"
+            );
         }
         Some(resolver)
     } else {
