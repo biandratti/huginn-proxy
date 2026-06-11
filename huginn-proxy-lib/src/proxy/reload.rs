@@ -1,40 +1,42 @@
 use crate::backend::health_check::HealthCheckSupervisor;
-use crate::config::{load_from_path, Backend, BackendPoolConfig, DynamicConfig, StaticConfig};
+use crate::config::{
+    load_from_path, Backend, BackendPoolConfig, Domain, DynamicConfig, RateLimitConfig,
+    RouteRateLimitConfig, StaticConfig,
+};
 use crate::proxy::client_pool::ClientPool;
 use crate::security::RateLimitManager;
 use crate::telemetry::Metrics;
 use crate::tls::DynamicCertResolver;
 use arc_swap::ArcSwap;
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 use std::hash::{Hash, Hasher};
 use std::path::Path;
 use std::sync::Arc;
 use tokio::runtime::Handle;
 use tracing::{debug, error, info};
 
-/// Shared, hot-swappable rate-limit manager.
-///
-/// - On reload with no rate-limit or route change → old manager is reused as-is (counters preserved).
-/// - On reload with a rate-limit or route change → manager is rebuilt (counters reset).
+/// Hot-swappable rate-limit manager; reused across reloads unless its config changes (see `try_reload`).
 pub type SharedRateLimiter = Arc<ArcSwap<Option<Arc<RateLimitManager>>>>;
 
-/// Shared, hot-swappable HTTP client pool.
-///
-/// When backends are removed from the config the old pool is replaced atomically.
-/// In-flight requests hold an `Arc<ClientPool>` clone and complete normally; once
-/// they finish, the old pool is dropped and its idle connections are closed.
-/// New backends are served on-demand by the fresh pool.
+/// Hot-swappable HTTP client pool; reused unless backends/pool change (see `try_reload`).
 pub type SharedClientPool = Arc<ArcSwap<ClientPool>>;
 
-/// Shared, hot-swappable dynamic configuration.
+/// Hot-swappable dynamic configuration.
 pub type SharedDynamicConfig = Arc<ArcSwap<DynamicConfig>>;
 
-/// Attempt a hot config reload.
+/// Apply a config change at runtime, atomically and without dropping connections.
 ///
-/// Re-parses the TOML, validates cross-references, warns on static-section changes,
-/// and atomically swaps in the new `DynamicConfig`. If parsing or validation fails
-/// the current config is kept untouched. Serialised via `reload_mutex` so concurrent
-/// SIGHUP / watcher events queue rather than running in parallel.
+/// Does:
+/// - Re-parse + validate; on failure keeps the current config untouched (fail-safe).
+/// - Atomically swap in the new dynamic config (routes, backends, headers, rate limits).
+/// - Rebuild only what changed: rate-limiter (counters reset) and client pool (idle conns drained).
+/// - Reconcile health checks and reload per-domain certs best-effort.
+///
+/// Does NOT:
+/// - Touch live connections: each one keeps the config snapshot it took at accept time, so changes
+///   apply to new connections only (no drain / GOAWAY).
+/// - Apply static changes (listen, tls, fingerprint, timeout): logged, effective on restart only.
+/// - Run concurrently: serialised by `reload_mutex`.
 #[allow(clippy::too_many_arguments)]
 pub async fn try_reload(
     config_path: &Path,
@@ -81,9 +83,10 @@ pub async fn try_reload(
 
     audit_config_changes(&old_dynamic, &new_dynamic);
 
-    // Rebuild rate-limiter when the rate-limit config or domains/routes change.
+    // Rebuild (resetting counters) only when the rate-limit config or its `rate_limit_signature`
+    // changes; unrelated edits (certs, headers, IP filters, backends) keep the existing buckets.
     if old_dynamic.security.rate_limit != new_dynamic.security.rate_limit
-        || old_dynamic.domains != new_dynamic.domains
+        || rate_limit_signature(&old_dynamic.domains) != rate_limit_signature(&new_dynamic.domains)
     {
         let candidate =
             RateLimitManager::new(&new_dynamic.security.rate_limit, &new_dynamic.domains);
@@ -96,9 +99,8 @@ pub async fn try_reload(
         info!("Rate-limit config changed counters reset");
     }
 
-    // Refresh the connection pool when backends are removed or pool config changes.
-    // In-flight handlers hold their own Arc<ClientPool> clone and finish normally;
-    // once they complete the old pool is dropped and its idle connections are closed.
+    // Refresh the connection pool when backends are removed or pool config changes; in-flight
+    // requests keep their old pool clone and only its idle connections are dropped afterwards.
     drain_removed_backends(
         &old_dynamic.backends,
         &new_dynamic.backends,
@@ -113,14 +115,12 @@ pub async fn try_reload(
     let old_hash = fnv1a_hash(&old_dynamic);
 
     dynamic_cfg.store(Arc::new(new_dynamic));
-    // The new snapshot was just stored in `dynamic_cfg`; load it back and reconcile checker tasks
-    // for backend additions/removals and health_check configuration changes.
+    // Reconcile health-check tasks for added/removed backends.
     let fresh = dynamic_cfg.load();
     health_supervisor.reconcile(&fresh.backends, metrics, &Handle::current());
 
-    // Reload certs best-effort, per-domain (Traefik-style): a domain whose cert fails to load
-    // does not abort the reload and keeps its previously serving cert (see
-    // `DynamicCertResolver::update`).
+    // Reload certs per-domain, best-effort: a domain whose cert fails to load keeps its previous
+    // cert instead of aborting the whole reload.
     let cert_report = match cert_resolver {
         Some(resolver) => resolver.update(&fresh.domains, metrics).await,
         None => crate::tls::CertReloadReport::default(),
@@ -213,10 +213,34 @@ fn audit_config_changes(old: &DynamicConfig, new: &DynamicConfig) {
     }
 }
 
-/// Replace the shared client pool when backends are removed or pool config changes.
-///
-/// If the backend set and pool config are both unchanged the existing pool is kept
-/// as-is (avoids needlessly resetting healthy connections).
+/// The rate-limit-relevant projection of `domains`: per domain (keyed by label), its `rate_limit`
+/// override plus the per-route overrides keyed by prefix. Equal signatures build an identical
+/// manager, so its live counters survive reloads that only touch unrelated fields.
+fn rate_limit_signature(
+    domains: &[Domain],
+) -> BTreeMap<&str, (Option<&RateLimitConfig>, BTreeMap<&str, &RouteRateLimitConfig>)> {
+    domains
+        .iter()
+        .map(|domain| {
+            let routes = domain
+                .routes
+                .iter()
+                .filter_map(|route| {
+                    route
+                        .security
+                        .as_ref()
+                        .and_then(|s| s.rate_limit.as_ref())
+                        .map(|rl| (route.prefix.as_str(), rl))
+                })
+                .collect();
+            let domain_override = domain.security.as_ref().and_then(|s| s.rate_limit.as_ref());
+            (domain.label(), (domain_override, routes))
+        })
+        .collect()
+}
+
+/// Replace the shared client pool when backends are removed or pool config changes; otherwise
+/// keep it as-is to avoid resetting healthy connections.
 fn drain_removed_backends(
     old_backends: &[Backend],
     new_backends: &[Backend],
@@ -250,11 +274,8 @@ fn drain_removed_backends(
     client_pool.store(Arc::new(new_pool));
 }
 
-/// Compute a fast FNV-1a hash of a `DynamicConfig` via its `Debug` representation.
-///
-/// Used exclusively for the `huginn_config_hash` Prometheus gauge must be
-/// deterministic within a process run and change whenever the config changes.
-/// Cross-run or cross-version stability is not required.
+/// Fast hash of a `DynamicConfig` for the `huginn_config_hash` Prometheus gauge: only needs to be
+/// stable within a process run and change whenever the config changes.
 fn fnv1a_hash(dynamic: &DynamicConfig) -> u64 {
     use std::collections::hash_map::DefaultHasher;
     let mut hasher = DefaultHasher::new();
