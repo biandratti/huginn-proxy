@@ -10,7 +10,7 @@ use crate::config::Domain;
 use crate::error::{ProxyError, Result};
 use crate::telemetry::Metrics;
 use crate::tls::cert_source::{cert_chain_hash, read_certs_and_keys};
-use tracing::info;
+use tracing::{info, warn};
 
 /// Outcome of a [`DynamicCertResolver::update`] call.
 ///
@@ -279,5 +279,23 @@ async fn load_certified_key(
             })?;
     let cert_hash = cert_chain_hash(&certs_keys.certs);
     let certified_key = Arc::new(CertifiedKey::new(certs_keys.certs, signing_key));
+
+    match certified_key.keys_match() {
+        Ok(()) => {}
+        Err(tokio_rustls::rustls::Error::InconsistentKeys(
+            tokio_rustls::rustls::InconsistentKeys::Unknown,
+        )) => {
+            warn!(
+                host,
+                "could not verify that the private key matches the certificate; proceeding"
+            );
+        }
+        Err(e) => {
+            return Err(ProxyError::Tls(format!(
+                "certificate and private key for '{host}' do not match: {e}"
+            )));
+        }
+    }
+
     Ok((certified_key, cert_hash))
 }

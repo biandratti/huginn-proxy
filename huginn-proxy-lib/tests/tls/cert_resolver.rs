@@ -125,6 +125,41 @@ async fn strict_rejects_unmatched_and_no_sni(
     Ok(())
 }
 
+#[tokio::test]
+async fn wildcard_matches_only_single_label_subdomain(
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let (cert, key) = create_valid_test_cert()?;
+    let resolver = DynamicCertResolver::new(false);
+
+    let domains = vec![domain(Some("*.example.com"), &cert, &key)];
+    let report = resolver.update(&domains, &Metrics::new_noop()).await;
+
+    let _ = std::fs::remove_file(&cert);
+    let _ = std::fs::remove_file(&key);
+    assert_eq!(report.failed, 0, "wildcard cert must load");
+
+    let (_, _, has_default) = resolver.cert_map_summary();
+    assert!(!has_default, "no catch-all ⇒ no default fallback to mask misses");
+
+    assert!(
+        resolver.resolves_for(Some("sub.example.com")),
+        "single-label subdomain matches the wildcard"
+    );
+    assert!(
+        !resolver.resolves_for(Some("example.com")),
+        "wildcard does NOT cover the apex/base domain"
+    );
+    assert!(
+        !resolver.resolves_for(Some("a.b.example.com")),
+        "wildcard covers exactly one label, not a multi-level subdomain"
+    );
+    assert!(
+        !resolver.resolves_for(Some("notexample.com")),
+        "unrelated host does not match the wildcard"
+    );
+    Ok(())
+}
+
 /// Best-effort: one domain's bad cert does not block the others. The valid cert loads,
 /// the bad one is reported as failed, and the swap still happens.
 #[tokio::test]
@@ -151,6 +186,29 @@ async fn bad_cert_does_not_block_other_domains(
     assert_eq!(exact, 1, "valid exact cert went live despite the other failure");
     assert!(!has_default, "first-time failed catch-all has no prior cert to carry over");
     assert!(resolver.resolves_for(Some("api.example.com")), "valid domain still resolves");
+    Ok(())
+}
+
+#[tokio::test]
+async fn mismatched_cert_and_key_is_rejected(
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    // Two independent self-signed pairs; cross cert A with key B.
+    let (cert_a, key_a) = create_valid_test_cert()?;
+    let (cert_b, key_b) = create_valid_test_cert()?;
+    let resolver = DynamicCertResolver::new(false);
+
+    let domains = vec![domain(None, &cert_a, &key_b)];
+    let report = resolver.update(&domains, &Metrics::new_noop()).await;
+
+    for path in [&cert_a, &key_a, &cert_b, &key_b] {
+        let _ = std::fs::remove_file(path);
+    }
+
+    assert_eq!(report.loaded, 0, "a crossed cert/key pair must not load");
+    assert_eq!(report.failed, 1, "the mismatched domain is reported as failed");
+    let (_, _, has_default) = resolver.cert_map_summary();
+    assert!(!has_default, "the mismatched pair must not populate the default slot");
+    assert!(!resolver.resolves_for(None), "nothing resolves from a rejected cert/key pair");
     Ok(())
 }
 
