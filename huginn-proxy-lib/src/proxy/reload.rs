@@ -24,13 +24,15 @@ pub type SharedClientPool = Arc<ArcSwap<ClientPool>>;
 /// Hot-swappable dynamic configuration.
 pub type SharedDynamicConfig = Arc<ArcSwap<DynamicConfig>>;
 
-/// Apply a config change at runtime, atomically and without dropping connections.
+/// Apply a config change at runtime without dropping connections.
 ///
 /// Does:
 /// - Re-parse + validate; on failure keeps the current config untouched (fail-safe).
-/// - Atomically swap in the new dynamic config (routes, backends, headers, rate limits).
+/// - Reload per-domain certs (best-effort) FIRST, then swap rate-limiter, pool, and the
+///   routing config LAST. Cert IO is the slow step; doing it before the synchronous stores
+///   keeps the cert-vs-routes inconsistency window down to microseconds.
 /// - Rebuild only what changed: rate-limiter (counters reset) and client pool (idle conns drained).
-/// - Reconcile health checks and reload per-domain certs best-effort.
+/// - Reconcile health checks for added/removed backends.
 ///
 /// Does NOT:
 /// - Touch live connections: each one keeps the config snapshot it took at accept time, so changes
@@ -83,6 +85,32 @@ pub async fn try_reload(
 
     audit_config_changes(&old_dynamic, &new_dynamic);
 
+    let hash = fnv1a_hash(&new_dynamic);
+    let old_hash = fnv1a_hash(&old_dynamic);
+
+    let cert_report = match cert_resolver {
+        Some(resolver) => {
+            let report = resolver.update(&new_dynamic.domains, metrics).await;
+            if !resolver.has_serviceable_cert() && !new_dynamic.domains.is_empty() {
+                info!(
+                    "TLS is configured but no certificate is serviceable after reload; all TLS \
+                     handshakes will be rejected until a cert is provided"
+                );
+            }
+            report
+        }
+        None => crate::tls::CertReloadReport::default(),
+    };
+
+    if cert_report.is_partial() {
+        info!(
+            failed = cert_report.failed,
+            loaded = cert_report.loaded,
+            "Some domain certificates failed to load on reload; new routes/backends are live and \
+             failed domains keep their previous certificates"
+        );
+    }
+
     // Rebuild (resetting counters) only when the rate-limit config or its `rate_limit_signature`
     // changes; unrelated edits (certs, headers, IP filters, backends) keep the existing buckets.
     if old_dynamic.security.rate_limit != new_dynamic.security.rate_limit
@@ -111,38 +139,12 @@ pub async fn try_reload(
         static_cfg.timeout.upstream_connect_ms,
     );
 
-    let hash = fnv1a_hash(&new_dynamic);
-    let old_hash = fnv1a_hash(&old_dynamic);
-
-    dynamic_cfg.store(Arc::new(new_dynamic));
+    // Routing config swapped LAST so a connection that observes the new routes already
+    // sees the matching certs, rate limiter, and pool from the same reload generation.
+    let new_dynamic = Arc::new(new_dynamic);
+    dynamic_cfg.store(Arc::clone(&new_dynamic));
     // Reconcile health-check tasks for added/removed backends.
-    let fresh = dynamic_cfg.load();
-    health_supervisor.reconcile(&fresh.backends, metrics, &Handle::current());
-
-    // Reload certs per-domain, best-effort: a domain whose cert fails to load keeps its previous
-    // cert instead of aborting the whole reload.
-    let cert_report = match cert_resolver {
-        Some(resolver) => {
-            let report = resolver.update(&fresh.domains, metrics).await;
-            if !resolver.has_serviceable_cert() && !fresh.domains.is_empty() {
-                info!(
-                    "TLS is configured but no certificate is serviceable after reload; all TLS \
-                     handshakes will be rejected until a cert is provided"
-                );
-            }
-            report
-        }
-        None => crate::tls::CertReloadReport::default(),
-    };
-
-    if cert_report.is_partial() {
-        info!(
-            failed = cert_report.failed,
-            loaded = cert_report.loaded,
-            "Some domain certificates failed to load on reload; new routes/backends are live and \
-             failed domains keep their previous certificates"
-        );
-    }
+    health_supervisor.reconcile(&new_dynamic.backends, metrics, &Handle::current());
 
     metrics.record_reload_success(hash);
     if hash == old_hash {
