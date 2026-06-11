@@ -133,11 +133,9 @@ impl RateLimitManager {
 /// When `trusted_proxies` is empty, returns the TCP peer IP unconditionally,
 /// this is the secure default and cannot be spoofed by a client.
 ///
-/// When `trusted_proxies` is non-empty and the peer itself is a trusted proxy,
-/// walks `X-Forwarded-For` right-to-left (our proxy appends the peer IP, so the
-/// rightmost entry is the most recently added and most trustworthy) and returns
-/// the first IP that it is NOT in the trusted set. Falls back to the peer IP if all
-/// XFF entries are trusted or the header is absent/malformed.
+/// When the peer is a trusted proxy, walks the inbound `X-Forwarded-For` right-to-left
+/// (most-trusted first) and returns the first non-trusted IP, the real client behind
+/// the load balancer. Falls back to the peer IP if all entries are trusted or absent.
 fn resolve_client_ip(
     peer: std::net::SocketAddr,
     headers: &http::HeaderMap,
