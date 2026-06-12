@@ -219,6 +219,9 @@ fn audit_config_changes(old: &DynamicConfig, new: &DynamicConfig) {
     if old.security.rate_limit != new.security.rate_limit {
         info!("Config diff: rate-limit config changed");
     }
+    if old.security.trusted_proxies != new.security.trusted_proxies {
+        info!("Config diff: trusted proxies changed (client-IP resolution from XFF)");
+    }
     if old.backend_pool != new.backend_pool {
         info!("Config diff: backend pool config changed, pool will be refreshed");
     }

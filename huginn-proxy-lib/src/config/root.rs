@@ -130,6 +130,7 @@ impl Config {
                     headers: self.security.headers,
                     ip_filter: self.security.ip_filter,
                     rate_limit: self.security.rate_limit,
+                    trusted_proxies: self.security.trusted_proxies,
                 },
                 backend_pool: self.backend_pool,
             },

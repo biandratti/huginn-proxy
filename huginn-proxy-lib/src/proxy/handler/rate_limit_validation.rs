@@ -1,6 +1,7 @@
 use http::StatusCode;
 use http_body_util::{combinators::BoxBody, BodyExt, Full};
 use hyper::Response;
+use ipnet::IpNet;
 use std::sync::Arc;
 use tracing::debug;
 
@@ -16,6 +17,7 @@ type RespBody = BoxBody<bytes::Bytes, hyper::Error>;
 /// Returns:
 /// - `None` if request is allowed to proceed
 /// - `Some(429 response)` if request exceeds rate limit
+#[allow(clippy::too_many_arguments)]
 pub fn check_rate_limit(
     rate_limit_manager: Option<&Arc<RateLimitManager>>,
     rate_limit_config: &RateLimitConfig,
@@ -24,11 +26,13 @@ pub fn check_rate_limit(
     headers: &http::HeaderMap,
     metrics: &Arc<Metrics>,
     domain: &str,
+    trusted_proxies: &[IpNet],
 ) -> Option<Response<RespBody>> {
     let manager = rate_limit_manager?;
 
     // Whole-block replace: when the route carries its own rate-limit block it fully replaces the
-    // domain-effective config (key strategy, header, trusted proxies); otherwise use that config.
+    // domain-effective config (key strategy, header); otherwise use that config. `trusted_proxies`
+    // is global (not per-scope) and resolves the real client IP from XFF for ip/combined keys.
     let effective = route_match.rate_limit.unwrap_or(rate_limit_config);
     let limit_by = effective.limit_by;
     let limit_by_header = effective.limit_by_header.as_deref();
@@ -39,7 +43,7 @@ pub fn check_rate_limit(
         route_match.matched_prefix,
         limit_by_header,
         headers,
-        &effective.trusted_proxies,
+        trusted_proxies,
     );
 
     let strategy = format!("{:?}", limit_by).to_lowercase();

@@ -18,6 +18,18 @@ pub struct SecurityConfig {
     /// Rate limiting configuration
     #[serde(default)]
     pub rate_limit: RateLimitConfig,
+    /// Trusted reverse-proxy CIDRs for client-IP resolution (global, opt-in).
+    ///
+    /// A property of the network topology (which load balancers sit in front), not of a
+    /// route, so it is configured once globally and is **not** overridable per domain/route.
+    /// When empty (default), the client IP is always the non-forgeable TCP peer IP. When
+    /// non-empty and the peer is a trusted proxy, `X-Forwarded-For` is walked right-to-left
+    /// and the first IP not in this list is used as the real client IP. Consumed by rate
+    /// limiting (`limit_by = "ip" | "combined"`). Accepts CIDR notation,
+    /// e.g. `["10.0.0.0/8", "::1/128"]`.
+    #[serde(default)]
+    #[serde(deserialize_with = "deserialize_ip_networks")]
+    pub trusted_proxies: Vec<IpNet>,
 }
 
 impl Default for SecurityConfig {
@@ -27,6 +39,7 @@ impl Default for SecurityConfig {
             headers: SecurityHeaders::default(),
             ip_filter: IpFilterConfig::default(),
             rate_limit: RateLimitConfig::default(),
+            trusted_proxies: vec![],
         }
     }
 }
@@ -68,6 +81,8 @@ pub struct SecurityDynamicConfig {
     pub ip_filter: IpFilterConfig,
     /// Rate limiting policy
     pub rate_limit: RateLimitConfig,
+    /// Trusted reverse-proxy CIDRs for client-IP resolution (global, not overridable per scope).
+    pub trusted_proxies: Vec<IpNet>,
 }
 
 /// Security headers configuration
@@ -233,19 +248,6 @@ pub struct RateLimitConfig {
     /// Custom header name for "header" limit_by mode
     /// Required when limit_by = "header"
     pub limit_by_header: Option<String>,
-    /// Trusted reverse-proxy CIDRs for IP resolution (opt-in).
-    ///
-    /// When empty (default), the rate-limit key is always the TCP peer IP, the only
-    /// non-forgeable identity available. When non-empty, the `X-Forwarded-For` header
-    /// is walked right-to-left and the first IP that is NOT in this list is used as
-    /// the real client IP. This lets you recover the original client IP behind a
-    /// trusted load balancer without allowing clients to spoof the key by injecting
-    /// arbitrary XFF values.
-    ///
-    /// Accepts CIDR notation: ["10.0.0.0/8", "172.16.0.0/12", "::1/128"]
-    #[serde(default)]
-    #[serde(deserialize_with = "deserialize_ip_networks")]
-    pub trusted_proxies: Vec<IpNet>,
 }
 
 impl Default for RateLimitConfig {
@@ -257,7 +259,6 @@ impl Default for RateLimitConfig {
             window_seconds: default_window_seconds(),
             limit_by: default_limit_by(),
             limit_by_header: None,
-            trusted_proxies: vec![],
         }
     }
 }

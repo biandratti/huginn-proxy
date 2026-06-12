@@ -47,11 +47,11 @@ pub fn add_forwarded_headers(
     }
 
     // X-Forwarded-Host: strip any client-supplied value first, then set it to the host the
-    // proxy actually routed on. This is the trusted precedence from `extract_request_host`
-    // (SNI for HTTP/1.1 over TLS, `:authority` for HTTP/2, `Host` fallback), so it stays
+    // proxy actually routed on. This is the resolved host from `extract_request_host`
+    // (URI authority — `:authority` / absolute-form — then `Host` fallback), so it stays
     // consistent with the backend the request is forwarded to, including coalesced HTTP/2
     // connections where `:authority` differs from the connection's SNI. If the resolved host
-    // is empty (e.g. an IP client that sent no SNI/authority/Host), leave the header unset.
+    // is empty (e.g. an IP client that sent no authority/Host), leave the header unset.
     req.headers_mut().remove(forwarded::HOST);
     if !forwarded_host.is_empty() {
         if let Ok(header_value) = HeaderValue::from_str(forwarded_host) {

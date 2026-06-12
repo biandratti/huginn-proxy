@@ -225,6 +225,7 @@ pub async fn handle_proxy_request(
         req.headers(),
         &metrics,
         domain_label,
+        &security.trusted_proxies,
     ) {
         let status_code = rate_limited_response.status().as_u16();
         metrics.record_entrypoint_request(&method, status_code, &protocol);

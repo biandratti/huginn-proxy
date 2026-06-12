@@ -77,10 +77,12 @@ Host matching order is **exact host → single-label wildcard (`*.example.com`) 
 with no `host` field (at most one is allowed); it matches any host not claimed by an exact or wildcard entry, including
 IP literals and `localhost`. A request whose host matches no domain is answered with **421 Misdirected Request**.
 
-The host itself is resolved from the most trustworthy source available: TLS SNI first, then the request URI authority
-(`:authority` / absolute-form URI), then the `Host` header. SNI and authority cannot be forged by a downstream `Host`
-header, so cert selection and routing stay consistent. Host comparison is case-insensitive and IPv6 brackets are
-stripped before matching (`[::1]` matches a domain configured as `::1`).
+The routing host is resolved from the HTTP-layer authority, uniformly for HTTP/1.1 and HTTP/2 (like nginx, Traefik, and
+Envoy): the request URI authority first (`:authority` pseudo-header in HTTP/2, or absolute-form request target in
+HTTP/1.1), then the `Host` header as fallback. TLS SNI is **not** a routing input — it only selects the certificate at
+the TLS layer and drives the optional `sni_strict` handshake rejection. Cert selection (SNI) and routing (HTTP host) are
+reconciled by the always-on **421 Misdirected Request** check on coalesced connections. Host comparison is
+case-insensitive and IPv6 brackets are stripped before matching (`[::1]` matches a domain configured as `::1`).
 
 `cert_path` and `key_path` are optional but must be supplied together — omit both for a plain-HTTP domain. Specifying
 only one is a validation error. Duplicate hosts and more than one catch-all are also rejected at config load.
@@ -89,20 +91,25 @@ Limitation: Wildcard is one label deep only. Routing is host + path prefix; no h
 
 ## Rate Limiting
 
-**Token bucket algorithm**
+**Fixed-window counter (per process)**
 
 Configurable at three scopes — **global** (`[security.rate_limit]`), **per-domain**
 (`[domains.security.rate_limit]`), and **per-route** (`[domains.routes.security.rate_limit]`). Security policy lives
 under `security` at every scope, so the path is consistent. You can limit by IP, custom header, route path, or a
-combination. The implementation uses an atomic token bucket that refills over time.
+combination. The effective limit is **`burst` requests per `window_seconds`** window, tracked with `pingora_limits`'
+atomic rate counter. (`requests_per_second` is currently not used for enforcement — the cap is `burst` over the
+window; size `burst`/`window_seconds` to the rate you want.)
+
+For `limit_by = "ip"` / `"combined"`, the client IP is resolved from the global
+[`[security].trusted_proxies`](SETTINGS.md#top-level-security-keys) (walking `X-Forwarded-For`); without it the
+non-forgeable TCP peer IP is used.
 
 Precedence is **global → domain → route**, **whole-block replace** at every scope: a domain's `rate_limit` block fully
 replaces the global policy for that domain, and a route's block fully replaces the domain-effective policy for that route
 (not a field-level merge — re-state every key you want to keep; e.g. a route block without `enabled = true` disables the
 limit for that route). Limiters are keyed per domain, so the same route prefix under two domains is tracked independently.
 
-Supports burst allowance (e.g., 100 req/s with 200 burst). Tracks limits in-memory, so restarting the proxy resets all
-counters.
+Tracks limits in-memory, so restarting the proxy resets all counters.
 
 Limitation: No distributed rate limiting across multiple proxy instances. Limits are per-process only.
 
@@ -132,9 +139,10 @@ these IPs). Empty allowlist blocks everything, empty denylist allows everything.
 
 Configurable globally (`[security.ip_filter]`), **per-domain** (`[domains.security.ip_filter]`), or **per-route**
 (`[domains.routes.security.ip_filter]`); the most specific scope that sets a filter replaces the parent's entirely.
-When no route overrides the filter, the check runs after host/domain resolution but before route selection, so a blocked
-client never learns whether a route exists. When a route overrides it, the check runs after route match (router-level
-ACL, like Traefik).
+When **no route in the matched domain** sets its own `ip_filter`, the domain/global filter runs after host/domain
+resolution but before route selection, so a blocked client never learns whether a route exists. When **any route in the
+domain** sets an `ip_filter`, the check for that whole domain defers to after route match (router-level ACL, like
+Traefik) and uses the matched route's resolved filter (`route.or(domain).or(global)`).
 
 Limitation: No geographic filtering or ASN-based rules.
 
@@ -169,9 +177,9 @@ Reloading is **best-effort and per-domain** (Traefik-style): if one domain's new
 domains still swap to their fresh certs, and the failing domain keeps serving its previously loaded certificate so a
 transient file issue never drops TLS for that domain.
 
-Each successful load or rotation increments `huginn_tls_cert_reload_total{result="success"}`, updates
-`huginn_tls_cert_last_reload_timestamp_seconds`, and publishes the new certificate-chain content hash via
-`huginn_tls_cert_hash`.
+Each successful load or rotation increments `huginn_tls_cert_reload_total{result="success", domain="…"}`, updates
+`huginn_tls_cert_last_reload_timestamp_seconds{domain="…"}`, and publishes the new certificate-chain content hash via
+`huginn_tls_cert_hash{domain="…"}` — all labeled per domain.
 Failed rebuilds bump the `result="error"` counter but leave the hash and timestamp gauges untouched, so dashboards
 always reflect the last *good* certificate actually serving traffic. See [TELEMETRY.md](TELEMETRY.md) §13 for the full
 metric reference and example alert queries.
@@ -261,8 +269,14 @@ Limitation: Pooling is global or per-route only. No per-backend configuration fo
 
 **X-Forwarded-* headers**
 
-Automatically adds X-Forwarded-For, X-Forwarded-Host, X-Forwarded-Port, and X-Forwarded-Proto. Client-provided values
-are overridden to prevent spoofing.
+Automatically sets X-Forwarded-For, X-Forwarded-Host, X-Forwarded-Port, and X-Forwarded-Proto:
+
+- **X-Forwarded-For** — the TCP peer IP is **appended** to any existing value (preserving the upstream proxy chain, per
+  the standard XFF convention). Note: do not trust the leftmost entry as the client IP — use `trusted_proxies` for that.
+- **X-Forwarded-Host** — any client-supplied value is **stripped** and replaced with the host the proxy actually routed
+  on, so it always agrees with the selected backend.
+- **X-Forwarded-Port** / **X-Forwarded-Proto** — set from the connection (peer port, and `https`/`http`), replacing any
+  client value.
 
 Limitation: No configurable header names. No support for Forwarded header (RFC 7239).
 
@@ -270,8 +284,9 @@ Limitation: No configurable header names. No support for Forwarded header (RFC 7
 
 **Configurable Host header forwarding**
 
-By default, the proxy replaces the Host header with the backend address. When preserve_host is enabled, the original
-Host header from the client is preserved and sent to the backend.
+When `preserve_host` is enabled, the client's original Host header is captured and forwarded to the backend unchanged.
+By default (`false`), the request is forwarded with the rewritten upstream target (the backend address) as its
+authority, so the backend sees the backend address rather than the client's Host.
 
 This is useful for virtual hosting scenarios where the backend needs to know which domain was originally requested.
 
@@ -335,8 +350,9 @@ Limitation: No distributed tracing. No request logging to files. No custom metri
 
 **Zero-downtime config updates via SIGHUP or file watcher**
 
-Dynamic config sections are swapped atomically using `ArcSwap` — in-flight requests complete with the old config, new
-requests use the new config immediately. No connections are dropped.
+Dynamic config sections are swapped atomically using `ArcSwap`. Each connection takes a config snapshot at accept time
+and keeps it for its lifetime, so the new config applies to **new connections**; in-flight connections (including
+keep-alive requests) finish on their original snapshot. No connections are dropped (no drain / GOAWAY).
 
 Reload triggers and config:
 
@@ -347,6 +363,10 @@ Reload triggers and config:
   or anything else). Hot reload behaves the same. See [SETTINGS.md](SETTINGS.md).
 
 On reload, if the new config is invalid the proxy keeps the current config and logs the error. If static sections
-changed, the proxy logs a warning and ignores those changes (restart required).
+changed, the proxy logs an error and ignores those changes (restart required).
+
+On load, `--validate`, and every reload the proxy also emits a **non-fatal `WARN`** when a whole-block override (domain
+or route) drops a protection the parent had enabled — e.g. a partial `rate_limit`/`ip_filter`/`headers` block that
+silently disables a globally-enabled policy. It never aborts, since dropping a policy may be intended.
 
 Limitation: No per-section partial reload. Dynamic config is always swapped as a whole.

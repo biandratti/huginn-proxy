@@ -23,7 +23,7 @@ fn headers(max_age: u64) -> SecurityHeaders {
 }
 
 fn ctx(ip_filter: IpFilterConfig, headers: SecurityHeaders) -> SecurityContext {
-    SecurityContext::new(headers, ip_filter, RateLimitConfig::default(), None, None)
+    SecurityContext::new(headers, ip_filter, RateLimitConfig::default(), None, None, vec![])
 }
 
 fn route(security: Option<RouteSecurityConfig>, fingerprinting: Option<bool>) -> Route {

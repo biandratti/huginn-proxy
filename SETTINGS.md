@@ -30,7 +30,7 @@ matter.
 
 | Key             | Type | Default | Description                                                                                                                                     |
 |-----------------|------|---------|-------------------------------------------------------------------------------------------------------------------------------------------------|
-| `preserve_host` | bool | `false` | Forward the original `Host` header from the client to the backend. When `false`, the proxy substitutes its own `Host` with the backend address. |
+| `preserve_host` | bool | `false` | Forward the original `Host` header from the client to the backend. When `false`, the request is forwarded with the backend address as its authority. **Dynamic** (hot-reloadable). |
 
 <table>
 <thead>
@@ -107,13 +107,13 @@ listen:
 
 ## `[[backends]]`
 
-Backend servers for forwarding. Repeat the header for each backend. **Optional** — omitting all backends is valid; requests return 404 (no routes) or 502 (routes reference a backend with no healthy candidates). **Dynamic** (hot-reloadable).
+Backend servers for forwarding. Repeat the header for each backend. **Optional** — omitting all backends is valid; requests then return **421** (host matches no domain), **404** (domain matched but no route prefix matches), or **502** (a matching route references a backend with no healthy candidate). **Dynamic** (hot-reloadable).
 
 | Key            | Type   | Default           | Description                                                                                                                        |
 |----------------|--------|-------------------|------------------------------------------------------------------------------------------------------------------------------------|
 | `address`      | string | —                 | `host:port` of the backend. Used as the pool key — must match exactly what routes reference.                                       |
-| `http_version` | string | `null` (preserve) | Protocol to use when connecting to this backend. `"http11"`, `"http2"`, or `"preserve"` (negotiate based on what the client used). |
-| `health_check` | table  | `null` (off)     | Optional active health probe. When set, the proxy tracks per-upstream health and returns **502** to clients when the backend is marked unhealthy. If you omit this key (or leave the backend without a `health_check` table), that backend is not probed and the health gate does not apply to it. See [`[backends.health_check]`](#backendshealth_check) below. |
+| `http_version` | string | `null`            | Protocol to use when connecting to this backend. `"http11"`, `"http2"`, or `"preserve"` (negotiate based on what the client used). When unset, the effective default is `preserve` for HTTPS clients and `http11` for plain-HTTP clients. |
+| `health_check` | table  | `null` (off)     | Optional active health probe. When set, the proxy tracks per-upstream health and returns **502** to clients when the backend is marked unhealthy. Omit the key entirely to leave the backend unprobed (always treated as healthy). Note: an **empty table** (`health_check = {}`) does *not* mean "off" — it enables a TCP probe with default thresholds. See [`[backends.health_check]`](#backendshealth_check) below. |
 
 <table>
 <thead>
@@ -209,7 +209,8 @@ backends:
 
 Domain entries group a TLS certificate with its path-based routes. Each entry handles one
 hostname (or wildcard), or acts as a catch-all. **Dynamic** (hot-reloadable). **Optional** —
-omitting all domains is valid; the proxy binds but returns 404 for all requests.
+omitting all domains is valid; the proxy binds but returns **421 (Misdirected Request)** for all
+requests, since no host can match.
 
 The request host is resolved from the HTTP-layer authority for **all** protocol versions —
 `:authority` (HTTP/2) or absolute-form target → `Host` header (RFC 7230 §5.4) — exactly like
@@ -265,6 +266,7 @@ enforce).
 | `key_path`  | string | `null`  | Path to the TLS private key PEM file. Must be set together with `cert_path` or both omitted.     |
 | `headers`   | table  | —       | Domain-level header manipulation. Merged between global and route-level headers.                 |
 | `security`  | table  | —       | Per-domain security overrides (`ip_filter`, `rate_limit`, `headers`). See [`[domains.security]`](#domainssecurity) below. |
+| `fingerprinting` | bool | `null` (inherit) | Domain-level fingerprint-header **injection** gate. Resolved per route as `route.or(domain).unwrap_or(true)`. Controls header injection only; capture is the static global `[fingerprint]`. |
 | `routes`    | array  | `[]`    | Path-based routing rules scoped to this domain. Same fields as the former `[[routes]]` entries.  |
 
 <table>
@@ -352,10 +354,11 @@ Where each policy can be set (**global** `[security]`/`[headers]` → **domain**
 | Policy | Global | Domain | Route | How it overrides |
 |---|:---:|:---:|:---:|---|
 | `ip_filter` (ACL) | ✅ | ✅ | ✅ | **Whole-block replace** — most specific scope wins entirely. Route filter checked after route match. |
-| `rate_limit` (incl. `trusted_proxies`, `limit_by`) | ✅ | ✅ | ✅ | **Whole-block replace** — most specific scope wins entirely. |
+| `rate_limit` (incl. `limit_by`) | ✅ | ✅ | ✅ | **Whole-block replace** — most specific scope wins entirely. |
 | `security.headers` (HSTS/CSP/custom) | ✅ | ✅ | ✅ | **Whole-block replace** — most specific scope wins entirely. |
 | `[headers]` (add/remove request/response) | ✅ | ✅ | ✅ | **Additive cascade** — all scopes accumulate; per header name the most specific wins. |
 | `fingerprinting` (header injection) | — | ✅ | ✅ | `route.or(domain).unwrap_or(true)`. Capture itself is the static global `[fingerprint]`. |
+| `trusted_proxies` (client-IP from XFF) | ✅ | ❌ | ❌ | Global only — network-topology property, not overridable per scope. |
 | `max_connections` | ✅ | ❌ | ❌ | Process-level (static); global only. |
 
 **Whole-block replace** means the block is taken as a unit: a partial override drops the parent's
@@ -686,10 +689,17 @@ tls:
 
 | Key                 | Type             | Default          | Description                                                |
 |---------------------|------------------|------------------|------------------------------------------------------------|
-| `versions`          | array of strings | `["1.2", "1.3"]` | Allowed TLS versions. Values: `"1.2"`, `"1.3"`.            |
-| `cipher_suites`     | array of strings | all supported    | Named cipher suites. Restrict to tighten security posture. |
-| `curve_preferences` | array of strings | all supported    | Named elliptic curves for key exchange.                    |
+| `versions`          | array of strings | `["1.2", "1.3"]` | Allowed TLS versions. Values: `"1.2"`, `"1.3"`. **Currently parsed and validated but not enforced** — see note below. |
+| `min_version`       | string           | `null`           | Minimum TLS version (`"1.2"` or `"1.3"`). Mutually exclusive with an explicit `versions` list. **Currently parsed and validated but not enforced** — see note below. |
+| `max_version`       | string           | `null`           | Maximum TLS version (`"1.2"` or `"1.3"`). Mutually exclusive with an explicit `versions` list. **Currently parsed and validated but not enforced** — see note below. |
+| `cipher_suites`     | array of strings | all supported    | Named cipher suites. Restrict to tighten security posture. Applied to the TLS stack. |
+| `curve_preferences` | array of strings | all supported    | Named elliptic curves for key exchange. **Currently parsed and validated but not enforced** — see note below. |
 | `sni_strict`        | bool             | `false`          | When `true`, disable the default-cert fallback entirely (full parity with Traefik's `sniStrict`): reject (`unrecognized_name`) both a TLS connection whose SNI matches no domain cert **and** a connection that sends no SNI (IP-literal clients). When `false`, both fall back to the default cert. Production hardening against unknown-hostname / no-SNI access. |
+
+> **Note:** `cipher_suites` and `sni_strict` are applied to the TLS stack. `versions`, `min_version`,
+> `max_version`, and `curve_preferences` are currently validated at load but **not** applied — the
+> acceptor is built with rustls' safe defaults (TLS 1.2 **and** 1.3, default curve preferences). Do
+> not rely on these four keys to restrict the negotiated TLS version or curves yet.
 
 > **Misdirected requests (HTTP 421)** are handled automatically and are not configurable. On a
 > coalesced HTTP/2 connection, any request whose host is served by a different certificate than
@@ -1102,9 +1112,10 @@ backend_pool:
 
 ### Top-level security keys
 
-| Key               | Type    | Default | Description                                                                         |
-|-------------------|---------|---------|-------------------------------------------------------------------------------------|
-| `max_connections` | integer | `512`   | Maximum concurrent client connections. **Static** — enforced at the acceptor level. |
+| Key               | Type         | Default | Description                                                                         |
+|-------------------|--------------|---------|-------------------------------------------------------------------------------------|
+| `max_connections` | integer      | `512`   | Maximum concurrent client connections. **Static** — enforced at the acceptor level. |
+| `trusted_proxies` | string array | `[]`    | Trusted reverse-proxy CIDRs used to resolve the real client IP from `X-Forwarded-For`. **Global only** — a property of the network topology, *not* overridable per domain/route. When empty (default), the non-forgeable TCP peer IP is used. When set and the peer is a trusted proxy, XFF is walked right-to-left and the first IP **not** in this list is used. Consumed by rate limiting (`limit_by = "ip" \| "combined"`). **Dynamic** (hot-reloadable). Accepts CIDR notation. |
 
 <table>
 <thead>
@@ -1120,6 +1131,8 @@ backend_pool:
 ```toml
 [security]
 max_connections = 512
+# Trusted load balancers in front of the proxy; recover the real client IP from XFF.
+trusted_proxies = ["10.0.0.0/8", "172.16.0.0/12"]
 ```
 
 </td>
@@ -1128,6 +1141,10 @@ max_connections = 512
 ```yaml
 security:
   max_connections: 512
+  # Trusted load balancers in front of the proxy; recover the real client IP from XFF.
+  trusted_proxies:
+    - "10.0.0.0/8"
+    - "172.16.0.0/12"
 ```
 
 </td>
@@ -1210,6 +1227,9 @@ Global rate limiting. **Dynamic** (hot-reloadable). Per-domain override via
 `[domains.security.rate_limit]` and per-route override via `[domains.routes.security.rate_limit]`,
 each a **whole-block replace** (not a field-level merge).
 
+The real client IP used for `limit_by = "ip" | "combined"` is resolved from the global
+[`[security].trusted_proxies`](#top-level-security-keys).
+
 | Key                   | Type    | Default | Description                                                                         |
 |-----------------------|---------|---------|-------------------------------------------------------------------------------------|
 | `enabled`             | bool    | `false` | Enable global rate limiting.                                                        |
@@ -1218,7 +1238,6 @@ each a **whole-block replace** (not a field-level merge).
 | `window_seconds`      | integer | `1`     | Sliding window in seconds for the token bucket refill.                              |
 | `limit_by`            | string       | `"ip"`  | Key used to track limits: `"ip"`, `"header"`, `"route"`, `"combined"` (IP + route). |
 | `limit_by_header`     | string       | `null`  | Header name to use as the rate limit key when `limit_by = "header"`.                |
-| `trusted_proxies`     | string array | `[]`    | Trusted reverse-proxy CIDRs. When empty (default), the TCP peer IP is always used as the rate-limit key — this is the secure default and cannot be spoofed. When set, `X-Forwarded-For` is walked right-to-left and the first IP **not** in this list is used, recovering the real client IP behind a trusted load balancer. Accepts CIDR notation. |
 
 <table>
 <thead>
@@ -1311,15 +1330,16 @@ security:
 
 ```toml
 # Rate limit by real client IP behind a trusted load balancer.
-# Without trusted_proxies the TCP peer IP is used (secure default).
-# With trusted_proxies, XFF is walked right-to-left to find the
-# first non-trusted IP, which is treated as the client address.
+# The client IP is resolved from the GLOBAL `[security].trusted_proxies`
+# (walking XFF right-to-left); without it the TCP peer IP is used.
+[security]
+trusted_proxies = ["10.0.0.0/8", "172.16.0.0/12"]
+
 [security.rate_limit]
 enabled = true
 requests_per_second = 500
 burst = 1000
 limit_by = "ip"
-trusted_proxies = ["10.0.0.0/8", "172.16.0.0/12"]
 ```
 
 </td>
@@ -1327,15 +1347,17 @@ trusted_proxies = ["10.0.0.0/8", "172.16.0.0/12"]
 
 ```yaml
 # Rate limit by real client IP behind a trusted load balancer.
+# The client IP is resolved from the GLOBAL security.trusted_proxies
+# (walking XFF right-to-left); without it the TCP peer IP is used.
 security:
+  trusted_proxies:
+    - "10.0.0.0/8"
+    - "172.16.0.0/12"
   rate_limit:
     enabled: true
     requests_per_second: 500
     burst: 1000
     limit_by: "ip"
-    trusted_proxies:
-      - "10.0.0.0/8"
-      - "172.16.0.0/12"
 ```
 
 </td>
@@ -1505,7 +1527,11 @@ addrs = ["0.0.0.0:8080"]
 [[backends]]
 address = "localhost:3000"
 
-[[routes]]
+# A host-less domain is the catch-all: it matches any host (plain HTTP here).
+# Routes live under the domain, never at the top level.
+[[domains]]
+
+[[domains.routes]]
 prefix = "/"
 backend = "localhost:3000"
 ```
@@ -1523,9 +1549,12 @@ listen:
 backends:
   - address: "localhost:3000"
 
-routes:
-  - prefix: "/"
-    backend: "localhost:3000"
+# A host-less domain is the catch-all: it matches any host (plain HTTP here).
+# Routes live under the domain, never at the top level.
+domains:
+  - routes:
+      - prefix: "/"
+        backend: "localhost:3000"
 ```
 
 </td>

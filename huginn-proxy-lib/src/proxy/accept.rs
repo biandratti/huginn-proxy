@@ -94,6 +94,7 @@ pub async fn accept_loop(
             dynamic.security.rate_limit.clone(),
             rate_mgr,
             dynamic.headers.clone(),
+            dynamic.security.trusted_proxies.clone(),
         );
         let backends = Arc::clone(&dynamic.backends);
         let domains = Arc::clone(&dynamic.domains);
