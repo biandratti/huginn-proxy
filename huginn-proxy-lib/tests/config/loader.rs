@@ -215,6 +215,81 @@ max_age = 600
 }
 
 #[test]
+fn loads_per_route_security_override() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    use huginn_proxy_lib::config::{IpFilterMode, LimitBy};
+
+    let path = tmp_path("route-security");
+    let toml = r#"
+listen = { addrs = ["127.0.0.1:0"] }
+backends = [{ address = "backend:9000" }]
+
+[[domains]]
+host = "api.example.com"
+
+[[domains.routes]]
+prefix = "/"
+backend = "backend:9000"
+
+[[domains.routes]]
+prefix = "/admin"
+backend = "backend:9000"
+
+[domains.routes.security.ip_filter]
+mode = "allowlist"
+allowlist = ["10.1.0.0/16"]
+
+[domains.routes.security.rate_limit]
+enabled = true
+requests_per_second = 7
+burst = 9
+limit_by = "route"
+
+[domains.routes.security.headers.csp]
+enabled = true
+policy = "default-src 'none'"
+"#;
+    fs::write(&path, toml)?;
+
+    let cfg = load_from_path(&path)?;
+    // Routes are sorted longest-prefix-first, so "/admin" comes before "/".
+    let admin = cfg.domains[0]
+        .routes
+        .iter()
+        .find(|r| r.prefix == "/admin")
+        .ok_or("admin route should be present")?;
+    let security = admin
+        .security
+        .as_ref()
+        .ok_or("route security should be present")?;
+
+    let ip_filter = security
+        .ip_filter
+        .as_ref()
+        .ok_or("route ip_filter should be present")?;
+    assert_eq!(ip_filter.mode, IpFilterMode::Allowlist);
+    assert_eq!(ip_filter.allowlist.len(), 1);
+
+    let rate_limit = security
+        .rate_limit
+        .as_ref()
+        .ok_or("route rate_limit should be present")?;
+    assert!(rate_limit.enabled);
+    assert_eq!(rate_limit.requests_per_second, 7);
+    assert_eq!(rate_limit.burst, 9);
+    assert_eq!(rate_limit.limit_by, LimitBy::Route);
+
+    let headers = security
+        .headers
+        .as_ref()
+        .ok_or("route headers should be present")?;
+    assert!(headers.csp.enabled);
+    assert_eq!(headers.csp.policy, "default-src 'none'");
+
+    let _ = fs::remove_file(&path);
+    Ok(())
+}
+
+#[test]
 fn rejects_invalid_health_check_timeout_greater_than_interval(
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let path = tmp_path("bad-hc");

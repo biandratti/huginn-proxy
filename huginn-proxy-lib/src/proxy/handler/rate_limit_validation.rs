@@ -27,17 +27,11 @@ pub fn check_rate_limit(
 ) -> Option<Response<RespBody>> {
     let manager = rate_limit_manager?;
 
-    let limit_by = route_match
-        .rate_limit
-        .as_ref()
-        .and_then(|rl| rl.limit_by)
-        .unwrap_or(rate_limit_config.limit_by);
-
-    let limit_by_header = route_match
-        .rate_limit
-        .as_ref()
-        .and_then(|rl| rl.limit_by_header.as_deref())
-        .or(rate_limit_config.limit_by_header.as_deref());
+    // Whole-block replace: when the route carries its own rate-limit block it fully replaces the
+    // domain-effective config (key strategy, header, trusted proxies); otherwise use that config.
+    let effective = route_match.rate_limit.unwrap_or(rate_limit_config);
+    let limit_by = effective.limit_by;
+    let limit_by_header = effective.limit_by_header.as_deref();
 
     let rate_limit_key = extract_rate_limit_key(
         limit_by,
@@ -45,7 +39,7 @@ pub fn check_rate_limit(
         route_match.matched_prefix,
         limit_by_header,
         headers,
-        &rate_limit_config.trusted_proxies,
+        &effective.trusted_proxies,
     );
 
     let strategy = format!("{:?}", limit_by).to_lowercase();

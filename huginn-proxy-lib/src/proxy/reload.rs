@@ -1,7 +1,7 @@
 use crate::backend::health_check::HealthCheckSupervisor;
 use crate::config::{
     load_from_path, Backend, BackendPoolConfig, Domain, DynamicConfig, RateLimitConfig,
-    RouteRateLimitConfig, StaticConfig,
+    StaticConfig,
 };
 use crate::proxy::client_pool::ClientPool;
 use crate::security::RateLimitManager;
@@ -229,7 +229,7 @@ fn audit_config_changes(old: &DynamicConfig, new: &DynamicConfig) {
 /// manager, so its live counters survive reloads that only touch unrelated fields.
 fn rate_limit_signature(
     domains: &[Domain],
-) -> BTreeMap<&str, (Option<&RateLimitConfig>, BTreeMap<&str, &RouteRateLimitConfig>)> {
+) -> BTreeMap<&str, (Option<&RateLimitConfig>, BTreeMap<&str, &RateLimitConfig>)> {
     domains
         .iter()
         .map(|domain| {

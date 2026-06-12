@@ -113,11 +113,12 @@ impl BenchFixture {
                 key_path: Some(key_file.path().to_string_lossy().into_owned()),
                 headers: None,
                 security: None,
+                fingerprinting: None,
                 routes: vec![
                     Route {
                         prefix: "/bench/fp".to_string(),
                         backend: backend_address.clone(),
-                        fingerprinting: true,
+                        fingerprinting: Some(true),
                         force_new_connection: false,
                         replace_path: Some("/".to_string()),
                         security: None,
@@ -126,7 +127,7 @@ impl BenchFixture {
                     Route {
                         prefix: "/bench/nofp".to_string(),
                         backend: backend_address.clone(),
-                        fingerprinting: false,
+                        fingerprinting: Some(false),
                         force_new_connection: false,
                         replace_path: Some("/".to_string()),
                         security: None,
@@ -135,7 +136,7 @@ impl BenchFixture {
                     Route {
                         prefix: "/".to_string(),
                         backend: backend_address,
-                        fingerprinting: true,
+                        fingerprinting: Some(true),
                         force_new_connection: false,
                         replace_path: None,
                         security: None,

@@ -200,10 +200,11 @@ async fn capture_fingerprint_values() -> Result<(), Box<dyn std::error::Error + 
             key_path: Some(key_file.path().to_string_lossy().into_owned()),
             headers: None,
             security: None,
+            fingerprinting: None,
             routes: vec![Route {
                 prefix: "/".to_string(),
                 backend: backend_addr.to_string(),
-                fingerprinting: true,
+                fingerprinting: Some(true),
                 force_new_connection: false,
                 replace_path: None,
                 security: None,

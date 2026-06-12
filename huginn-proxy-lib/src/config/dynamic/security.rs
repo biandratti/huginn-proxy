@@ -264,38 +264,20 @@ impl Default for RateLimitConfig {
 
 /// Per-route security policy override (`[domains.routes.security]`).
 ///
-/// Mirrors the per-domain `security` block so a security policy always lives under `security`
-/// at every scope (global → domain → route). Currently only `rate_limit` is supported at the
-/// route scope; the wrapper keeps room for `ip_filter` / `headers` to be added symmetrically.
+/// Mirrors the per-domain `security` block (`global → domain → route`). Each field, when
+/// present, **fully replaces** (whole-block) the domain-effective policy for that route; a
+/// field left unset inherits the domain-effective (or global) policy.
 #[derive(Debug, Deserialize, Clone, PartialEq, Default)]
 pub struct RouteSecurityConfig {
-    /// Rate limit overrides for this route. Overlays onto the domain-effective rate-limit config.
+    /// Security headers for this route. Replaces the domain/global `[security.headers]` when present.
     #[serde(default)]
-    pub rate_limit: Option<RouteRateLimitConfig>,
-}
-
-/// Per-route rate limiting configuration
-#[derive(Debug, Deserialize, Clone, PartialEq)]
-pub struct RouteRateLimitConfig {
-    /// Enable rate limiting for this route
-    /// If not specified, inherits from global config
+    pub headers: Option<SecurityHeaders>,
+    /// IP filter (ACL) for this route. Replaces the domain/global `[security.ip_filter]` when present.
     #[serde(default)]
-    pub enabled: Option<bool>,
-    /// Maximum requests per second for this route
-    /// If not specified, uses global config
-    pub requests_per_second: Option<u32>,
-    /// Burst size for this route
-    /// If not specified, uses global config
-    pub burst: Option<u32>,
-    /// Time window in seconds for this route
-    /// If not specified, uses global config
-    pub window_seconds: Option<u64>,
-    /// Key extraction strategy for this route
-    /// If not specified, uses global config
-    pub limit_by: Option<LimitBy>,
-    /// Custom header name for "header" limit_by mode
-    /// If not specified, uses global config
-    pub limit_by_header: Option<String>,
+    pub ip_filter: Option<IpFilterConfig>,
+    /// Rate limit policy for this route. Replaces the domain/global `[security.rate_limit]` when present.
+    #[serde(default)]
+    pub rate_limit: Option<RateLimitConfig>,
 }
 
 /// Rate limiting key extraction strategy

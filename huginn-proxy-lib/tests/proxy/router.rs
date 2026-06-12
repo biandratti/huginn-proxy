@@ -7,7 +7,7 @@ fn route(prefix: &str, backend: &str) -> Route {
     Route {
         prefix: prefix.to_string(),
         backend: backend.to_string(),
-        fingerprinting: true,
+        fingerprinting: Some(true),
         force_new_connection: false,
         replace_path: None,
         security: None,
@@ -27,6 +27,7 @@ fn domain(host: &str, routes: Vec<Route>) -> Domain {
         key_path: None,
         headers: None,
         security: None,
+        fingerprinting: None,
         routes,
     }
 }
@@ -38,6 +39,7 @@ fn domain_with_cert(host: &str, cert_path: &str) -> Domain {
         key_path: Some(format!("{cert_path}.key")),
         headers: None,
         security: None,
+        fingerprinting: None,
         routes: vec![],
     }
 }
@@ -50,6 +52,7 @@ fn catch_all(routes: Vec<Route>) -> Domain {
         key_path: None,
         headers: None,
         security: None,
+        fingerprinting: None,
         routes,
     }
 }
@@ -100,7 +103,7 @@ fn test_pick_route_with_fingerprinting_with_replace_path() {
     let routes = vec![Route {
         prefix: "/api".to_string(),
         backend: "backend-a:9000".to_string(),
-        fingerprinting: true,
+        fingerprinting: Some(true),
         replace_path: Some("/v1".to_string()),
         security: None,
         headers: None,
@@ -121,7 +124,7 @@ fn test_pick_route_with_fingerprinting_path_stripping() {
     let routes = vec![Route {
         prefix: "/api".to_string(),
         backend: "backend-a:9000".to_string(),
-        fingerprinting: false,
+        fingerprinting: Some(false),
         replace_path: Some("".to_string()),
         security: None,
         headers: None,
@@ -522,6 +525,7 @@ fn authority_matches_sni_certless_host_uses_default_cert() {
         key_path: Some("/certs/default.key".to_string()),
         headers: None,
         security: None,
+        fingerprinting: None,
         routes: vec![],
     };
     let domains = vec![domain("api.example.com", vec![]), catch_all_with_cert];

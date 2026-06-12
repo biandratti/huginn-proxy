@@ -3,13 +3,12 @@ pub mod headers;
 pub mod security;
 pub use backend::{
     sort_domain_routes, sort_routes, Backend, BackendHttpVersion, BackendPoolConfig, Domain,
-    HealthCheckConfig, HealthCheckType, Route, DEFAULT_DOMAIN_LABEL,
+    HealthCheckConfig, HealthCheckType, Route, DEFAULT_DOMAIN_LABEL, DEFAULT_FINGERPRINTING,
 };
 pub use headers::{CustomHeader, HeaderManipulation, HeaderManipulationGroup};
 pub use security::{
     CspConfig, DomainSecurityConfig, HstsConfig, IpFilterConfig, IpFilterMode, LimitBy,
-    RateLimitConfig, RouteRateLimitConfig, RouteSecurityConfig, SecurityConfig,
-    SecurityDynamicConfig, SecurityHeaders,
+    RateLimitConfig, RouteSecurityConfig, SecurityConfig, SecurityDynamicConfig, SecurityHeaders,
 };
 use std::sync::Arc;
 

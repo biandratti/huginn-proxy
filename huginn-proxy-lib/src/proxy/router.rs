@@ -7,7 +7,7 @@ pub struct RouteMatch<'a> {
     pub fingerprinting: bool,
     pub matched_prefix: &'a str,
     pub replace_path: Option<&'a str>,
-    pub rate_limit: Option<&'a crate::config::RouteRateLimitConfig>,
+    pub rate_limit: Option<&'a crate::config::RateLimitConfig>,
     pub headers: Option<&'a crate::config::HeaderManipulation>,
     pub force_new_connection: bool,
 }
@@ -132,7 +132,9 @@ pub fn pick_route_with_fingerprinting<'a>(
     Some(RouteMatch {
         backend: first.backend.as_str(),
         backend_candidates,
-        fingerprinting: first.fingerprinting,
+        fingerprinting: first
+            .fingerprinting
+            .unwrap_or(crate::config::DEFAULT_FINGERPRINTING),
         matched_prefix: first.prefix.as_str(),
         replace_path: first.replace_path.as_deref(),
         rate_limit: first.security.as_ref().and_then(|s| s.rate_limit.as_ref()),

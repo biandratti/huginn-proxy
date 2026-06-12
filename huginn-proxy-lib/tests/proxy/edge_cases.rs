@@ -9,7 +9,7 @@ fn test_pick_route_no_match() {
         Route {
             prefix: "/api".to_string(),
             backend: "backend-a:9000".to_string(),
-            fingerprinting: true,
+            fingerprinting: Some(true),
             replace_path: None,
             security: None,
             headers: None,
@@ -18,7 +18,7 @@ fn test_pick_route_no_match() {
         Route {
             prefix: "/static".to_string(),
             backend: "backend-b:9000".to_string(),
-            fingerprinting: true,
+            fingerprinting: Some(true),
             replace_path: None,
             security: None,
             headers: None,
@@ -35,7 +35,7 @@ fn test_pick_route_exact_match() {
         Route {
             prefix: "/api".to_string(),
             backend: "backend-a:9000".to_string(),
-            fingerprinting: true,
+            fingerprinting: Some(true),
             replace_path: None,
             security: None,
             headers: None,
@@ -44,7 +44,7 @@ fn test_pick_route_exact_match() {
         Route {
             prefix: "/".to_string(),
             backend: "backend-b:9000".to_string(),
-            fingerprinting: true,
+            fingerprinting: Some(true),
             replace_path: None,
             security: None,
             headers: None,
@@ -62,7 +62,7 @@ fn test_pick_route_longest_prefix() {
         Route {
             prefix: "/api/v1".to_string(),
             backend: "backend-v1:9000".to_string(),
-            fingerprinting: true,
+            fingerprinting: Some(true),
             replace_path: None,
             security: None,
             headers: None,
@@ -71,7 +71,7 @@ fn test_pick_route_longest_prefix() {
         Route {
             prefix: "/api".to_string(),
             backend: "backend-api:9000".to_string(),
-            fingerprinting: true,
+            fingerprinting: Some(true),
             replace_path: None,
             security: None,
             headers: None,
@@ -80,7 +80,7 @@ fn test_pick_route_longest_prefix() {
         Route {
             prefix: "/".to_string(),
             backend: "backend-default:9000".to_string(),
-            fingerprinting: true,
+            fingerprinting: Some(true),
             replace_path: None,
             security: None,
             headers: None,
@@ -144,7 +144,7 @@ fn test_pick_route_with_empty_prefix() {
     let routes = vec![Route {
         prefix: "".to_string(),
         backend: "backend-default:9000".to_string(),
-        fingerprinting: true,
+        fingerprinting: Some(true),
         replace_path: None,
         security: None,
         headers: None,

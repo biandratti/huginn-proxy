@@ -189,11 +189,12 @@ pub struct Route {
     /// Backend address to route matching requests to
     /// Must match one of the backend addresses defined in `backends`
     pub backend: String,
-    /// Enable fingerprinting for this route
-    /// If true, TLS and HTTP/2 fingerprints will be injected as headers
-    /// Default: true (fingerprinting enabled)
-    #[serde(default = "default_true")]
-    pub fingerprinting: bool,
+    /// Enable fingerprint header **injection** for this route (whole-block override).
+    /// `None` (unset) inherits the domain's `fingerprinting`, then the built-in default `true`.
+    /// Note: this only gates injection of the headers; capture/extraction is the static
+    /// global `[fingerprint]` config.
+    #[serde(default)]
+    pub fingerprinting: Option<bool>,
     /// Force a new TCP/TLS connection from the proxy to the backend for each request,
     /// bypassing the backend connection pool.
     /// Note: this does not affect the client→proxy TLS session or JA4 fingerprints,
@@ -263,6 +264,10 @@ pub struct Domain {
     /// Each present sub-block fully replaces the corresponding global policy for this domain.
     #[serde(default)]
     pub security: Option<DomainSecurityConfig>,
+    /// Default fingerprint header **injection** for routes in this domain (whole-block override).
+    /// `None` (unset) means the built-in default `true`; a route's own `fingerprinting` overrides it.
+    #[serde(default)]
+    pub fingerprinting: Option<bool>,
     /// Path-based routing rules scoped to this domain.
     #[serde(default)]
     pub routes: Vec<Route>,
@@ -318,6 +323,9 @@ impl Default for BackendPoolConfig {
         }
     }
 }
+
+/// Built-in default for fingerprint header **injection** when neither the route nor its domain sets `fingerprinting`.
+pub const DEFAULT_FINGERPRINTING: bool = true;
 
 fn default_true() -> bool {
     true

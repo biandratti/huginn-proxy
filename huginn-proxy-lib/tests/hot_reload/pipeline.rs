@@ -43,10 +43,11 @@ fn minimal_config(backend_addr: std::net::SocketAddr, listen_port: u16) -> Confi
             key_path: None,
             headers: None,
             security: None,
+            fingerprinting: None,
             routes: vec![Route {
                 prefix: "/".to_string(),
                 backend: backend_addr.to_string(),
-                fingerprinting: false,
+                fingerprinting: Some(false),
                 force_new_connection: false,
                 replace_path: None,
                 security: None,
