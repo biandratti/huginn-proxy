@@ -9,6 +9,7 @@ use crate::proxy::handler::header_manipulation::{
 };
 use crate::proxy::handler::headers::{add_forwarded_headers, akamai_header_value};
 use crate::proxy::handler::rate_limit_validation::check_rate_limit;
+use crate::proxy::handler::resolve::{domain_defers_ip_filter, resolve_security};
 use crate::proxy::http_result::{HttpError, HttpResult};
 use crate::proxy::ClientPool;
 use crate::telemetry::metrics::values;
@@ -62,6 +63,23 @@ fn check_ip_access(
     Ok(())
 }
 
+/// Enforce the IP ACL, recording the entrypoint-request metric on rejection. Shared by the
+/// pre-routing (domain-effective) and post-routing (route-effective) check sites.
+fn enforce_ip_access(
+    peer: std::net::SocketAddr,
+    ip_filter: &crate::config::IpFilterConfig,
+    metrics: &Arc<Metrics>,
+    method: &str,
+    protocol: &str,
+) -> HttpResult<()> {
+    if let Err(e) = check_ip_access(peer, ip_filter, metrics) {
+        let status_code = StatusCode::from(e.clone()).as_u16();
+        metrics.record_entrypoint_request(method, status_code, protocol);
+        return Err(e);
+    }
+    Ok(())
+}
+
 /// Handle request routing and forwarding
 #[allow(clippy::too_many_arguments)]
 pub async fn handle_proxy_request(
@@ -100,27 +118,21 @@ pub async fn handle_proxy_request(
     let domain_headers = domain.and_then(|d| d.headers.as_ref());
     let domain_label: &str = domain.map_or(DEFAULT_DOMAIN_LABEL, Domain::label);
 
-    // Resolve the effective security policy for this request. A per-domain `security` block
-    // fully replaces the matching global policy (whole-block override); a sub-block the domain
-    // does not set inherits the global `[security]` policy. The no-domain (421) path has no
-    // override, so the global policy applies, preserving "IP filtering applies to everything".
+    // Rate-limit base is `domain.or(global)`; the route override is applied in `check_rate_limit`.
     let domain_security = domain.and_then(|d| d.security.as_ref());
-    let effective_ip_filter = domain_security
-        .and_then(|s| s.ip_filter.as_ref())
-        .unwrap_or(&security.ip_filter);
     let effective_rate_limit = domain_security
         .and_then(|s| s.rate_limit.as_ref())
         .unwrap_or(&security.rate_limit_config);
-    let effective_security_headers = domain_security
-        .and_then(|s| s.headers.as_ref())
-        .unwrap_or(&security.headers);
 
-    // IP filter runs after domain resolution, so a domain can override the ACL, but still before
-    // route selection / 421, so a blocked client never learns whether a route exists.
-    if let Err(e) = check_ip_access(peer, effective_ip_filter, &metrics) {
-        let status_code = StatusCode::from(e.clone()).as_u16();
-        metrics.record_entrypoint_request(&method, status_code, &protocol);
-        return Err(e);
+    // If no route overrides the IP filter, the domain/global filter applies to every route, so
+    // enforce it pre-routing (a blocked client never learns whether a host/route exists). If a
+    // route does override it, defer to post-routing (route-level ACL; see `resolve_security`).
+    let defer_ip_check = domain.is_some_and(domain_defers_ip_filter);
+    if !defer_ip_check {
+        let domain_ip_filter = domain_security
+            .and_then(|s| s.ip_filter.as_ref())
+            .unwrap_or(&security.ip_filter);
+        enforce_ip_access(peer, domain_ip_filter, &metrics, &method, &protocol)?;
     }
 
     // Misdirected-request enforcement (RFC 9110 §15.5.20 / RFC 7540 §9.1.2), always on,
@@ -165,6 +177,14 @@ pub async fn handle_proxy_request(
             }
         },
     };
+
+    // Route is known: resolve the whole-block effective policy (route.or(domain).or(global)).
+    let effective = resolve_security(security, domain, &route_match);
+
+    // Deferred route-level IP check, before backend selection (blocked client never hits upstream).
+    if defer_ip_check {
+        enforce_ip_access(peer, effective.ip_filter, &metrics, &method, &protocol)?;
+    }
 
     let selected_upstream = match upstream.selector.select(
         route_match.matched_prefix,
@@ -235,7 +255,7 @@ pub async fn handle_proxy_request(
 
     // Extract and inject fingerprints first (fingerprints are extracted from TLS handshake/HTTP2 frames,
     // not from HTTP headers, so adding X-Forwarded-* headers won't affect fingerprint generation)
-    if route_match.fingerprinting {
+    if effective.fingerprinting {
         if let Some(ref fingerprints) = ja4_fingerprints {
             if let Ok(hv) = hyper::header::HeaderValue::from_str(&fingerprints.ja4.full.to_string())
             {
@@ -337,7 +357,7 @@ pub async fn handle_proxy_request(
             metrics: Arc::clone(&metrics),
             matched_prefix: route_match.matched_prefix,
             replace_path: route_match.replace_path,
-            security_headers: Some(effective_security_headers),
+            security_headers: Some(effective.security_headers),
             is_https,
             preserve_host,
             route: route_match.matched_prefix,

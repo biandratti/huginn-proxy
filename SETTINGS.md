@@ -353,27 +353,33 @@ order does not matter within a domain.
 |------------------------|--------|---------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `prefix`               | string | —       | URL path prefix to match. Use `"/"` as a catch-all.                                                                                                                                            |
 | `backend`              | string | —       | Backend address to forward to. Must match a `[[backends]].address` exactly.                                                                                                                    |
-| `fingerprinting`       | bool   | `true`  | Inject TLS/HTTP fingerprint headers (`x-tls-ja4*`, `x-http2-akamai`, `x-tcp-p0f`) for this route.                                                                                             |
+| `fingerprinting`       | bool   | inherit | Inject TLS/HTTP fingerprint headers (`x-tls-ja4*`, `x-http2-akamai`, `x-tcp-p0f`) for this route. Unset inherits the domain's `fingerprinting`, then the built-in default `true`.            |
 | `force_new_connection` | bool   | `false` | Bypass the connection pool — opens a fresh TCP+TLS connection per request.                                                                                                                     |
 | `replace_path`         | string | `null`  | Path prefix replacement. Empty string (`""`) strips the prefix. Absent = forward as-is.                                                                                                       |
-| `security`             | table  | —       | Per-route security overrides (currently `rate_limit`). See [`[domains.routes.security.rate_limit]`](#domainsroutessecurityrate_limit) below.                                                    |
-| `headers`              | table  | —       | Per-route header manipulation. Applied after global and domain-level headers.                                                                                                                  |
+| `security`             | table  | —       | Per-route security overrides (`ip_filter`, `rate_limit`, `headers`). Each present sub-block **fully replaces** the domain-effective policy for this route. See [`[domains.routes.security]`](#domainsroutessecurity) below. |
+| `headers`              | table  | —       | Per-route header manipulation (add/remove). Applied after global and domain-level headers (additive cascade — see [Header manipulation vs. security headers](#header-manipulation-vs-security-headers)). |
 
-### `[domains.routes.security.rate_limit]`
+### `[domains.routes.security]`
 
-Overrides the **domain-effective** rate limit (the domain's `[domains.security.rate_limit]` if
-set, otherwise the global `[security.rate_limit]`) for this specific route. Only the keys you set
-override; unset keys fall back to that effective config. Security policy lives under `security` at
-every scope — global (`[security]`), domain (`[domains.security]`), and route here — so the path
-is consistent.
+Per-route security policy. Mirrors [`[domains.security]`](#domainssecurity) one level deeper:
+each sub-block (`ip_filter`, `rate_limit`, `headers`), **when present, fully replaces** the
+domain-effective policy for this route (whole-block replace — **not** a field-level merge). A
+sub-block you omit inherits the domain-effective (or global) policy. Security policy lives under
+`security` at every scope — global (`[security]`), domain (`[domains.security]`), and route — so
+the path is consistent.
 
-| Key                   | Type    | Default | Description                                                               |
-|-----------------------|---------|---------|---------------------------------------------------------------------------|
-| `enabled`             | bool    | `null`  | Override whether rate limiting is active for this route.                  |
-| `requests_per_second` | integer | `null`  | Override RPS limit.                                                       |
-| `burst`               | integer | `null`  | Override burst size.                                                      |
-| `limit_by`            | string  | `null`  | Override limit key strategy: `"ip"`, `"header"`, `"route"`, `"combined"`. |
-| `limit_by_header`     | string  | `null`  | Override header name when `limit_by = "header"`.                          |
+> **Footgun:** because the block is replaced wholesale, a *partial* override silently drops the
+> sibling keys of the policy it replaces. For example, a route `rate_limit` that sets only
+> `requests_per_second` (without `enabled = true`) **disables** the limit for that route, because
+> the unset `enabled` defaults to `false`. The proxy emits a non-fatal `warn!` at load and on every
+> hot reload when an override drops a protection the parent had enabled (e.g. `WARN ... headers
+> override drops parent-enabled protections [CSP]`). Re-state every key you want to keep.
+
+| Key          | Type  | Default | Description                                                                                                      |
+|--------------|-------|---------|------------------------------------------------------------------------------------------------------------------|
+| `ip_filter`  | table | —       | IP ACL for this route. Replaces the domain/global `ip_filter`. Same fields as [`[security.ip_filter]`](#securityip_filter). Checked after route match (router-level ACL). |
+| `rate_limit` | table | —       | Rate limit policy for this route. Replaces the domain/global `rate_limit`. Same fields as [`[security.rate_limit]`](#securityrate_limit). |
+| `headers`    | table | —       | Security headers for this route. Replaces the domain/global `security.headers`. Same fields as [`[security.headers]`](#securityheaders). |
 
 ### `[domains.security]`
 
@@ -386,12 +392,14 @@ is global only (process-level) and is not part of this block.
 | Key          | Type  | Default | Description                                                                                                   |
 |--------------|-------|---------|---------------------------------------------------------------------------------------------------------------|
 | `ip_filter`  | table | —       | IP ACL for this domain. Replaces global [`[security.ip_filter]`](#securityip_filter) when present.            |
-| `rate_limit` | table | —       | Rate limit policy for this domain. Replaces global [`[security.rate_limit]`](#securityrate_limit) when present. Per-route `[domains.routes.security.rate_limit]` then overlays onto this domain-effective config. |
+| `rate_limit` | table | —       | Rate limit policy for this domain. Replaces global [`[security.rate_limit]`](#securityrate_limit) when present. A per-route `[domains.routes.security.rate_limit]` then replaces this domain-effective policy for that route (whole-block, not a merge). |
 | `headers`    | table | —       | Security headers for this domain. Replaces global [`[security.headers]`](#securityheaders) when present.      |
 
-Precedence: **global → domain** for `ip_filter` and `headers`; **global → domain → route** for
-`rate_limit`. Rate limiters are keyed per domain, so the same route prefix under two domains is
-tracked independently.
+Precedence is **global → domain → route** for all three policies (`ip_filter`, `rate_limit`,
+`headers`): the most specific scope that sets a block wins **entirely** (whole-block replace, no
+field merge). Rate limiters are keyed per domain, so the same route prefix under two domains is
+tracked independently. `fingerprinting` (header injection) follows the same precedence:
+`route.or(domain).unwrap_or(true)`.
 
 <table>
 <thead>
@@ -594,6 +602,22 @@ headers:
 </tr>
 </tbody>
 </table>
+
+### Header manipulation vs. security headers
+
+There are two header mechanisms with **different override semantics** — this is intentional:
+
+- **`[headers]` (add/remove), the additive cascade.** Global → domain → route are applied in
+  order and **accumulate**; for a given header name the most specific scope wins (last-writer).
+  Nothing is "replaced wholesale" — a route adding `X-API-Version` does not wipe a global
+  `X-Proxy` header. This mirrors **chaining `headers` middlewares in Traefik**, where each
+  middleware in the chain runs in turn.
+- **`security.headers` (HSTS/CSP/custom), whole-block replace.** Like the other security policies
+  (`ip_filter`, `rate_limit`), the most specific scope that sets a `security.headers` block
+  replaces the parent's block **entirely** (see [`[domains.routes.security]`](#domainsroutessecurity)).
+
+Rule of thumb: `[headers]` is for free-form request/response header plumbing (cascades);
+`security.headers` is a security *policy* (replaced as a unit, audited for partial-override drops).
 
 ---
 
@@ -1162,7 +1186,8 @@ security:
 ### `[security.rate_limit]`
 
 Global rate limiting. **Dynamic** (hot-reloadable). Per-domain override via
-`[domains.security.rate_limit]`; per-route override via `[domains.routes.security.rate_limit]`.
+`[domains.security.rate_limit]` and per-route override via `[domains.routes.security.rate_limit]`,
+each a **whole-block replace** (not a field-level merge).
 
 | Key                   | Type    | Default | Description                                                                         |
 |-----------------------|---------|---------|-------------------------------------------------------------------------------------|

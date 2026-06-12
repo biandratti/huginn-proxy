@@ -96,9 +96,10 @@ Configurable at three scopes — **global** (`[security.rate_limit]`), **per-dom
 under `security` at every scope, so the path is consistent. You can limit by IP, custom header, route path, or a
 combination. The implementation uses an atomic token bucket that refills over time.
 
-Precedence is **global → domain → route**: a domain's `rate_limit` block fully replaces the global policy for that
-domain (including disabling it with `enabled = false`), and a route's block then overlays onto the domain-effective
-config. Limiters are keyed per domain, so the same route prefix under two domains is tracked independently.
+Precedence is **global → domain → route**, **whole-block replace** at every scope: a domain's `rate_limit` block fully
+replaces the global policy for that domain, and a route's block fully replaces the domain-effective policy for that route
+(not a field-level merge — re-state every key you want to keep; e.g. a route block without `enabled = true` disables the
+limit for that route). Limiters are keyed per domain, so the same route prefix under two domains is tracked independently.
 
 Supports burst allowance (e.g., 100 req/s with 200 burst). Tracks limits in-memory, so restarting the proxy resets all
 counters.
@@ -110,9 +111,10 @@ Limitation: No distributed rate limiting across multiple proxy instances. Limits
 **HSTS, CSP, and custom headers**
 
 HSTS is configurable with max-age, includeSubdomains, and preload directives. CSP policies are customizable. Any custom
-header can be added to all responses. Security headers can be set globally (`[security.headers]`) or **per-domain**
-(`[domains.security.headers]`); a domain's block fully replaces the global one for that domain (whole-block, not merged —
-a domain that sets only CSP does not inherit the global HSTS).
+header can be added to all responses. Security headers can be set globally (`[security.headers]`), **per-domain**
+(`[domains.security.headers]`), or **per-route** (`[domains.routes.security.headers]`); the most specific scope that sets
+the block replaces the parent's entirely (whole-block, not merged — a scope that sets only CSP does not inherit the
+parent's HSTS).
 
 Header manipulation (add/remove on both request and response) can be configured at three scopes: **global**,
 **per-domain** (`[domains.headers]`), and **per-route** (`[domains.routes.headers]`). They are applied in the order
@@ -128,11 +130,13 @@ Limitation: No header-value templating; values are static strings.
 Supports CIDR notation for both IPv4 and IPv6. You pick either allowlist mode (only these IPs) or denylist mode (block
 these IPs). Empty allowlist blocks everything, empty denylist allows everything.
 
-Configurable globally (`[security.ip_filter]`) or **per-domain** (`[domains.security.ip_filter]`); a domain's filter
-fully replaces the global one for requests to that domain. The check runs after the request's host (and thus domain) is
-resolved, but before route selection, so a blocked client never learns whether a route exists.
+Configurable globally (`[security.ip_filter]`), **per-domain** (`[domains.security.ip_filter]`), or **per-route**
+(`[domains.routes.security.ip_filter]`); the most specific scope that sets a filter replaces the parent's entirely.
+When no route overrides the filter, the check runs after host/domain resolution but before route selection, so a blocked
+client never learns whether a route exists. When a route overrides it, the check runs after route match (router-level
+ACL, like Traefik).
 
-Limitation: No geographic filtering or ASN-based rules. No per-route IP filtering (host/domain granularity only).
+Limitation: No geographic filtering or ASN-based rules.
 
 ## TLS Termination
 
@@ -221,8 +225,9 @@ Passive fingerprinting extracts three types of signatures from client connection
 - **TCP SYN (p0f)** - extracted from the raw TCP SYN packet via an eBPF/XDP program attached to the network
   interface. Injected as `x-tcp-p0f`. Requires the `ebpf-tcp` build feature and `tcp_enabled = true` in config.
 
-Per-route control to enable/disable TLS and HTTP/2 fingerprinting. TCP SYN fingerprinting is global (controlled by the
-`fingerprint.tcp_enabled` flag).
+Per-domain and per-route control to enable/disable TLS and HTTP/2 fingerprint **header injection**
+(`route.or(domain).unwrap_or(true)`; a route overrides its domain). Whether the signatures are *captured* at all is the
+static global `[fingerprint]` config. TCP SYN fingerprinting is global (controlled by the `fingerprint.tcp_enabled` flag).
 
 The TCP SYN signature follows the p0f format: `ip_ver:ttl:ip_olen:mss:wsize,wscale:olayout:quirks:pclass`. Quirks
 extracted include IP-level flags (DF, ECN, reserved bit, IP ID anomalies) and TCP-level flags (zero-seq, non-zero ACK,

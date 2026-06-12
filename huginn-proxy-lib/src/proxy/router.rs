@@ -4,10 +4,12 @@ use crate::config::{Domain, Route};
 pub struct RouteMatch<'a> {
     pub backend: &'a str,
     pub backend_candidates: Vec<&'a str>,
-    pub fingerprinting: bool,
+    pub fingerprinting: Option<bool>,
     pub matched_prefix: &'a str,
     pub replace_path: Option<&'a str>,
     pub rate_limit: Option<&'a crate::config::RateLimitConfig>,
+    pub ip_filter: Option<&'a crate::config::IpFilterConfig>,
+    pub security_headers: Option<&'a crate::config::SecurityHeaders>,
     pub headers: Option<&'a crate::config::HeaderManipulation>,
     pub force_new_connection: bool,
 }
@@ -129,15 +131,16 @@ pub fn pick_route_with_fingerprinting<'a>(
         .map(|r| r.backend.as_str())
         .collect::<Vec<_>>();
 
+    let security = first.security.as_ref();
     Some(RouteMatch {
         backend: first.backend.as_str(),
         backend_candidates,
-        fingerprinting: first
-            .fingerprinting
-            .unwrap_or(crate::config::DEFAULT_FINGERPRINTING),
+        fingerprinting: first.fingerprinting,
         matched_prefix: first.prefix.as_str(),
         replace_path: first.replace_path.as_deref(),
-        rate_limit: first.security.as_ref().and_then(|s| s.rate_limit.as_ref()),
+        rate_limit: security.and_then(|s| s.rate_limit.as_ref()),
+        ip_filter: security.and_then(|s| s.ip_filter.as_ref()),
+        security_headers: security.and_then(|s| s.headers.as_ref()),
         headers: first.headers.as_ref(),
         force_new_connection: first.force_new_connection,
     })

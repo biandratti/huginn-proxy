@@ -7,4 +7,5 @@ mod handler;
 mod http_result;
 mod path_manipulation;
 mod reload;
+mod resolve;
 mod router;

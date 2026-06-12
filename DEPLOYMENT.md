@@ -216,6 +216,14 @@ continues running with the old values.
 > across reloads unless `limit_by` or `window_seconds` changes, in which case
 > they are reset.
 
+> **Note on security overrides:** `ip_filter`, `rate_limit`, and `headers` can be set per
+> domain (`[domains.security]`) and per route (`[domains.routes.security]`). These are
+> **whole-block replace** — the most specific scope that sets a block replaces the parent's
+> entirely (no field merge). A partial override that drops a parent-enabled protection is logged
+> as a non-fatal `WARN` on boot, `--validate`, and every reload. Per-route `ip_filter` is enforced
+> **after route match** (router-level ACL, like Traefik); when no route overrides it, the
+> domain/global filter is still checked before routing. See `SETTINGS.md`.
+
 ### Static (requires restart)
 
 | TOML key | Description |

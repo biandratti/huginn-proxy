@@ -15,7 +15,7 @@ pub use dynamic::{
     Domain, DynamicConfig, HeaderManipulation, HeaderManipulationGroup, HealthCheckConfig,
     HealthCheckType, Route, DEFAULT_DOMAIN_LABEL, DEFAULT_FINGERPRINTING,
 };
-pub use loader::load_from_path;
+pub use loader::{load_from_path, security_override_warnings, SecurityOverrideWarning};
 pub use parser::{ConfigFormat, ConfigParser, TomlParser, YamlParser};
 pub use root::{Config, ConfigParts};
 pub use startup::{

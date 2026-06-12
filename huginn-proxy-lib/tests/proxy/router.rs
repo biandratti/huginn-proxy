@@ -92,7 +92,7 @@ fn test_pick_route_with_fingerprinting_basic() {
     if let Some(r) = result {
         assert_eq!(r.backend, "backend-a:9000");
         assert_eq!(r.backend_candidates, vec!["backend-a:9000"]);
-        assert!(r.fingerprinting);
+        assert_eq!(r.fingerprinting, Some(true));
         assert_eq!(r.matched_prefix, "/api");
         assert!(r.replace_path.is_none());
     }
@@ -134,7 +134,7 @@ fn test_pick_route_with_fingerprinting_path_stripping() {
     let result = pick_route_with_fingerprinting("/api/users", &routes);
     assert!(result.is_some());
     if let Some(r) = result {
-        assert!(!r.fingerprinting);
+        assert_eq!(r.fingerprinting, Some(false));
         assert_eq!(r.replace_path, Some(""));
     }
 }
