@@ -104,6 +104,16 @@ domains:
             burst: 3
             window_seconds: 1
             limit_by: "ip"
+      # Per-route IP ACL (whole-block). Allowlist a TEST-NET-1 range (RFC 5737) that no real
+      # client uses, so every request to this route is rejected with 403, proving route-level
+      # ACL while the global ip_filter stays disabled. Exercised by the route_ip_filter E2E test.
+      - prefix: "/acl-denied"
+        backend: "backend-a:9000"
+        security:
+          ip_filter:
+            mode: "allowlist"
+            allowlist:
+              - "192.0.2.0/24"
       - prefix: "/"
         backend: "backend-b:9000"
 

@@ -344,6 +344,27 @@ domains:
         backend: "web-backend:8080"
 ```
 
+### Scope & override summary
+
+Where each policy can be set (**global** `[security]`/`[headers]` → **domain** `[domains.*]` →
+**route** `[domains.routes.*]`) and how a more specific scope combines with the parent:
+
+| Policy | Global | Domain | Route | How it overrides |
+|---|:---:|:---:|:---:|---|
+| `ip_filter` (ACL) | ✅ | ✅ | ✅ | **Whole-block replace** — most specific scope wins entirely. Route filter checked after route match. |
+| `rate_limit` (incl. `trusted_proxies`, `limit_by`) | ✅ | ✅ | ✅ | **Whole-block replace** — most specific scope wins entirely. |
+| `security.headers` (HSTS/CSP/custom) | ✅ | ✅ | ✅ | **Whole-block replace** — most specific scope wins entirely. |
+| `[headers]` (add/remove request/response) | ✅ | ✅ | ✅ | **Additive cascade** — all scopes accumulate; per header name the most specific wins. |
+| `fingerprinting` (header injection) | — | ✅ | ✅ | `route.or(domain).unwrap_or(true)`. Capture itself is the static global `[fingerprint]`. |
+| `max_connections` | ✅ | ❌ | ❌ | Process-level (static); global only. |
+
+**Whole-block replace** means the block is taken as a unit: a partial override drops the parent's
+other keys (e.g. a route `rate_limit` without `enabled = true` disables the limit for that route).
+Re-state every key you want to keep. The proxy logs a non-fatal `WARN` (boot, `--validate`, and
+every hot reload) when an override drops a parent-enabled protection. See
+[`[domains.security]`](#domainssecurity), [`[domains.routes.security]`](#domainsroutessecurity),
+and [Header manipulation vs. security headers](#header-manipulation-vs-security-headers).
+
 ### `[domains.routes]`
 
 Path-prefix routing rules scoped to the parent domain. Longest prefix wins; declaration
