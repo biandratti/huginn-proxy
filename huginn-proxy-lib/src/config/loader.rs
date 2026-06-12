@@ -104,7 +104,7 @@ pub struct SecurityOverrideWarning {
     pub message: String,
 }
 
-/// Non-fatal audit for the whole-block override footgun (pure; logged by [`audit_security_overrides`]).
+/// Non-fatal audit for the whole-block override footgun (pure; logged by `audit_security_overrides`).
 ///
 /// Security policies (`rate_limit`, `ip_filter`, `headers`) replace the parent scope **entirely**
 /// when set at a domain or route (no field merge). A partial override can therefore silently drop
