@@ -1,77 +1,121 @@
 use super::{RateLimitResult, RateLimiter};
-use crate::config::{LimitBy, RateLimitConfig, Route};
+use crate::config::{Domain, LimitBy, RateLimitConfig};
 use ahash::AHashMap;
 use ipnet::IpNet;
 use std::net::IpAddr;
 use std::time::Duration;
 
-/// Manager for rate limiters (global and per-route).
+/// Build the limiter for a fully-resolved config (`None` when disabled).
+fn build_limiter(config: &RateLimitConfig) -> Option<RateLimiter> {
+    if config.enabled {
+        let window = Duration::from_secs(config.window_seconds);
+        Some(RateLimiter::new(config.requests_per_second, config.burst, window))
+    } else {
+        None
+    }
+}
+
+/// Manager for rate limiters (global, per-domain, and per-route).
 ///
 /// This struct holds rate limiters for:
-/// - Global rate limiting (applies to all routes unless overridden).
-/// - Per-route rate limiting (specific limits for individual routes).
+/// - Global rate limiting (applies to every domain unless overridden).
+/// - Per-domain rate limiting (`[domains.security.rate_limit]`, whole-block replace).
+/// - Per-route rate limiting (`[domains.routes.security.rate_limit]`, whole-block replace).
 ///
-/// The manager is immutable after construction. Hot reload swaps the entire
-/// manager atomically via `proxy::reload::SharedRateLimiter`
+/// Limiters are keyed by domain label so the same route prefix under two different
+/// domains stays isolated. The manager is immutable after construction. Hot reload
+/// swaps the entire manager atomically via `proxy::reload::SharedRateLimiter`.
 pub struct RateLimitManager {
     /// Global rate limiter (optional)
     global: Option<RateLimiter>,
-    /// Per-route rate limiters
-    route_limiters: AHashMap<String, RateLimiter>,
+    /// Per-domain limiters keyed by domain label. Present only when the domain overrides
+    /// rate limiting: `Some` = enabled limiter, `None` = explicitly disabled (does NOT fall
+    /// through to the global limiter). Domains without an override are absent from the map.
+    domain_limiters: AHashMap<String, Option<RateLimiter>>,
+    /// Per-route limiters: domain label -> route prefix -> slot. Present only when the route
+    /// overrides rate limiting: `Some` = enabled limiter, `None` = explicitly disabled (does NOT
+    /// fall through to the domain/global limiter). Routes without an override are absent from the map.
+    route_limiters: AHashMap<String, AHashMap<String, Option<RateLimiter>>>,
 }
 
 impl RateLimitManager {
-    /// Create a new rate limit manager from configuration
+    /// Create a new rate limit manager from configuration.
     ///
-    /// # Arguments
-    /// * `global_config` - Global rate limiting configuration
-    /// * `routes` - Route configurations (with optional per-route rate limits)
-    pub fn new(global_config: &RateLimitConfig, routes: &[Route]) -> Self {
-        let global = if global_config.enabled {
-            let window = Duration::from_secs(global_config.window_seconds);
-            Some(RateLimiter::new(global_config.requests_per_second, global_config.burst, window))
-        } else {
-            None
-        };
+    /// Whole-block replace at every scope: a domain `rate_limit` override fully replaces the
+    /// global policy for that domain, and a route override fully replaces it for that route.
+    /// Each present override is recorded as an explicit slot (enabled limiter or explicit
+    /// disable) so it never silently inherits the level it replaced.
+    pub fn new(global_config: &RateLimitConfig, domains: &[Domain]) -> Self {
+        let global = build_limiter(global_config);
 
-        let mut route_limiters = AHashMap::new();
-        for route in routes {
-            if let Some(ref route_rate_limit) = route.rate_limit {
-                let enabled = route_rate_limit.enabled.unwrap_or(global_config.enabled);
-                if enabled {
-                    let rps = route_rate_limit
-                        .requests_per_second
-                        .unwrap_or(global_config.requests_per_second);
-                    let burst = route_rate_limit.burst.unwrap_or(global_config.burst);
-                    let window = Duration::from_secs(
-                        route_rate_limit
-                            .window_seconds
-                            .unwrap_or(global_config.window_seconds),
-                    );
+        let mut domain_limiters = AHashMap::new();
+        let mut route_limiters: AHashMap<String, AHashMap<String, Option<RateLimiter>>> =
+            AHashMap::new();
 
+        for domain in domains {
+            let label = domain.label().to_string();
+            let domain_override = domain.security.as_ref().and_then(|s| s.rate_limit.as_ref());
+
+            // Record an explicit domain slot only when the domain overrides rate limiting, so a
+            // disabled override (`enabled = false`) does not fall through to the global limiter.
+            if let Some(cfg) = domain_override {
+                domain_limiters.insert(label.clone(), build_limiter(cfg));
+            }
+
+            for route in &domain.routes {
+                if let Some(cfg) = route.security.as_ref().and_then(|s| s.rate_limit.as_ref()) {
                     route_limiters
-                        .insert(route.prefix.clone(), RateLimiter::new(rps, burst, window));
+                        .entry(label.clone())
+                        .or_default()
+                        .insert(route.prefix.clone(), build_limiter(cfg));
                 }
             }
         }
 
-        Self { global, route_limiters }
+        Self { global, domain_limiters, route_limiters }
     }
 
     /// Check if a request is allowed (not rate limited)
     ///
+    /// Precedence: route limiter (for `domain_label` + `route_prefix`) → domain override
+    /// (enabled or explicitly disabled) → global limiter.
+    ///
     /// # Arguments
     /// * `key` - Rate limiting key (IP, header value, route, or combination)
+    /// * `domain_label` - Matched domain label (for per-domain / per-route limiting)
     /// * `route_prefix` - Matched route prefix (for per-route limiting)
     ///
     /// # Returns
     /// * `RateLimitResult::Allowed` if request is permitted
     /// * `RateLimitResult::Limited` if request exceeds rate limit
-    pub fn check(&self, key: &str, route_prefix: Option<&str>) -> RateLimitResult {
+    pub fn check(
+        &self,
+        key: &str,
+        domain_label: &str,
+        route_prefix: Option<&str>,
+    ) -> RateLimitResult {
+        // A route-level override is authoritative: an enabled limiter is checked, an explicit
+        // disable allows the request, and neither falls through to the domain/global limiter.
         if let Some(prefix) = route_prefix {
-            if let Some(limiter) = self.route_limiters.get(prefix) {
-                return limiter.check(key);
+            if let Some(by_prefix) = self.route_limiters.get(domain_label) {
+                if let Some(slot) = by_prefix.get(prefix) {
+                    return match slot {
+                        Some(limiter) => limiter.check(key),
+                        None => {
+                            RateLimitResult::Allowed { remaining: isize::MAX, limit: isize::MAX }
+                        }
+                    };
+                }
             }
+        }
+
+        // A domain-level override is authoritative: an enabled limiter is checked, an explicit
+        // disable allows the request, and neither falls through to the global limiter.
+        if let Some(slot) = self.domain_limiters.get(domain_label) {
+            return match slot {
+                Some(limiter) => limiter.check(key),
+                None => RateLimitResult::Allowed { remaining: isize::MAX, limit: isize::MAX },
+            };
         }
 
         match &self.global {
@@ -81,7 +125,12 @@ impl RateLimitManager {
     }
 
     pub fn is_enabled(&self) -> bool {
-        self.global.is_some() || !self.route_limiters.is_empty()
+        self.global.is_some()
+            || self.domain_limiters.values().any(Option::is_some)
+            || self
+                .route_limiters
+                .values()
+                .any(|m| m.values().any(Option::is_some))
     }
 }
 
@@ -90,11 +139,9 @@ impl RateLimitManager {
 /// When `trusted_proxies` is empty, returns the TCP peer IP unconditionally,
 /// this is the secure default and cannot be spoofed by a client.
 ///
-/// When `trusted_proxies` is non-empty and the peer itself is a trusted proxy,
-/// walks `X-Forwarded-For` right-to-left (our proxy appends the peer IP, so the
-/// rightmost entry is the most recently added and most trustworthy) and returns
-/// the first IP that it is NOT in the trusted set. Falls back to the peer IP if all
-/// XFF entries are trusted or the header is absent/malformed.
+/// When the peer is a trusted proxy, walks the inbound `X-Forwarded-For` right-to-left
+/// (most-trusted first) and returns the first non-trusted IP, the real client behind
+/// the load balancer. Falls back to the peer IP if all entries are trusted or absent.
 fn resolve_client_ip(
     peer: std::net::SocketAddr,
     headers: &http::HeaderMap,

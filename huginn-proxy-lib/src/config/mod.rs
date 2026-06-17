@@ -7,14 +7,15 @@ mod loader;
 mod root;
 
 pub use dynamic::security::{
-    CspConfig, HstsConfig, IpFilterConfig, IpFilterMode, LimitBy, RateLimitConfig,
-    RouteRateLimitConfig, SecurityConfig, SecurityDynamicConfig, SecurityHeaders,
+    CspConfig, DomainSecurityConfig, HstsConfig, IpFilterConfig, IpFilterMode, LimitBy,
+    RateLimitConfig, RouteSecurityConfig, SecurityConfig, SecurityDynamicConfig, SecurityHeaders,
 };
 pub use dynamic::{
-    sort_routes, Backend, BackendHttpVersion, BackendPoolConfig, CustomHeader, DynamicConfig,
-    HeaderManipulation, HeaderManipulationGroup, HealthCheckConfig, HealthCheckType, Route,
+    sort_domain_routes, sort_routes, Backend, BackendHttpVersion, BackendPoolConfig, CustomHeader,
+    Domain, DynamicConfig, HeaderManipulation, HeaderManipulationGroup, HealthCheckConfig,
+    HealthCheckType, Route, DEFAULT_DOMAIN_LABEL, DEFAULT_FINGERPRINTING,
 };
-pub use loader::load_from_path;
+pub use loader::{load_from_path, security_override_warnings, SecurityOverrideWarning};
 pub use parser::{ConfigFormat, ConfigParser, TomlParser, YamlParser};
 pub use root::{Config, ConfigParts};
 pub use startup::{

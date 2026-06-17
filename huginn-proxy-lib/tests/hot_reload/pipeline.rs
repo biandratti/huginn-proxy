@@ -21,7 +21,7 @@ type TestResult = Result<(), Box<dyn std::error::Error + Send + Sync>>;
 
 fn minimal_config(backend_addr: std::net::SocketAddr, listen_port: u16) -> Config {
     use huginn_proxy_lib::config::{
-        Backend, FingerprintConfig, KeepAliveConfig, ListenConfig, LoggingConfig, Route,
+        Backend, Domain, FingerprintConfig, KeepAliveConfig, ListenConfig, LoggingConfig, Route,
         SecurityConfig, TelemetryConfig, TimeoutConfig,
     };
 
@@ -37,14 +37,22 @@ fn minimal_config(backend_addr: std::net::SocketAddr, listen_port: u16) -> Confi
             http_version: None,
             health_check: None,
         }],
-        routes: vec![Route {
-            prefix: "/".to_string(),
-            backend: backend_addr.to_string(),
-            fingerprinting: false,
-            force_new_connection: false,
-            replace_path: None,
-            rate_limit: None,
+        domains: vec![Domain {
+            host: Some("127.0.0.1".to_string()),
+            cert_path: None,
+            key_path: None,
             headers: None,
+            security: None,
+            fingerprinting: None,
+            routes: vec![Route {
+                prefix: "/".to_string(),
+                backend: backend_addr.to_string(),
+                fingerprinting: Some(false),
+                force_new_connection: false,
+                replace_path: None,
+                security: None,
+                headers: None,
+            }],
         }],
         tls: None,
         fingerprint: FingerprintConfig {
@@ -111,6 +119,7 @@ async fn reload_invalid_toml_keeps_current_config() -> TestResult {
         &reload_mutex,
         &metrics,
         &health_supervisor,
+        None,
     )
     .await;
 
@@ -157,6 +166,7 @@ async fn drain_removed_backend_replaces_pool() -> TestResult {
         &reload_mutex,
         &metrics,
         &health_supervisor,
+        None,
     )
     .await;
 
@@ -202,6 +212,7 @@ async fn reload_static_change_proceeds_without_crash() -> TestResult {
         &reload_mutex,
         &metrics,
         &health_supervisor,
+        None,
     )
     .await;
 
@@ -251,6 +262,7 @@ async fn concurrent_reloads_are_serialized() -> TestResult {
                 &reload_mutex,
                 &metrics,
                 health_supervisor.as_ref(),
+                None,
             )
             .await;
         }));
@@ -298,6 +310,7 @@ async fn reload_toggles_rate_limiter() -> TestResult {
         &reload_mutex,
         &metrics,
         &health_supervisor,
+        None,
     )
     .await;
 
@@ -317,6 +330,7 @@ async fn reload_toggles_rate_limiter() -> TestResult {
         &reload_mutex,
         &metrics,
         &health_supervisor,
+        None,
     )
     .await;
 

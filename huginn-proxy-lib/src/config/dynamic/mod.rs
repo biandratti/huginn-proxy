@@ -2,13 +2,13 @@ pub mod backend;
 pub mod headers;
 pub mod security;
 pub use backend::{
-    sort_routes, Backend, BackendHttpVersion, BackendPoolConfig, HealthCheckConfig,
-    HealthCheckType, Route,
+    sort_domain_routes, sort_routes, Backend, BackendHttpVersion, BackendPoolConfig, Domain,
+    HealthCheckConfig, HealthCheckType, Route, DEFAULT_DOMAIN_LABEL, DEFAULT_FINGERPRINTING,
 };
 pub use headers::{CustomHeader, HeaderManipulation, HeaderManipulationGroup};
 pub use security::{
-    CspConfig, HstsConfig, IpFilterConfig, IpFilterMode, LimitBy, RateLimitConfig,
-    RouteRateLimitConfig, SecurityConfig, SecurityDynamicConfig, SecurityHeaders,
+    CspConfig, DomainSecurityConfig, HstsConfig, IpFilterConfig, IpFilterMode, LimitBy,
+    RateLimitConfig, RouteSecurityConfig, SecurityConfig, SecurityDynamicConfig, SecurityHeaders,
 };
 use std::sync::Arc;
 
@@ -22,8 +22,8 @@ use std::sync::Arc;
 pub struct DynamicConfig {
     /// List of backend servers
     pub backends: Arc<Vec<Backend>>,
-    /// Path-based routing rules
-    pub routes: Arc<Vec<Route>>,
+    /// Domain entries, each groups a TLS cert with its path-based routes
+    pub domains: Arc<Vec<Domain>>,
     /// Preserve the original Host header from clients when forwarding
     pub preserve_host: bool,
     /// Global header manipulation applied to all requests/responses

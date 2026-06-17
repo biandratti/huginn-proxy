@@ -1,26 +1,19 @@
-//! Source of TLS server certificates.
+//! TLS server certificate material loaded from disk.
 //!
-//! Two variants:
-//! - [`StaticCertSource`]: loaded once at startup, never changes.
-//! - [`WatchedCertSource`]: filesystem watcher publishes updates on cert/key
+//! Certificates are read from PEM files into [`ServerCertsKeys`] and handed to
+//! [`DynamicCertResolver`](crate::tls::cert_resolver::DynamicCertResolver), which
+//! owns SNI-based selection and atomic hot-reload. There is no standalone cert
+//! source or file watcher: rotation is driven by the config hot-reload path.
 
 use std::hash::{Hash, Hasher};
 use std::path::Path;
-use std::sync::Arc;
 
 use rustls_pki_types::pem::PemObject;
 use rustls_pki_types::{CertificateDer, PrivateKeyDer};
 use tokio::fs;
-use tokio::sync::watch;
 use tracing::debug;
 
 use crate::error::ProxyError;
-
-pub use static_source::StaticCertSource;
-pub use watched_source::WatchedCertSource;
-
-mod static_source;
-mod watched_source;
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct ServerCertsKeys {
@@ -44,42 +37,10 @@ pub fn cert_chain_hash(certs: &[CertificateDer<'static>]) -> u64 {
     hasher.finish()
 }
 
-/// Source of TLS server certificates.
-///
-/// Closed enum: the two reasonable shapes today are "loaded once" and
-/// "watch the filesystem". Future sources (Vault, K8s secrets, SPIRE…)
-/// should be added as new variants, so the exhaustive match in
-/// `setup_tls_with_hot_reload` forces every site to handle them.
-pub enum CertSource {
-    Static(StaticCertSource),
-    Watched(WatchedCertSource),
-}
-
-impl CertSource {
-    /// Snapshot of the currently active certs.
-    pub fn current(&self) -> Arc<ServerCertsKeys> {
-        match self {
-            CertSource::Static(s) => s.current(),
-            CertSource::Watched(w) => w.current(),
-        }
-    }
-
-    /// Subscribe to cert updates.
-    ///
-    /// Returns `None` for static sources the caller MUST NOT spawn a
-    /// reload task. Returns `Some(receiver)` for watched sources, with
-    /// each successful reload publishing a new `Arc<ServerCertsKeys>`.
-    pub fn subscribe(&self) -> Option<watch::Receiver<Arc<ServerCertsKeys>>> {
-        match self {
-            CertSource::Static(_) => None,
-            CertSource::Watched(w) => Some(w.subscribe()),
-        }
-    }
-}
-
 /// Read the certificate and private key from the disk.
 ///
-/// Used by both `StaticCertSource::load` and the `WatchedCertSource` reload task.
+/// Used by [`DynamicCertResolver`](crate::tls::cert_resolver::DynamicCertResolver)
+/// to load each domain's cert material during startup and hot-reload.
 pub(crate) async fn read_certs_and_keys(
     cert_path: &Path,
     key_path: &Path,

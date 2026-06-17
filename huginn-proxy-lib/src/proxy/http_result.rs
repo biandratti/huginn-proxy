@@ -17,6 +17,9 @@ pub enum HttpError {
     #[error("No matching route")]
     NoMatchingRoute,
 
+    #[error("No domain configured for this host")]
+    MisdirectedRequest,
+
     #[error("IP address blocked by filter")]
     Forbidden,
 
@@ -45,6 +48,7 @@ impl From<HttpError> for StatusCode {
             HttpError::InvalidHostInRequestHeader => StatusCode::BAD_REQUEST,
             HttpError::NoMatchingBackend => StatusCode::SERVICE_UNAVAILABLE,
             HttpError::NoMatchingRoute => StatusCode::NOT_FOUND,
+            HttpError::MisdirectedRequest => StatusCode::MISDIRECTED_REQUEST,
             HttpError::Forbidden => StatusCode::FORBIDDEN,
             HttpError::NoUpstreamCandidates => StatusCode::NOT_FOUND,
             HttpError::FailedToGenerateUpstreamRequest(_) => StatusCode::INTERNAL_SERVER_ERROR,
@@ -62,6 +66,7 @@ impl HttpError {
             HttpError::InvalidHostInRequestHeader => "invalid_host",
             HttpError::NoMatchingBackend => "no_matching_backend",
             HttpError::NoMatchingRoute => "no_matching_route",
+            HttpError::MisdirectedRequest => "misdirected_request",
             HttpError::Forbidden => "ip_blocked",
             HttpError::NoUpstreamCandidates => "no_upstream_candidates",
             HttpError::FailedToGenerateUpstreamRequest(_) => "upstream_request_failed",
@@ -75,6 +80,7 @@ impl HttpError {
     fn log_level(&self) -> tracing::Level {
         match self {
             HttpError::NoMatchingRoute
+            | HttpError::MisdirectedRequest
             | HttpError::Forbidden
             | HttpError::UpstreamUnhealthy
             | HttpError::InvalidHostInRequestHeader

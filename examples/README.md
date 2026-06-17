@@ -216,7 +216,6 @@ eBPF compose examples map agent HTTP on the proxy service (`9091:9091`).
 The `config/` directory contains example configurations:
 
 - **`compose.toml`** - Basic proxy setup (default for Docker Compose)
-- **`rate-limit-example.toml`** - Advanced rate limiting configuration
 
 To switch configurations, edit `docker-compose.ebpf.yml` and change the `command` and `volumes` sections.
 
@@ -225,7 +224,8 @@ To switch configurations, edit `docker-compose.ebpf.yml` and change the `command
 ## Telemetry
 
 The observability stack runs **Prometheus** (`prom/prometheus`), **Grafana**, and **cAdvisor** as a separate Docker
-Compose project alongside the main proxy stack. Prometheus scrapes metrics from the proxy (`port 9090`) and the eBPF
+Compose project alongside the main proxy stack. Prometheus scrape config lives in `prometheus/prometheus.yml`; Grafana
+provisioning and dashboards live under `grafana/`. Prometheus scrapes metrics from the proxy (`port 9090`) and the eBPF
 agent (`port 9091`) via `host.docker.internal`, and scrapes **cAdvisor** on the compose network for per-container CPU
 and memory. Grafana is pre-provisioned with a data source and a dashboard (including a **Docker resources (cAdvisor)**
 row) — no manual setup needed. Optional cAdvisor UI: `http://localhost:8099/`.
@@ -253,42 +253,6 @@ docker compose -f examples/docker-compose.observability.yml up -d
 ---
 
 ## Advanced Examples
-
-### Rate Limiting
-
-To test rate limiting, switch to `rate-limit-example.toml` in `docker-compose.ebpf.yml`:
-
-```yaml
-environment:
-  - HUGINN_CONFIG_PATH=/config/rate-limit-example.toml
-volumes:
-  - ./config/rate-limit-example.toml:/config/rate-limit-example.toml:ro
-  - ./certs:/config/certs:ro
-```
-
-This configuration demonstrates:
-
-- IP-based rate limiting
-- Per-route rate limits
-- Header-based limits (API keys)
-- Combined strategies
-
-**Test rate limiting:**
-
-```bash
-# Send 150 parallel requests to trigger rate limits
-# /api endpoint: 50 req/s limit, burst of 100
-seq 1 150 | xargs -P 50 -I {} curl -sk https://127.0.0.1:7000/api/test 2>&1 \
-  | grep -c "Too Many Requests"
-
-# View a 429 response
-seq 1 150 | xargs -P 50 -I {} curl -sk https://127.0.0.1:7000/api/test 2>&1 \
-  | grep "Too Many Requests" | head -1
-
-# Test different endpoints with different limits
-curl -sk https://127.0.0.1:7000/public/test     # 200 req/s
-curl -sk https://127.0.0.1:7000/premium/test    # Header-based
-```
 
 ### TLS Fingerprinting
 

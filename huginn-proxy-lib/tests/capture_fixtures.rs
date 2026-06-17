@@ -20,7 +20,7 @@ use std::time::Duration;
 
 use arc_swap::ArcSwap;
 use huginn_proxy_lib::config::{
-    Backend, FingerprintConfig, KeepAliveConfig, ListenConfig, LoggingConfig, Route,
+    Backend, Domain, FingerprintConfig, KeepAliveConfig, ListenConfig, LoggingConfig, Route,
     SecurityConfig, TelemetryConfig, TimeoutConfig,
 };
 use huginn_proxy_lib::fingerprinting::names;
@@ -39,8 +39,6 @@ fn fixtures_dir() -> PathBuf {
 }
 
 // ---------------------------------------------------------------------------
-// Fixture 1: TLS ClientHello bytes from reqwest/rustls
-//
 // Strategy: start a raw TCP server, accept one connection, read the first
 // bytes - those ARE the TLS ClientHello record (before any handshake).
 // reqwest will get a connection error but we already have the bytes.
@@ -99,8 +97,6 @@ async fn capture_tls_client_hello() -> Result<(), Box<dyn std::error::Error + Se
 }
 
 // ---------------------------------------------------------------------------
-// Fixture 2: HTTP/2 client frames from reqwest/h2 via the proxy
-//
 // Strategy: start a mock backend that records the forwarded request headers
 // (the proxy injects fingerprints there), start the proxy with TLS, make one
 // HTTP/2 request, and capture the Akamai fingerprint string.
@@ -109,6 +105,7 @@ async fn capture_tls_client_hello() -> Result<(), Box<dyn std::error::Error + Se
 // by the proxy - the Akamai fingerprint string IS the processed output of those
 // bytes, so we capture the output value rather than the raw frames.
 // ---------------------------------------------------------------------------
+#[ignore]
 #[tokio::test]
 async fn capture_fingerprint_values() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     use std::convert::Infallible;
@@ -197,18 +194,24 @@ async fn capture_fingerprint_values() -> Result<(), Box<dyn std::error::Error + 
             http_version: None,
             health_check: None,
         }],
-        routes: vec![Route {
-            prefix: "/".to_string(),
-            backend: backend_addr.to_string(),
-            fingerprinting: true,
-            force_new_connection: false,
-            replace_path: None,
-            rate_limit: None,
+        domains: vec![Domain {
+            host: None,
+            cert_path: Some(cert_file.path().to_string_lossy().into_owned()),
+            key_path: Some(key_file.path().to_string_lossy().into_owned()),
             headers: None,
+            security: None,
+            fingerprinting: None,
+            routes: vec![Route {
+                prefix: "/".to_string(),
+                backend: backend_addr.to_string(),
+                fingerprinting: Some(true),
+                force_new_connection: false,
+                replace_path: None,
+                security: None,
+                headers: None,
+            }],
         }],
         tls: Some(TlsConfig {
-            cert_path: cert_file.path().to_string_lossy().into_owned(),
-            key_path: key_file.path().to_string_lossy().into_owned(),
             alpn: vec!["h2".to_string(), "http/1.1".to_string()],
             options: Default::default(),
             client_auth: Default::default(),

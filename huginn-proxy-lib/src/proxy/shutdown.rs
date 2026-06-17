@@ -7,15 +7,6 @@
 //!   │
 //!   └─▶ shutdown_tx.send(true)          (server.rs)
 //!         │
-//!         ├─▶ debounce task             (WatchedCertSource)
-//!         │     shutdown_rx.changed() → break
-//!         │     tx (cert updates) drops → subscribers receive Err
-//!         │
-//!         ├─▶ cert-reload task          (tls/setup.rs)
-//!         │     shutdown_rx.wait_for(true) → break
-//!         │     _source_keep_alive drops → AbortOnDrop fires (defence-in-depth,
-//!         │     debounce task has already exited cooperatively)
-//!         │
 //!         ├─▶ config-watcher task       (config/watcher.rs)
 //!         │     shutdown_rx.wait_for(true) → break
 //!         │

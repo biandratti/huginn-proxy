@@ -3,25 +3,7 @@ use std::path::PathBuf;
 use std::sync::OnceLock;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use huginn_proxy_lib::{ShutdownSender, ShutdownWatch};
-
-/// Return a `(ShutdownSender, ShutdownWatch)` pair that never fires.
-///
-/// Both halves must be kept alive for the duration of the test.
-/// Assign the sender to a named variable (`_shutdown_tx`, not `_`) so that
-/// Rust keeps it alive until the end of the scope instead of dropping it immediately.
-/// Dropping the sender closes the channel and causes any task that calls
-/// `shutdown_rx.wait_for(|v| *v)` to receive `Err`, which is treated as a
-/// shutdown signal, the task exits without doing any useful work.
-///
-/// # Example
-/// ```rust
-/// let (_shutdown_tx, shutdown_rx) = never_shutdown();
-/// let setup = setup_tls_with_hot_reload(&config, true, 60, metrics, shutdown_rx).await?;
-/// ```
-pub fn never_shutdown() -> (ShutdownSender, ShutdownWatch) {
-    huginn_proxy_lib::shutdown_channel()
-}
+use rustls_pki_types::{CertificateDer, PrivateKeyDer};
 
 /// Generate a temporary file path for testing
 pub fn tmp_path(name: &str) -> PathBuf {
@@ -30,27 +12,6 @@ pub fn tmp_path(name: &str) -> PathBuf {
         .unwrap_or_else(|_| Duration::from_secs(0))
         .as_nanos();
     std::env::temp_dir().join(format!("huginn-test-{nanos}-{name}"))
-}
-
-/// Create dummy (invalid) test certificates in PEM format
-/// These are valid PEM format but not cryptographically valid certificates
-/// Use for tests that expect certificate parsing/validation errors
-pub fn create_dummy_test_cert(
-) -> Result<(PathBuf, PathBuf), Box<dyn std::error::Error + Send + Sync>> {
-    ensure_crypto_provider();
-    let cert_path = tmp_path("test.crt");
-    let key_path = tmp_path("test.key");
-
-    fs::write(
-        &cert_path,
-        b"-----BEGIN CERTIFICATE-----\nMIIBkTCB+wIJAKJ\n-----END CERTIFICATE-----\n",
-    )?;
-    fs::write(
-        &key_path,
-        b"-----BEGIN PRIVATE KEY-----\nMIIBVAIBADANBgkq\n-----END PRIVATE KEY-----\n",
-    )?;
-
-    Ok((cert_path, key_path))
 }
 
 /// Generate valid test certificates using rcgen
@@ -75,30 +36,10 @@ pub fn create_valid_test_cert(
     Ok((cert_path, key_path))
 }
 
-/// Generate dummy (invalid) test certificates as DER (for direct use with rustls)
-///
-/// The bytes are syntactically arbitrary rustls will reject them.
-/// Use for tests that exercise the error path of `build_tls_acceptor` or
-/// similar functions without needing cryptographically valid material.
-pub fn generate_dummy_test_cert_der() -> (
-    rustls_pki_types::CertificateDer<'static>,
-    rustls_pki_types::PrivateKeyDer<'static>,
-) {
-    ensure_crypto_provider();
-    let cert = rustls_pki_types::CertificateDer::from(b"dummy cert".to_vec());
-    let key = rustls_pki_types::PrivateKeyDer::Pkcs8(rustls_pki_types::PrivatePkcs8KeyDer::from(
-        b"dummy key".to_vec(),
-    ));
-    (cert, key)
-}
-
 /// Generate valid test certificates as DER (for direct use with rustls)
 /// Returns CertificateDer and PrivateKeyDer for direct use in ServerConfig
 pub fn generate_valid_test_cert_der() -> Result<
-    (
-        rustls_pki_types::CertificateDer<'static>,
-        rustls_pki_types::PrivateKeyDer<'static>,
-    ),
+    (CertificateDer<'static>, PrivateKeyDer<'static>),
     Box<dyn std::error::Error + Send + Sync>,
 > {
     ensure_crypto_provider();
@@ -106,10 +47,10 @@ pub fn generate_valid_test_cert_der() -> Result<
     let rcgen::CertifiedKey { cert, signing_key } =
         rcgen::generate_simple_self_signed(subject_alt_names)?;
 
-    let cert_der = rustls_pki_types::CertificateDer::from(cert.der().to_vec());
-    let key_der = rustls_pki_types::PrivateKeyDer::Pkcs8(
-        rustls_pki_types::PrivatePkcs8KeyDer::from(signing_key.serialize_der()),
-    );
+    let cert_der = CertificateDer::from(cert.der().to_vec());
+    let key_der = PrivateKeyDer::Pkcs8(rustls_pki_types::PrivatePkcs8KeyDer::from(
+        signing_key.serialize_der(),
+    ));
 
     Ok((cert_der, key_der))
 }

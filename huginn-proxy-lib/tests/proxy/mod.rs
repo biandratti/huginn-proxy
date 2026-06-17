@@ -1,10 +1,11 @@
 mod client_pool;
-mod connection_limit;
+mod connection;
 mod edge_cases;
-mod fingerprint_spoofing;
 mod forwarding;
 mod h2c_forwarding;
-mod header_manipulation;
+mod handler;
 mod http_result;
 mod path_manipulation;
+mod reload;
+mod resolve;
 mod router;

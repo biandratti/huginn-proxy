@@ -80,17 +80,19 @@ scrape_configs:
 
 ### 1. Throughput Metrics
 
-| Metric                                | Type    | Description                        | Labels            |
-|---------------------------------------|---------|------------------------------------|-------------------|
-| `huginn_bytes_received_total`         | Counter | Total bytes received from clients  | `protocol`        |
-| `huginn_bytes_sent_total`             | Counter | Total bytes sent to clients        | `protocol`        |
-| `huginn_backend_bytes_received_total` | Counter | Total bytes received from backends | `backend_address` |
-| `huginn_backend_bytes_sent_total`     | Counter | Total bytes sent to backends       | `backend_address` |
+| Metric                                | Type    | Description                        | Labels                               |
+|---------------------------------------|---------|------------------------------------|--------------------------------------|
+| `huginn_bytes_received_total`         | Counter | Total bytes received from clients  | `protocol`                           |
+| `huginn_bytes_sent_total`             | Counter | Total bytes sent to clients        | `protocol`                           |
+| `huginn_backend_bytes_received_total` | Counter | Total bytes received from backends | `backend_address`, `route`, `domain` |
+| `huginn_backend_bytes_sent_total`     | Counter | Total bytes sent to backends       | `backend_address`, `route`, `domain` |
 
 **Labels**:
 
 - `protocol`: Connection protocol (`http/1.1`, `h2`, `https`)
 - `backend_address`: Backend server address (e.g., `backend-1:9000`)
+- `route`: Matched route prefix (e.g., `/api`, `/`)
+- `domain`: Matched domain — configured `host`, or `_default_` for the catch-all (see §3)
 
 **Example queries**:
 
@@ -148,19 +150,20 @@ rate(huginn_connections_rejected_total[5m])
 
 ### 3. Request Metrics
 
-| Metric                             | Type      | Description                                                       | Labels                                       |
-|------------------------------------|-----------|-------------------------------------------------------------------|----------------------------------------------|
-| `huginn_entrypoint_requests_total` | Counter   | All requests arriving at the proxy, regardless of routing outcome | `method`, `status_code`, `protocol`          |
-| `huginn_requests_total`            | Counter   | Requests matched to a route and dispatched                        | `method`, `status_code`, `protocol`, `route` |
-| `huginn_requests_duration_seconds` | Histogram | Duration of routed requests                                       | `method`, `status_code`, `protocol`, `route` |
+| Metric                             | Type      | Description                                                       | Labels                                                 |
+|------------------------------------|-----------|-------------------------------------------------------------------|--------------------------------------------------------|
+| `huginn_entrypoint_requests_total` | Counter   | All requests arriving at the proxy, regardless of routing outcome | `method`, `status_code`, `protocol`                    |
+| `huginn_requests_total`            | Counter   | Requests matched to a route and dispatched                        | `method`, `status_code`, `protocol`, `route`, `domain` |
+| `huginn_requests_duration_seconds` | Histogram | Duration of routed requests                                       | `method`, `status_code`, `protocol`, `route`, `domain` |
 
 The two request counters model the same two layers as Traefik's `entrypoint` / `router` metrics:
 
 - **`huginn_entrypoint_requests_total`** — incremented for every HTTP request the proxy receives, including those
   rejected before routing (IP block → 403, no matching route → 404). Use this for total load and overall status-code
   distribution visible to clients.
-- **`huginn_requests_total`** — incremented only when a route matched. Carries the `route` label so you can break down
-  traffic, latency, and error rates per route. Unrouted requests (403, 404) are not counted here.
+- **`huginn_requests_total`** — incremented only when a route matched. Carries the `route` and `domain` labels so you
+  can break down traffic, latency, and error rates per route *and* per domain. Unrouted requests (403, 404) are not
+  counted here.
 
 **Labels**:
 
@@ -168,6 +171,12 @@ The two request counters model the same two layers as Traefik's `entrypoint` / `
 - `status_code`: HTTP status code (`200`, `404`, `500`, etc.)
 - `protocol`: HTTP version (`HTTP/1.1`, `HTTP/2.0`)
 - `route`: Matched route prefix — only on `huginn_requests_total` (e.g., `/api`, `/`)
+- `domain`: Matched domain identity — only on `huginn_requests_total`. The domain's configured `host`
+  (e.g. `api.example.com`, `*.example.com`), or `_default_` for the catch-all (host-less) domain. This is the
+  *configured* identity, never the client's real `Host`, so cardinality stays bounded by the number of configured
+  domains; a wildcard domain collapses all its subdomains into one series. Without it, the same route prefix under two
+  domains would collapse into a single series. Mirrors the `router` dimension in Traefik, and works well as a Grafana
+  `$domain` template variable (`label_values(huginn_requests_total, domain)`).
 
 **Example queries**:
 
@@ -193,6 +202,12 @@ histogram_quantile(0.99, rate(huginn_requests_duration_seconds_bucket[5m]))
 
 # Requests by route
 sum by (route) (rate(huginn_requests_total[5m]))
+
+# Requests by domain and route (distinguishes the same prefix across domains)
+sum by (domain, route) (rate(huginn_requests_total[5m]))
+
+# Requests for a single domain (e.g. a Grafana $domain template variable)
+sum by (route) (rate(huginn_requests_total{domain="api.example.com"}[5m]))
 
 # Latency by route (P95)
 histogram_quantile(0.95,
@@ -338,12 +353,12 @@ histogram_quantile(0.95, rate(huginn_tls_fingerprint_extraction_duration_seconds
 
 ### 6. Backend Metrics
 
-| Metric                            | Type      | Description                    | Labels                                                |
-|-----------------------------------|-----------|--------------------------------|-------------------------------------------------------|
-| `huginn_backend_requests_total`   | Counter   | Requests forwarded to backends | `backend_address`, `status_code`, `protocol`, `route` |
-| `huginn_backend_errors_total`     | Counter   | Backend errors                 | `backend_address`, `error_type`, `route`              |
-| `huginn_backend_duration_seconds` | Histogram | Backend request duration       | `backend_address`, `route`                            |
-| `huginn_backend_selections_total` | Counter   | Backend selection events       | `backend`                                             |
+| Metric                            | Type      | Description                    | Labels                                                          |
+|-----------------------------------|-----------|--------------------------------|-----------------------------------------------------------------|
+| `huginn_backend_requests_total`   | Counter   | Requests forwarded to backends | `backend_address`, `status_code`, `protocol`, `route`, `domain` |
+| `huginn_backend_errors_total`     | Counter   | Backend errors                 | `backend_address`, `error_type`, `route`, `domain`              |
+| `huginn_backend_duration_seconds` | Histogram | Backend request duration       | `backend_address`, `status_code`, `protocol`, `route`, `domain` |
+| `huginn_backend_selections_total` | Counter   | Backend selection events       | `backend`                                                       |
 
 **Labels**:
 
@@ -353,6 +368,7 @@ histogram_quantile(0.95, rate(huginn_tls_fingerprint_extraction_duration_seconds
 - `error_type`: Error type (`connection_refused`, `timeout`, `dns_error`, etc.)
 - `protocol`: HTTP version used for backend request
 - `route`: Route that triggered the backend request
+- `domain`: Matched domain identity (configured `host`, or `_default_` for the catch-all — see §3)
 
 **Example queries**:
 
@@ -373,8 +389,8 @@ sum by (backend) (rate(huginn_backend_selections_total[5m]))
 # Backend request distribution by route
 sum by (backend_address, route) (rate(huginn_backend_requests_total[5m]))
 
-# Backend requests by route
-sum by (backend_address, route) (rate(huginn_backend_requests_total[5m]))
+# Backend requests by domain and route
+sum by (domain, route) (rate(huginn_backend_requests_total[5m]))
 
 # Backend errors by route
 sum by (backend_address, route) (rate(huginn_backend_errors_total[5m]))
@@ -413,16 +429,17 @@ sum by (backend) (rate(huginn_health_check_probes_total{result="fail"}[5m]))
 
 ### 7. Rate Limiting Metrics
 
-| Metric                             | Type    | Description                                   | Labels              |
-|------------------------------------|---------|-----------------------------------------------|---------------------|
-| `huginn_rate_limit_requests_total` | Counter | Total requests evaluated by rate limiter      | `strategy`, `route` |
-| `huginn_rate_limit_allowed_total`  | Counter | Total requests allowed by rate limiter        | `strategy`, `route` |
-| `huginn_rate_limit_rejected_total` | Counter | Total requests rejected (429) by rate limiter | `strategy`, `route` |
+| Metric                             | Type    | Description                                   | Labels                        |
+|------------------------------------|---------|-----------------------------------------------|-------------------------------|
+| `huginn_rate_limit_requests_total` | Counter | Total requests evaluated by rate limiter      | `strategy`, `route`, `domain` |
+| `huginn_rate_limit_allowed_total`  | Counter | Total requests allowed by rate limiter        | `strategy`, `route`, `domain` |
+| `huginn_rate_limit_rejected_total` | Counter | Total requests rejected (429) by rate limiter | `strategy`, `route`, `domain` |
 
 **Labels**:
 
 - `strategy`: Rate limiting strategy (`ip`, `header`, `route`, `combined`)
 - `route`: Route prefix (e.g., `/api`, `/`)
+- `domain`: Matched domain identity (configured `host`, or `_default_` for the catch-all — see §3)
 
 **Example queries**:
 
@@ -579,6 +596,9 @@ sum by (protocol) (rate(huginn_mtls_connections_total[5m]))
   regardless of outcome.
 - `huginn_config_last_reload_timestamp_seconds` is only updated on success; use it together with
   `huginn_config_reload_total{result="error"}` to detect stuck reloads.
+- Cert handling on reload is **best-effort** (Traefik-style): a domain whose certificate fails to load does
+  **not** flip this counter to `error` (which tracks config parse/validation only). The reload still counts as
+  `success`; the bad cert surfaces as `huginn_tls_cert_reload_total{result="error", domain="..."}` (see §13).
 - `huginn_config_hash` changes whenever the deserialized `DynamicConfig` changes. It is unaffected by TOML formatting
   changes (whitespace, comments, field ordering within a table) since it hashes the parsed struct, not the raw file.
 
@@ -586,34 +606,46 @@ sum by (protocol) (rate(huginn_mtls_connections_total[5m]))
 
 ### 13. TLS Certificate Hot Reload Metrics
 
-| Metric                                          | Type    | Description                                                       | Labels   |
-|-------------------------------------------------|---------|-------------------------------------------------------------------|----------|
-| `huginn_tls_cert_reload_total`                  | Counter | TLS certificate load/reload attempts (includes initial load)      | `result` |
-| `huginn_tls_cert_last_reload_timestamp_seconds` | Gauge   | Unix timestamp of the last successful TLS cert load or reload     | -        |
-| `huginn_tls_cert_hash`                          | Gauge   | FNV-1a hash of the currently active certificate chain (DER bytes) | -        |
+| Metric                                          | Type    | Description                                                            | Labels            |
+|-------------------------------------------------|---------|------------------------------------------------------------------------|-------------------|
+| `huginn_tls_cert_reload_total`                  | Counter | TLS certificate load/reload attempts per domain (includes initial load) | `result`, `domain` |
+| `huginn_tls_cert_last_reload_timestamp_seconds` | Gauge   | Unix timestamp of the last successful TLS cert load or reload          | `domain`          |
+| `huginn_tls_cert_hash`                          | Gauge   | FNV-1a hash of the active certificate chain for a domain (DER bytes)  | `domain`          |
 
 **Labels**:
 
 - `result`: Outcome of the reload attempt — `success` or `error`
+- `domain`: The domain host pattern the certificate belongs to (e.g. `api.example.com`, `*.example.com`).
+  The catch-all (host-less) domain reports its certs under `domain="_default_"`.
 
 **Notes**:
 
-- This metric trio is **independent** from the config hot reload trio (§12). Modifying the TOML config does not bump
-  these gauges; replacing the cert/key files does. The two subsystems run in separate background tasks.
-- The hash and timestamp gauges are populated **immediately at boot** with the initial certificate, so
-  `time() - huginn_tls_cert_last_reload_timestamp_seconds` is meaningful from the first scrape (unlike §12, which only
-  populates on the first hot reload event).
-- `huginn_tls_cert_hash` hashes the certificate chain DER bytes. The private key is intentionally not part of the hash
-  (cert/key are always rotated together, and hashing key material in a process-wide gauge is a security smell).
-- A failed reload (cert/key parse error, validation failure, or `ServerConfig` rebuild error) bumps the
-  `result="error"` counter but leaves the hash and timestamp gauges untouched, so dashboards continue to advertise the
-  last *good* certificate that is actually serving traffic.
+- Cert loading is driven by config hot-reload (`DynamicCertResolver::update`) — each SIGHUP or config file change
+  reloads all domain certs. This replaces the former per-file watcher model.
+- All three metrics are **per-domain** so you can track cert rotation independently for each domain.
+- Only domains that declare a certificate emit these metrics. Plain-HTTP domains and a cert-less catch-all
+  produce no cert series.
+- The hash and timestamp gauges are populated **at boot** for every domain with a certificate, so
+  `time() - huginn_tls_cert_last_reload_timestamp_seconds{domain="..."}` is meaningful from the first scrape.
+- `huginn_tls_cert_hash` hashes the certificate chain DER bytes. Private key material is intentionally excluded.
+  The value is a `u64`; over the Prometheus exposition format (float64) hashes above 2^53 lose low-bit precision,
+  so use `changes()` for rotation detection rather than comparing the literal value.
+- Success metrics are emitted only **after** the new cert map goes live (atomic swap). A failing domain bumps
+  `result="error"` and emits no success for that reload, so the hash/timestamp gauges always reflect the
+  certificate actually serving traffic.
+- Cert reload is **best-effort, per-domain**: one domain's failure does not abort the others. A failing domain
+  keeps its *previously serving* cert (carried over from the last-good map), so its `huginn_tls_cert_hash` and
+  timestamp gauges stay at their last-good value — no spurious success is emitted for a carried-over cert.
+- A **cert** reload failure does *not* flip `huginn_config_reload_total` to `error` (that counter tracks config
+  parse/validation only); the config reload still counts as `success` (Traefik-style best-effort, see §12).
+  Alert on `huginn_tls_cert_reload_total{result="error"}` to catch cert failures.
 
 **Example queries**:
 
-- Detect a rotation in the last 5 minutes: `changes(huginn_tls_cert_hash[5m]) > 0`
-- Alert on stuck reloads (rotation attempted but failed): `rate(huginn_tls_cert_reload_total{result="error"}[5m]) > 0`
-- Cert age proxy (time since last successful load): `time() - huginn_tls_cert_last_reload_timestamp_seconds`
+- Detect a rotation for a domain in the last 5 minutes: `changes(huginn_tls_cert_hash{domain="api.example.com"}[5m]) > 0`
+- Alert on failed reload for any domain: `rate(huginn_tls_cert_reload_total{result="error"}[5m]) > 0`
+- Cert age by domain: `time() - huginn_tls_cert_last_reload_timestamp_seconds`
+- Domains with a cert loaded: `count by (domain)(huginn_tls_cert_hash)`
 
 ---
 
@@ -715,9 +747,8 @@ TLS certificate row (each panel aligned column-wise under its config counterpart
 
 - Cert reload success rate: `rate(huginn_tls_cert_reload_total{result="success"}[1h])`
 - Cert reload error rate: `rate(huginn_tls_cert_reload_total{result="error"}[1h])`
-- Time since last successful cert load: `time() - huginn_tls_cert_last_reload_timestamp_seconds`
-- Active cert hash: `huginn_tls_cert_hash` (changes on every rotation; content hash for change detection, not a
-  JA4-style client fingerprint)
+- Time since last successful cert load per domain: `time() - huginn_tls_cert_last_reload_timestamp_seconds`
+- Active cert hash per domain: `huginn_tls_cert_hash` (changes on every rotation; content hash for change detection)
 - Detect rotation in last 5 min: `changes(huginn_tls_cert_hash[5m]) > 0`
 
 **eBPF Agent Panel** (DaemonSet, one agent per node):

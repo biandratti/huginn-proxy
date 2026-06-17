@@ -46,6 +46,15 @@ pub struct TlsOptions {
     /// Default: empty (uses rustls safe defaults)
     #[serde(default = "default_curve_preferences")]
     pub curve_preferences: Vec<String>,
+    /// Strict SNI checking.
+    ///
+    /// When `true`, a TLS connection whose SNI matches no configured domain cert is
+    /// rejected (`unrecognized_name`) instead of being served the default certificate
+    /// (the catch-all domain's cert).
+    ///
+    /// Default: false (lenient, serve the default cert for unmatched SNI).
+    #[serde(default)]
+    pub sni_strict: bool,
 }
 
 impl Default for TlsOptions {
@@ -56,6 +65,7 @@ impl Default for TlsOptions {
             max_version: default_max_version(),
             cipher_suites: default_cipher_suites(),
             curve_preferences: default_curve_preferences(),
+            sni_strict: false,
         }
     }
 }
@@ -134,12 +144,6 @@ fn default_session_cache_size() -> usize {
 
 #[derive(Debug, Deserialize, Clone, PartialEq)]
 pub struct TlsConfig {
-    /// Path to TLS certificate file (PEM format)
-    /// File must exist and be readable at startup
-    pub cert_path: String,
-    /// Path to TLS private key file (PEM format)
-    /// File must exist and be readable at startup
-    pub key_path: String,
     /// Application-Layer Protocol Negotiation (ALPN) protocols
     /// Common values: ["h2", "http/1.1"]
     /// Default: empty (no ALPN)

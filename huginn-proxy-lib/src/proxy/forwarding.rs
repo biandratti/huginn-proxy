@@ -20,6 +20,7 @@ pub struct ForwardConfig<'a> {
     pub is_https: bool,
     pub preserve_host: bool,
     pub route: &'a str,
+    pub domain: &'a str,
     pub client_pool: &'a Arc<ClientPool>,
     pub force_new_connection: bool,
 }
@@ -110,9 +111,12 @@ pub async fn forward(
     if let Some(content_length) = parts.headers.get(hyper::header::CONTENT_LENGTH) {
         if let Ok(length_str) = content_length.to_str() {
             if let Ok(length) = length_str.parse::<u64>() {
-                config
-                    .metrics
-                    .record_backend_bytes_sent(length, &backend, config.route);
+                config.metrics.record_backend_bytes_sent(
+                    length,
+                    &backend,
+                    config.route,
+                    config.domain,
+                );
             }
         }
     }
@@ -151,6 +155,7 @@ pub async fn forward(
                             length,
                             &backend,
                             config.route,
+                            config.domain,
                         );
                     }
                 }
@@ -162,23 +167,31 @@ pub async fn forward(
                 config.is_https,
             );
 
-            config
-                .metrics
-                .record_backend_request(&backend, status_code, &protocol, config.route);
+            config.metrics.record_backend_request(
+                &backend,
+                status_code,
+                &protocol,
+                config.route,
+                config.domain,
+            );
             config.metrics.record_backend_duration(
                 duration,
                 &backend,
                 status_code,
                 &protocol,
                 config.route,
+                config.domain,
             );
             Ok(resp.map(|b| b.boxed()))
         }
         Err(e) => {
             let error = HttpError::FailedToGetResponseFromBackend(e.to_string());
-            config
-                .metrics
-                .record_backend_error(&backend, error.error_type(), config.route);
+            config.metrics.record_backend_error(
+                &backend,
+                error.error_type(),
+                config.route,
+                config.domain,
+            );
             Err(error)
         }
     }

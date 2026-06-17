@@ -33,7 +33,7 @@ services:
   prometheus:
     image: prom/prometheus:v3.11.2
     volumes:
-      - ./config/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus-data:/prometheus
     ports:
       - "9092:9090"

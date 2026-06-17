@@ -8,9 +8,9 @@ fn test_path_stripping_basic() {
     let routes = vec![Route {
         prefix: "/api".to_string(),
         backend: "backend:9000".to_string(),
-        fingerprinting: true,
-        replace_path: Some("".to_string()),
-        rate_limit: None, // Empty string means strip prefix
+        fingerprinting: Some(true),
+        replace_path: Some("".to_string()), // Empty string means strip prefix
+        security: None,
         headers: None,
         force_new_connection: false,
     }];
@@ -31,9 +31,9 @@ fn test_path_stripping_with_query_params() {
     let routes = vec![Route {
         prefix: "/api".to_string(),
         backend: "backend:9000".to_string(),
-        fingerprinting: true,
+        fingerprinting: Some(true),
         replace_path: Some("".to_string()),
-        rate_limit: None,
+        security: None,
         headers: None,
         force_new_connection: false,
     }];
@@ -55,9 +55,9 @@ fn test_path_rewriting_basic() {
     let routes = vec![Route {
         prefix: "/maps".to_string(),
         backend: "backend:9000".to_string(),
-        fingerprinting: true,
+        fingerprinting: Some(true),
         replace_path: Some("/replacing/path1".to_string()),
-        rate_limit: None,
+        security: None,
         headers: None,
         force_new_connection: false,
     }];
@@ -78,9 +78,9 @@ fn test_path_rewriting_with_versioned_api() {
     let routes = vec![Route {
         prefix: "/api".to_string(),
         backend: "backend:9000".to_string(),
-        fingerprinting: true,
+        fingerprinting: Some(true),
         replace_path: Some("/v1/api".to_string()),
-        rate_limit: None,
+        security: None,
         headers: None,
         force_new_connection: false,
     }];
@@ -101,9 +101,9 @@ fn test_no_path_manipulation() {
     let routes = vec![Route {
         prefix: "/api".to_string(),
         backend: "backend:9000".to_string(),
-        fingerprinting: true,
+        fingerprinting: Some(true),
         replace_path: None,
-        rate_limit: None,
+        security: None,
         headers: None,
         force_new_connection: false,
     }];
@@ -123,9 +123,9 @@ fn test_path_manipulation_with_nested_paths() {
     let routes = vec![Route {
         prefix: "/api/v1".to_string(),
         backend: "backend:9000".to_string(),
-        fingerprinting: true,
+        fingerprinting: Some(true),
         replace_path: Some("/backend/v1".to_string()),
-        rate_limit: None,
+        security: None,
         headers: None,
         force_new_connection: false,
     }];
@@ -145,9 +145,9 @@ fn test_path_manipulation_root_path() {
     let routes = vec![Route {
         prefix: "/".to_string(),
         backend: "backend:9000".to_string(),
-        fingerprinting: true,
+        fingerprinting: Some(true),
         replace_path: Some("/api".to_string()),
-        rate_limit: None,
+        security: None,
         headers: None,
         force_new_connection: false,
     }];
@@ -168,18 +168,18 @@ fn test_multiple_routes_matching_priority() {
         Route {
             prefix: "/api/v1".to_string(),
             backend: "backend-v1:9000".to_string(),
-            fingerprinting: true,
+            fingerprinting: Some(true),
             replace_path: Some("/v1".to_string()),
-            rate_limit: None,
+            security: None,
             headers: None,
             force_new_connection: false,
         },
         Route {
             prefix: "/api".to_string(),
             backend: "backend-api:9000".to_string(),
-            fingerprinting: true,
+            fingerprinting: Some(true),
             replace_path: Some("/".to_string()),
-            rate_limit: None,
+            security: None,
             headers: None,
             force_new_connection: false,
         },
@@ -203,9 +203,9 @@ fn test_path_manipulation_exact_prefix_match() {
     let routes = vec![Route {
         prefix: "/api".to_string(),
         backend: "backend:9000".to_string(),
-        fingerprinting: true,
+        fingerprinting: Some(true),
         replace_path: Some("/v1".to_string()),
-        rate_limit: None,
+        security: None,
         headers: None,
         force_new_connection: false,
     }];
@@ -226,9 +226,9 @@ fn test_path_stripping_to_root() {
     let routes = vec![Route {
         prefix: "/api".to_string(),
         backend: "backend:9000".to_string(),
-        fingerprinting: true,
+        fingerprinting: Some(true),
         replace_path: Some("".to_string()),
-        rate_limit: None,
+        security: None,
         headers: None,
         force_new_connection: false,
     }];
@@ -249,9 +249,9 @@ fn test_path_manipulation_with_special_characters() {
     let routes = vec![Route {
         prefix: "/api".to_string(),
         backend: "backend:9000".to_string(),
-        fingerprinting: true,
+        fingerprinting: Some(true),
         replace_path: Some("/v1".to_string()),
-        rate_limit: None,
+        security: None,
         headers: None,
         force_new_connection: false,
     }];

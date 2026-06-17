@@ -1,5 +1,4 @@
-# Top-level scalar keys must appear before any [table] header in TOML.
-
+# Top-level scalar keys
 preserve_host = false
 
 [listen]
@@ -15,66 +14,120 @@ health_check = { type = "http", path = "/", expected_status = 200, interval_secs
 address = "backend-b:9000"
 http_version = "http11"
 
-# Basic route without path manipulation (with connection pooling)
-[[routes]]
+# No Docker service with this name — TCP probes fail immediately.
+# Used by E2E to verify the proxy returns 502 when all candidates are unhealthy.
+[[backends]]
+address = "unreachable-backend:9000"
+http_version = "http11"
+health_check = { type = "tcp", interval_secs = 1, timeout_secs = 1, unhealthy_threshold = 2, healthy_threshold = 2 }
+
+[[domains]]
+cert_path = "/config/certs/server.crt"
+key_path = "/config/certs/server.key"
+
+[domains.headers.response]
+remove = ["Server", "X-Powered-By", "X-AspNet-Version"]
+add = [
+    { name = "X-Proxy", value = "huginn-proxy" },
+]
+
+# [domains.security.ip_filter]
+# mode = "allowlist"
+# allowlist = ["10.0.0.0/8", "192.168.0.0/16"]
+#
+# [domains.security.rate_limit]
+# enabled = true
+# requests_per_second = 50
+# burst = 100
+#
+# [domains.security.headers.hsts]
+# enabled = true
+# max_age = 63072000
+
+[[domains.routes]]
 prefix = "/api"
 backend = "backend-a:9000"
 fingerprinting = true
 force_new_connection = false
 
-# Route without fingerprinting (for fingerprint tests)
-[[routes]]
+[[domains.routes]]
 prefix = "/static"
 backend = "backend-b:9000"
 fingerprinting = false
 force_new_connection = false
 
-# Advanced fingerprinting: force new TCP+TLS handshake per request
-# Performance: Adds latency per request
-[[routes]]
+[[domains.routes]]
 prefix = "/fingerprint"
 backend = "backend-a:9000"
 fingerprinting = true
 force_new_connection = true
 
-# Path stripping: removes matched prefix
-# Request: /strip/users → Backend: /users
-[[routes]]
+[[domains.routes]]
 prefix = "/strip"
 backend = "backend-a:9000"
 fingerprinting = true
 replace_path = ""
 
-# Path rewriting: replaces prefix with new path
-# Request: /old/data → Backend: /new/data
-[[routes]]
+[[domains.routes]]
 prefix = "/old"
 backend = "backend-b:9000"
 fingerprinting = true
 replace_path = "/new"
 
-# Path rewriting to versioned API
-# Request: /v1/endpoint → Backend: /api/v1/endpoint
-[[routes]]
+[[domains.routes]]
 prefix = "/v1"
 backend = "backend-a:9000"
 fingerprinting = true
 replace_path = "/api/v1"
 
-# Load-balance probe route: same prefix mapped to two backends.
-# Used by E2E tests to verify real backend distribution.
-[[routes]]
+[[domains.routes]]
 prefix = "/lb"
 backend = "backend-a:9000"
 fingerprinting = true
 
-[[routes]]
+[[domains.routes]]
 prefix = "/lb"
 backend = "backend-b:9000"
 fingerprinting = true
 
-# Default route (no path manipulation)
-[[routes]]
+[[domains.routes]]
+prefix = "/api/e2e-unhealthy"
+backend = "unreachable-backend:9000"
+
+[[domains.routes]]
+prefix = "/rl"
+backend = "backend-a:9000"
+
+[domains.routes.security.rate_limit]
+enabled = true
+requests_per_second = 1
+burst = 3
+window_seconds = 1
+limit_by = "ip"
+
+[[domains.routes]]
+prefix = "/rl-bypass"
+backend = "backend-a:9000"
+
+[domains.routes.security.rate_limit]
+enabled = true
+requests_per_second = 1
+burst = 3
+window_seconds = 1
+limit_by = "ip"
+
+# Per-route IP ACL (whole-block). Allowlist a TEST-NET-1 range (RFC 5737) that no real client
+# uses, so every request to this route is rejected with 403 — proving route-level ACL while the
+# global ip_filter stays disabled. Exercised by the route_ip_filter E2E test.
+[[domains.routes]]
+prefix = "/acl-denied"
+backend = "backend-a:9000"
+
+[domains.routes.security.ip_filter]
+mode = "allowlist"
+allowlist = ["192.0.2.0/24"]
+
+[[domains.routes]]
 prefix = "/"
 backend = "backend-b:9000"
 
@@ -82,21 +135,14 @@ backend = "backend-b:9000"
 remove = ["X-Forwarded-Server"]
 add = [
     { name = "X-Proxy-Name", value = "huginn-proxy" },
-    { name = "X-Proxy-Version", value = "0.0.1" }
-]
-
-[headers.response]
-remove = ["Server", "X-Powered-By", "X-AspNet-Version"]
-add = [
-    { name = "X-Proxy", value = "huginn-proxy" }
+    { name = "X-Proxy-Version", value = "0.0.1" },
 ]
 
 [tls]
-cert_path = "/config/certs/server.crt"
-key_path = "/config/certs/server.key"
 alpn = ["h2", "http/1.1"]
 
 [tls.options]
+sni_strict = false
 versions = ["1.2", "1.3"]
 cipher_suites = [
     "TLS13_AES_128_GCM_SHA256",
@@ -129,7 +175,7 @@ show_target = false
 [backend_pool]
 enabled = true
 idle_timeout = 90
-pool_max_idle_per_host = 128
+pool_max_idle_per_host = 0
 
 [timeout]
 upstream_connect_ms = 5000
@@ -147,21 +193,10 @@ max_connections = 512
 
 [security.ip_filter]
 mode = "disabled"
-
-# Allowlist example (only these IPs can connect):
-# mode = "allowlist"
 # allowlist = [
-#   "127.0.0.1/32",      # Localhost IPv4
-#   "::1/128",           # Localhost IPv6
-#   "192.168.1.0/24",    # Private network
-#   "10.0.0.0/8"         # Private network (large range)
-# ]
-
-# Denylist example (block these IPs):
-# mode = "denylist"
-# denylist = [
-#   "192.168.1.100/32",  # Block specific IP
-#   "10.0.0.0/8"         # Block entire network
+#   "127.0.0.1/32",
+#   "::1/128",
+#   "192.168.1.0/24",
 # ]
 
 [security.headers]
@@ -169,7 +204,7 @@ custom = [
     { name = "X-Frame-Options", value = "DENY" },
     { name = "X-Content-Type-Options", value = "nosniff" },
     { name = "X-XSS-Protection", value = "1; mode=block" },
-    { name = "Referrer-Policy", value = "strict-origin-when-cross-origin" }
+    { name = "Referrer-Policy", value = "strict-origin-when-cross-origin" },
 ]
 
 [security.headers.hsts]
@@ -181,6 +216,13 @@ preload = false
 [security.headers.csp]
 enabled = true
 policy = "default-src 'self'; script-src 'self' 'unsafe-inline'"
+
+[security.rate_limit]
+enabled = false
+requests_per_second = 1000
+burst = 2000
+window_seconds = 1
+limit_by = "ip"
 
 [telemetry]
 metrics_port = 9090

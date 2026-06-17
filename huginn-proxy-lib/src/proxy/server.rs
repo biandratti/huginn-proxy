@@ -13,7 +13,7 @@ use crate::proxy::reload::{
 use crate::proxy::shutdown::{wait_for_drain, ServiceHandle, ShutdownSender};
 pub use crate::proxy::watch::WatchOptions;
 use crate::telemetry::Metrics;
-use crate::tls::setup_tls_with_hot_reload;
+use crate::tls::{build_tls_acceptor, DynamicCertResolver};
 use hyper_util::rt::{TokioExecutor, TokioTimer};
 use hyper_util::server::conn::auto::Builder as ConnBuilder;
 use std::net::SocketAddr;
@@ -62,22 +62,34 @@ pub async fn run(
     // Collect background service handles for ordered cooperative shutdown.
     let mut services: Vec<ServiceHandle> = Vec::new();
 
-    let tls_acceptor = match &static_cfg.tls {
-        Some(tls_config) => {
-            let tls_setup = setup_tls_with_hot_reload(
-                tls_config,
-                watch_opts.watch,
-                watch_opts.watch_delay_secs,
-                Arc::clone(&metrics),
-                shutdown_rx.clone(),
-            )
-            .await?;
-            if let Some(svc) = tls_setup.reload_handle {
-                services.push(svc);
-            }
-            Some(tls_setup.acceptor)
+    // Build the cert resolver and load initial certs from the current dynamic config.
+    // `None` when TLS is not configured (plain HTTP mode).
+    let cert_resolver: Option<Arc<DynamicCertResolver>> = if let Some(tls) = &static_cfg.tls {
+        let resolver = Arc::new(DynamicCertResolver::new(tls.options.sni_strict));
+        let report = resolver.update(&dynamic_cfg.load().domains, &metrics).await;
+        if report.is_partial() {
+            info!(
+                failed = report.failed,
+                loaded = report.loaded,
+                "Some domain certificates failed to load at startup; those domains will not serve TLS"
+            );
         }
-        None => None,
+        if !resolver.has_serviceable_cert() && !dynamic_cfg.load().domains.is_empty() {
+            info!(
+                "TLS is configured but no certificate is serviceable; all TLS handshakes will be \
+                 rejected until a cert is provided"
+            );
+        }
+        Some(resolver)
+    } else {
+        None
+    };
+
+    let tls_acceptor = match (&static_cfg.tls, &cert_resolver) {
+        (Some(tls_config), Some(resolver)) => {
+            Some(build_tls_acceptor(tls_config, Arc::clone(resolver)).await?)
+        }
+        _ => None,
     };
 
     let shutdown_signal = Arc::new(AtomicUsize::new(0));
@@ -185,6 +197,7 @@ pub async fn run(
                         &reload_mutex,
                         &metrics,
                         &health_supervisor,
+                        cert_resolver.as_ref(),
                     )
                     .await;
                 }

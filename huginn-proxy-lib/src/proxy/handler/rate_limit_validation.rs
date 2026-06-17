@@ -1,6 +1,7 @@
 use http::StatusCode;
 use http_body_util::{combinators::BoxBody, BodyExt, Full};
 use hyper::Response;
+use ipnet::IpNet;
 use std::sync::Arc;
 use tracing::debug;
 
@@ -16,6 +17,7 @@ type RespBody = BoxBody<bytes::Bytes, hyper::Error>;
 /// Returns:
 /// - `None` if request is allowed to proceed
 /// - `Some(429 response)` if request exceeds rate limit
+#[allow(clippy::too_many_arguments)]
 pub fn check_rate_limit(
     rate_limit_manager: Option<&Arc<RateLimitManager>>,
     rate_limit_config: &RateLimitConfig,
@@ -23,20 +25,17 @@ pub fn check_rate_limit(
     peer: std::net::SocketAddr,
     headers: &http::HeaderMap,
     metrics: &Arc<Metrics>,
+    domain: &str,
+    trusted_proxies: &[IpNet],
 ) -> Option<Response<RespBody>> {
     let manager = rate_limit_manager?;
 
-    let limit_by = route_match
-        .rate_limit
-        .as_ref()
-        .and_then(|rl| rl.limit_by)
-        .unwrap_or(rate_limit_config.limit_by);
-
-    let limit_by_header = route_match
-        .rate_limit
-        .as_ref()
-        .and_then(|rl| rl.limit_by_header.as_deref())
-        .or(rate_limit_config.limit_by_header.as_deref());
+    // Whole-block replace: when the route carries its own rate-limit block it fully replaces the
+    // domain-effective config (key strategy, header); otherwise use that config. `trusted_proxies`
+    // is global (not per-scope) and resolves the real client IP from XFF for ip/combined keys.
+    let effective = route_match.rate_limit.unwrap_or(rate_limit_config);
+    let limit_by = effective.limit_by;
+    let limit_by_header = effective.limit_by_header.as_deref();
 
     let rate_limit_key = extract_rate_limit_key(
         limit_by,
@@ -44,22 +43,23 @@ pub fn check_rate_limit(
         route_match.matched_prefix,
         limit_by_header,
         headers,
-        &rate_limit_config.trusted_proxies,
+        trusted_proxies,
     );
 
     let strategy = format!("{:?}", limit_by).to_lowercase();
-    metrics.record_rate_limit_request(&strategy, route_match.matched_prefix);
+    metrics.record_rate_limit_request(&strategy, route_match.matched_prefix, domain);
 
-    let rate_limit_result = manager.check(&rate_limit_key, Some(route_match.matched_prefix));
+    let rate_limit_result =
+        manager.check(&rate_limit_key, domain, Some(route_match.matched_prefix));
 
     match rate_limit_result {
         RateLimitResult::Limited { limit, reset_after, .. } => {
-            metrics.record_rate_limit_rejection(&strategy, route_match.matched_prefix);
+            metrics.record_rate_limit_rejection(&strategy, route_match.matched_prefix, domain);
             Some(create_429_response(limit, reset_after.as_secs()))
         }
         RateLimitResult::Allowed { limit, remaining } => {
             debug!(limit = limit, remaining = remaining, "Rate limit check passed");
-            metrics.record_rate_limit_allowed(&strategy, route_match.matched_prefix);
+            metrics.record_rate_limit_allowed(&strategy, route_match.matched_prefix, domain);
             None
         }
     }

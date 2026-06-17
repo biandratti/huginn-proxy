@@ -1,14 +1,15 @@
 use rustls_pki_types::pem::PemObject;
-use rustls_pki_types::{CertificateDer, PrivateKeyDer};
+use rustls_pki_types::CertificateDer;
 use std::sync::Arc;
 use tokio_rustls::rustls::crypto::aws_lc_rs as aws_lc_provider;
 use tokio_rustls::rustls::crypto::CryptoProvider;
+use tokio_rustls::rustls::server::ResolvesServerCert;
 use tokio_rustls::rustls::server::WebPkiClientVerifier;
 use tokio_rustls::rustls::RootCertStore;
 use tokio_rustls::rustls::ServerConfig;
 use tokio_rustls::TlsAcceptor;
 
-use crate::config::{ClientAuth, TlsConfig, TlsOptions, TlsVersion};
+use crate::config::{ClientAuth, TlsOptions, TlsVersion};
 use crate::error::{ProxyError, Result};
 use crate::tls::cipher_suites::{
     is_cipher_suite_supported, resolve_cipher_suites, supported_cipher_suites,
@@ -26,45 +27,19 @@ fn load_ca_certs(path: &str) -> Result<Vec<CertificateDer<'static>>> {
         .map_err(|e| ProxyError::Tls(format!("Failed to parse client CA certificates: {e}")))
 }
 
-fn read_certs_and_keys_sync(
-    cert_path: &str,
-    key_path: &str,
-) -> Result<(Vec<CertificateDer<'static>>, PrivateKeyDer<'static>)> {
-    let cert_bytes = std::fs::read(cert_path)
-        .map_err(|e| ProxyError::Tls(format!("Failed to read certificate: {e}")))?;
-    let certs: Vec<CertificateDer<'static>> = CertificateDer::pem_slice_iter(&cert_bytes)
-        .collect::<std::result::Result<Vec<_>, rustls_pki_types::pem::Error>>()
-        .map_err(|e| ProxyError::Tls(format!("Failed to parse certificates: {e}")))?;
-
-    let key_bytes =
-        std::fs::read(key_path).map_err(|e| ProxyError::Tls(format!("Failed to read key: {e}")))?;
-    let mut keys: Vec<PrivateKeyDer<'_>> = PrivateKeyDer::pem_slice_iter(&key_bytes)
-        .collect::<std::result::Result<Vec<_>, rustls_pki_types::pem::Error>>()
-        .map_err(|e| ProxyError::Tls(format!("Failed to parse private key: {e}")))?;
-    let Some(key) = keys.pop() else {
-        return Err(ProxyError::NoPrivateKey);
-    };
-    Ok((certs, key))
-}
-
-/// Builds a fully configured `ServerConfig` from in-memory certs + TLS settings.
+/// Builds a `ServerConfig` that uses a `DynamicCertResolver` for SNI-based cert selection.
 ///
-/// This is the single source of truth used by both startup (`build_tls_acceptor`)
-/// and the hot-reload path. Cipher suites, ALPN, client auth, and session
-/// resumption are all applied uniformly here.
-pub fn build_server_config(
-    certs: Vec<CertificateDer<'static>>,
-    key: PrivateKeyDer<'static>,
+/// Cipher suites, ALPN, client auth, and session resumption are all applied here; cert
+/// provisioning is delegated to the resolver (populated via `DynamicCertResolver::update`).
+pub fn build_server_config_with_resolver(
+    resolver: Arc<dyn ResolvesServerCert>,
     alpn: &[String],
     options: &TlsOptions,
     client_auth: &ClientAuth,
     session_resumption: &crate::config::SessionResumptionConfig,
-) -> Result<ServerConfig> {
+) -> Result<TlsAcceptor> {
     validate_tls_options(options)?;
 
-    // Build a CryptoProvider with the requested cipher suites, falling back to
-    // aws-lc-rs defaults when none are specified. All other provider fields
-    // (key exchange groups, signature algorithms, …) keep the defaults.
     let provider = if options.cipher_suites.is_empty() {
         aws_lc_provider::default_provider()
     } else {
@@ -92,13 +67,9 @@ pub fn build_server_config(
                 .map_err(|e| ProxyError::Tls(format!("Failed to build client verifier: {e}")))?;
             builder
                 .with_client_cert_verifier(client_verifier)
-                .with_single_cert(certs, key)
-                .map_err(|e| ProxyError::Tls(format!("Failed to build TLS config: {e}")))?
+                .with_cert_resolver(resolver)
         }
-        ClientAuth::Disabled => builder
-            .with_no_client_auth()
-            .with_single_cert(certs, key)
-            .map_err(|e| ProxyError::Tls(format!("Failed to build TLS config: {e}")))?,
+        ClientAuth::Disabled => builder.with_no_client_auth().with_cert_resolver(resolver),
     };
 
     if !alpn.is_empty() {
@@ -107,20 +78,6 @@ pub fn build_server_config(
 
     configure_session_resumption(&mut server, session_resumption);
 
-    Ok(server)
-}
-
-/// Builds a TLS acceptor from configuration, reading cert + key from disk.
-pub fn build_tls_acceptor(cfg: &TlsConfig) -> Result<TlsAcceptor> {
-    let (certs, key) = read_certs_and_keys_sync(&cfg.cert_path, &cfg.key_path)?;
-    let server = build_server_config(
-        certs,
-        key,
-        &cfg.alpn,
-        &cfg.options,
-        &cfg.client_auth,
-        &cfg.session_resumption,
-    )?;
     Ok(TlsAcceptor::from(Arc::new(server)))
 }
 

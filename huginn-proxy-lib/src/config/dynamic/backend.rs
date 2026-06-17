@@ -1,7 +1,7 @@
 use std::convert::TryFrom;
 
 use super::headers::HeaderManipulation;
-use super::security::RouteRateLimitConfig;
+use super::security::{DomainSecurityConfig, RouteSecurityConfig};
 use crate::error::{ProxyError, Result};
 use serde::{Deserialize, Deserializer};
 
@@ -189,11 +189,12 @@ pub struct Route {
     /// Backend address to route matching requests to
     /// Must match one of the backend addresses defined in `backends`
     pub backend: String,
-    /// Enable fingerprinting for this route
-    /// If true, TLS and HTTP/2 fingerprints will be injected as headers
-    /// Default: true (fingerprinting enabled)
-    #[serde(default = "default_true")]
-    pub fingerprinting: bool,
+    /// Enable fingerprint header **injection** for this route (whole-block override).
+    /// `None` (unset) inherits the domain's `fingerprinting`, then the built-in default `true`.
+    /// Note: this only gates injection of the headers; capture/extraction is the static
+    /// global `[fingerprint]` config.
+    #[serde(default)]
+    pub fingerprinting: Option<bool>,
     /// Force a new TCP/TLS connection from the proxy to the backend for each request,
     /// bypassing the backend connection pool.
     /// Note: this does not affect the client→proxy TLS session or JA4 fingerprints,
@@ -208,10 +209,10 @@ pub struct Route {
     /// Example: prefix = "/api", replace_path = "" (or "/")
     ///   Request: /api/users → Backend: /users (path stripping)
     pub replace_path: Option<String>,
-    /// Rate limiting configuration for this route (optional)
-    /// If not specified, uses global rate limit settings
+    /// Per-route security policy override (optional). Currently carries `rate_limit`.
+    /// Overlays onto the domain-effective (or global) policy.
     #[serde(default)]
-    pub rate_limit: Option<RouteRateLimitConfig>,
+    pub security: Option<RouteSecurityConfig>,
     /// Header manipulation for this route (optional)
     /// Allows adding or removing headers for specific routes
     #[serde(default)]
@@ -225,6 +226,67 @@ pub struct Route {
 /// Call this once at config load time via `Config::into_parts`; do not call per-request.
 pub fn sort_routes(routes: &mut [Route]) {
     routes.sort_by_key(|r| std::cmp::Reverse(r.prefix.len()));
+}
+
+/// Identifier used for the catch-all (host-less) domain, the entry with `host: None`
+/// in metrics labels and logs. Mirrors Traefik's `_default_` TLS-cert/router naming.
+pub const DEFAULT_DOMAIN_LABEL: &str = "_default_";
+
+/// A named domain entry grouping a TLS certificate and its path-based routes.
+///
+/// `host` drives SNI-based cert selection and request routing:
+/// - Exact: `"api.example.com"`
+/// - Wildcard (one level): `"*.example.com"`
+///
+/// `cert_path` / `key_path` are optional, omit both for plain-HTTP domains.
+/// Both must be present together; specifying only one is a validation error.
+#[derive(Debug, Deserialize, Clone, PartialEq)]
+pub struct Domain {
+    /// Domain pattern used for SNI matching and routing.
+    ///
+    /// `Some("api.example.com")` : exact host match.
+    /// `Some("*.example.com")`   : single-label wildcard.
+    /// `None` (omit `host:`)     : catch-all: matches any host not matched by an exact or wildcard entry.
+    ///                             A catch-all with a cert also acts as the TLS default certificate.
+    #[serde(default)]
+    pub host: Option<String>,
+    /// Path to the TLS certificate PEM file for this domain (optional).
+    #[serde(default)]
+    pub cert_path: Option<String>,
+    /// Path to the TLS private key PEM file for this domain (optional).
+    #[serde(default)]
+    pub key_path: Option<String>,
+    /// Header manipulation applied to all routes in this domain (optional).
+    /// Merged with global headers; route-level headers take final precedence.
+    #[serde(default)]
+    pub headers: Option<HeaderManipulation>,
+    /// Per-domain security policy override (IP filter, rate limit, security headers).
+    /// Each present sub-block fully replaces the corresponding global policy for this domain.
+    #[serde(default)]
+    pub security: Option<DomainSecurityConfig>,
+    /// Default fingerprint header **injection** for routes in this domain (whole-block override).
+    /// `None` (unset) means the built-in default `true`; a route's own `fingerprinting` overrides it.
+    #[serde(default)]
+    pub fingerprinting: Option<bool>,
+    /// Path-based routing rules scoped to this domain.
+    #[serde(default)]
+    pub routes: Vec<Route>,
+}
+
+impl Domain {
+    /// Identifier for this domain in metrics labels and logs: the configured `host`,
+    /// or [`DEFAULT_DOMAIN_LABEL`] (`"_default_"`) for the catch-all (host-less) domain.
+    pub fn label(&self) -> &str {
+        self.host.as_deref().unwrap_or(DEFAULT_DOMAIN_LABEL)
+    }
+}
+
+/// Sort routes within every domain longest-prefix first.
+/// Call once at config load time via `Config::into_parts`; do not call per-request.
+pub fn sort_domain_routes(domains: &mut [Domain]) {
+    for domain in domains.iter_mut() {
+        sort_routes(&mut domain.routes);
+    }
 }
 
 /// Configuration for backend connection pool
@@ -261,6 +323,9 @@ impl Default for BackendPoolConfig {
         }
     }
 }
+
+/// Built-in default for fingerprint header **injection** when neither the route nor its domain sets `fingerprinting`.
+pub const DEFAULT_FINGERPRINTING: bool = true;
 
 fn default_true() -> bool {
     true
