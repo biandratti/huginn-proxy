@@ -4,6 +4,7 @@ use hyper::body::Bytes;
 use hyper::Response;
 use hyper::StatusCode;
 use serde_json::json;
+use tracing::warn;
 
 type RespBody = BoxBody<Bytes, hyper::Error>;
 
@@ -48,6 +49,11 @@ pub fn ready_check_response(
     let (status, body) = if healthchecks::pins_exist(pin_path) {
         (StatusCode::OK, json!({"status": "ready"}))
     } else {
+        warn!(
+            pin_path,
+            reason = "pins_not_ready",
+            "Readiness check failed: BPF map pins are not present yet"
+        );
         (
             StatusCode::SERVICE_UNAVAILABLE,
             json!({"status": "not_ready", "reason": "pins_not_ready"}),

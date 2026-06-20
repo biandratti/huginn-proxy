@@ -3,8 +3,8 @@ use hyper::body::Bytes;
 use hyper::Response;
 use hyper::StatusCode;
 use serde_json::json;
+use tracing::warn;
 
-use crate::config::Backend;
 use crate::error::Result;
 
 type RespBody = BoxBody<Bytes, hyper::Error>;
@@ -31,13 +31,24 @@ pub fn health_check_response() -> Result<Response<RespBody>> {
     Ok(response)
 }
 
-/// Readiness check - verifies that backends are available
-/// Returns 200 if at least one backend is configured, 503 otherwise
-pub fn ready_check_response(backends: &[Backend]) -> Result<Response<RespBody>> {
-    if backends.is_empty() {
+/// Readiness check - reports whether the proxy has finished starting up and is
+/// accepting connections.
+///
+/// Decoupled from backend availability on purpose: a proxy can serve traffic even when
+/// every backend is down (that surfaces as 502s on real requests plus backend-health
+/// metrics, not as readiness). Tying readiness to backends would keep the pod out of
+/// rotation forever when backends are registered dynamically. This mirrors Traefik/Envoy.
+///
+/// `ready` is `false` while the listeners are still binding/initialising and during
+/// graceful shutdown; `true` once the proxy is accepting connections.
+pub fn ready_check_response(ready: bool) -> Result<Response<RespBody>> {
+    if !ready {
+        let reason = "proxy_starting";
+        warn!(reason, "Readiness check failed: proxy is not accepting connections yet");
+
         let body = json!({
             "status": "not_ready",
-            "reason": "no_backends_configured"
+            "reason": reason
         });
         let body_bytes = serde_json::to_vec(&body).map_err(|e| {
             crate::error::ProxyError::Http(format!("Failed to serialize ready response: {e}"))

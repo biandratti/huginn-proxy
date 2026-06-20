@@ -195,17 +195,17 @@ matches; you may still need to accept the browser warning unless you use `mkcert
 
 ## Endpoints
 
-| Service    | URL                             | Description          |
-|------------|---------------------------------|----------------------|
-| Proxy      | `https://127.0.0.1:7000/`       | HTTPS proxy          |
-| Proxy      | `http://127.0.0.1:9090/health`  | Health               |
-| Proxy      | `http://127.0.0.1:9090/ready`   | Readiness            |
-| Proxy      | `http://127.0.0.1:9090/live`    | Liveness             |
-| Proxy      | `http://127.0.0.1:9090/metrics` | Prometheus metrics   |
-| eBPF Agent | `http://127.0.0.1:9091/health`  | Health               |
-| eBPF Agent | `http://127.0.0.1:9091/ready`   | Readiness (BPF pins) |
-| eBPF Agent | `http://127.0.0.1:9091/live`    | Liveness             |
-| eBPF Agent | `http://127.0.0.1:9091/metrics` | Prometheus metrics   |
+| Service    | URL                             | Description                       |
+|------------|---------------------------------|-----------------------------------|
+| Proxy      | `https://127.0.0.1:7000/`       | HTTPS proxy                       |
+| Proxy      | `http://127.0.0.1:9090/health`  | Health (liveness alias)           |
+| Proxy      | `http://127.0.0.1:9090/ready`   | Readiness (accepting connections) |
+| Proxy      | `http://127.0.0.1:9090/live`    | Liveness                          |
+| Proxy      | `http://127.0.0.1:9090/metrics` | Prometheus metrics                |
+| eBPF Agent | `http://127.0.0.1:9091/health`  | Health (liveness alias)           |
+| eBPF Agent | `http://127.0.0.1:9091/ready`   | Readiness (BPF pins loaded)       |
+| eBPF Agent | `http://127.0.0.1:9091/live`    | Liveness                          |
+| eBPF Agent | `http://127.0.0.1:9091/metrics` | Prometheus metrics                |
 
 eBPF compose examples map agent HTTP on the proxy service (`9091:9091`).
 

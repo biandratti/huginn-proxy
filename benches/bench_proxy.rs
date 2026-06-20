@@ -186,6 +186,7 @@ impl BenchFixture {
                 None,
                 huginn_proxy_lib::WatchOptions::default(),
                 shutdown_tx,
+                huginn_proxy_lib::Readiness::new(),
             )
             .await;
         });

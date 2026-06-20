@@ -252,6 +252,7 @@ async fn capture_fingerprint_values() -> Result<(), Box<dyn std::error::Error + 
             None,
             huginn_proxy_lib::WatchOptions::default(),
             shutdown_tx,
+            huginn_proxy_lib::Readiness::new(),
         )
         .await;
     });
