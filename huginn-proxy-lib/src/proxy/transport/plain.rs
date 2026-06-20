@@ -82,9 +82,9 @@ pub async fn handle_plain_connection(
                     metrics_for_match.record_error(e.error_type());
                     match synthetic_error_response(code) {
                         Ok(resp) => Ok(resp),
-                        Err(e) => Ok(crate::utils::http::text_response(
+                        Err(e) => Ok(crate::utils::http::json_error(
                             StatusCode::INTERNAL_SERVER_ERROR,
-                            format!("Failed to create error response: {e}"),
+                            &format!("Failed to create error response: {e}"),
                         )),
                     }
                 }

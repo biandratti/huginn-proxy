@@ -8,7 +8,7 @@ use crate::config::RateLimitConfig;
 use crate::proxy::router::RouteMatch;
 use crate::security::{extract_rate_limit_key, RateLimitManager, RateLimitResult};
 use crate::telemetry::Metrics;
-use crate::utils::http::{text_response, RespBody};
+use crate::utils::http::{json_error, RespBody};
 
 /// Check rate limiting for incoming request.
 ///
@@ -64,7 +64,7 @@ pub fn check_rate_limit(
 }
 
 fn create_429_response(limit: isize, reset_after_secs: u64) -> Response<RespBody> {
-    let mut resp = text_response(StatusCode::TOO_MANY_REQUESTS, "Too Many Requests");
+    let mut resp = json_error(StatusCode::TOO_MANY_REQUESTS, "too_many_requests");
 
     resp.headers_mut().insert(
         hyper::header::HeaderName::from_static("x-rate-limit-limit"),

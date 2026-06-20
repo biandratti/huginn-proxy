@@ -11,7 +11,6 @@ pub(crate) enum Status {
     Error,
 }
 
-
 #[derive(Debug, Clone, Serialize)]
 pub(crate) struct StatusBody {
     status: Status,

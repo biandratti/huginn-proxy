@@ -1,39 +1,21 @@
-//! Shared helpers for building boxed HTTP response bodies and simple responses.
-//!
-//! Centralises the `BoxBody<Bytes, hyper::Error>` alias and the `Full` boxing dance
-//! (`Full` is infallible, so its `Infallible` error is mapped away) that would otherwise
-//! be duplicated across every module that produces a response.
-
 use http_body_util::{combinators::BoxBody, BodyExt, Full};
 use hyper::body::Bytes;
 use hyper::header::{HeaderValue, CONTENT_TYPE};
 use hyper::{Response, StatusCode};
 use serde::Serialize;
 
-/// Boxed response body shared by the proxy and the observability server.
 pub(crate) type RespBody = BoxBody<Bytes, hyper::Error>;
 
-/// Box a fixed byte buffer into a [`RespBody`].
 pub(crate) fn full_body(bytes: impl Into<Bytes>) -> RespBody {
     Full::new(bytes.into())
         .map_err(|never| match never {})
         .boxed()
 }
 
-/// An empty boxed body.
 pub(crate) fn empty_body() -> RespBody {
     full_body(Bytes::new())
 }
 
-/// Build a plain-text response with the given status. Used for responses on the proxy
-/// data path (e.g. 429 / 5xx returned to real clients).
-pub(crate) fn text_response(status: StatusCode, message: impl Into<Bytes>) -> Response<RespBody> {
-    let mut resp = Response::new(full_body(message));
-    *resp.status_mut() = status;
-    resp
-}
-
-/// Build an `application/json` response with the given status.
 pub(crate) fn json_response(status: StatusCode, body: impl Serialize) -> Response<RespBody> {
     let bytes = serde_json::to_vec(&body).unwrap_or_else(|_| b"{}".to_vec());
     let mut resp = Response::new(full_body(bytes));
@@ -41,4 +23,13 @@ pub(crate) fn json_response(status: StatusCode, body: impl Serialize) -> Respons
     resp.headers_mut()
         .insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
     resp
+}
+
+#[derive(Serialize)]
+struct ErrorBody<'a> {
+    error: &'a str,
+}
+
+pub(crate) fn json_error(status: StatusCode, error: &str) -> Response<RespBody> {
+    json_response(status, ErrorBody { error })
 }
