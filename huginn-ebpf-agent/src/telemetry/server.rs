@@ -1,10 +1,6 @@
-use crate::telemetry::health;
-use crate::telemetry::metrics_handler;
-use http_body_util::{BodyExt, Full};
-use hyper::body::{Bytes, Incoming};
+use crate::telemetry::router::dispatch;
+use hyper::body::Incoming;
 use hyper::Request;
-use hyper::Response;
-use hyper::StatusCode;
 use hyper_util::rt::{TokioExecutor, TokioIo};
 use hyper_util::server::conn::auto::Builder as ConnBuilder;
 use prometheus::Registry;
@@ -17,7 +13,7 @@ pub async fn start_observability_server(
     port: u16,
     registry: Arc<Registry>,
     pin_path: String,
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+) -> crate::error::Result<()> {
     let addr = format!("{}:{}", listen_addr, port);
     let listener = TcpListener::bind(&addr).await?;
     info!(%addr, "Observability server started (health, ready, live, metrics)");
@@ -37,69 +33,7 @@ pub async fn start_observability_server(
             let svc = hyper::service::service_fn(move |req: Request<Incoming>| {
                 let registry = registry.clone();
                 let pin_path = pin_path.clone();
-                async move {
-                    let path = req.uri().path();
-                    if path == "/metrics" {
-                        match metrics_handler::handle_metrics(&registry) {
-                            Ok(resp) => Ok::<_, hyper::Error>(resp),
-                            Err(e) => {
-                                warn!(%e, "handle_metrics failed");
-                                let body = Full::new(Bytes::from("Internal Server Error"))
-                                    .map_err(|never| match never {})
-                                    .boxed();
-                                let mut resp = Response::new(body);
-                                *resp.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
-                                Ok(resp)
-                            }
-                        }
-                    } else if path == "/health" {
-                        match health::health_check_response() {
-                            Ok(resp) => Ok::<_, hyper::Error>(resp),
-                            Err(e) => {
-                                warn!(%e, "health_check_response failed");
-                                let body = Full::new(Bytes::from("Internal Server Error"))
-                                    .map_err(|never| match never {})
-                                    .boxed();
-                                let mut resp = Response::new(body);
-                                *resp.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
-                                Ok(resp)
-                            }
-                        }
-                    } else if path == "/ready" {
-                        match health::ready_check_response(&pin_path) {
-                            Ok(resp) => Ok::<_, hyper::Error>(resp),
-                            Err(e) => {
-                                warn!(%e, "ready_check_response failed");
-                                let body = Full::new(Bytes::from("Internal Server Error"))
-                                    .map_err(|never| match never {})
-                                    .boxed();
-                                let mut resp = Response::new(body);
-                                *resp.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
-                                Ok(resp)
-                            }
-                        }
-                    } else if path == "/live" {
-                        match health::live_check_response() {
-                            Ok(resp) => Ok::<_, hyper::Error>(resp),
-                            Err(e) => {
-                                warn!(%e, "live_check_response failed");
-                                let body = Full::new(Bytes::from("Internal Server Error"))
-                                    .map_err(|never| match never {})
-                                    .boxed();
-                                let mut resp = Response::new(body);
-                                *resp.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
-                                Ok(resp)
-                            }
-                        }
-                    } else {
-                        let body = Full::new(Bytes::from("Not Found"))
-                            .map_err(|never| match never {})
-                            .boxed();
-                        let mut resp = Response::new(body);
-                        *resp.status_mut() = StatusCode::NOT_FOUND;
-                        Ok(resp)
-                    }
-                }
+                async move { Ok::<_, hyper::Error>(dispatch(req.uri().path(), &registry, &pin_path)) }
             });
 
             let builder = ConnBuilder::new(TokioExecutor::new());

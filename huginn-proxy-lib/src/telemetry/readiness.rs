@@ -1,15 +1,8 @@
-//! Readiness state shared between the proxy and the observability server's `/ready`
-//! endpoint.
+//! Readiness state shared between the proxy and the observability server's `/ready` endpoint.
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
-/// Tracks whether the proxy is ready to accept traffic.
-///
-/// Cheaply cloneable (shared `Arc`). The proxy flips it ready once its listeners are
-/// accepting connections and back to not-ready during graceful shutdown; the `/ready`
-/// endpoint reads it. Readiness reflects internal process state only and is deliberately
-/// independent of backend availability.
 #[derive(Clone, Default)]
 pub struct Readiness(Arc<AtomicBool>);
 

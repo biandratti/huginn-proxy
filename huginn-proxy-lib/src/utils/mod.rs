@@ -1,3 +1,5 @@
+pub(crate) mod http;
+
 use tokio::time::{Duration, Instant};
 
 /// Returns `base + duration`, falling back gracefully if the addition overflows.

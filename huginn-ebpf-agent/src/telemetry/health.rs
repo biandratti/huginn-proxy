@@ -1,73 +1,30 @@
 use crate::healthchecks;
-use http_body_util::{combinators::BoxBody, BodyExt, Full};
-use hyper::body::Bytes;
+use crate::telemetry::http::{json_response, RespBody};
+use crate::telemetry::status::{Status, StatusBody};
 use hyper::Response;
 use hyper::StatusCode;
-use serde_json::json;
 use tracing::warn;
 
-type RespBody = BoxBody<Bytes, hyper::Error>;
-
 /// Health check, 200 if process is running.
-pub fn health_check_response(
-) -> Result<Response<RespBody>, Box<dyn std::error::Error + Send + Sync>> {
-    let body = json!({"status": "healthy"});
-    let body_bytes = serde_json::to_vec(&body)
-        .map_err(|e| format!("Failed to serialize health response: {e}"))?;
-    let body = Full::new(Bytes::from(body_bytes))
-        .map_err(|never| match never {})
-        .boxed();
-    let response = Response::builder()
-        .status(StatusCode::OK)
-        .header("Content-Type", "application/json")
-        .body(body)
-        .map_err(|e| format!("Failed to build response: {e}"))?;
-    Ok(response)
+pub fn health_check_response() -> Response<RespBody> {
+    json_response(StatusCode::OK, StatusBody::new(Status::Healthy))
 }
 
 /// Liveness check, 200 if process is running
-pub fn live_check_response() -> Result<Response<RespBody>, Box<dyn std::error::Error + Send + Sync>>
-{
-    let body = json!({"status": "alive"});
-    let body_bytes =
-        serde_json::to_vec(&body).map_err(|e| format!("Failed to serialize live response: {e}"))?;
-    let body = Full::new(Bytes::from(body_bytes))
-        .map_err(|never| match never {})
-        .boxed();
-    let response = Response::builder()
-        .status(StatusCode::OK)
-        .header("Content-Type", "application/json")
-        .body(body)
-        .map_err(|e| format!("Failed to build response: {e}"))?;
-    Ok(response)
+pub fn live_check_response() -> Response<RespBody> {
+    json_response(StatusCode::OK, StatusBody::new(Status::Alive))
 }
 
 /// Readiness check if BPF pins exist
-pub fn ready_check_response(
-    pin_path: &str,
-) -> Result<Response<RespBody>, Box<dyn std::error::Error + Send + Sync>> {
-    let (status, body) = if healthchecks::pins_exist(pin_path) {
-        (StatusCode::OK, json!({"status": "ready"}))
-    } else {
-        warn!(
-            pin_path,
-            reason = "pins_not_ready",
-            "Readiness check failed: BPF map pins are not present yet"
-        );
-        (
-            StatusCode::SERVICE_UNAVAILABLE,
-            json!({"status": "not_ready", "reason": "pins_not_ready"}),
-        )
-    };
-    let body_bytes = serde_json::to_vec(&body)
-        .map_err(|e| format!("Failed to serialize ready response: {e}"))?;
-    let body = Full::new(Bytes::from(body_bytes))
-        .map_err(|never| match never {})
-        .boxed();
-    let response = Response::builder()
-        .status(status)
-        .header("Content-Type", "application/json")
-        .body(body)
-        .map_err(|e| format!("Failed to build response: {e}"))?;
-    Ok(response)
+pub fn ready_check_response(pin_path: &str) -> Response<RespBody> {
+    if healthchecks::pins_exist(pin_path) {
+        return json_response(StatusCode::OK, StatusBody::new(Status::Ready));
+    }
+
+    let reason = "pins_not_ready";
+    warn!(pin_path, reason, "Readiness check failed: BPF map pins are not present yet");
+    json_response(
+        StatusCode::SERVICE_UNAVAILABLE,
+        StatusBody::with_reason(Status::NotReady, reason),
+    )
 }

@@ -1,6 +1,9 @@
 pub mod health;
+pub mod http;
 pub mod metrics;
 pub mod metrics_handler;
+pub mod router;
 pub mod server;
+pub mod status;
 pub use metrics::init_metrics;
 pub use server::start_observability_server;

@@ -8,7 +8,6 @@ use crate::proxy::synthetic_response::synthetic_error_response;
 use crate::proxy::ClientPool;
 use crate::telemetry::Metrics;
 use http::StatusCode;
-use http_body_util::BodyExt;
 use hyper_util::rt::{TokioExecutor, TokioIo};
 use hyper_util::server::conn::auto::Builder as ConnBuilder;
 use tokio::net::TcpStream;
@@ -83,16 +82,10 @@ pub async fn handle_plain_connection(
                     metrics_for_match.record_error(e.error_type());
                     match synthetic_error_response(code) {
                         Ok(resp) => Ok(resp),
-                        Err(e) => {
-                            let body = http_body_util::Full::new(bytes::Bytes::from(format!(
-                                "Failed to create error response: {e}"
-                            )))
-                            .map_err(|never| match never {})
-                            .boxed();
-                            let mut resp = hyper::Response::new(body);
-                            *resp.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
-                            Ok(resp)
-                        }
+                        Err(e) => Ok(crate::utils::http::text_response(
+                            StatusCode::INTERNAL_SERVER_ERROR,
+                            format!("Failed to create error response: {e}"),
+                        )),
                     }
                 }
             }

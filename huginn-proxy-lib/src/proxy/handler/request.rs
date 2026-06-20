@@ -25,7 +25,7 @@ use tokio::sync::watch;
 use tokio::time::Instant;
 use tracing::debug;
 
-type RespBody = http_body_util::combinators::BoxBody<bytes::Bytes, hyper::Error>;
+use crate::utils::http::RespBody;
 
 /// Strip all proxy-authoritative fingerprint headers from an incoming request.
 ///

@@ -4,6 +4,7 @@ pub mod metrics_handler;
 pub mod readiness;
 pub mod router;
 pub mod server;
+pub mod status;
 pub mod tracing;
 
 pub use health::{health_check_response, live_check_response, ready_check_response};
