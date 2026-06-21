@@ -96,11 +96,11 @@ dependencies = [
 
 [[package]]
 name = "huginn-ebpf-common"
-version = "0.0.1"
+version = "0.0.2-beta.1"
 
 [[package]]
 name = "huginn-ebpf-xdp"
-version = "0.0.1"
+version = "0.0.2-beta.1"
 dependencies = [
  "aya-ebpf",
  "huginn-ebpf-common",
