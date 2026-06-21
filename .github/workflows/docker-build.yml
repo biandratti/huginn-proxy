@@ -22,10 +22,10 @@ on:
         required: false
     outputs:
       image_tag:
-        description: 'Full registry image tag (e.g. ghcr.io/owner/repo:v1.0.0)'
+        description: 'Full registry image tag (e.g. ghcr.io/owner/repo:1.0.0)'
         value: ${{ jobs.prepare.outputs.image_tag }}
       tag:
-        description: 'Version tag (e.g. v1.0.0)'
+        description: 'Version tag (e.g. 1.0.0)'
         value: ${{ jobs.prepare.outputs.tag }}
 
 concurrency:
@@ -50,7 +50,7 @@ jobs:
           REGISTRY: ${{ inputs.registry || 'ghcr.io' }}
           IMAGE_NAME: ${{ inputs.image_name || github.repository }}
         run: |
-          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+          if [[ "$GITHUB_REF" == refs/tags/[0-9]* ]]; then
             TAG=${GITHUB_REF#refs/tags/}
           else
             TAG=sha-${GITHUB_SHA::7}

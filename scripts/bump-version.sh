@@ -17,7 +17,7 @@ if [[ -z "$NEW" ]]; then
     exit 1
 fi
 
-# Validate semver-ish format (e.g. 1.2.3 or 1.2.3-rc.1)
+# Validate semver-ish format (e.g. 1.2.3, 1.2.3-beta.0, 1.2.3-rc.1)
 if ! [[ "$NEW" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9._-]+)?$ ]]; then
     echo "Invalid version format: '$NEW' (expected e.g. 1.2.3 or 1.2.3-rc.1)" >&2
     exit 1
