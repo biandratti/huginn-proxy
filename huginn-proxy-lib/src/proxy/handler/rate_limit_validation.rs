@@ -1,5 +1,4 @@
 use http::StatusCode;
-use http_body_util::{combinators::BoxBody, BodyExt, Full};
 use hyper::Response;
 use ipnet::IpNet;
 use std::sync::Arc;
@@ -9,8 +8,7 @@ use crate::config::RateLimitConfig;
 use crate::proxy::router::RouteMatch;
 use crate::security::{extract_rate_limit_key, RateLimitManager, RateLimitResult};
 use crate::telemetry::Metrics;
-
-type RespBody = BoxBody<bytes::Bytes, hyper::Error>;
+use crate::utils::http::{json_error, RespBody};
 
 /// Check rate limiting for incoming request.
 ///
@@ -66,11 +64,7 @@ pub fn check_rate_limit(
 }
 
 fn create_429_response(limit: isize, reset_after_secs: u64) -> Response<RespBody> {
-    let body = Full::new(bytes::Bytes::from("Too Many Requests"))
-        .map_err(|never| match never {})
-        .boxed();
-    let mut resp = Response::new(body);
-    *resp.status_mut() = StatusCode::TOO_MANY_REQUESTS;
+    let mut resp = json_error(StatusCode::TOO_MANY_REQUESTS, "too_many_requests");
 
     resp.headers_mut().insert(
         hyper::header::HeaderName::from_static("x-rate-limit-limit"),

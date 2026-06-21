@@ -12,7 +12,7 @@ use crate::proxy::reload::{
 };
 use crate::proxy::shutdown::{wait_for_drain, ServiceHandle, ShutdownSender};
 pub use crate::proxy::watch::WatchOptions;
-use crate::telemetry::Metrics;
+use crate::telemetry::{Metrics, Readiness};
 use crate::tls::{build_tls_acceptor, DynamicCertResolver};
 use hyper_util::rt::{TokioExecutor, TokioTimer};
 use hyper_util::server::conn::auto::Builder as ConnBuilder;
@@ -33,6 +33,7 @@ pub async fn run(
     syn_probe: Option<SynProbe>,
     watch_opts: WatchOptions,
     shutdown_tx: ShutdownSender,
+    readiness: Readiness,
 ) -> Result<()> {
     // Derive receiver from the sender so all clones share the same channel
     let shutdown_rx = shutdown_tx.subscribe();
@@ -175,6 +176,9 @@ pub async fn run(
         ));
     }
 
+    readiness.mark_ready();
+    info!("Proxy ready: accepting connections");
+
     // Signal loop: SIGHUP forwards to the reload channel; SIGTERM/SIGINT trigger shutdown.
     loop {
         tokio::select! {
@@ -204,6 +208,7 @@ pub async fn run(
             }
             _ = sigterm.recv() => {
                 info!("Received SIGTERM, initiating graceful shutdown");
+                readiness.mark_not_ready();
                 health_supervisor.shutdown();
                 shutdown_signal.store(1, Ordering::Relaxed);
                 shutdown_tx.send(true).ok();
@@ -211,6 +216,7 @@ pub async fn run(
             }
             _ = sigint.recv() => {
                 info!("Received SIGINT, initiating graceful shutdown");
+                readiness.mark_not_ready();
                 health_supervisor.shutdown();
                 shutdown_signal.store(1, Ordering::Relaxed);
                 shutdown_tx.send(true).ok();

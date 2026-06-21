@@ -17,6 +17,7 @@ opentelemetry.workspace = true
 opentelemetry-prometheus.workspace = true
 opentelemetry_sdk = { workspace = true, features = ["metrics"] }
 prometheus.workspace = true
+serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["rt", "net", "signal", "macros"] }

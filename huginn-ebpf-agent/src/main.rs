@@ -6,15 +6,17 @@
 #![forbid(unsafe_code)]
 
 mod config;
+mod error;
 mod healthchecks;
 mod telemetry;
 use crate::config::from_env;
+use crate::error::Result;
 use huginn_ebpf::EbpfProbe;
 use std::env;
 use std::sync::Arc;
 use tokio::signal;
 
-async fn wait_for_shutdown_signal() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+async fn wait_for_shutdown_signal() -> Result<()> {
     let mut sigterm = signal::unix::signal(signal::unix::SignalKind::terminate())
         .map_err(|e| std::io::Error::other(format!("Failed to setup SIGTERM handler: {e}")))?;
     let mut sigint = signal::unix::signal(signal::unix::SignalKind::interrupt())
@@ -27,7 +29,7 @@ async fn wait_for_shutdown_signal() -> Result<(), Box<dyn std::error::Error + Se
 }
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+async fn main() -> Result<()> {
     let default_level = env::var("RUST_LOG").unwrap_or_else(|_| "info".to_string());
     let env_filter = tracing_subscriber::EnvFilter::try_from_default_env()
         .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new(default_level));

@@ -1027,6 +1027,7 @@ dependencies = [
  "opentelemetry-prometheus",
  "opentelemetry_sdk",
  "prometheus",
+ "serde",
  "serde_json",
  "thiserror 2.0.18",
  "tokio",

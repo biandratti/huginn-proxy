@@ -158,16 +158,16 @@ spec:
 
 ### Proxy (observability server)
 
-- `/health` - General health check
-- `/ready` - readiness probe (checks if proxy can accept traffic)
-- `/live` - liveness probe (checks if proxy is alive)
+- `/health` - general health check (alias of liveness, always 200 while running)
+- `/ready` - readiness probe: 200 once listeners are accepting connections; 503 while starting up and during graceful shutdown (fails first on SIGTERM so traffic drains cleanly).
+- `/live` - liveness probe (200 while the process is alive)
 - `/metrics` - Prometheus metrics
 
 ### eBPF agent (observability server)
 
-- `/health` - General health check
-- `/ready` - readiness probe: 200 if BPF map pins exist under `HUGINN_EBPF_PIN_PATH`
-- `/live` - liveness probe
+- `/health` - general health check (alias of liveness, always 200 while running)
+- `/ready` - readiness probe: 200 if BPF map pins exist under `HUGINN_EBPF_PIN_PATH`, 503 otherwise
+- `/live` - liveness probe (200 while the process is alive)
 - `/metrics` - Prometheus metrics
 
 ## Performance Tuning

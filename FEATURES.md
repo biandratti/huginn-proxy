@@ -105,9 +105,11 @@ For `limit_by = "ip"` / `"combined"`, the client IP is resolved from the global
 non-forgeable TCP peer IP is used.
 
 Precedence is **global → domain → route**, **whole-block replace** at every scope: a domain's `rate_limit` block fully
-replaces the global policy for that domain, and a route's block fully replaces the domain-effective policy for that route
+replaces the global policy for that domain, and a route's block fully replaces the domain-effective policy for that
+route
 (not a field-level merge — re-state every key you want to keep; e.g. a route block without `enabled = true` disables the
-limit for that route). Limiters are keyed per domain, so the same route prefix under two domains is tracked independently.
+limit for that route). Limiters are keyed per domain, so the same route prefix under two domains is tracked
+independently.
 
 Tracks limits in-memory, so restarting the proxy resets all counters.
 
@@ -119,7 +121,8 @@ Limitation: No distributed rate limiting across multiple proxy instances. Limits
 
 HSTS is configurable with max-age, includeSubdomains, and preload directives. CSP policies are customizable. Any custom
 header can be added to all responses. Security headers can be set globally (`[security.headers]`), **per-domain**
-(`[domains.security.headers]`), or **per-route** (`[domains.routes.security.headers]`); the most specific scope that sets
+(`[domains.security.headers]`), or **per-route** (`[domains.routes.security.headers]`); the most specific scope that
+sets
 the block replaces the parent's entirely (whole-block, not merged — a scope that sets only CSP does not inherit the
 parent's HSTS).
 
@@ -159,18 +162,30 @@ ClientHello SNI. Each `[[domains]]` entry carries its own `cert_path` / `key_pat
 catch-all (host-less) domain, and it is also served to clients that send no SNI (e.g. connecting by IP). When
 `[tls.options].sni_strict = true`, the default-cert fallback is disabled entirely (full parity with Traefik's
 `sniStrict`): both an SNI hostname that matches no configured domain **and** a connection that sends no SNI are
-rejected with `unrecognized_name` — IP-literal HTTPS clients no longer get the default cert in this mode. Default is `sni_strict = false`, where both cases fall back to the default cert. See the **Multi-Domain Routing** section below for how domains tie certificates to routes.
+rejected with `unrecognized_name` — IP-literal HTTPS clients no longer get the default cert in this mode. Default is
+`sni_strict = false`, where both cases fall back to the default cert. See the **Multi-Domain Routing** section below for
+how domains tie certificates to routes.
 
-**Misdirected-request enforcement (HTTP 421, always on).** Routing follows the request `:authority` / `Host`, not SNI, so
-a reused (coalesced) HTTP/2 connection could carry a request for a host served by a different certificate. Huginn rejects
-that with `421 Misdirected Request` — the same default protection nginx and Apache `mod_http2` apply (RFC 9110 §15.5.20 /
+**Misdirected-request enforcement (HTTP 421, always on).** Routing follows the request `:authority` / `Host`, not SNI,
+so
+a reused (coalesced) HTTP/2 connection could carry a request for a host served by a different certificate. Huginn
+rejects
+that with `421 Misdirected Request` — the same default protection nginx and Apache `mod_http2` apply (RFC 9110
+§15.5.20 /
 RFC 7540 §9.1.2). Because huginn uses a single global TLS configuration, "authoritative" reduces to "served by the same
-certificate": a request whose host is not covered by the certificate the connection's SNI selected is rejected. The check
-compares certificate coverage rather than literal `authority == SNI`, so hosts sharing a single certificate (a `*.example.com`
-wildcard, or distinct domains pointing at the same SAN cert file) still coalesce. It is not configurable — it only fires on
+certificate": a request whose host is not covered by the certificate the connection's SNI selected is rejected. The
+check
+compares certificate coverage rather than literal `authority == SNI`, so hosts sharing a single certificate (a
+`*.example.com`
+wildcard, or distinct domains pointing at the same SAN cert file) still coalesce. It is not configurable — it only fires
+on
 genuinely cross-certificate requests, and plain HTTP / no-SNI connections are unaffected.
 
-Certificates are re-read as part of a **config reload** — driven by SIGHUP or by a change to the *config file* (when the `--watch` file watcher is enabled, debounced by a configurable delay), not by an independent cert-file watcher. Each reload re-reads the cert/key files from their configured paths. The `DynamicCertResolver` is updated in place and its cert map is swapped atomically (`ArcSwap`); the acceptor's `ServerConfig` itself is built once at startup, so cipher suites, ALPN, client auth, and session resumption settings never drift between the initial configuration and reloaded
+Certificates are re-read as part of a **config reload** — driven by SIGHUP or by a change to the *config file* (when the
+`--watch` file watcher is enabled, debounced by a configurable delay), not by an independent cert-file watcher. Each
+reload re-reads the cert/key files from their configured paths. The `DynamicCertResolver` is updated in place and its
+cert map is swapped atomically (`ArcSwap`); the acceptor's `ServerConfig` itself is built once at startup, so cipher
+suites, ALPN, client auth, and session resumption settings never drift between the initial configuration and reloaded
 certificates.
 
 Reloading is **best-effort and per-domain** (Traefik-style): if one domain's new certificate fails to load, the other
@@ -235,7 +250,8 @@ Passive fingerprinting extracts three types of signatures from client connection
 
 Per-domain and per-route control to enable/disable TLS and HTTP/2 fingerprint **header injection**
 (`route.or(domain).unwrap_or(true)`; a route overrides its domain). Whether the signatures are *captured* at all is the
-static global `[fingerprint]` config. TCP SYN fingerprinting is global (controlled by the `fingerprint.tcp_enabled` flag).
+static global `[fingerprint]` config. TCP SYN fingerprinting is global (controlled by the `fingerprint.tcp_enabled`
+flag).
 
 The TCP SYN signature follows the p0f format: `ip_ver:ttl:ip_olen:mss:wsize,wscale:olayout:quirks:pclass`. Quirks
 extracted include IP-level flags (DF, ECN, reserved bit, IP ID anomalies) and TCP-level flags (zero-seq, non-zero ACK,
@@ -339,8 +355,10 @@ Request and backend metrics carry a `domain` label so traffic can be broken down
 pattern (e.g. `*.example.com`), keeping cardinality bounded by the number of configured domains rather than by request
 hosts.
 
-Health endpoints: `/health` (general), `/ready` (Kubernetes readiness), `/live` (Kubernetes liveness), `/metrics` (
-Prometheus).
+Health endpoints: `/health` (general, alias of liveness), `/ready` (Kubernetes readiness), `/live` (Kubernetes
+liveness), `/metrics` (Prometheus). `/live` and `/health` return 200 while the process runs. `/ready` returns 200 once
+the proxy's listeners are accepting connections and 503 while starting up or during graceful shutdown.
+The eBPF agent's `/ready` returns 200 once its BPF map pins are loaded.
 
 For the full metric list, labels, and example queries, see [TELEMETRY.md](TELEMETRY.md).
 

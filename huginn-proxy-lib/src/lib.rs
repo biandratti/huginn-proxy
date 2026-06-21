@@ -26,4 +26,4 @@ pub use proxy::reload::{
 pub use proxy::server::{SynProbe, WatchOptions};
 pub use proxy::shutdown::{shutdown_channel, ShutdownSender, ShutdownWatch};
 pub use proxy::{forwarding, run};
-pub use telemetry::Metrics;
+pub use telemetry::{Metrics, Readiness};

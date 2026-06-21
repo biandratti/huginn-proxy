@@ -51,14 +51,13 @@ impl Metrics {
     }
 }
 
-pub fn init_metrics(
-    pin_path: Arc<String>,
-) -> Result<(Registry, Metrics), Box<dyn std::error::Error + Send + Sync>> {
+pub fn init_metrics(pin_path: Arc<String>) -> crate::error::Result<(Registry, Metrics)> {
     let registry = Registry::default();
 
     let exporter = opentelemetry_prometheus::exporter()
         .with_registry(registry.clone())
-        .build()?;
+        .build()
+        .map_err(|e| crate::error::AgentError::Metrics(e.to_string()))?;
 
     let meter_provider = SdkMeterProvider::builder().with_reader(exporter).build();
     global::set_meter_provider(meter_provider);

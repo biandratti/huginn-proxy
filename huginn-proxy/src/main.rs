@@ -10,7 +10,7 @@ use huginn_proxy_lib::config::load_from_path;
 use huginn_proxy_lib::proxy::shutdown::{shutdown_channel, ServiceHandle, ServiceName};
 use huginn_proxy_lib::run;
 use huginn_proxy_lib::telemetry::{
-    init_metrics, init_tracing_with_otel, shutdown_tracing, start_observability_server,
+    init_metrics, init_tracing_with_otel, shutdown_tracing, start_observability_server, Readiness,
 };
 use huginn_proxy_lib::WatchOptions;
 use tokio::time::Duration;
@@ -70,10 +70,14 @@ async fn main() -> Result<(), BoxError> {
     let (metrics, registry) =
         init_metrics().map_err(|e| format!("Failed to initialize metrics: {e}"))?;
 
+    // Readiness shared between the proxy and the observability server's `/ready` endpoint.
+    // Not-ready until the proxy listeners are accepting; not-ready again on shutdown.
+    let readiness = Readiness::new();
+
     let metrics_service: Option<ServiceHandle> =
         if let Some(metrics_port) = static_cfg.telemetry.metrics_port {
             info!(port = metrics_port, "Metrics initialized, starting observability server");
-            let backends_for_observability = dynamic_cfg.load().backends.clone();
+            let readiness_for_observability = readiness.clone();
             let mut metrics_shutdown = shutdown_rx.clone();
             let handle = tokio::spawn(async move {
                 tokio::select! {
@@ -84,7 +88,7 @@ async fn main() -> Result<(), BoxError> {
                     result = start_observability_server(
                         metrics_port,
                         registry,
-                        backends_for_observability,
+                        readiness_for_observability,
                     ) => {
                         if let Err(e) = result {
                             tracing::error!(error = %e, "Observability server error");
@@ -181,6 +185,7 @@ async fn main() -> Result<(), BoxError> {
         syn_probe,
         watch_opts,
         shutdown_tx,
+        readiness,
     )
     .await;
 
