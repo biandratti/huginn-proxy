@@ -10,7 +10,7 @@ publish = false
 
 [dependencies]
 http-body-util.workspace = true
-huginn-ebpf = { path = "../huginn-ebpf", version = "0.0.1" }
+huginn-ebpf = { path = "../huginn-ebpf", version = "0.0.2-beta.1" }
 hyper.workspace = true
 hyper-util.workspace = true
 opentelemetry.workspace = true
