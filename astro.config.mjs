@@ -4,6 +4,8 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
+import { unified } from '@astrojs/markdown-remark';
+import remarkGfm from 'remark-gfm';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const { tag: releaseTag } = JSON.parse(
@@ -17,6 +19,14 @@ export default defineConfig({
 	site,
 	base,
 	trailingSlash: 'always',
+	markdown: unified({ remarkPlugins: [remarkGfm], gfm: true }),
+	vite: {
+		server: {
+			watch: {
+				ignored: ['**/target/**', '**/node_modules/**'],
+			},
+		},
+	},
 	redirects: {
 		'/docs/deployment/': '/docs/containers/',
 	},
@@ -104,7 +114,7 @@ export default defineConfig({
 							collapsed: false,
 							items: [
 								{ label: 'Backends', slug: 'docs/backends' },
-								{ label: 'Routes', slug: 'docs/routes' },
+								{ label: 'Routes & Domains', slug: 'docs/routes' },
 								{ label: 'Security', slug: 'docs/security' },
 								{ label: 'IP filtering', slug: 'docs/ip-filtering' },
 								{ label: 'Rate limiting', slug: 'docs/rate-limiting' },

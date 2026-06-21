@@ -1,17 +1,15 @@
 ---
 title: Security
-description: Connection limits, response security headers, and trusted forwarding. Beta.
+description: Connection limits, trusted proxies, response security headers, and per-domain/route overrides. Beta.
 sidebar:
   order: 7
 ---
 
 import { Tabs, TabItem } from '@astrojs/starlight/components';
 
-The **`[security]`** block groups controls that apply **before** and **around** request handling: connection caps, how fast clients may send traffic (see [Rate limiting](/huginn-proxy/docs/rate-limiting/) for `[security.rate_limit]`), and **response** security headers (HSTS, CSP, custom). **IP allow/deny lists** live under the same top-level `[security]` table but are documented on **[IP filtering](/huginn-proxy/docs/ip-filtering/)**.
+The **`[security]`** block groups controls that apply **before** and **around** request handling: connection caps, trusted-proxy CIDRs for real-IP resolution, IP allow/deny lists (see [IP filtering](/huginn-proxy/docs/ip-filtering/)), rate limits (see [Rate limiting](/huginn-proxy/docs/rate-limiting/)), and **response** security headers (HSTS, CSP, custom).
 
 **TLS** termination and **mTLS** are configured under **`[tls]`**; see [TLS](/huginn-proxy/docs/tls/).
-
-Separately, the proxy sets trusted **`X-Forwarded-*`** headers for backends so downstream services see a consistent client identity and scheme, without trusting spoofed client values.
 
 ## Connection limit
 
@@ -36,11 +34,40 @@ max_connections = 512
   </TabItem>
 </Tabs>
 
+## Trusted proxies
+
+When the proxy sits behind a load balancer or ingress, client IPs in `X-Forwarded-For` can be trusted for real-IP resolution. **`trusted_proxies`** is a global CIDR list — it applies to **all** requests and is **not** overridable per domain or route.
+
+When set and the peer IP is in this list, the proxy walks `X-Forwarded-For` right-to-left and uses the first IP **not** in the trusted list as the real client IP. This real IP drives rate limiting (`limit_by = "ip"` or `"combined"`) and IP filtering.
+
+When empty (default), the non-forgeable TCP peer IP is used directly. **Dynamic** (hot-reloadable).
+
+<Tabs syncKey="huginn-config">
+  <TabItem label="YAML">
+
+```yaml
+security:
+  trusted_proxies:
+    - "10.0.0.0/8"
+    - "172.16.0.0/12"
+```
+
+  </TabItem>
+  <TabItem label="TOML">
+
+```toml
+[security]
+trusted_proxies = ["10.0.0.0/8", "172.16.0.0/12"]
+```
+
+  </TabItem>
+</Tabs>
+
 ## Security headers
 
-HSTS, CSP, and custom headers attach to **responses** globally under `[security.headers]`. There is **no** per-route security header block in this beta (use global `[security.headers]` or per-route `[routes.headers]` for generic add/remove — see [Headers](/huginn-proxy/docs/headers/)).
+HSTS, CSP, and custom headers attach to **responses**. The global `[security.headers]` block applies to all responses. Per-domain and per-route overrides use the same shape inside `[domains.security.headers]` and `[domains.routes.security.headers]` respectively — each is a **whole-block replace**: the most specific scope that defines a `security.headers` block replaces the parent's block entirely (no field-level merge).
 
-**Example** (aligned with [`compose.toml`](https://github.com/biandratti/huginn-proxy/blob/master/examples/config/compose.toml) / [`compose.yaml`](https://github.com/biandratti/huginn-proxy/blob/master/examples/config/compose.yaml)):
+**Example (global):**
 
 <Tabs syncKey="huginn-config">
   <TabItem label="YAML">
@@ -87,19 +114,83 @@ policy = "default-src 'self'; script-src 'self' 'unsafe-inline'"
   </TabItem>
 </Tabs>
 
+### Header cascade vs. security headers
+
+There are two header mechanisms with **different semantics**:
+
+- **`[headers]` (add/remove) — additive cascade.** Global → domain → route accumulate; for a given header name, the most specific scope wins. Nothing is replaced wholesale.
+- **`security.headers` — whole-block replace.** Like `ip_filter` and `rate_limit`, the most specific scope that defines the block replaces the parent entirely. Setting `security.headers` on a route silently drops any global or domain `security.headers` for that route.
+
+Use `[headers]` for free-form request/response plumbing; use `security.headers` as a security policy you intend to define completely at a given scope.
+
+## Per-domain and per-route security overrides
+
+`ip_filter`, `rate_limit`, and `security.headers` can be overridden at the domain and route levels. Each override is a **whole-block replace** — it does not merge with the global config.
+
+<Tabs syncKey="huginn-config">
+  <TabItem label="YAML">
+
+```yaml
+domains:
+  - host: "api.example.com"
+    security:
+      ip_filter:
+        mode: "allowlist"
+        allowlist: ["10.0.0.0/8"]
+      rate_limit:
+        enabled: true
+        requests_per_second: 50
+        burst: 100
+        limit_by: "ip"
+    routes:
+      - prefix: "/internal"
+        backend: "backend-a:9000"
+        security:
+          rate_limit:
+            enabled: false   # this route is exempt
+```
+
+  </TabItem>
+  <TabItem label="TOML">
+
+```toml
+[[domains]]
+host = "api.example.com"
+
+[domains.security.ip_filter]
+mode      = "allowlist"
+allowlist = ["10.0.0.0/8"]
+
+[domains.security.rate_limit]
+enabled              = true
+requests_per_second  = 50
+burst                = 100
+limit_by             = "ip"
+
+  [[domains.routes]]
+  prefix  = "/internal"
+  backend = "backend-a:9000"
+
+  [domains.routes.security.rate_limit]
+  enabled = false   # this route is exempt
+```
+
+  </TabItem>
+</Tabs>
+
 ## Forwarding headers
 
 The proxy sets trusted **`X-Forwarded-*`** values for backends:
 
-- **`X-Forwarded-For`:** appends the client IP to any existing value (comma-separated), or creates the header.
-- **`X-Forwarded-Host`:** set from the **TLS SNI** when present; client-supplied values are **not** trusted and are removed first.
+- **`X-Forwarded-For`:** appends the client IP (comma-separated), or creates the header.
+- **`X-Forwarded-Host`:** set from the **HTTP request authority** (`:authority` in HTTP/2, `Host` header in HTTP/1.1). Client-supplied `X-Forwarded-Host` values are **not** trusted and are removed first.
 - **`X-Forwarded-Port` / `X-Forwarded-Proto`:** derived from the peer connection and scheme.
 
-You do not need to configure these in the config file for standard behavior. Global **[Headers](/huginn-proxy/docs/headers/)** `request` add/remove lists are separate from forwarding.
+These do not require config. Global `[headers]` `request` add/remove lists are separate.
 
 ## Related
 
 - [IP filtering](/huginn-proxy/docs/ip-filtering/): `[security.ip_filter]` allowlist / denylist
-- [Rate limiting](/huginn-proxy/docs/rate-limiting/): `[security.rate_limit]` and per-route overrides
+- [Rate limiting](/huginn-proxy/docs/rate-limiting/): `[security.rate_limit]` and per-domain/route overrides
 - [TLS](/huginn-proxy/docs/tls/): certificates and mTLS
 - [Configuration overview](/huginn-proxy/docs/configuration/)

@@ -9,14 +9,19 @@ import { Tabs, TabItem } from '@astrojs/starlight/components';
 
 The **`[headers]`** section configures **global** request and response header manipulation. **Dynamic.** It is distinct from:
 
-- **Per-route** header rules under **`[routes.headers]`** on each route (same shape as below; applied after global headers)
-- **`[security.headers]`:** HSTS, CSP, and custom **security** response headers (see [Security](/huginn-proxy/docs/security/))
+- **Per-domain** header rules under **`[domains.headers]`** (same shape; applied after global headers)
+- **Per-route** header rules under **`[domains.routes.headers]`** (same shape; applied after domain headers)
+- **`[security.headers]`:** HSTS, CSP, and custom **security** response headers — whole-block replace semantics (see [Security](/huginn-proxy/docs/security/))
 - **Forwarding:** `X-Forwarded-*` set by the proxy (see [Security](/huginn-proxy/docs/security/#forwarding-headers))
+
+The `[headers]` cascade is **additive**: global → domain → route accumulate in order; for a given header name the most specific scope wins. This is different from `security.headers`, which is replaced wholesale.
 
 ## Structure
 
 - **`[headers.request]`:** `add` / `remove` lists
 - **`[headers.response]`:** `add` / `remove` lists
+
+The same shape applies at `[domains.headers]` and `[domains.routes.headers]`.
 
 ## Example
 

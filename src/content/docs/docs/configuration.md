@@ -47,9 +47,8 @@ Rough split: **static** blocks need a process restart to take effect; **dynamic*
 
 | Key | Page / notes |
 | --- | --- |
-| `preserve_host` | Top-level bool — [Routes](/huginn-proxy/docs/routes/) (forwarding `Host` upstream) |
 | `[listen]` | [Listen](/huginn-proxy/docs/listen/) |
-| `[tls]` | [TLS](/huginn-proxy/docs/tls/) — PEM paths may still refresh via watcher |
+| `[tls]` | [TLS](/huginn-proxy/docs/tls/) — transport options only; cert/key paths are per domain |
 | `[fingerprint]` | [Fingerprinting](/huginn-proxy/docs/fingerprinting/) |
 | `[timeout]` | [Timeout](/huginn-proxy/docs/timeout/) |
 | `[logging]` | [Logging](/huginn-proxy/docs/logging/) |
@@ -59,8 +58,10 @@ Rough split: **static** blocks need a process restart to take effect; **dynamic*
 
 | Key | Page / notes |
 | --- | --- |
+| `preserve_host` | Top-level bool — [Routes](/huginn-proxy/docs/routes/) (forwarding `Host` upstream) |
 | `[[backends]]` | [Backends](/huginn-proxy/docs/backends/) |
-| `[[routes]]` | [Routes](/huginn-proxy/docs/routes/) |
+| `[[domains]]` | [Routes](/huginn-proxy/docs/routes/) — hostname matching, TLS certs, nested routes |
+| `[security.trusted_proxies]` | [Security](/huginn-proxy/docs/security/) — global CIDR list for XFF client-IP resolution |
 | `[security.ip_filter]` | [IP filtering](/huginn-proxy/docs/ip-filtering/) |
 | `[security.rate_limit]` | [Rate limiting](/huginn-proxy/docs/rate-limiting/) |
 | `[security.headers]` | [Security](/huginn-proxy/docs/security/) (HSTS, CSP, custom — reloadable) |
@@ -68,6 +69,28 @@ Rough split: **static** blocks need a process restart to take effect; **dynamic*
 | `[backend_pool]` | [Backends](/huginn-proxy/docs/backends/#backend-pool) |
 
 **`[security]`** also includes **`max_connections`** ([Security](/huginn-proxy/docs/security/)), which is **static** — restart required. Treat **`[security]`** as mixed: use the pages above for each subsection.
+
+## Scope and override summary
+
+Security policies and headers can be set at three scopes — **global**, **domain**, and **route** — and each policy has its own override semantics:
+
+| Policy | Global | Domain | Route | Semantics |
+| --- | --- | --- | --- | --- |
+| `ip_filter` | yes | yes | yes | Whole-block replace |
+| `rate_limit` | yes | yes | yes | Whole-block replace |
+| `security.headers` (HSTS, CSP, custom) | yes | yes | yes | Whole-block replace |
+| `[headers]` (add / remove) | yes | yes | yes | Additive cascade |
+| `fingerprinting` | no | yes | yes | Route, domain, or default true |
+| `trusted_proxies` | yes | no | no | Global only |
+| `max_connections` | yes | no | no | Global only (static) |
+
+**Whole-block replace:** the most specific scope that defines a block wins entirely. A partial override drops the parent’s other keys — for example, a route `rate_limit` with only `requests_per_second` and no `enabled = true` **disables** rate limiting for that route. Re-state every key you need.
+
+**Additive cascade:** global, domain, and route headers accumulate in order; for a given header name the most specific scope wins.
+
+The proxy logs a `WARN` at load and on every hot reload when an override drops a parent-enabled protection.
+
+See [Security](/huginn-proxy/docs/security/) and [Rate limiting](/huginn-proxy/docs/rate-limiting/) for examples.
 
 ## Examples (repository only)
 
