@@ -37,7 +37,7 @@ jobs:
       CHROMEDRIVER_PORT: 9515
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Cache cargo
         uses: actions/cache@v4
@@ -79,7 +79,7 @@ jobs:
       GECKODRIVER_PORT: 4444
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Cache cargo
         uses: actions/cache@v4
