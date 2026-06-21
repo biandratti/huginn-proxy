@@ -4,8 +4,6 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
-import { unified } from '@astrojs/markdown-remark';
-import remarkGfm from 'remark-gfm';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const { tag: releaseTag } = JSON.parse(
@@ -19,7 +17,6 @@ export default defineConfig({
 	site,
 	base,
 	trailingSlash: 'always',
-	markdown: unified({ remarkPlugins: [remarkGfm], gfm: true }),
 	vite: {
 		server: {
 			watch: {
