@@ -55,6 +55,8 @@ spec:
 
 ## Proxy (Deployment)
 
+A **Deployment** is the standard choice when the proxy runs as a centralized service (one or more replicas, behind a Service/LoadBalancer). Use it when TLS and HTTP/2 fingerprinting are enough and you do **not** need TCP SYN fingerprinting, or when the BPF maps are accessible via a shared bpffs volume.
+
 **With TCP fingerprinting** (`tcp_enabled = true`): requires the DaemonSet above.
 
 ```yaml
@@ -91,6 +93,72 @@ spec:
 ```
 
 Pin paths and interface names must match between agent configuration and node networking. Readiness should probe the agent’s `/ready` when maps must exist before traffic.
+
+## Proxy (DaemonSet)
+
+The following example uses a **DaemonSet**, though a Deployment works equally well depending on your setup.
+
+```yaml
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: huginn-proxy
+spec:
+  selector:
+    matchLabels:
+      app: huginn-proxy
+  template:
+    metadata:
+      labels:
+        app: huginn-proxy
+    spec:
+      hostNetwork: true   # share the node network namespace; proxy binds on the node IP
+      containers:
+        - name: proxy
+          image: ghcr.io/biandratti/huginn-proxy:latest
+          securityContext:
+            capabilities:
+              add: [BPF]
+            seccompProfile:
+              type: RuntimeDefault
+          ports:
+            - containerPort: 7000
+              hostPort: 7000       # one proxy instance per node, bound directly on the node IP
+            - containerPort: 9090
+              hostPort: 9090       # observability
+          env:
+            - name: HUGINN_EBPF_PIN_PATH
+              value: "/sys/fs/bpf/huginn"
+          volumeMounts:
+            - name: config
+              mountPath: /config
+              readOnly: true
+            - name: bpffs
+              mountPath: /sys/fs/bpf
+              readOnly: true
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 9090
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /live
+              port: 9090
+            initialDelaySeconds: 10
+            periodSeconds: 10
+      volumes:
+        - name: config
+          configMap:
+            name: huginn-proxy-config
+        - name: bpffs
+          hostPath:
+            path: /sys/fs/bpf
+            type: Directory
+```
+
+`HUGINN_EBPF_PIN_PATH` must match the agent’s value. Because both DaemonSets land on the same node, the pinned maps are always reachable.
 
 ## Docker Compose vs Kubernetes
 

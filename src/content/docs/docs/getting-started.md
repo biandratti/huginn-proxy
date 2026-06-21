@@ -21,7 +21,7 @@ Inspired by production-grade proxies like [Pingora](https://github.com/cloudflar
 
 Huginn Proxy is built for **passive fingerprinting** and a small set of production hardening features, not feature parity with general-purpose load balancers. Before you invest time, be aware of the rough edges (this list will grow as we document more):
 
-- **TLS (single certificate):** one **server certificate and key per process**, read from paths in config. Multiple certificates per SNI / multi-tenant TLS vhosts are **not** supported.
+- **TLS (per-domain certificates):** each `[[domains]]` entry carries its own `cert_path` / `key_path`. SNI-based certificate selection across domains is supported; the catch-all domain (no `host`) acts as the default certificate for unmatched-SNI or no-SNI connections.
 - **TLS (certificate management):** there is **no built-in ACME** (Let's Encrypt), internal CA, or automatic issuance; many other proxies integrate that. You point config at files that **some other process** issues and renews (Kubernetes cert-manager, systemd timers, acme.sh, Vault, manual installs, etc.).
 - **Load balancing:** simple **round-robin** when a route references more than one backend address. There are **no** in-proxy health checks, least-connections, or weights. The design assumes an **orchestrator** (Kubernetes, Nomad, Docker Compose, etc.) or another layer owns **replicas, health, and failover**. If you run bare VMs without that, plan for health and failover **outside** this proxy (see [Routes](/huginn-proxy/docs/routes/) for the longer story).
 

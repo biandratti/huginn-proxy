@@ -1,28 +1,39 @@
 ---
 title: TLS
-description: Certificates, ALPN, cipher suites, and mTLS. Beta.
+description: Per-domain certificates, ALPN, SNI strict mode, cipher suites, and mTLS. Beta.
 sidebar:
   order: 5
 ---
 
 import { Tabs, TabItem } from '@astrojs/starlight/components';
 
-The **`[tls]`** section configures **server-side TLS**: certificate paths, ALPN, TLS version bounds, cipher suites, curves, session resumption, and **mTLS** client certificate trust. **Static** — changing it requires a restart (certificate and key **file contents** can still be reloaded when the implementation watches those paths).
+TLS configuration splits into two places:
 
-**Scope:** the proxy uses **one** certificate and key per process. **Per-SNI** (multiple certificates by server name) is **not** implemented. The feature is out of scope for this proxy, not a temporary gap.
+- **Certificate paths** (`cert_path`, `key_path`) belong to each **`[[domains]]`** entry. This gives each hostname its own certificate — see [Routes & Domains](/huginn-proxy/docs/routes/).
+- **Transport options** (`alpn`, `[tls.options]`, `[tls.client_auth]`, `[tls.session_resumption]`) live under the top-level **`[tls]`** section. **Static** — requires restart. Certificate and key **file contents** are hot-reloaded separately via the file watcher.
+
+Omit the **`[tls]`** section entirely to run as plain HTTP.
 
 ## Minimal HTTPS
+
+Set `cert_path` and `key_path` on each domain, and declare ALPN under `[tls]`:
 
 <Tabs syncKey="huginn-config">
   <TabItem label="YAML">
 
 ```yaml
 tls:
-  cert_path: "/config/certs/server.crt"
-  key_path: "/config/certs/server.key"
   alpn:
     - "h2"
     - "http/1.1"
+
+domains:
+  - host: "api.example.com"
+    cert_path: "/config/certs/api.crt"
+    key_path:  "/config/certs/api.key"
+    routes:
+      - prefix: "/"
+        backend: "backend-a:9000"
 ```
 
   </TabItem>
@@ -30,17 +41,99 @@ tls:
 
 ```toml
 [tls]
-cert_path = "/config/certs/server.crt"
-key_path = "/config/certs/server.key"
 alpn = ["h2", "http/1.1"]
+
+[[domains]]
+host      = "api.example.com"
+cert_path = "/config/certs/api.crt"
+key_path  = "/config/certs/api.key"
+
+  [[domains.routes]]
+  prefix  = "/"
+  backend = "backend-a:9000"
 ```
 
   </TabItem>
 </Tabs>
 
+## Multiple domains, multiple certificates
+
+Each `[[domains]]` entry can carry its own certificate. The **catch-all** domain (no `host`) provides the **default certificate** — used when SNI is absent or unrecognized.
+
+<Tabs syncKey="huginn-config">
+  <TabItem label="YAML">
+
+```yaml
+tls:
+  alpn: ["h2", "http/1.1"]
+
+domains:
+  - host: "api.example.com"
+    cert_path: "/config/certs/api.crt"
+    key_path:  "/config/certs/api.key"
+    routes:
+      - prefix: "/"
+        backend: "api:9000"
+
+  - host: "*.internal.example.com"
+    cert_path: "/config/certs/wildcard-internal.crt"
+    key_path:  "/config/certs/wildcard-internal.key"
+    routes:
+      - prefix: "/"
+        backend: "internal:9001"
+
+  - # catch-all → default cert
+    cert_path: "/config/certs/default.crt"
+    key_path:  "/config/certs/default.key"
+    routes:
+      - prefix: "/"
+        backend: "fallback:9002"
+```
+
+  </TabItem>
+  <TabItem label="TOML">
+
+```toml
+[tls]
+alpn = ["h2", "http/1.1"]
+
+[[domains]]
+host      = "api.example.com"
+cert_path = "/config/certs/api.crt"
+key_path  = "/config/certs/api.key"
+
+  [[domains.routes]]
+  prefix  = "/"
+  backend = "api:9000"
+
+[[domains]]
+host      = "*.internal.example.com"
+cert_path = "/config/certs/wildcard-internal.crt"
+key_path  = "/config/certs/wildcard-internal.key"
+
+  [[domains.routes]]
+  prefix  = "/"
+  backend = "internal:9001"
+
+[[domains]]   # catch-all → default cert
+cert_path = "/config/certs/default.crt"
+key_path  = "/config/certs/default.key"
+
+  [[domains.routes]]
+  prefix  = "/"
+  backend = "fallback:9002"
+```
+
+  </TabItem>
+</Tabs>
+
+Certificate **file contents** are hot-reloaded via file watcher or `SIGHUP` — cert/key paths are static, but you can replace the file on disk and the proxy will pick up the new certificate without a restart.
+
 ## Options
 
-Use **`[tls.options]`** for allowed TLS versions, cipher suites, and curve preferences.
+Use **`[tls.options]`** to restrict cipher suites, curve preferences, or enable SNI strict mode.
+
+> **Note:** `cipher_suites` and `sni_strict` are applied to the TLS stack. `versions`, `min_version`, `max_version`, and `curve_preferences` are currently parsed and validated at load time but **not yet enforced** — the TLS stack runs with rustls' safe defaults (TLS 1.2 and 1.3, default curves). Do not rely on those four keys to restrict the negotiated version or curves yet.
 
 <Tabs syncKey="huginn-config">
   <TabItem label="YAML">
@@ -61,6 +154,7 @@ tls:
       - "X25519"
       - "secp256r1"
       - "secp384r1"
+    sni_strict: false   # set true in production to reject unknown-hostname / no-SNI access
 ```
 
   </TabItem>
@@ -77,12 +171,24 @@ cipher_suites = [
     "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256",
 ]
 curve_preferences = ["X25519", "secp256r1", "secp384r1"]
+sni_strict = false   # set true in production to reject unknown-hostname / no-SNI access
 ```
 
   </TabItem>
 </Tabs>
 
-See the [**examples**](https://github.com/biandratti/huginn-proxy/tree/master/examples) directory in the repository for full files such as `config/compose.toml` / `compose.yaml`.
+## SNI strict mode
+
+`sni_strict = true` disables the default-certificate fallback entirely (parity with Traefik's `sniStrict: true`):
+
+- A connection whose SNI matches **no** domain cert is rejected with `unrecognized_name`.
+- A connection that sends **no SNI** (IP-literal clients, RFC 6066) is also rejected.
+
+Leave it `false` (default) if you need IP-literal HTTPS access or no-SNI clients to work via the catch-all / default cert.
+
+## Misdirected requests (HTTP 421)
+
+On coalesced HTTP/2 connections, any request whose host is served by a **different certificate** than the one the SNI selected is rejected automatically with **421 Misdirected Request**. This is the same default behaviour as nginx and Apache `mod_http2` and is **not configurable**. Hosts sharing one certificate (wildcard or SAN) still coalesce normally.
 
 ## Client authentication (mTLS)
 
