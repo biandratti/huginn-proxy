@@ -7,74 +7,119 @@ follows [Semantic Versioning](https://semver.org/).
 
 ---
 
-## [Unreleased]
+## [0.0.2-beta.0]
 
----
+### Breaking changes
 
-## [0.1.0-rc1] — upcoming
+**`[[routes]]` replaced by `[[domains]]` / `[[domains.routes]]`**
 
-First public release candidate.
+Top-level `[[routes]]` blocks no longer exist. Routes are now nested inside domain entries:
+
+```toml
+# Before (v0.0.1-beta.7)
+[[routes]]
+prefix = "/api"
+backend = "backend-a:9000"
+
+# After (0.0.2-beta.0)
+[[domains]]
+host = "api.example.com"
+cert_path = "/config/certs/api.crt"
+key_path  = "/config/certs/api.key"
+
+  [[domains.routes]]
+  prefix  = "/api"
+  backend = "backend-a:9000"
+```
+
+A **catch-all** domain (matches any host, plain HTTP) uses a host-less entry:
+
+```toml
+# Before
+[[routes]]
+prefix  = "/"
+backend = "localhost:3000"
+
+# After
+[[domains]]          # no host = catch-all
+
+  [[domains.routes]]
+  prefix  = "/"
+  backend = "localhost:3000"
+```
+
+**`[tls]` no longer carries `cert_path` / `key_path`**
+
+Certificate paths moved to each `[[domains]]` entry. The `[tls]` section now only
+contains transport options (`alpn`, `[tls.options]`):
+
+```toml
+# Before
+[tls]
+cert_path = "/config/certs/server.crt"
+key_path  = "/config/certs/server.key"
+alpn      = ["h2", "http/1.1"]
+
+# After
+[tls]
+alpn = ["h2", "http/1.1"]   # cert/key moved to [[domains]]
+```
+
+**`trusted_proxies` moved from `[security.rate_limit]` to `[security]`**
+
+It is now a global, non-overridable setting:
+
+```toml
+# Before
+[security.rate_limit]
+trusted_proxies = ["10.0.0.0/8"]
+
+# After
+[security]
+trusted_proxies = ["10.0.0.0/8"]   # removed from rate_limit block
+```
 
 ### Added
 
-**Fingerprinting**
+- **Domain-based routing** (`[[domains]]`) — groups TLS certificate, headers, security
+  policy, and routes under one hostname (exact or `*.wildcard`). Host matching is
+  authority-first (`:authority` / `Host` header), not SNI. Catch-all domain (no `host`)
+  mirrors a Traefik router with no `Host()` rule.
+- **`sni_strict`** option in `[tls.options]` — rejects connections with no SNI or
+  unmatched SNI (parity with Traefik's `sniStrict: true`).
+- **Automatic 421 Misdirected Request** for coalesced HTTP/2 connections where the
+  request host is served by a different certificate than the SNI-selected one.
+- **`[security].trusted_proxies`** — global CIDR list for real-client-IP resolution
+  from `X-Forwarded-For`; consumed by rate limiting (`limit_by = "ip" | "combined"`).
+- **Per-domain security overrides** — `[domains.security]` and
+  `[domains.routes.security]` accept `ip_filter`, `rate_limit`, and `security.headers`
+  as **whole-block replacements** (not field-level merges).
+- **`fingerprinting` on `[[domains]]`** — domain-level gate that combines with the
+  per-route toggle: `route.or(domain).unwrap_or(true)`.
+- **Readiness probe decoupled from backends** — `/ready` now returns 200 once the proxy
+  listeners are accepting connections, independent of backend availability (backends down
+  → 502 + metrics, not a readiness failure). Matches Traefik/Envoy semantics.
+- **`min_version` / `max_version`** keys in `[tls.options]` — parsed and validated
+  (currently not enforced by the TLS stack; see note in SETTINGS.md).
+- **Multi-DNS / multiple listen addresses** support.
+- **Graceful shutdown** — readiness fails first on SIGTERM so orchestrators drain traffic
+  before the process stops accepting connections.
 
-- TLS (JA4) fingerprinting via ClientHello — injects `x-tls-ja4`, `x-tls-ja4-r`, `x-tls-ja4-o`, `x-tls-ja4-or`,
-  `x-tls-ja4-s1`, `x-tls-ja4-s1r`
-- HTTP/2 (Akamai) fingerprinting from SETTINGS and WINDOW_UPDATE frames — injects `x-http2-akamai`
-- TCP SYN (p0f-style) fingerprinting via eBPF/XDP — injects `x-tcp-p0f` (requires `ebpf-tcp` build feature and
-  Linux kernel ≥ 5.11)
-- Per-route `fingerprinting` toggle for TLS and HTTP/2; TCP SYN is global
+### Changed
 
-**Proxying**
-
-- HTTP/1.1 and HTTP/2 support with ALPN negotiation
-- IPv4 and IPv6 dual-stack
-- Path-prefix routing — longest prefix wins; strip and rewrite support via `replace_path`
-- Round-robin load balancing across multiple backends per route
-- Connection pooling (HTTP/1.1 and HTTP/2) with `force_new_connection` per-route override
-- `preserve_host` for virtual hosting scenarios
-- `X-Forwarded-For`, `X-Forwarded-Host`, `X-Forwarded-Port`, `X-Forwarded-Proto` injection
-
-**Backends**
-
-- Optional active health checks per backend — TCP connect or HTTP `GET` with configurable thresholds
-- Fast-fail 502 when backend is marked unhealthy
-
-**Security**
-
-- TLS termination with configurable cipher suites, curves, and TLS version bounds
-- TLS session resumption (TLS 1.2 session IDs, TLS 1.3 session tickets)
-- Certificate hot reload via file watcher
-- mTLS client certificate authentication
-- IP filtering — allowlist/denylist with CIDR notation (IPv4 and IPv6)
-- Token bucket rate limiting — global and per-route, keyed by IP, header, route, or combined
-- Connection limit (`max_connections`)
-- HSTS, CSP, and custom security response headers
-
-**Configuration**
-
-- TOML and YAML config formats (detected from file extension)
-- Dynamic hot reload via SIGHUP or `--watch` file watcher — zero dropped connections
-- Config validation via `--validate` flag
-- `[headers]` global and per-route request/response header manipulation
-
-**Observability**
-
-- 44 Prometheus metrics covering connections, requests, TLS, fingerprinting, backends, health checks, rate limiting, IP
-  filtering, headers, mTLS, config reload, and build info
-- Health endpoints: `/health`, `/ready`, `/live`, `/metrics`
-- Pre-built Grafana dashboard with Prometheus provisioning (`examples/docker-compose.observability.yml`)
-
-**Deployment**
-
-- Docker images: `huginn-proxy` (eBPF), `huginn-proxy-plain` (no eBPF), `huginn-proxy-ebpf-agent`
-- Static release binaries for Linux (amd64/arm64, musl and glibc) and macOS (amd64/arm64)
-- Docker Compose examples for full eBPF stack and plain stack
-- Kubernetes deployment examples (DaemonSet for eBPF agent, Deployment for proxy)
+- `preserve_host` documented as **Dynamic** (hot-reloadable).
+- `http_version` default clarified: `preserve` for HTTPS clients, `http11` for plain
+  HTTP (was documented as `null (preserve)`).
+- `health_check = {}` (empty table) enables a **TCP probe** with default thresholds —
+  it does *not* mean "off". Omit the key entirely to leave the backend unprobed.
+- Omitting all backends is now explicitly valid: requests return **421** (no domain
+  match), **404** (domain matched, no route), or **502** (route matched, no healthy
+  backend).
+- Rate-limit scope description updated: per-domain and per-route overrides are
+  whole-block replaces, not field merges.
+- Fingerprint header names renamed from `x-huginn-net-*` to protocol-scoped names
+  (`x-tls-ja4*`, `x-http2-akamai`, `x-tcp-p0f`).
 
 ---
 
-[Unreleased]: https://github.com/biandratti/huginn-proxy/compare/v0.1.0-rc1...HEAD
-
-[0.1.0-rc1]: https://github.com/biandratti/huginn-proxy/releases/tag/v0.1.0-rc1
+[0.0.2-beta.0]: https://github.com/biandratti/huginn-proxy/compare/v0.0.1-beta.7...0.0.2-beta.0
