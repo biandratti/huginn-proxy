@@ -1,7 +1,5 @@
 //! Agent-wide error type.
 
-/// Errors produced by the eBPF agent: config parsing, eBPF program loading/pinning,
-/// metrics setup, and the observability HTTP server.
 #[derive(Debug, thiserror::Error)]
 pub enum AgentError {
     #[error(transparent)]

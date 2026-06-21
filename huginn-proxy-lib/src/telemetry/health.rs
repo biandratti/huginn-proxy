@@ -17,12 +17,6 @@ pub fn live_check_response() -> Response<RespBody> {
 
 /// Readiness check - reports whether the proxy has finished starting up and is
 /// accepting connections.
-///
-/// Decoupled from backend availability on purpose: a proxy can serve traffic even when
-/// every backend is down (that surfaces as 502s on real requests plus backend-health
-/// metrics, not as readiness). Tying readiness to backends would keep the pod out of
-/// rotation forever when backends are registered dynamically. This mirrors Traefik/Envoy.
-///
 /// `ready` is `false` while the listeners are still binding/initialising and during
 /// graceful shutdown; `true` once the proxy is accepting connections.
 pub fn ready_check_response(ready: bool) -> Response<RespBody> {
