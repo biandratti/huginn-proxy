@@ -21,6 +21,7 @@ pub type SharedTlsAcceptor = Arc<ArcSwap<TlsAcceptor>>;
 pub async fn build_tls_acceptor(
     tls_config: &TlsConfig,
     resolver: Arc<DynamicCertResolver>,
+    acme_active: bool,
 ) -> Result<SharedTlsAcceptor> {
     let acceptor = build_server_config_with_resolver(
         resolver,
@@ -28,6 +29,7 @@ pub async fn build_tls_acceptor(
         &tls_config.options,
         &tls_config.client_auth,
         &tls_config.session_resumption,
+        acme_active,
     )?;
 
     Ok(Arc::new(ArcSwap::new(Arc::new(acceptor))))

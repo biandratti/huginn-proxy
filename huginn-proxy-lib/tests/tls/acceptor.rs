@@ -9,7 +9,7 @@ fn build_with(
     alpn: Vec<String>,
     client_auth: ClientAuth,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    build_acceptor(&alpn, &TlsOptions::default(), &client_auth)?;
+    build_acceptor(&alpn, &TlsOptions::default(), &client_auth, false)?;
     Ok(())
 }
 
