@@ -88,7 +88,9 @@ pub async fn run(
 
     let tls_acceptor = match (&static_cfg.tls, &cert_resolver) {
         (Some(tls_config), Some(resolver)) => {
-            Some(build_tls_acceptor(tls_config, Arc::clone(resolver)).await?)
+            // `acme_active` is wired in Phase 8 (it composes the CompositeResolver and
+            // derives the flag from configured ACME hosts); plain TLS path for now.
+            Some(build_tls_acceptor(tls_config, Arc::clone(resolver), false).await?)
         }
         _ => None,
     };

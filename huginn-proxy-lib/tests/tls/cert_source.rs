@@ -19,7 +19,8 @@ async fn build_tls_acceptor_produces_usable_acceptor(
         session_resumption: Default::default(),
     };
 
-    let acceptor = build_tls_acceptor(&config, Arc::new(DynamicCertResolver::new(false))).await?;
+    let acceptor =
+        build_tls_acceptor(&config, Arc::new(DynamicCertResolver::new(false)), false).await?;
     // Acceptor must have been built successfully and be loadable.
     let _ = acceptor.load();
     Ok(())
@@ -41,7 +42,7 @@ fn cipher_suites_applied_on_initial_build() -> Result<(), Box<dyn std::error::Er
         cipher_suites: vec!["TLS13_AES_128_GCM_SHA256".to_string()],
         ..Default::default()
     };
-    let acceptor = build_acceptor(&[], &options, &ClientAuth::Disabled)?;
+    let acceptor = build_acceptor(&[], &options, &ClientAuth::Disabled, false)?;
 
     assert_eq!(
         cipher_suites_of(acceptor.config()),

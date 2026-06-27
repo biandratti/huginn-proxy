@@ -41,6 +41,7 @@ fn minimal_config(backend_addr: std::net::SocketAddr, listen_port: u16) -> Confi
             host: Some("127.0.0.1".to_string()),
             cert_path: None,
             key_path: None,
+            acme: false,
             headers: None,
             security: None,
             fingerprinting: None,
@@ -55,6 +56,7 @@ fn minimal_config(backend_addr: std::net::SocketAddr, listen_port: u16) -> Confi
             }],
         }],
         tls: None,
+        acme: None,
         fingerprint: FingerprintConfig {
             tls_enabled: false,
             http_enabled: false,

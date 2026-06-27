@@ -111,6 +111,7 @@ impl BenchFixture {
                 host: None,
                 cert_path: Some(cert_file.path().to_string_lossy().into_owned()),
                 key_path: Some(key_file.path().to_string_lossy().into_owned()),
+                acme: false,
                 headers: None,
                 security: None,
                 fingerprinting: None,
@@ -150,6 +151,7 @@ impl BenchFixture {
                 client_auth: Default::default(),
                 session_resumption: Default::default(),
             }),
+            acme: None,
             fingerprint: FingerprintConfig {
                 tls_enabled: true,
                 http_enabled: true,

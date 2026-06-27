@@ -7,7 +7,7 @@ fn build_with_options(
     options: &TlsOptions,
     alpn: &[String],
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    build_acceptor(alpn, options, &ClientAuth::Disabled)?;
+    build_acceptor(alpn, options, &ClientAuth::Disabled, false)?;
     Ok(())
 }
 

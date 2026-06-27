@@ -33,6 +33,7 @@ fn domain(
         host: host.map(str::to_string),
         cert_path: None,
         key_path: None,
+        acme: false,
         headers: None,
         security,
         fingerprinting: None,
