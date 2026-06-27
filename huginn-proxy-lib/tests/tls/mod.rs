@@ -2,6 +2,7 @@ mod acceptor;
 mod cert_resolver;
 mod cert_source;
 mod cipher_curve_signature;
+mod composite_resolver;
 mod options;
 mod session_resumption;
 
