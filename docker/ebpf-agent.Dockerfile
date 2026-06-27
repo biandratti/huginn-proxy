@@ -18,7 +18,7 @@ RUN cargo build --release -p huginn-ebpf-agent
 
 # ── runtime ─────────────────────────────────────────────────────
 # debian:trixie-slim — matches rust:1.94.1-slim base (Debian 13, glibc 2.38+).
-FROM debian:trixie-slim@sha256:4e401d95de7083948053197a9c3913343cd06b706bf15eb6a0c3ccd26f436a0e
+FROM debian:trixie-slim@sha256:28de0877c2189802884ccd20f15ee41c203573bd87bb6b883f5f46362d24c5c2
 LABEL org.opencontainers.image.description="eBPF XDP agent for huginn-proxy — loads XDP program and pins BPF maps"
 COPY --from=builder /app/target/release/huginn-ebpf-agent /usr/local/bin/huginn-ebpf-agent
 RUN apt-get update -q && apt-get install -y --no-install-recommends curl \
