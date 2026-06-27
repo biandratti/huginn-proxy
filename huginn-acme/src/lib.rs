@@ -1,10 +1,5 @@
 //! ACME (Let's Encrypt) adapter for huginn-proxy, isolated in its own crate.
 //!
-//! Mirrors the eBPF boundary (`huginn-proxy-lib` never imports `huginn-ebpf`): primitives
-//! in, trait-objects out. This crate depends only on `rustls-acme` and never on
-//! `huginn-proxy-lib`, so the smol/`async-io` reactor that `rustls-acme` pulls in stays out
-//! of the core library's dependency tree.
-//!
 //! The returned resolvers implement `rustls_acme::rustls::server::ResolvesServerCert`. Because
 //! the workspace resolves a single `rustls` (`0.23.x`, shared with `tokio-rustls` via
 //! `futures-rustls`), that trait object is the *same* type the proxy's acceptor expects, so it
@@ -78,7 +73,7 @@ pub fn start_acme(
     let mut tasks = Vec::with_capacity(domains.len());
 
     for domain in domains {
-        // One `AcmeState` (and one cert) per domain, like rpxy-acme.
+        // One `AcmeState` (and one cert) per domain.
         let mut state = AcmeConfig::new([domain.as_str()])
             .contact_push(format!("mailto:{contact_email}"))
             .cache(DirCache::new(PathBuf::from(cache_dir)))

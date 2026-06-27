@@ -388,6 +388,208 @@ requests_per_second = 5
 }
 
 #[test]
+fn loads_acme_domain() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let path = tmp_path("acme-ok");
+    let toml = r#"
+listen = { addrs = ["127.0.0.1:0"] }
+backends = [{ address = "backend:9000" }]
+
+[tls]
+alpn = ["h2"]
+
+[acme]
+contact_email = "ops@example.com"
+cache_dir = "/var/lib/huginn-proxy/acme"
+
+[[domains]]
+host = "api.example.com"
+acme = true
+routes = [{ prefix = "/", backend = "backend:9000" }]
+"#;
+    fs::write(&path, toml)?;
+
+    let cfg = load_from_path(&path)?;
+    assert!(cfg.domains[0].acme);
+    assert!(cfg.domains[0].cert_path.is_none());
+    let acme = cfg.acme.ok_or("acme block missing")?;
+    assert_eq!(acme.contact_email, "ops@example.com");
+    assert!(!acme.staging);
+
+    let _ = fs::remove_file(&path);
+    Ok(())
+}
+
+#[test]
+fn rejects_acme_without_acme_block() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let path = tmp_path("acme-no-block");
+    let toml = r#"
+listen = { addrs = ["127.0.0.1:0"] }
+backends = [{ address = "backend:9000" }]
+
+[tls]
+alpn = ["h2"]
+
+[[domains]]
+host = "api.example.com"
+acme = true
+"#;
+    fs::write(&path, toml)?;
+    let err = match load_from_path(&path) {
+        Ok(_) => panic!("should reject acme=true without [acme] block"),
+        Err(e) => e.to_string(),
+    };
+    assert!(err.contains("requires a static [acme] block"), "got: {err}");
+    let _ = fs::remove_file(&path);
+    Ok(())
+}
+
+#[test]
+fn rejects_acme_without_tls() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let path = tmp_path("acme-no-tls");
+    let toml = r#"
+listen = { addrs = ["127.0.0.1:0"] }
+backends = [{ address = "backend:9000" }]
+
+[acme]
+contact_email = "ops@example.com"
+cache_dir = "/tmp/acme"
+
+[[domains]]
+host = "api.example.com"
+acme = true
+"#;
+    fs::write(&path, toml)?;
+    let err = match load_from_path(&path) {
+        Ok(_) => panic!("should reject acme=true without [tls]"),
+        Err(e) => e.to_string(),
+    };
+    assert!(err.contains("requires a [tls] block"), "got: {err}");
+    let _ = fs::remove_file(&path);
+    Ok(())
+}
+
+#[test]
+fn rejects_acme_with_cert_paths() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let path = tmp_path("acme-and-cert");
+    let toml = r#"
+listen = { addrs = ["127.0.0.1:0"] }
+backends = [{ address = "backend:9000" }]
+
+[tls]
+alpn = ["h2"]
+
+[acme]
+contact_email = "ops@example.com"
+cache_dir = "/tmp/acme"
+
+[[domains]]
+host = "api.example.com"
+acme = true
+cert_path = "/etc/certs/api.crt"
+key_path = "/etc/certs/api.key"
+"#;
+    fs::write(&path, toml)?;
+    let err = match load_from_path(&path) {
+        Ok(_) => panic!("should reject acme=true alongside cert_path/key_path"),
+        Err(e) => e.to_string(),
+    };
+    assert!(err.contains("mutually exclusive"), "got: {err}");
+    let _ = fs::remove_file(&path);
+    Ok(())
+}
+
+#[test]
+fn rejects_acme_on_catch_all() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let path = tmp_path("acme-catchall");
+    let toml = r#"
+listen = { addrs = ["127.0.0.1:0"] }
+backends = [{ address = "backend:9000" }]
+
+[tls]
+alpn = ["h2"]
+
+[acme]
+contact_email = "ops@example.com"
+cache_dir = "/tmp/acme"
+
+[[domains]]
+# no host → catch-all
+acme = true
+"#;
+    fs::write(&path, toml)?;
+    let err = match load_from_path(&path) {
+        Ok(_) => panic!("should reject acme=true on catch-all domain"),
+        Err(e) => e.to_string(),
+    };
+    assert!(err.contains("catch-all"), "got: {err}");
+    let _ = fs::remove_file(&path);
+    Ok(())
+}
+
+#[test]
+fn rejects_acme_wildcard() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let path = tmp_path("acme-wildcard");
+    let toml = r#"
+listen = { addrs = ["127.0.0.1:0"] }
+backends = [{ address = "backend:9000" }]
+
+[tls]
+alpn = ["h2"]
+
+[acme]
+contact_email = "ops@example.com"
+cache_dir = "/tmp/acme"
+
+[[domains]]
+host = "*.example.com"
+acme = true
+"#;
+    fs::write(&path, toml)?;
+    let err = match load_from_path(&path) {
+        Ok(_) => panic!("should reject acme=true on wildcard host"),
+        Err(e) => e.to_string(),
+    };
+    assert!(err.contains("wildcard"), "got: {err}");
+    let _ = fs::remove_file(&path);
+    Ok(())
+}
+
+#[test]
+fn rejects_acme_with_mtls_required() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let path = tmp_path("acme-mtls");
+    let ca_path = tmp_path("ca.crt");
+    fs::write(&ca_path, "dummy ca")?;
+    let toml = format!(
+        r#"
+listen = {{ addrs = ["127.0.0.1:0"] }}
+backends = [{{ address = "backend:9000" }}]
+
+[tls]
+alpn = ["h2"]
+client_auth = {{ required = {{ ca_cert_path = "{}" }} }}
+
+[acme]
+contact_email = "ops@example.com"
+cache_dir = "/tmp/acme"
+
+[[domains]]
+host = "api.example.com"
+acme = true
+"#,
+        ca_path.display()
+    );
+    fs::write(&path, toml)?;
+    let err = match load_from_path(&path) {
+        Ok(_) => panic!("should reject acme=true with client_auth = required"),
+        Err(e) => e.to_string(),
+    };
+    assert!(err.contains("client_auth"), "got: {err}");
+    let _ = fs::remove_file(&path);
+    let _ = fs::remove_file(&ca_path);
+    Ok(())
+}
+
+#[test]
 fn rejects_invalid_health_check_timeout_greater_than_interval(
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let path = tmp_path("bad-hc");

@@ -47,6 +47,7 @@ fn domain(
         host: Some("a.com".to_string()),
         cert_path: None,
         key_path: None,
+        acme: false,
         headers: None,
         security,
         fingerprinting,

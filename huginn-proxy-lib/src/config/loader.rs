@@ -5,7 +5,9 @@ use std::path::Path;
 use tracing::warn;
 
 use crate::config::parser::ConfigFormat;
-use crate::config::{Config, IpFilterConfig, IpFilterMode, RateLimitConfig, SecurityHeaders};
+use crate::config::{
+    ClientAuth, Config, IpFilterConfig, IpFilterMode, RateLimitConfig, SecurityHeaders,
+};
 use crate::error::{ProxyError, Result};
 
 pub fn load_from_path<P: AsRef<Path>>(p: P) -> Result<Config> {
@@ -68,8 +70,45 @@ fn validate_config(cfg: &Config) -> Result<()> {
 
     for domain in &cfg.domains {
         let host = domain.label();
-        match (&domain.cert_path, &domain.key_path) {
-            (Some(cert), Some(key)) => {
+        match (domain.acme, &domain.cert_path, &domain.key_path) {
+            // ACME-managed domain: the cert is issued/renewed automatically.
+            (true, None, None) => {
+                if cfg.acme.is_none() {
+                    return Err(ProxyError::Config(format!(
+                        "Domain '{host}': acme = true requires a static [acme] block"
+                    )));
+                }
+                // ACME terminates TLS; without a [tls] block the proxy runs plain HTTP and
+                // the acceptor (and the TLS-ALPN-01 challenge) is never wired.
+                let Some(tls) = cfg.tls.as_ref() else {
+                    return Err(ProxyError::Config(format!(
+                        "Domain '{host}': acme = true requires a [tls] block"
+                    )));
+                };
+                // Global mTLS breaks the TLS-ALPN-01 challenge: Let's Encrypt's validation
+                // connection presents no client certificate, and the same ServerConfig serves
+                // both challenge and production handshakes.
+                if matches!(tls.client_auth, ClientAuth::Required { .. }) {
+                    return Err(ProxyError::Config(format!(
+                        "Domain '{host}': acme = true is incompatible with client_auth = required (global mTLS)"
+                    )));
+                }
+                // The catch-all (host-less) domain has no name to issue a certificate for.
+                let Some(name) = domain.host.as_deref() else {
+                    return Err(ProxyError::Config(
+                        "ACME requires `host`; the catch-all (host-less) domain is not issuable"
+                            .to_string(),
+                    ));
+                };
+                // ACME here uses TLS-ALPN-01, which cannot validate wildcards (needs DNS-01).
+                if name.starts_with("*.") {
+                    return Err(ProxyError::Config(format!(
+                        "Domain '{host}': ACME does not support wildcards; use an external issuer (cert-manager) via cert_path/key_path"
+                    )));
+                }
+            }
+            // Static cert from files.
+            (false, Some(cert), Some(key)) => {
                 if !Path::new(cert).exists() {
                     return Err(ProxyError::Config(format!(
                         "Domain '{host}': certificate file not found: {cert}"
@@ -81,7 +120,15 @@ fn validate_config(cfg: &Config) -> Result<()> {
                     )));
                 }
             }
-            (None, None) => {}
+            // Plain-HTTP domain (no cert, no ACME).
+            (false, None, None) => {}
+            // acme = true alongside cert_path/key_path: mutually exclusive.
+            (true, _, _) => {
+                return Err(ProxyError::Config(format!(
+                    "Domain '{host}': acme = true is mutually exclusive with cert_path/key_path"
+                )));
+            }
+            // Only one of cert_path/key_path set.
             _ => {
                 return Err(ProxyError::Config(format!(
                     "Domain '{host}': cert_path and key_path must both be set or both omitted"

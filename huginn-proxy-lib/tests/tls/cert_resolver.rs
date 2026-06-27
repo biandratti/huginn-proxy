@@ -8,6 +8,7 @@ fn domain(host: Option<&str>, cert: &std::path::Path, key: &std::path::Path) -> 
         host: host.map(str::to_string),
         cert_path: Some(cert.display().to_string()),
         key_path: Some(key.display().to_string()),
+        acme: false,
         headers: None,
         security: None,
         fingerprinting: None,

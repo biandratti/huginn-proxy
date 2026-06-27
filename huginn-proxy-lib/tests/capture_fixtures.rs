@@ -198,6 +198,7 @@ async fn capture_fingerprint_values() -> Result<(), Box<dyn std::error::Error + 
             host: None,
             cert_path: Some(cert_file.path().to_string_lossy().into_owned()),
             key_path: Some(key_file.path().to_string_lossy().into_owned()),
+            acme: false,
             headers: None,
             security: None,
             fingerprinting: None,
@@ -217,6 +218,7 @@ async fn capture_fingerprint_values() -> Result<(), Box<dyn std::error::Error + 
             client_auth: Default::default(),
             session_resumption: Default::default(),
         }),
+        acme: None,
         fingerprint: FingerprintConfig {
             tls_enabled: true,
             http_enabled: true,

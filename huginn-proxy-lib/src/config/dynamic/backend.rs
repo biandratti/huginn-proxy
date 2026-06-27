@@ -256,6 +256,13 @@ pub struct Domain {
     /// Path to the TLS private key PEM file for this domain (optional).
     #[serde(default)]
     pub key_path: Option<String>,
+    /// If `true`, the certificate is issued and renewed automatically via ACME
+    /// (mutually exclusive with `cert_path`/`key_path`).
+    ///
+    /// Requires the static `[acme]` block and a `[tls]` block. Only exact hosts are
+    /// supported (no wildcards, no catch-all). Validated in `config/loader.rs`.
+    #[serde(default)]
+    pub acme: bool,
     /// Header manipulation applied to all routes in this domain (optional).
     /// Merged with global headers; route-level headers take final precedence.
     #[serde(default)]
