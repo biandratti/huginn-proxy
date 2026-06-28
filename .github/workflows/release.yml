@@ -189,8 +189,8 @@ jobs:
       - name: Add Rust target
         run: rustup target add ${{ matrix.target }}
 
-      - name: Build plain release binary (no eBPF)
-        run: cargo zigbuild --release --target ${{ matrix.target }} -p huginn-proxy
+      - name: Build plain release binary (no eBPF, with ACME)
+        run: cargo zigbuild --release --target ${{ matrix.target }} -p huginn-proxy --features acme
 
       - name: Package binary
         run: |
@@ -257,7 +257,7 @@ jobs:
 
       - name: Build release binary
         shell: bash
-        run: cargo build --release --target ${{ matrix.target }} -p huginn-proxy
+        run: cargo build --release --target ${{ matrix.target }} -p huginn-proxy --features acme
 
       - name: Determine output path
         id: output

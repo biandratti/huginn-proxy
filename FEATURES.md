@@ -157,7 +157,7 @@ Configurable cipher suites, curve preferences, and TLS version restrictions (1.2
 HTTP/2 negotiation.
 
 **SNI-based multi-certificate selection.** The proxy serves a different certificate per domain, selected from the TLS
-ClientHello SNI. Each `[[domains]]` entry carries its own `cert_path` / `key_path`. The resolver picks a certificate by
+ClientHello SNI. Each `[[domains]]` entry declares its certificate source via a single `cert` field (`cert = { type = "file", cert_path = "…", key_path = "…" }`, or `cert = { type = "acme" }`). The resolver picks a certificate by
 **exact host → single-label wildcard (`*.example.com`) → default**. The default certificate is the one attached to the
 catch-all (host-less) domain, and it is also served to clients that send no SNI (e.g. connecting by IP). When
 `[tls.options].sni_strict = true`, the default-cert fallback is disabled entirely (full parity with Traefik's
@@ -208,6 +208,22 @@ is no silent fallback. When `cipher_suites` is empty or omitted, the proxy uses 
 Limitation: Wildcard matching is single-label only (`*.example.com` matches `api.example.com` but not
 `a.b.example.com`). The cipher suite list is global — the same set is offered for every domain, since SNI selects the
 certificate but not the TLS parameters.
+
+**Automatic TLS (ACME / Let's Encrypt).** When an `[acme]` block is configured, domains that do not declare an explicit
+`cert = { type = "file" }` obtain and renew their certificate automatically via the **TLS-ALPN-01** challenge — there is
+no separate `cert = { type = "acme" }` needed (omitting `cert` under a global `[acme]` is ACME-by-default). Validation
+happens on the **same TLS listener** (the proxy answers the `acme-tls/1` ALPN challenge in-band), so the public
+**`:443`** just needs to be reachable; no `:80` listener and no DNS provider credentials are required. Issued certs are
+cached on disk (`[acme].cache_dir`) and survive restarts. A custom directory CA can be trusted via
+`[acme].directory_ca_path` for private/test ACME servers (e.g. Pebble). The `acme` cargo feature is **compiled into the
+published `plain` and `ebpf` images** and stays completely inert unless `[acme]` is present. See
+[SETTINGS.md](SETTINGS.md) for configuration and [DEPLOYMENT.md](DEPLOYMENT.md) for operational guidance.
+
+ACME limitations: **TLS-ALPN-01 only** (no HTTP-01, no DNS-01), so **no wildcards** — a wildcard domain must use
+`cert = { type = "file" }` (e.g. fed by cert-manager); **single-replica** (the on-disk cache is not shared, so N
+replicas issue N certs and may hit CA rate limits); **incompatible with global mTLS** (`[tls.client_auth]`), rejected at
+config validation; and **no EAB** (External Account Binding — CAs that require it, e.g. ZeroSSL / Google Public CA, must
+be used via a file cert).
 
 ## TLS Session Resumption
 

@@ -16,7 +16,9 @@ services:
     build:
       context: ..
       dockerfile: docker/proxy.Dockerfile
-      target: acme
+      # The published `plain` (and `ebpf`) images are built with the `acme` feature, so this is
+      # the same artifact you'd run in production — just pointed at a local Pebble directory.
+      target: plain
     # Drop the image's default positional config arg so HUGINN_CONFIG_PATH is used.
     command: ["/usr/local/bin/huginn-proxy"]
     environment:

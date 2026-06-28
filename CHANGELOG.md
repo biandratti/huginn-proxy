@@ -39,10 +39,10 @@ require it, e.g. ZeroSSL/Google Public CA, must be used via a file cert). A new
 
 Trusts a custom PEM CA for the ACME **directory** connection instead of the compiled-in public
 (webpki) roots, so the proxy can talk to a private or test ACME server (e.g.
-[Pebble](https://github.com/letsencrypt/pebble)) served with a self-signed CA. A new `acme` Docker
-target (`docker build --target acme`) ships the proxy built with the `acme` feature, and
-`examples/docker-compose.acme.yml` is a fully self-contained local demo that issues a real cert
-from Pebble via TLS-ALPN-01.
+[Pebble](https://github.com/letsencrypt/pebble)) served with a self-signed CA. The published
+`plain` and `ebpf` images are now built with the `acme` feature (ACME stays inert until an
+`[acme]` block is configured), and `examples/docker-compose.acme.yml` is a fully self-contained
+local demo that issues a real cert from Pebble via TLS-ALPN-01.
 
 ### Breaking changes
 

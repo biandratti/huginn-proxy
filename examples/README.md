@@ -259,10 +259,10 @@ How it fits together:
   `cargo test -p tests-e2e --test acme` — it verifies the served leaf is issued by Pebble for
   `proxy.huginn.local` and that traffic is proxied over it. CI runs this as the `test-e2e-acme` job.
 
-This uses the `acme` Docker target (`docker build --target acme -f docker/proxy.Dockerfile .`),
-i.e. the proxy built with the `acme` cargo feature. For real deployments, drop `directory_url` /
-`directory_ca_path` and set `staging`/production against Let's Encrypt with a publicly resolvable
-domain and the validation port reachable on `:443`.
+The demo builds the `plain` target, which (like the published `plain`/`ebpf` images) is compiled
+with the `acme` cargo feature — so this is the same artifact you'd run in production. For real
+deployments, drop `directory_url` / `directory_ca_path` and set `staging`/production against Let's
+Encrypt with a publicly resolvable domain and the validation port reachable on `:443`.
 
 ---
 
