@@ -45,22 +45,11 @@ services:
       retries: 12
       start_period: 10s
     depends_on:
-      # Gate startup on Pebble's directory actually listening, so the first ACME order does not
-      # race the server coming up (otherwise the first attempt logs a benign ConnectionRefused
-      # before rustls-acme retries).
-      wait-pebble:
-        condition: service_completed_successfully
-      backend:
-        condition: service_started
-
-  # Pebble's image is distroless (no shell/curl/nc), so it cannot define its own healthcheck.
-  # This throwaway helper blocks until Pebble's directory port accepts TCP, then exits 0.
-  wait-pebble:
-    image: busybox:latest
-    command: ["sh", "-c", "until nc -z pebble 14000; do echo 'waiting for pebble...'; sleep 0.5; done; echo 'pebble is up'"]
-    depends_on:
-      pebble:
-        condition: service_started
+      # Pebble's distroless image has no shell/nc/curl, so it can't expose a healthcheck — we can
+      # only order on `service_started`, not readiness. If the proxy's first ACME order beats
+      # Pebble's directory coming up, rustls-acme just logs a benign ConnectionRefused and retries.
+      - pebble
+      - backend
 
   pebble:
     image: ghcr.io/letsencrypt/pebble:latest

@@ -255,6 +255,9 @@ How it fits together:
   Pebble's self-signed directory CA via `[acme].directory_ca_path`.
 - The test PKI under `acme/` (`pebble-ca.pem`, `pebble-cert.pem`, `pebble-key.pem`) is **for local
   testing only**. Regenerate it with `acme/gen-pebble-ca.sh`.
+- This same stack backs the automated ACME end-to-end test. With the stack up, run
+  `cargo test -p tests-e2e --test acme` — it verifies the served leaf is issued by Pebble for
+  `proxy.huginn.local` and that traffic is proxied over it. CI runs this as the `test-e2e-acme` job.
 
 This uses the `acme` Docker target (`docker build --target acme -f docker/proxy.Dockerfile .`),
 i.e. the proxy built with the `acme` cargo feature. For real deployments, drop `directory_url` /

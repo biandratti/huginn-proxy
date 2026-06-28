@@ -3269,6 +3269,8 @@ dependencies = [
  "reqwest",
  "serial_test",
  "tokio",
+ "tokio-rustls",
+ "x509-parser 0.18.1",
 ]
 
 [[package]]

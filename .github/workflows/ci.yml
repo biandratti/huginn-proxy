@@ -302,3 +302,44 @@ jobs:
         uses: ./.github/actions/setup-docker-compose
       - name: Run E2E tests
         run: cargo test --package tests-e2e --test e2e --verbose
+
+  test-e2e-acme:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+      - name: Install Rust ${{ env.rust_stable }}
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.rust_stable }}
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Generate Pebble test PKI
+        run: bash examples/acme/gen-pebble-ca.sh
+      - name: Start ACME demo stack
+        env:
+          DOCKER_BUILDKIT: 1
+          COMPOSE_DOCKER_CLI_BUILD: 1
+        run: |
+          docker compose -f examples/docker-compose.acme.yml up --build -d
+          echo "Waiting for proxy to become healthy (ACME issuance against Pebble)..."
+          timeout 180 bash -c 'until docker compose -f examples/docker-compose.acme.yml ps proxy | grep -q "(healthy)"; do sleep 2; done'
+          docker compose -f examples/docker-compose.acme.yml ps
+      - name: Run ACME E2E tests
+        run: cargo test --package tests-e2e --test acme --verbose
+      - name: Dump compose logs on failure
+        if: failure()
+        run: docker compose -f examples/docker-compose.acme.yml logs --no-color
+      - name: Tear down
+        if: always()
+        run: docker compose -f examples/docker-compose.acme.yml down -v

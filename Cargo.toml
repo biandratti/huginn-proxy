@@ -66,6 +66,7 @@ tokio-util = { version = "0.7.18", features = ["rt"] }
 toml = "1.1.2"
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["fmt", "env-filter"] }
+x509-parser = "0.18.1"
 
 [profile.release]
 codegen-units = 4
