@@ -5,6 +5,8 @@
 //! `futures-rustls`), that trait object is the *same* type the proxy's acceptor expects, so it
 //! plugs into the `CompositeResolver` without any trait mismatch.
 
+#![forbid(unsafe_code)]
+
 use std::path::PathBuf;
 use std::sync::Arc;
 

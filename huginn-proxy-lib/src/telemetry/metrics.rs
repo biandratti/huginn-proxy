@@ -141,6 +141,12 @@ pub struct Metrics {
     pub tls_cert_last_reload_timestamp_seconds: Gauge<f64>,
     /// FNV-1a hash of the currently active certificate chain; changes on every rotation.
     pub tls_cert_hash: Gauge<u64>,
+
+    // ACME (automatic certificate management) metrics
+    /// Number of domains served by in-process ACME (TLS-ALPN-01). Set once at startup; `0`
+    /// (the default) means ACME is inactive. Per-event issuance/renewal metrics are not emitted
+    /// in this MVP — those events are logged by the `huginn-acme` crate.
+    pub acme_domains: Gauge<u64>,
 }
 
 impl Metrics {
@@ -365,6 +371,11 @@ impl Metrics {
             tls_cert_hash: meter
                 .u64_gauge("huginn_tls_cert_hash")
                 .with_description("FNV-1a hash of the currently active certificate chain DER bytes; changes on every rotation.")
+                .build(),
+
+            acme_domains: meter
+                .u64_gauge("huginn_acme_domains")
+                .with_description("Number of domains served by in-process ACME (TLS-ALPN-01); set once at startup, 0 when ACME is inactive")
                 .build(),
         }
     }
@@ -710,6 +721,12 @@ impl Metrics {
                 KeyValue::new(labels::DOMAIN, domain.to_string()),
             ],
         );
+    }
+
+    /// Record the number of ACME-managed domains. Called once at startup when ACME is active;
+    /// the ACME domain set is fixed at boot, so this gauge does not change at runtime.
+    pub fn set_acme_domains(&self, count: u64) {
+        self.acme_domains.record(count, &[]);
     }
 
     /// Record a rejected incoming connection.

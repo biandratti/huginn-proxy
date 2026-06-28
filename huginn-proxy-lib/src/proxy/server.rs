@@ -122,6 +122,7 @@ pub async fn run(
             // directly (behavior unchanged).
             let effective: Arc<dyn ResolvesServerCert> = match acme {
                 Some(rt) if !rt.resolvers.is_empty() => {
+                    metrics.set_acme_domains(rt.resolvers.len() as u64);
                     services.extend(rt.tasks);
                     Arc::new(CompositeResolver::new(Arc::clone(resolver), rt.resolvers))
                 }

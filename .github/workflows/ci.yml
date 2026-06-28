@@ -176,6 +176,7 @@ jobs:
     strategy:
       matrix:
         crate:
+          - huginn-acme
           - huginn-proxy
           - huginn-ebpf
           - huginn-ebpf-agent
