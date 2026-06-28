@@ -216,8 +216,53 @@ eBPF compose examples map agent HTTP on the proxy service (`9091:9091`).
 The `config/` directory contains example configurations:
 
 - **`compose.toml`** - Basic proxy setup (default for Docker Compose)
+- **`compose-acme.toml`** - Minimal automatic-TLS setup for the local ACME demo below
 
 To switch configurations, edit `docker-compose.ebpf.yml` and change the `command` and `volumes` sections.
+
+---
+
+## Automatic TLS with ACME (local Pebble demo)
+
+`docker-compose.acme.yml` is a **fully self-contained** demo where huginn-proxy obtains a **real
+certificate** from a local [Pebble](https://github.com/letsencrypt/pebble) ACME server (Let's
+Encrypt's test server) using the **TLS-ALPN-01** challenge — no public DNS or internet required.
+
+First generate the local test PKI (one time; the `.pem` files are git-ignored and never committed):
+
+```bash
+./examples/acme/gen-pebble-ca.sh
+```
+
+Then build and start the stack:
+
+```bash
+docker compose -f examples/docker-compose.acme.yml up --build
+```
+
+Watch the proxy logs for `ACME event … DeployedNewCert`, then exercise it (the issued cert chains
+to Pebble's throwaway root, so use `-k`):
+
+```bash
+curl -k --resolve proxy.huginn.local:8443:127.0.0.1 https://proxy.huginn.local:8443/
+```
+
+How it fits together:
+
+- The proxy listens on `:8443` and Pebble's validation authority connects back to
+  `proxy.huginn.local:8443` (ALPN `acme-tls/1`) to verify the challenge before issuing.
+- `config/compose-acme.toml` points the proxy at Pebble via `[acme].directory_url` and trusts
+  Pebble's self-signed directory CA via `[acme].directory_ca_path`.
+- The test PKI under `acme/` (`pebble-ca.pem`, `pebble-cert.pem`, `pebble-key.pem`) is **for local
+  testing only**. Regenerate it with `acme/gen-pebble-ca.sh`.
+- This same stack backs the automated ACME end-to-end test. With the stack up, run
+  `cargo test -p tests-e2e --test acme` — it verifies the served leaf is issued by Pebble for
+  `proxy.huginn.local` and that traffic is proxied over it. CI runs this as the `test-e2e-acme` job.
+
+The demo builds the `plain` target, which (like the published `plain`/`ebpf` images) is compiled
+with the `acme` cargo feature — so this is the same artifact you'd run in production. For real
+deployments, drop `directory_url` / `directory_ca_path` and set `staging`/production against Let's
+Encrypt with a publicly resolvable domain and the validation port reachable on `:443`.
 
 ---
 

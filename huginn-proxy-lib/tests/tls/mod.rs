@@ -1,7 +1,9 @@
 mod acceptor;
+mod acme_alpn;
 mod cert_resolver;
 mod cert_source;
 mod cipher_curve_signature;
+mod composite_resolver;
 mod options;
 mod session_resumption;
 
@@ -18,7 +20,8 @@ use tokio_rustls::TlsAcceptor;
 pub fn build_acceptor(
     alpn: &[String],
     options: &TlsOptions,
-    client_auth: &ClientAuth,
+    client_auth: Option<&ClientAuth>,
+    acme_active: bool,
 ) -> huginn_proxy_lib::error::Result<TlsAcceptor> {
     crate::helpers::ensure_crypto_provider();
     build_server_config_with_resolver(
@@ -27,5 +30,6 @@ pub fn build_acceptor(
         options,
         client_auth,
         &Default::default(),
+        acme_active,
     )
 }

@@ -253,6 +253,11 @@ enforce).
   cert on the catch-all (`host`-less) entry. Equivalent to Traefik's `defaultCertificate`.
 - Unknown/absent SNI with no default cert → rejected with TLS `unrecognized_name` (nothing to
   serve).
+
+  This default-cert fallback applies only to **unmatched/absent SNI at runtime**. It is **not** a
+  fallback for a *declared* domain that omits `cert`: under `[tls]` every domain must declare its
+  own `cert` (config validation rejects a TLS domain without one), so the default cert lives on
+  the catch-all (`host`-less) entry and that entry, under `[tls]`, must declare a `cert` too.
 - For strict hostname enforcement, set `[tls.options].sni_strict = true` (see below). This is
   full parity with Traefik's `sniStrict: true`: the default-cert fallback is disabled for
   **both** unmatched-hostname SNI **and** no-SNI connections, so IP-literal HTTPS clients (and
@@ -261,9 +266,8 @@ enforce).
 
 | Key         | Type   | Default | Description                                                                                      |
 |-------------|--------|---------|--------------------------------------------------------------------------------------------------|
-| `host`      | string | `null`  | Domain pattern for host matching: exact (`api.example.com`) or single-level wildcard (`*.example.com`). **Omit for a catch-all** that matches any host; its cert (if any) is the TLS default certificate. |
-| `cert_path` | string | `null`  | Path to the TLS certificate PEM file. Omit for plain-HTTP-only domains.                          |
-| `key_path`  | string | `null`  | Path to the TLS private key PEM file. Must be set together with `cert_path` or both omitted.     |
+| `host`      | string | `null`  | Domain pattern for host matching: exact (`api.example.com`) or single-level wildcard (`*.example.com`). **Omit for a catch-all** that matches any host; under `[tls]` its cert is the TLS default certificate. |
+| `cert`      | table  | `null`  | Certificate source for this domain. `{ type = "file", cert_path = "…", key_path = "…" }` for a static PEM cert, or `{ type = "acme" }` for an ACME-managed cert (requires the global `[acme]` block — TLS-ALPN-01, exact hosts only). **Under `[tls]`, every domain must declare `cert`** (or resolve to ACME-by-default when `[acme]` is configured) — there is **no implicit default-cert fallback** for a declared domain; a TLS domain without `cert` is a configuration error. **Omit only** for plain-HTTP-only domains (no `[tls]`). |
 | `headers`   | table  | —       | Domain-level header manipulation. Merged between global and route-level headers.                 |
 | `security`  | table  | —       | Per-domain security overrides (`ip_filter`, `rate_limit`, `headers`). See [`[domains.security]`](#domainssecurity) below. |
 | `fingerprinting` | bool | `null` (inherit) | Domain-level fingerprint-header **injection** gate. Resolved per route as `route.or(domain).unwrap_or(true)`. Controls header injection only; capture is the static global `[fingerprint]`. |
@@ -283,8 +287,7 @@ enforce).
 ```toml
 [[domains]]
 host = "api.example.com"
-cert_path = "/config/certs/api.crt"
-key_path  = "/config/certs/api.key"
+cert = { type = "file", cert_path = "/config/certs/api.crt", key_path = "/config/certs/api.key" }
 
   [[domains.routes]]
   prefix = "/v2"
@@ -297,8 +300,7 @@ key_path  = "/config/certs/api.key"
 
 [[domains]]
 host = "*.example.com"
-cert_path = "/config/certs/wildcard.crt"
-key_path  = "/config/certs/wildcard.key"
+cert = { type = "file", cert_path = "/config/certs/wildcard.crt", key_path = "/config/certs/wildcard.key" }
 
   [[domains.routes]]
   prefix = "/"
@@ -311,8 +313,10 @@ key_path  = "/config/certs/wildcard.key"
 ```yaml
 domains:
   - host: "api.example.com"
-    cert_path: "/config/certs/api.crt"
-    key_path:  "/config/certs/api.key"
+    cert:
+      type: file
+      cert_path: "/config/certs/api.crt"
+      key_path:  "/config/certs/api.key"
     routes:
       - prefix: "/v2"
         backend: "api-backend:9000"
@@ -321,8 +325,10 @@ domains:
         backend: "web-backend:8080"
 
   - host: "*.example.com"
-    cert_path: "/config/certs/wildcard.crt"
-    key_path:  "/config/certs/wildcard.key"
+    cert:
+      type: file
+      cert_path: "/config/certs/wildcard.crt"
+      key_path:  "/config/certs/wildcard.key"
     routes:
       - prefix: "/"
         backend: "web-backend:8080"
@@ -339,8 +345,10 @@ default site). Its cert becomes the TLS default certificate:
 ```yaml
 domains:
   # No `host:` → matches localhost, 127.0.0.1, ::1, or any other host.
-  - cert_path: "/config/certs/server.crt"
-    key_path:  "/config/certs/server.key"
+  - cert:
+      type: file
+      cert_path: "/config/certs/server.crt"
+      key_path:  "/config/certs/server.key"
     routes:
       - prefix: "/"
         backend: "web-backend:8080"
@@ -439,8 +447,7 @@ tracked independently. `fingerprinting` (header injection) follows the same prec
 ```toml
 [[domains]]
 host = "api.example.com"
-cert_path = "/config/certs/api.crt"
-key_path  = "/config/certs/api.key"
+cert = { type = "file", cert_path = "/config/certs/api.crt", key_path = "/config/certs/api.key" }
 
   [[domains.routes]]
   prefix = "/"
@@ -467,8 +474,10 @@ key_path  = "/config/certs/api.key"
 ```yaml
 domains:
   - host: "api.example.com"
-    cert_path: "/config/certs/api.crt"
-    key_path:  "/config/certs/api.key"
+    cert:
+      type: file
+      cert_path: "/config/certs/api.crt"
+      key_path:  "/config/certs/api.key"
     routes:
       - prefix: "/"
         backend: "api-backend:9000"
@@ -510,8 +519,7 @@ route-level `[domains.routes.headers]`. Same shape as [`[headers]`](#headers).
 ```toml
 [[domains]]
 host = "api.example.com"
-cert_path = "/config/certs/api.crt"
-key_path  = "/config/certs/api.key"
+cert = { type = "file", cert_path = "/config/certs/api.crt", key_path = "/config/certs/api.key" }
 
 [domains.headers.response]
 add = [
@@ -533,8 +541,10 @@ add = [
 ```yaml
 domains:
   - host: "api.example.com"
-    cert_path: "/config/certs/api.crt"
-    key_path:  "/config/certs/api.key"
+    cert:
+      type: file
+      cert_path: "/config/certs/api.crt"
+      key_path:  "/config/certs/api.key"
     headers:
       response:
         add:
@@ -761,7 +771,16 @@ tls:
 
 ### `[tls.client_auth]`
 
-Mutual TLS (mTLS). Omit to disable. **Static**.
+Mutual TLS (mTLS). **Present** ⇒ clients must present a certificate signed by `ca_cert_path`'s
+CA; **omit the block** to disable mTLS. **Static**.
+
+> Note: mTLS is incompatible with ACME. A domain that resolves to `cert = { type = "acme" }`
+> together with a global `client_auth` is rejected at load (the TLS-ALPN-01 challenge presents no
+> client certificate). Use a static `cert = { type = "file" }` if you need mTLS.
+
+| Key            | Type   | Default | Description                                                              |
+|----------------|--------|---------|--------------------------------------------------------------------------|
+| `ca_cert_path` | string | —       | Path to the client CA certificate PEM file (one or more CA certs). Required when the block is present. |
 
 <table>
 <thead>
@@ -777,7 +796,7 @@ Mutual TLS (mTLS). Omit to disable. **Static**.
 ```toml
 # Require client certificates signed by this CA
 [tls.client_auth]
-required = { ca_cert_path = "/config/certs/ca.crt" }
+ca_cert_path = "/config/certs/ca.crt"
 ```
 
 </td>
@@ -787,8 +806,7 @@ required = { ca_cert_path = "/config/certs/ca.crt" }
 # Require client certificates signed by this CA
 tls:
   client_auth:
-    required:
-      ca_cert_path: "/config/certs/ca.crt"
+    ca_cert_path: "/config/certs/ca.crt"
 ```
 
 </td>
@@ -834,6 +852,87 @@ tls:
 </tr>
 </tbody>
 </table>
+
+---
+
+## `[acme]`
+
+Automatic TLS certificate issuance and renewal via ACME (e.g. Let's Encrypt), using the
+**TLS-ALPN-01** challenge on the existing HTTPS listener (port 443). **Static** — the ACME account
+and the background issuance/renewal tasks are wired at startup, so changes require a restart.
+
+When this block is present, any domain that does **not** declare an explicit `cert = { type = "file" }`
+is ACME-managed by default (see [`[[domains]]` → `cert`](#domains)). The account key and issued
+certificates are persisted under `cache_dir`.
+
+| Key             | Type   | Default      | Description                                                                                                   |
+|-----------------|--------|--------------|---------------------------------------------------------------------------------------------------------------|
+| `contact_email` | string | —            | Contact email registered with the ACME account (sent as a `mailto:` contact). Required.                       |
+| `cache_dir`     | string | —            | Filesystem directory for the ACME cache (account key + issued certificates). Must be **writable and persistent across restarts** to avoid re-issuing on every boot. Required. |
+| `staging`       | bool   | `false`      | Use the Let's Encrypt **staging** directory (higher rate limits, untrusted certs) instead of production. Ignored when `directory_url` is set. |
+| `directory_url` | string | `null`       | Override the ACME directory URL (a private CA, or Pebble for tests). Takes precedence over `staging`.          |
+| `directory_ca_path` | string | `null`   | PEM bundle to trust for the **directory** TLS connection instead of the compiled-in public (webpki) roots. Needed only for private/test ACME servers (e.g. Pebble) served with a self-signed CA; leave unset for public CAs like Let's Encrypt. See `examples/docker-compose.acme.yml` for a local Pebble demo. |
+
+<table>
+<thead>
+<tr>
+<th>TOML</th>
+<th>YAML</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td valign="top">
+
+```toml
+[acme]
+contact_email = "ops@example.com"
+cache_dir = "/var/lib/huginn-proxy/acme"
+staging = false
+# directory_url = "https://acme.example.com/directory"   # optional, overrides `staging`
+# directory_ca_path = "/config/acme/ca.pem"              # only for a private/test CA (e.g. Pebble)
+```
+
+</td>
+<td valign="top">
+
+```yaml
+acme:
+  contact_email: "ops@example.com"
+  cache_dir: "/var/lib/huginn-proxy/acme"
+  staging: false
+  # directory_url: "https://acme.example.com/directory"  # optional, overrides `staging`
+  # directory_ca_path: "/config/acme/ca.pem"             # only for a private/test CA (e.g. Pebble)
+```
+
+</td>
+</tr>
+</tbody>
+</table>
+
+### ACME limitations (MVP)
+
+The built-in ACME integration is intentionally minimal. For anything outside these bounds, obtain
+certificates with an external issuer (cert-manager, Caddy, lego, …) and serve them via
+`cert = { type = "file" }`.
+
+- **Challenge type:** only **TLS-ALPN-01** (over the HTTPS listener) is supported. **HTTP-01**
+  (port 80) and **DNS-01** are **not** implemented.
+- **Exact hosts only:** no **wildcards** (`*.example.com`) and no **catch-all** (host-less) ACME
+  domains — TLS-ALPN-01 cannot validate them (wildcards need DNS-01). A wildcard that resolves to
+  ACME is rejected at load.
+- **mTLS incompatible:** a global `[tls.client_auth]` (mTLS) together with an ACME-managed domain
+  is rejected at load (the challenge connection presents no client certificate).
+- **Single-replica:** each running instance issues and caches its own certificate independently in
+  its local `cache_dir`; there is no shared/distributed cache and no leader election. For
+  multi-replica / HA deployments, issue once with an external issuer (e.g. cert-manager) and mount
+  the resulting cert/key into every replica via `cert = { type = "file" }`. Note that per-CA
+  issuance rate limits (Let's Encrypt) apply **per replica**.
+- **No per-certificate tuning:** key type, renewal window, and similar knobs are not exposed; the
+  underlying defaults apply.
+- **No EAB (External Account Binding):** ACME CAs that require EAB — **ZeroSSL**, **Google Public
+  CA**, **Sectigo**, etc. — are **not supported** (`rustls-acme` 0.15.3 does not send an
+  `externalAccountBinding`). Use such CAs through an external issuer + `cert = { type = "file" }`.
 
 ---
 

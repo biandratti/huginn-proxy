@@ -81,6 +81,28 @@ backends:
 }
 
 #[test]
+fn yaml_parser_parses_cert_source_file() -> TestResult {
+    // `CertSource` (internally tagged on `type`) must round-trip through YAML, including the
+    // nested-map `file` form with its cert/key paths.
+    let input = r#"
+listen:
+  addrs:
+    - "127.0.0.1:0"
+backends:
+  - address: "localhost:3000"
+domains:
+  - host: "api.example.com"
+    cert:
+      type: file
+      cert_path: /etc/tls/api.crt
+      key_path: /etc/tls/api.key
+"#;
+    let cfg = YamlParser.parse(input)?;
+    assert_eq!(cfg.domains[0].cert_file(), Some(("/etc/tls/api.crt", "/etc/tls/api.key")));
+    Ok(())
+}
+
+#[test]
 fn yaml_parser_returns_error_on_invalid_syntax() -> TestResult {
     let Err(err) = YamlParser.parse("key: [unclosed") else {
         return Err("expected parse error but YAML parser succeeded".into());

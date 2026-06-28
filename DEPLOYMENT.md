@@ -8,7 +8,7 @@ Image tags and release binaries (GHCR, musl/glibc, eBPF): see [DEPLOYMENT-MATRIX
 
 ### Overview
 
-Use a published image from GHCR (see [DEPLOYMENT-MATRIX.md](DEPLOYMENT-MATRIX.md)). The **`huginn-proxy-plain`** image needs no extra Linux capabilities on the host; the default **`huginn-proxy`** image includes eBPF support for TCP SYN fingerprinting and may need `CAP_BPF` when that feature is enabled.
+Use a published image from GHCR (see [DEPLOYMENT-MATRIX.md](DEPLOYMENT-MATRIX.md)). The **`huginn-proxy-plain`** image needs no extra Linux capabilities on the host; the default **`huginn-proxy`** image includes eBPF support for TCP SYN fingerprinting and may need `CAP_BPF` when that feature is enabled. Both images are built with the `acme` feature, so built-in ACME / Let's Encrypt TLS is available out of the box — it stays inert unless you configure an `[acme]` block (see [Automatic TLS (ACME)](#automatic-tls-acme--lets-encrypt) below).
 
 From the **repository root**, mount a real config **file** on the host. If the path does not exist, Docker creates an empty **directory** with that name and the proxy fails with `Is a directory (os error 21)` — remove any mistaken `config.toml` directory (`rm -rf ./config.toml`) and point at the file under `examples/config/`.
 
@@ -275,3 +275,18 @@ chmod 400 server.crt server.key
 ```
 
 **Kubernetes:** Secret volumes are mounted with `defaultMode: 0400` (read-only for owner).
+
+### Automatic TLS (ACME / Let's Encrypt)
+
+The published `huginn-proxy` and `huginn-proxy-plain` images are built with the `acme` feature. Add an `[acme]` block (see [SETTINGS.md](SETTINGS.md)) and any domain without an explicit `cert = { type = "file" }` is issued and renewed automatically via the **TLS-ALPN-01** challenge. Without `[acme]`, the feature is inert and behaves exactly like a file-cert deployment.
+
+Operational requirements specific to ACME:
+
+- **Public `:443` reachability.** TLS-ALPN-01 validates on the same TLS listener (the proxy answers the `acme-tls/1` ALPN handshake in-band). The CA must be able to reach the proxy's TLS port from the public internet on the cert's domain. There is **no `:80` listener** and **no DNS provider** involved.
+- **Persistent cert cache.** Issued certs and the ACME account key live under `[acme].cache_dir` (the images create `/var/lib/huginn-proxy/acme`, owned by UID `10001`). **Mount a persistent volume there** — Docker named volume or a Kubernetes PVC. Without persistence, every restart re-issues certificates and can hit the CA's [rate limits](https://letsencrypt.org/docs/rate-limits/).
+- **Single replica.** The cache is on-disk and **not shared across replicas**; each replica runs its own ACME client. Running N replicas means N independent issuances for the same domain (more rate-limit pressure) and no coordination. For ACME, run a **single replica** (`replicas: 1`, `Recreate` strategy); scale horizontally only with file certs fed by an external manager (e.g. cert-manager) instead.
+- **No global mTLS.** ACME is **incompatible with global mTLS** (`[tls.client_auth]`) and is rejected at config validation — TLS-ALPN-01 cannot complete when the listener demands a client certificate.
+- **No wildcards.** TLS-ALPN-01 issues per-host certs only; wildcard domains must use `cert = { type = "file" }` (e.g. cert-manager with a DNS-01 solver).
+- **Private/test directories.** Point `[acme].directory_url` at a non-public ACME server and trust its CA with `[acme].directory_ca_path`. The local Pebble demo in [`examples/README.md`](examples/README.md) shows a full self-contained issuance.
+
+Observe issuance with the `huginn_acme_domains` gauge ([TELEMETRY.md](TELEMETRY.md) §14) and the `ACME event … DeployedNewCert` log lines.

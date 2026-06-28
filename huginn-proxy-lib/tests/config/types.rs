@@ -1,5 +1,6 @@
 use huginn_proxy_lib::config::{
-    Backend, BackendHttpVersion, ClientAuth, Config, HealthCheckConfig, HealthCheckType, TlsConfig,
+    Backend, BackendHttpVersion, CertSource, ClientAuth, Config, Domain, HealthCheckConfig,
+    HealthCheckType, TlsConfig,
 };
 
 #[test]
@@ -62,15 +63,15 @@ key_path = "/config/certs/server.key"
 alpn = ["h2", "http/1.1"]
 
 [client_auth]
-required = { ca_cert_path = "/config/certs/client-ca.crt" }
+ca_cert_path = "/config/certs/client-ca.crt"
 "#;
 
     let config: TlsConfig = toml::from_str(toml)?;
     match config.client_auth {
-        ClientAuth::Required { ca_cert_path } => {
+        Some(ClientAuth { ca_cert_path }) => {
             assert_eq!(ca_cert_path, "/config/certs/client-ca.crt");
         }
-        ClientAuth::Disabled => panic!("Expected ClientAuth::Required"),
+        None => panic!("Expected client_auth to be present"),
     }
     Ok(())
 }
@@ -84,7 +85,7 @@ alpn = ["h2", "http/1.1"]
 "#;
 
     let config: TlsConfig = toml::from_str(toml)?;
-    assert!(matches!(config.client_auth, ClientAuth::Disabled));
+    assert!(config.client_auth.is_none());
     Ok(())
 }
 
@@ -107,7 +108,7 @@ key_path = "/config/certs/server.key"
 alpn = ["h2", "http/1.1"]
 
 [tls.client_auth]
-required = { ca_cert_path = "/config/certs/client-ca.crt" }
+ca_cert_path = "/config/certs/client-ca.crt"
 "#;
 
     let config: Config = toml::from_str(toml)?;
@@ -117,12 +118,54 @@ required = { ca_cert_path = "/config/certs/client-ca.crt" }
     };
 
     match tls_config.client_auth {
-        ClientAuth::Required { ca_cert_path } => {
+        Some(ClientAuth { ca_cert_path }) => {
             assert_eq!(ca_cert_path, "/config/certs/client-ca.crt");
         }
-        ClientAuth::Disabled => panic!("Expected ClientAuth::Required"),
+        None => panic!("Expected client_auth to be present"),
     }
     Ok(())
+}
+
+#[test]
+fn cert_source_acme_inline() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let domain: Domain = toml::from_str("host = \"api.example.com\"\ncert = { type = \"acme\" }")?;
+    assert!(matches!(domain.cert, Some(CertSource::Acme)));
+    assert!(domain.cert_file().is_none());
+    Ok(())
+}
+
+#[test]
+fn cert_source_file_inline() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let toml = r#"
+host = "api.example.com"
+cert = { type = "file", cert_path = "/etc/tls/api.crt", key_path = "/etc/tls/api.key" }
+"#;
+    let domain: Domain = toml::from_str(toml)?;
+    assert_eq!(domain.cert_file(), Some(("/etc/tls/api.crt", "/etc/tls/api.key")));
+    Ok(())
+}
+
+#[test]
+fn cert_source_file_subtable() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    // The multi-line sub-table form must deserialize identically to the inline form.
+    let toml = r#"
+host = "api.example.com"
+
+[cert]
+type = "file"
+cert_path = "/etc/tls/api.crt"
+key_path = "/etc/tls/api.key"
+"#;
+    let domain: Domain = toml::from_str(toml)?;
+    assert_eq!(domain.cert_file(), Some(("/etc/tls/api.crt", "/etc/tls/api.key")));
+    Ok(())
+}
+
+#[test]
+fn cert_source_unknown_type_is_rejected() {
+    // An unknown tag value must fail rather than silently default.
+    let result = toml::from_str::<Domain>("host = \"x\"\ncert = { type = \"vault\" }");
+    assert!(result.is_err());
 }
 
 #[test]

@@ -13,7 +13,7 @@ use crate::proxy::reload::{
 use crate::proxy::shutdown::{wait_for_drain, ServiceHandle, ShutdownSender};
 pub use crate::proxy::watch::WatchOptions;
 use crate::telemetry::{Metrics, Readiness};
-use crate::tls::{build_tls_acceptor, DynamicCertResolver};
+use crate::tls::{build_tls_acceptor, CompositeResolver, DynamicCertResolver};
 use hyper_util::rt::{TokioExecutor, TokioTimer};
 use hyper_util::server::conn::auto::Builder as ConnBuilder;
 use std::net::SocketAddr;
@@ -24,13 +24,31 @@ use tokio::runtime::Handle;
 use tokio::signal;
 use tokio::sync::watch;
 use tokio::time::Duration;
+use tokio_rustls::rustls::server::ResolvesServerCert;
 use tracing::{info, warn};
 
+/// Pre-built ACME runtime injected into [`run`], mirroring how `syn_probe` is injected.
+///
+/// Constructed entirely outside the library by the binary (feature `acme`): it calls
+/// `huginn_acme::start_acme`, wraps each returned `JoinHandle` in a [`ServiceHandle`], and
+/// hands the resulting `(host, resolver)` pairs and tasks here. The library never depends on
+/// `rustls-acme`; it only sees trait objects and shutdown handles (same boundary discipline as
+/// `huginn-ebpf`).
+pub struct AcmeRuntime {
+    /// `(exact host, resolver)` per ACME domain; used to build the [`CompositeResolver`]'s
+    /// SNI routing table. Hosts are matched case-insensitively (the composite lowercases them).
+    pub resolvers: Vec<(String, Arc<dyn ResolvesServerCert>)>,
+    /// Background issuance/renewal tasks, already wrapped for ordered cooperative shutdown.
+    pub tasks: Vec<ServiceHandle>,
+}
+
+#[allow(clippy::too_many_arguments)]
 pub async fn run(
     static_cfg: Arc<StaticConfig>,
     dynamic_cfg: SharedDynamicConfig,
     metrics: Arc<Metrics>,
     syn_probe: Option<SynProbe>,
+    acme: Option<AcmeRuntime>,
     watch_opts: WatchOptions,
     shutdown_tx: ShutdownSender,
     readiness: Readiness,
@@ -63,8 +81,14 @@ pub async fn run(
     // Collect background service handles for ordered cooperative shutdown.
     let mut services: Vec<ServiceHandle> = Vec::new();
 
-    // Build the cert resolver and load initial certs from the current dynamic config.
-    // `None` when TLS is not configured (plain HTTP mode).
+    // `true` once ACME produced at least one per-host resolver. Computed before `acme` is
+    // moved into the composite, and used both for the ALPN `acme-tls/1` advertisement and for
+    // the composite-aware serviceability check below (so an ACME-only deploy doesn't warn).
+    let acme_active = acme.as_ref().is_some_and(|rt| !rt.resolvers.is_empty());
+
+    // Build the static cert resolver and load initial certs from the current dynamic config.
+    // `None` when TLS is not configured (plain HTTP mode). This is the resolver the hot-reload
+    // path keeps updating; the composite (if any) shares it by `Arc`.
     let cert_resolver: Option<Arc<DynamicCertResolver>> = if let Some(tls) = &static_cfg.tls {
         let resolver = Arc::new(DynamicCertResolver::new(tls.options.sni_strict));
         let report = resolver.update(&dynamic_cfg.load().domains, &metrics).await;
@@ -75,7 +99,12 @@ pub async fn run(
                 "Some domain certificates failed to load at startup; those domains will not serve TLS"
             );
         }
-        if !resolver.has_serviceable_cert() && !dynamic_cfg.load().domains.is_empty() {
+        // Composite-aware: ACME hosts also make TLS serviceable, so only warn when neither a
+        // file cert nor an ACME host can serve a handshake.
+        if !resolver.has_serviceable_cert()
+            && !acme_active
+            && !dynamic_cfg.load().domains.is_empty()
+        {
             info!(
                 "TLS is configured but no certificate is serviceable; all TLS handshakes will be \
                  rejected until a cert is provided"
@@ -88,9 +117,32 @@ pub async fn run(
 
     let tls_acceptor = match (&static_cfg.tls, &cert_resolver) {
         (Some(tls_config), Some(resolver)) => {
-            Some(build_tls_acceptor(tls_config, Arc::clone(resolver)).await?)
+            // Compose the static resolver with any per-host ACME resolvers and register the
+            // ACME background tasks for ordered shutdown. Without ACME, use the static resolver
+            // directly (behavior unchanged).
+            let effective: Arc<dyn ResolvesServerCert> = match acme {
+                Some(rt) if !rt.resolvers.is_empty() => {
+                    metrics.set_acme_domains(rt.resolvers.len() as u64);
+                    services.extend(rt.tasks);
+                    Arc::new(CompositeResolver::new(Arc::clone(resolver), rt.resolvers))
+                }
+                Some(rt) => {
+                    // ACME configured but no resolvers produced; still register its tasks.
+                    services.extend(rt.tasks);
+                    Arc::clone(resolver) as Arc<dyn ResolvesServerCert>
+                }
+                None => Arc::clone(resolver) as Arc<dyn ResolvesServerCert>,
+            };
+            Some(build_tls_acceptor(tls_config, effective, acme_active).await?)
         }
-        _ => None,
+        _ => {
+            // No TLS acceptor (plain HTTP). The loader forbids `acme` without `[tls]`, but if a
+            // runtime were still supplied, register its tasks so they shut down cleanly.
+            if let Some(rt) = acme {
+                services.extend(rt.tasks);
+            }
+            None
+        }
     };
 
     let shutdown_signal = Arc::new(AtomicUsize::new(0));
@@ -202,6 +254,7 @@ pub async fn run(
                         &metrics,
                         &health_supervisor,
                         cert_resolver.as_ref(),
+                        acme_active,
                     )
                     .await;
                 }

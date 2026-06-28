@@ -22,8 +22,7 @@ http_version = "http11"
 health_check = { type = "tcp", interval_secs = 1, timeout_secs = 1, unhealthy_threshold = 2, healthy_threshold = 2 }
 
 [[domains]]
-cert_path = "/config/certs/server.crt"
-key_path = "/config/certs/server.key"
+cert = { type = "file", cert_path = "/config/certs/server.crt", key_path = "/config/certs/server.key" }
 
 [domains.headers.response]
 remove = ["Server", "X-Powered-By", "X-AspNet-Version"]

@@ -30,8 +30,10 @@ backends:
       healthy_threshold: 2
 
 domains:
-  - cert_path: "/config/certs/server.crt"
-    key_path: "/config/certs/server.key"
+  - cert:
+      type: file
+      cert_path: "/config/certs/server.crt"
+      key_path: "/config/certs/server.key"
     headers:
       response:
         remove:

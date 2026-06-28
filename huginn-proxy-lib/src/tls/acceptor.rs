@@ -31,12 +31,20 @@ fn load_ca_certs(path: &str) -> Result<Vec<CertificateDer<'static>>> {
 ///
 /// Cipher suites, ALPN, client auth, and session resumption are all applied here; cert
 /// provisioning is delegated to the resolver (populated via `DynamicCertResolver::update`).
+///
+/// When `acme_active` is `true`, the `acme-tls/1` protocol is appended to the offered ALPN
+/// list. This is required for the ACME TLS-ALPN-01 challenge: rustls must negotiate
+/// `acme-tls/1` for the validation handshake before the `ClientHello` reaches the resolver,
+/// otherwise it aborts ALPN negotiation. It is harmless to normal clients, which never
+/// request it. The flag is a runtime bool (not a `cfg` feature) because the `acme` feature
+/// lives in the binary crate, not in this library.
 pub fn build_server_config_with_resolver(
     resolver: Arc<dyn ResolvesServerCert>,
     alpn: &[String],
     options: &TlsOptions,
-    client_auth: &ClientAuth,
+    client_auth: Option<&ClientAuth>,
     session_resumption: &crate::config::SessionResumptionConfig,
+    acme_active: bool,
 ) -> Result<TlsAcceptor> {
     validate_tls_options(options)?;
 
@@ -54,7 +62,7 @@ pub fn build_server_config_with_resolver(
         .map_err(|e| ProxyError::Tls(format!("Failed to set TLS protocol versions: {e}")))?;
 
     let mut server = match client_auth {
-        ClientAuth::Required { ca_cert_path } => {
+        Some(ClientAuth { ca_cert_path }) => {
             let client_ca_certs = load_ca_certs(ca_cert_path)?;
             let mut root_store = RootCertStore::empty();
             for cert in client_ca_certs {
@@ -69,11 +77,17 @@ pub fn build_server_config_with_resolver(
                 .with_client_cert_verifier(client_verifier)
                 .with_cert_resolver(resolver)
         }
-        ClientAuth::Disabled => builder.with_no_client_auth().with_cert_resolver(resolver),
+        None => builder.with_no_client_auth().with_cert_resolver(resolver),
     };
 
-    if !alpn.is_empty() {
-        server.alpn_protocols = alpn.iter().map(|s| s.as_bytes().to_vec()).collect();
+    let mut alpn_protocols: Vec<Vec<u8>> = alpn.iter().map(|s| s.as_bytes().to_vec()).collect();
+    if acme_active {
+        // Announce the TLS-ALPN-01 challenge protocol so the validation handshake can
+        // negotiate it; the per-host ACME resolver then serves the challenge cert.
+        alpn_protocols.push(b"acme-tls/1".to_vec());
+    }
+    if !alpn_protocols.is_empty() {
+        server.alpn_protocols = alpn_protocols;
     }
 
     configure_session_resumption(&mut server, session_resumption);

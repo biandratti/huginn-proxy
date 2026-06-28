@@ -18,6 +18,8 @@ Runtime images use the same base as [`docker/proxy.Dockerfile`](docker/proxy.Doc
 
 Three **separate** GHCR packages; each uses the same tags `latest` and `vX.Y.Z` (no `plain-` / `ebpf-agent-` prefix on the tag). Version pins: [GitHub Releases](https://github.com/biandratti/huginn-proxy/releases).
 
+Both proxy images (`huginn-proxy`, `huginn-proxy-plain`) are built with the `acme` feature, so built-in ACME / Let's Encrypt TLS is available; it stays inert unless an `[acme]` block is configured. See [DEPLOYMENT.md](DEPLOYMENT.md#automatic-tls-acme--lets-encrypt). The agent image is unrelated to TLS and has no ACME.
+
 ## Release binaries
 
 | Artifact | Suffix | OS | Arch | libc | eBPF |
@@ -33,6 +35,7 @@ Three **separate** GHCR packages; each uses the same tags `latest` and `vX.Y.Z` 
 
 - **musl (static):** zero runtime dependencies; runs on any Linux kernel and distro (no TCP SYN via eBPF in this build).
 - **glibc (eBPF):** Linux binaries extracted from or aligned with the Docker images; TCP SYN path needs kernel ≥ 5.11 and the agent where applicable.
+- **ACME:** all `huginn-proxy` release binaries (musl, glibc, macOS) are built with the `acme` feature, matching the Docker images; inert unless an `[acme]` block is configured.
 
 ## Where to download
 

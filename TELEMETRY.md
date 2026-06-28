@@ -649,7 +649,30 @@ sum by (protocol) (rate(huginn_mtls_connections_total[5m]))
 
 ---
 
-### 14. Build Info
+### 14. ACME Metrics
+
+| Metric                 | Type  | Description                                                              | Labels |
+|------------------------|-------|--------------------------------------------------------------------------|--------|
+| `huginn_acme_domains`  | Gauge | Number of domains served by in-process ACME (TLS-ALPN-01)               | —      |
+
+**Notes**:
+
+- Only emitted when the binary is built with `--features acme` **and** the config has an `[acme]`
+  block with at least one ACME-managed domain. Otherwise the series is absent (treat as `0`).
+- Set **once at startup**: the ACME domain set is fixed at boot (adding/removing an ACME domain
+  requires a restart), so this gauge does not change at runtime.
+- This MVP does not emit per-event issuance/renewal/error metrics; those ACME events are written to
+  the logs by the `huginn-acme` crate. Renewal-failure alerting via dedicated metrics is a planned
+  enhancement (WIP TODO).
+
+**Example queries**:
+
+- Is ACME active and for how many domains: `huginn_acme_domains`
+- Alert if ACME unexpectedly serves zero domains: `huginn_acme_domains == 0`
+
+---
+
+### 15. Build Info
 
 | Metric              | Type  | Description                  | Labels                    |
 |---------------------|-------|------------------------------|---------------------------|

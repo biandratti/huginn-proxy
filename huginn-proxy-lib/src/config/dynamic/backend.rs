@@ -232,14 +232,38 @@ pub fn sort_routes(routes: &mut [Route]) {
 /// in metrics labels and logs. Mirrors Traefik's `_default_` TLS-cert/router naming.
 pub const DEFAULT_DOMAIN_LABEL: &str = "_default_";
 
+/// Source of a domain's TLS certificate.
+///
+/// A sum type makes invalid combinations (ACME together with file paths) **unrepresentable**:
+/// the loader only has to check semantics (wildcards, mTLS conflict, file existence), not
+/// reject contradictory field combinations.
+///
+/// Wire form is internally tagged on `type`:
+/// - `cert = { type = "acme" }`
+/// - `cert = { type = "file", cert_path = "…", key_path = "…" }`
+#[derive(Debug, Deserialize, Clone, PartialEq)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum CertSource {
+    /// Issued and renewed automatically via ACME (TLS-ALPN-01). Requires the global `[acme]`
+    /// block and a `[tls]` block; only exact hosts (no wildcards, no catch-all).
+    Acme,
+    /// Static certificate loaded from PEM files (e.g. a cert-manager wildcard or internal CA).
+    File {
+        /// Path to the TLS certificate PEM file.
+        cert_path: String,
+        /// Path to the TLS private key PEM file.
+        key_path: String,
+    },
+}
+
 /// A named domain entry grouping a TLS certificate and its path-based routes.
 ///
 /// `host` drives SNI-based cert selection and request routing:
 /// - Exact: `"api.example.com"`
 /// - Wildcard (one level): `"*.example.com"`
 ///
-/// `cert_path` / `key_path` are optional, omit both for plain-HTTP domains.
-/// Both must be present together; specifying only one is a validation error.
+/// `cert` is optional. Omitting it means "ACME-managed" when the global `[acme]` block is
+/// present (ACME-by-default), or "use the default/catch-all certificate" otherwise.
 #[derive(Debug, Deserialize, Clone, PartialEq)]
 pub struct Domain {
     /// Domain pattern used for SNI matching and routing.
@@ -250,12 +274,14 @@ pub struct Domain {
     ///                             A catch-all with a cert also acts as the TLS default certificate.
     #[serde(default)]
     pub host: Option<String>,
-    /// Path to the TLS certificate PEM file for this domain (optional).
+    /// Certificate source for this domain (see [`CertSource`]).
+    ///
+    /// - `Some(File { .. })`: static cert from PEM files.
+    /// - `Some(Acme)`: ACME-managed (requires `[acme]` + `[tls]`).
+    /// - `None`: ACME-managed if `[acme]` is configured, else served by the default/catch-all
+    ///   certificate (or plain HTTP without `[tls]`).
     #[serde(default)]
-    pub cert_path: Option<String>,
-    /// Path to the TLS private key PEM file for this domain (optional).
-    #[serde(default)]
-    pub key_path: Option<String>,
+    pub cert: Option<CertSource>,
     /// Header manipulation applied to all routes in this domain (optional).
     /// Merged with global headers; route-level headers take final precedence.
     #[serde(default)]
@@ -278,6 +304,28 @@ impl Domain {
     /// or [`DEFAULT_DOMAIN_LABEL`] (`"_default_"`) for the catch-all (host-less) domain.
     pub fn label(&self) -> &str {
         self.host.as_deref().unwrap_or(DEFAULT_DOMAIN_LABEL)
+    }
+
+    /// Static cert file paths `(cert_path, key_path)` when this domain is served from PEM
+    /// files; `None` for ACME-managed or cert-less domains.
+    pub fn cert_file(&self) -> Option<(&str, &str)> {
+        match &self.cert {
+            Some(CertSource::File { cert_path, key_path }) => {
+                Some((cert_path.as_str(), key_path.as_str()))
+            }
+            _ => None,
+        }
+    }
+
+    /// Whether this domain's certificate is ACME-managed, given whether the global `[acme]`
+    /// block is present. Mirrors the resolution table: an explicit `cert = { type = "acme" }`,
+    /// or an omitted `cert` while `[acme]` is configured (ACME-by-default).
+    pub fn is_acme(&self, acme_globally_enabled: bool) -> bool {
+        match &self.cert {
+            Some(CertSource::Acme) => true,
+            Some(CertSource::File { .. }) => false,
+            None => acme_globally_enabled,
+        }
     }
 }
 

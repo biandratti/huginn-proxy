@@ -155,6 +155,7 @@ impl Harness {
             &metrics,
             &health,
             None,
+            false,
         )
         .await;
         Ok(())
