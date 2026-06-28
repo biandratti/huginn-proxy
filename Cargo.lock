@@ -1236,6 +1236,7 @@ version = "0.0.2-beta.1"
 dependencies = [
  "futures-util",
  "rustls-acme",
+ "rustls-pki-types",
  "thiserror 2.0.18",
  "tokio",
  "tokio-util",

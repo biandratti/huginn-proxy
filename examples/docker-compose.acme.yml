@@ -1,0 +1,95 @@
+# Local ACME demo — fully self-contained, no public DNS or internet required.
+#
+# huginn-proxy obtains a REAL certificate from a local Pebble ACME server (Let's Encrypt's
+# test server) via the TLS-ALPN-01 challenge, then serves traffic with it.
+#
+#   docker compose -f examples/docker-compose.acme.yml up --build
+#
+# Then exercise the proxy (the issued cert chains to Pebble's throwaway root, so use -k):
+#   curl -k --resolve proxy.huginn.local:8443:127.0.0.1 https://proxy.huginn.local:8443/
+#
+# Watch issuance in the proxy logs ("ACME event"). Regenerate the test PKI with
+# examples/acme/gen-pebble-ca.sh. These certs are for LOCAL TESTING ONLY.
+
+services:
+  proxy:
+    build:
+      context: ..
+      dockerfile: docker/proxy.Dockerfile
+      target: acme
+    # Drop the image's default positional config arg so HUGINN_CONFIG_PATH is used.
+    command: ["/usr/local/bin/huginn-proxy"]
+    environment:
+      - HUGINN_CONFIG_PATH=/config/compose-acme.toml
+      - RUST_LOG=${RUST_LOG:-info}
+    volumes:
+      - ./config/compose-acme.toml:/config/compose-acme.toml:ro
+      - ./acme/pebble-ca.pem:/config/acme/pebble-ca.pem:ro
+      - acme-cache:/var/lib/huginn-proxy/acme
+    networks:
+      default:
+        # Pebble's validation authority resolves this name to the proxy container.
+        aliases:
+          - proxy.huginn.local
+    ports:
+      - "8443:8443"   # proxy TLS (also the TLS-ALPN-01 validation port)
+      - "9090:9090"   # metrics + health
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://127.0.0.1:9090/health || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+    depends_on:
+      # Gate startup on Pebble's directory actually listening, so the first ACME order does not
+      # race the server coming up (otherwise the first attempt logs a benign ConnectionRefused
+      # before rustls-acme retries).
+      wait-pebble:
+        condition: service_completed_successfully
+      backend:
+        condition: service_started
+
+  # Pebble's image is distroless (no shell/curl/nc), so it cannot define its own healthcheck.
+  # This throwaway helper blocks until Pebble's directory port accepts TCP, then exits 0.
+  wait-pebble:
+    image: busybox:latest
+    command: ["sh", "-c", "until nc -z pebble 14000; do echo 'waiting for pebble...'; sleep 0.5; done; echo 'pebble is up'"]
+    depends_on:
+      pebble:
+        condition: service_started
+
+  pebble:
+    image: ghcr.io/letsencrypt/pebble:latest
+    # Entry point is the `pebble` binary; -dnsserver points the validation authority at
+    # Docker's embedded DNS so it can resolve the proxy's network alias.
+    command: ["-config", "/test/config/pebble-config.json", "-dnsserver", "127.0.0.11:53"]
+    environment:
+      # Deterministic local behaviour: no random validation delay, never reject nonces.
+      - PEBBLE_VA_NOSLEEP=1
+      - PEBBLE_WFE_NONCEREJECT=0
+    volumes:
+      - ./acme/pebble-config.json:/test/config/pebble-config.json:ro
+      - ./acme/pebble-cert.pem:/test/certs/pebble-cert.pem:ro
+      - ./acme/pebble-key.pem:/test/certs/pebble-key.pem:ro
+    ports:
+      - "14000:14000"   # ACME directory (HTTPS)
+      - "15000:15000"   # management API (issuance roots served at /roots/0)
+
+  backend:
+    image: traefik/whoami
+    command: ["--port", "9000"]
+
+volumes:
+  acme-cache:
+
+networks:
+  default:
+    enable_ipv6: true
+    ipam:
+      config:
+        - subnet: 172.29.0.0/16
+        - subnet: fd00:dead:beef:2::/64

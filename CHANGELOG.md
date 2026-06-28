@@ -30,9 +30,19 @@ cert = { type = "acme" }     # or omit `cert` entirely → ACME-by-default
 ```
 
 Notes / limitations: exact hosts only (no wildcards — use `cert = { type = "file" }` +
-cert-manager), single-replica (the on-disk cache is not shared across replicas), and incompatible
-with global mTLS (`[tls.client_auth]`). A new `huginn_acme_domains` gauge reports the number of
-ACME-managed domains.
+cert-manager), single-replica (the on-disk cache is not shared across replicas), incompatible
+with global mTLS (`[tls.client_auth]`), and **no EAB** (External Account Binding — CAs that
+require it, e.g. ZeroSSL/Google Public CA, must be used via a file cert). A new
+`huginn_acme_domains` gauge reports the number of ACME-managed domains.
+
+**Private/test ACME servers** — new optional `[acme].directory_ca_path`
+
+Trusts a custom PEM CA for the ACME **directory** connection instead of the compiled-in public
+(webpki) roots, so the proxy can talk to a private or test ACME server (e.g.
+[Pebble](https://github.com/letsencrypt/pebble)) served with a self-signed CA. A new `acme` Docker
+target (`docker build --target acme`) ships the proxy built with the `acme` feature, and
+`examples/docker-compose.acme.yml` is a fully self-contained local demo that issues a real cert
+from Pebble via TLS-ALPN-01.
 
 ### Breaking changes
 

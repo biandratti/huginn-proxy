@@ -855,6 +855,87 @@ tls:
 
 ---
 
+## `[acme]`
+
+Automatic TLS certificate issuance and renewal via ACME (e.g. Let's Encrypt), using the
+**TLS-ALPN-01** challenge on the existing HTTPS listener (port 443). **Static** — the ACME account
+and the background issuance/renewal tasks are wired at startup, so changes require a restart.
+
+When this block is present, any domain that does **not** declare an explicit `cert = { type = "file" }`
+is ACME-managed by default (see [`[[domains]]` → `cert`](#domains)). The account key and issued
+certificates are persisted under `cache_dir`.
+
+| Key             | Type   | Default      | Description                                                                                                   |
+|-----------------|--------|--------------|---------------------------------------------------------------------------------------------------------------|
+| `contact_email` | string | —            | Contact email registered with the ACME account (sent as a `mailto:` contact). Required.                       |
+| `cache_dir`     | string | —            | Filesystem directory for the ACME cache (account key + issued certificates). Must be **writable and persistent across restarts** to avoid re-issuing on every boot. Required. |
+| `staging`       | bool   | `false`      | Use the Let's Encrypt **staging** directory (higher rate limits, untrusted certs) instead of production. Ignored when `directory_url` is set. |
+| `directory_url` | string | `null`       | Override the ACME directory URL (a private CA, or Pebble for tests). Takes precedence over `staging`.          |
+| `directory_ca_path` | string | `null`   | PEM bundle to trust for the **directory** TLS connection instead of the compiled-in public (webpki) roots. Needed only for private/test ACME servers (e.g. Pebble) served with a self-signed CA; leave unset for public CAs like Let's Encrypt. See `examples/docker-compose.acme.yml` for a local Pebble demo. |
+
+<table>
+<thead>
+<tr>
+<th>TOML</th>
+<th>YAML</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td valign="top">
+
+```toml
+[acme]
+contact_email = "ops@example.com"
+cache_dir = "/var/lib/huginn-proxy/acme"
+staging = false
+# directory_url = "https://acme.example.com/directory"   # optional, overrides `staging`
+# directory_ca_path = "/config/acme/ca.pem"              # only for a private/test CA (e.g. Pebble)
+```
+
+</td>
+<td valign="top">
+
+```yaml
+acme:
+  contact_email: "ops@example.com"
+  cache_dir: "/var/lib/huginn-proxy/acme"
+  staging: false
+  # directory_url: "https://acme.example.com/directory"  # optional, overrides `staging`
+  # directory_ca_path: "/config/acme/ca.pem"             # only for a private/test CA (e.g. Pebble)
+```
+
+</td>
+</tr>
+</tbody>
+</table>
+
+### ACME limitations (MVP)
+
+The built-in ACME integration is intentionally minimal. For anything outside these bounds, obtain
+certificates with an external issuer (cert-manager, Caddy, lego, …) and serve them via
+`cert = { type = "file" }`.
+
+- **Challenge type:** only **TLS-ALPN-01** (over the HTTPS listener) is supported. **HTTP-01**
+  (port 80) and **DNS-01** are **not** implemented.
+- **Exact hosts only:** no **wildcards** (`*.example.com`) and no **catch-all** (host-less) ACME
+  domains — TLS-ALPN-01 cannot validate them (wildcards need DNS-01). A wildcard that resolves to
+  ACME is rejected at load.
+- **mTLS incompatible:** a global `[tls.client_auth]` (mTLS) together with an ACME-managed domain
+  is rejected at load (the challenge connection presents no client certificate).
+- **Single-replica:** each running instance issues and caches its own certificate independently in
+  its local `cache_dir`; there is no shared/distributed cache and no leader election. For
+  multi-replica / HA deployments, issue once with an external issuer (e.g. cert-manager) and mount
+  the resulting cert/key into every replica via `cert = { type = "file" }`. Note that per-CA
+  issuance rate limits (Let's Encrypt) apply **per replica**.
+- **No per-certificate tuning:** key type, renewal window, and similar knobs are not exposed; the
+  underlying defaults apply.
+- **No EAB (External Account Binding):** ACME CAs that require EAB — **ZeroSSL**, **Google Public
+  CA**, **Sectigo**, etc. — are **not supported** (`rustls-acme` 0.15.3 does not send an
+  `externalAccountBinding`). Use such CAs through an external issuer + `cert = { type = "file" }`.
+
+---
+
 ## `[fingerprint]`
 
 Feature flags for passive fingerprinting. **Static** — eBPF programs are loaded at startup.

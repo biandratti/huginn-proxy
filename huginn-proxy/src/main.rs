@@ -206,6 +206,7 @@ async fn main() -> Result<(), BoxError> {
                     &acme_cfg.cache_dir,
                     acme_cfg.staging,
                     acme_cfg.directory_url.as_deref(),
+                    acme_cfg.directory_ca_path.as_deref(),
                     &hosts,
                     cancel.clone(),
                 )?;

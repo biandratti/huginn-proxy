@@ -1,10 +1,12 @@
 # Multi-stage Dockerfile for huginn-proxy.
 # Targets:
 #   plain  — no eBPF, stable toolchain, no Linux capabilities needed.
+#   acme   — plain + built-in ACME (Let's Encrypt) TLS via the `acme` cargo feature.
 #   ebpf   — TCP SYN fingerprinting via pinned BPF maps, needs CAP_BPF at runtime.
 #
 # Build:
 #   docker build --target plain -f docker/proxy.Dockerfile .
+#   docker build --target acme  -f docker/proxy.Dockerfile .
 #   docker build --target ebpf  -f docker/proxy.Dockerfile .    (or just: docker build -f ...)
 
 # ── builder base ────────────────────────────────────────────────
@@ -18,6 +20,10 @@ COPY . .
 # ── plain builder ───────────────────────────────────────────────
 FROM builder-base AS builder-plain
 RUN cargo build --release -p huginn-proxy
+
+# ── acme builder ────────────────────────────────────────────────
+FROM builder-base AS builder-acme
+RUN cargo build --release -p huginn-proxy --features acme
 
 # ── ebpf builder ────────────────────────────────────────────────
 FROM builder-base AS builder-ebpf
@@ -40,6 +46,19 @@ FROM runtime-base AS plain
 LABEL org.opencontainers.image.description="High-performance reverse proxy with passive fingerprinting capabilities powered by Huginn Net (no eBPF/XDP)"
 COPY --from=builder-plain /app/target/release/huginn-proxy /usr/local/bin/huginn-proxy
 RUN chmod 555 /usr/local/bin/huginn-proxy \
+    && rm -f /usr/bin/apt-get /usr/bin/apt /usr/bin/dpkg
+USER 10001
+CMD ["/usr/local/bin/huginn-proxy", "/config/config.toml"]
+
+# ── acme target (plain + ACME / Let's Encrypt) ─────────────────
+FROM runtime-base AS acme
+LABEL org.opencontainers.image.description="High-performance reverse proxy with passive fingerprinting and built-in ACME (Let's Encrypt) TLS, no eBPF/XDP"
+COPY --from=builder-acme /app/target/release/huginn-proxy /usr/local/bin/huginn-proxy
+# The ACME cache must be writable by the unprivileged runtime user. Creating it here means a
+# named volume mounted at this path inherits the ownership on first creation.
+RUN mkdir -p /var/lib/huginn-proxy/acme \
+    && chown -R 10001:10001 /var/lib/huginn-proxy \
+    && chmod 555 /usr/local/bin/huginn-proxy \
     && rm -f /usr/bin/apt-get /usr/bin/apt /usr/bin/dpkg
 USER 10001
 CMD ["/usr/local/bin/huginn-proxy", "/config/config.toml"]

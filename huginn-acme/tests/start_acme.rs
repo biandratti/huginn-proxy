@@ -19,10 +19,55 @@ fn rejects_empty_domains() {
         "/tmp/huginn-acme-test",
         true,
         None,
+        None,
         &[],
         CancellationToken::new(),
     );
     assert!(matches!(result, Err(AcmeError::NoDomains)));
+}
+
+#[test]
+fn rejects_missing_directory_ca() {
+    let result = start_acme(
+        "ops@example.com",
+        "/tmp/huginn-acme-test",
+        false,
+        None,
+        Some("/nonexistent/huginn-acme/pebble-ca.pem"),
+        &["api.example.com".to_string()],
+        CancellationToken::new(),
+    );
+    assert!(
+        matches!(result, Err(AcmeError::DirectoryCaRead { .. })),
+        "expected DirectoryCaRead for a missing CA path"
+    );
+}
+
+#[test]
+fn rejects_empty_directory_ca() -> TestResult {
+    // A readable-but-empty bundle parses to zero certificates → distinct, actionable error.
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    let ca_path = std::env::temp_dir().join(format!("huginn-acme-empty-ca-{nanos}.pem"));
+    std::fs::write(&ca_path, b"")?;
+
+    let result = start_acme(
+        "ops@example.com",
+        "/tmp/huginn-acme-test",
+        false,
+        None,
+        Some(&ca_path.to_string_lossy()),
+        &["api.example.com".to_string()],
+        CancellationToken::new(),
+    );
+    let _ = std::fs::remove_file(&ca_path);
+    assert!(
+        matches!(result, Err(AcmeError::DirectoryCaEmpty { .. })),
+        "expected DirectoryCaEmpty for a readable-but-empty CA bundle"
+    );
+    Ok(())
 }
 
 #[tokio::test]
@@ -39,6 +84,7 @@ async fn builds_one_lowercased_resolver_per_domain() -> TestResult {
         &cache_dir.to_string_lossy(),
         true,
         Some(BOGUS_DIRECTORY),
+        None,
         &domains,
         cancel,
     )?;
