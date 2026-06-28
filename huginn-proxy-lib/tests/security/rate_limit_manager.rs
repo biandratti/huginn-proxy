@@ -31,9 +31,7 @@ fn domain(
 ) -> Domain {
     Domain {
         host: host.map(str::to_string),
-        cert_path: None,
-        key_path: None,
-        acme: false,
+        cert: None,
         headers: None,
         security,
         fingerprinting: None,

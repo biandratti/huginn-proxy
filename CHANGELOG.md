@@ -7,7 +7,74 @@ follows [Semantic Versioning](https://semver.org/).
 
 ---
 
-## [0.0.2-beta.0]
+## [0.0.2-beta.2]
+
+### Added
+
+**Automatic TLS certificates via ACME (TLS-ALPN-01)** — optional `acme` build feature
+
+A new `[acme]` block enables in-process certificate issuance and renewal through ACME
+(e.g. Let's Encrypt), using the **TLS-ALPN-01** challenge on `:443`. ACME runs in an isolated
+`huginn-acme` crate and is wired into the proxy only when built with `--features acme`.
+
+```toml
+[acme]
+contact_email = "ops@example.com"
+cache_dir = "/var/lib/huginn-proxy/acme"
+# staging = true            # use the staging directory while testing
+# directory_url = "https://acme-v02.api.letsencrypt.org/directory"
+
+[[domains]]
+host = "api.example.com"
+cert = { type = "acme" }     # or omit `cert` entirely → ACME-by-default
+```
+
+Notes / limitations: exact hosts only (no wildcards — use `cert = { type = "file" }` +
+cert-manager), single-replica (the on-disk cache is not shared across replicas), and incompatible
+with global mTLS (`[tls.client_auth]`). A new `huginn_acme_domains` gauge reports the number of
+ACME-managed domains.
+
+### Breaking changes
+
+**Domain certificate: `cert_path` / `key_path` / `acme` → a single `cert` field**
+
+Each `[[domains]]` entry now declares its certificate source through one tagged `cert` table
+instead of three flat fields. This makes invalid combinations (ACME together with file paths)
+unrepresentable.
+
+```toml
+# Before (0.0.2-beta.0)
+[[domains]]
+host = "api.example.com"
+cert_path = "/config/certs/api.crt"
+key_path  = "/config/certs/api.key"
+
+# After (0.0.2-beta.1)
+[[domains]]
+host = "api.example.com"
+cert = { type = "file", cert_path = "/config/certs/api.crt", key_path = "/config/certs/api.key" }
+```
+
+Omitting `cert` means: plain HTTP (no `[tls]`), the default/catch-all certificate, or — when an
+`[acme]` block is present — ACME-managed by default.
+
+**`[tls.client_auth]`: enum → optional struct**
+
+mTLS is now modeled as an optional block: present ⇒ required, omitted ⇒ disabled. The
+`disabled` / `required = { … }` wrapper forms are gone.
+
+```toml
+# Before
+[tls.client_auth]
+required = { ca_cert_path = "/config/certs/ca.crt" }
+
+# After
+[tls.client_auth]
+ca_cert_path = "/config/certs/ca.crt"
+# (omit the whole block to disable mTLS)
+```
+
+## [0.0.2-beta.1]
 
 ### Breaking changes
 

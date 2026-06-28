@@ -6,9 +6,10 @@ use huginn_proxy_lib::tls::DynamicCertResolver;
 fn domain(host: Option<&str>, cert: &std::path::Path, key: &std::path::Path) -> Domain {
     Domain {
         host: host.map(str::to_string),
-        cert_path: Some(cert.display().to_string()),
-        key_path: Some(key.display().to_string()),
-        acme: false,
+        cert: Some(huginn_proxy_lib::config::CertSource::File {
+            cert_path: cert.display().to_string(),
+            key_path: key.display().to_string(),
+        }),
         headers: None,
         security: None,
         fingerprinting: None,

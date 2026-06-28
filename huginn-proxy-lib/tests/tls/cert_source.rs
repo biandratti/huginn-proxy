@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use super::build_acceptor;
-use huginn_proxy_lib::config::{ClientAuth, TlsConfig, TlsOptions};
+use huginn_proxy_lib::config::{TlsConfig, TlsOptions};
 use huginn_proxy_lib::tls::{build_tls_acceptor, cert_chain_hash, DynamicCertResolver};
 use tokio_rustls::rustls::{CipherSuite, ServerConfig};
 
@@ -15,7 +15,7 @@ async fn build_tls_acceptor_produces_usable_acceptor(
     let config = TlsConfig {
         alpn: vec![],
         options: TlsOptions::default(),
-        client_auth: ClientAuth::Disabled,
+        client_auth: None,
         session_resumption: Default::default(),
     };
 
@@ -42,7 +42,7 @@ fn cipher_suites_applied_on_initial_build() -> Result<(), Box<dyn std::error::Er
         cipher_suites: vec!["TLS13_AES_128_GCM_SHA256".to_string()],
         ..Default::default()
     };
-    let acceptor = build_acceptor(&[], &options, &ClientAuth::Disabled, false)?;
+    let acceptor = build_acceptor(&[], &options, None, false)?;
 
     assert_eq!(
         cipher_suites_of(acceptor.config()),

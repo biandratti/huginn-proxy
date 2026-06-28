@@ -96,21 +96,16 @@ fn default_curve_preferences() -> Vec<String> {
         .collect()
 }
 
-/// Client authentication mode for mTLS
-#[derive(Debug, Deserialize, Clone, PartialEq, Eq, Default)]
-#[serde(rename_all = "lowercase")]
-pub enum ClientAuth {
-    /// Client authentication is disabled (default)
-    #[default]
-    Disabled,
-    /// Client authentication is required
-    /// Clients must present valid certificates signed by the specified CA
-    Required {
-        /// Path to client CA certificate file (PEM format)
-        /// File must exist and be readable at startup
-        /// Can contain one or more CA certificates
-        ca_cert_path: String,
-    },
+/// Client authentication (mTLS) settings.
+///
+/// Modeled as an `Option` on [`TlsConfig::client_auth`]: **present** ⇒ clients must present a
+/// certificate signed by `ca_cert_path`'s CA; **absent** (the default) ⇒ no client
+/// authentication. There is no explicit "disabled" value — omit the block to turn mTLS off.
+#[derive(Debug, Deserialize, Clone, PartialEq, Eq)]
+pub struct ClientAuth {
+    /// Path to client CA certificate file (PEM format).
+    /// File must exist and be readable at startup; can contain one or more CA certificates.
+    pub ca_cert_path: String,
 }
 
 /// Session resumption configuration for TLS
@@ -152,10 +147,10 @@ pub struct TlsConfig {
     /// Controls TLS versions and cipher suites
     #[serde(default)]
     pub options: TlsOptions,
-    /// Client authentication mode for mTLS (mutual TLS authentication)
-    /// Default: disabled (no client authentication required)
+    /// Client authentication for mTLS (mutual TLS). Omit for no client authentication;
+    /// present ⇒ clients must present a cert signed by `client_auth.ca_cert_path`'s CA.
     #[serde(default)]
-    pub client_auth: ClientAuth,
+    pub client_auth: Option<ClientAuth>,
     /// Session resumption configuration
     #[serde(default)]
     pub session_resumption: SessionResumptionConfig,

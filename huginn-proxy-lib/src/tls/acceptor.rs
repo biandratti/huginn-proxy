@@ -42,7 +42,7 @@ pub fn build_server_config_with_resolver(
     resolver: Arc<dyn ResolvesServerCert>,
     alpn: &[String],
     options: &TlsOptions,
-    client_auth: &ClientAuth,
+    client_auth: Option<&ClientAuth>,
     session_resumption: &crate::config::SessionResumptionConfig,
     acme_active: bool,
 ) -> Result<TlsAcceptor> {
@@ -62,7 +62,7 @@ pub fn build_server_config_with_resolver(
         .map_err(|e| ProxyError::Tls(format!("Failed to set TLS protocol versions: {e}")))?;
 
     let mut server = match client_auth {
-        ClientAuth::Required { ca_cert_path } => {
+        Some(ClientAuth { ca_cert_path }) => {
             let client_ca_certs = load_ca_certs(ca_cert_path)?;
             let mut root_store = RootCertStore::empty();
             for cert in client_ca_certs {
@@ -77,7 +77,7 @@ pub fn build_server_config_with_resolver(
                 .with_client_cert_verifier(client_verifier)
                 .with_cert_resolver(resolver)
         }
-        ClientAuth::Disabled => builder.with_no_client_auth().with_cert_resolver(resolver),
+        None => builder.with_no_client_auth().with_cert_resolver(resolver),
     };
 
     let mut alpn_protocols: Vec<Vec<u8>> = alpn.iter().map(|s| s.as_bytes().to_vec()).collect();

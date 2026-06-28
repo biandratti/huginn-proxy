@@ -45,9 +45,7 @@ fn domain(
 ) -> Domain {
     Domain {
         host: Some("a.com".to_string()),
-        cert_path: None,
-        key_path: None,
-        acme: false,
+        cert: None,
         headers: None,
         security,
         fingerprinting,

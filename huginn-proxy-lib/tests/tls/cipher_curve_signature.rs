@@ -1,5 +1,5 @@
 use super::build_acceptor;
-use huginn_proxy_lib::config::{ClientAuth, TlsOptions};
+use huginn_proxy_lib::config::TlsOptions;
 use huginn_proxy_lib::tls::cipher_suites::supported_cipher_suites;
 use huginn_proxy_lib::tls::curves::supported_curves;
 
@@ -7,7 +7,7 @@ fn build_with_options(
     options: &TlsOptions,
     alpn: &[String],
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    build_acceptor(alpn, options, &ClientAuth::Disabled, false)?;
+    build_acceptor(alpn, options, None, false)?;
     Ok(())
 }
 

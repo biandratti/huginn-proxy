@@ -39,9 +39,7 @@ fn minimal_config(backend_addr: std::net::SocketAddr, listen_port: u16) -> Confi
         }],
         domains: vec![Domain {
             host: Some("127.0.0.1".to_string()),
-            cert_path: None,
-            key_path: None,
-            acme: false,
+            cert: None,
             headers: None,
             security: None,
             fingerprinting: None,

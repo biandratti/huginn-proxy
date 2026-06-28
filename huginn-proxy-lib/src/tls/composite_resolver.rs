@@ -19,7 +19,7 @@ use crate::tls::cert_resolver::DynamicCertResolver;
 ///
 /// `ClientHello` is neither `Clone` nor `Copy` and `ResolvesServerCert::resolve` consumes it
 /// by value, so only **one** inner `resolve()` can run per handshake. The owner of each SNI is
-/// unambiguous (the loader enforces `acme` XOR `cert_path`/`key_path` per host), so a single
+/// unambiguous (each host resolves to exactly one `CertSource`), so a single
 /// `host → resolver` table decides the route up front using the borrowing `server_name()`
 /// accessor, then moves the `ClientHello` into exactly one inner `resolve()`.
 pub struct CompositeResolver {

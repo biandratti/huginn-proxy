@@ -1,4 +1,4 @@
-use huginn_proxy_lib::config::{sort_domain_routes, sort_routes, Domain, Route};
+use huginn_proxy_lib::config::{sort_domain_routes, sort_routes, CertSource, Domain, Route};
 use huginn_proxy_lib::proxy::router::{
     authority_matches_sni, pick_domain, pick_route, pick_route_with_fingerprinting, prefix_matches,
 };
@@ -23,9 +23,7 @@ fn sorted_routes(mut routes: Vec<Route>) -> Vec<Route> {
 fn domain(host: &str, routes: Vec<Route>) -> Domain {
     Domain {
         host: Some(host.to_string()),
-        cert_path: None,
-        key_path: None,
-        acme: false,
+        cert: None,
         headers: None,
         security: None,
         fingerprinting: None,
@@ -36,9 +34,10 @@ fn domain(host: &str, routes: Vec<Route>) -> Domain {
 fn domain_with_cert(host: &str, cert_path: &str) -> Domain {
     Domain {
         host: Some(host.to_string()),
-        cert_path: Some(cert_path.to_string()),
-        key_path: Some(format!("{cert_path}.key")),
-        acme: false,
+        cert: Some(CertSource::File {
+            cert_path: cert_path.to_string(),
+            key_path: format!("{cert_path}.key"),
+        }),
         headers: None,
         security: None,
         fingerprinting: None,
@@ -50,9 +49,7 @@ fn domain_with_cert(host: &str, cert_path: &str) -> Domain {
 fn catch_all(routes: Vec<Route>) -> Domain {
     Domain {
         host: None,
-        cert_path: None,
-        key_path: None,
-        acme: false,
+        cert: None,
         headers: None,
         security: None,
         fingerprinting: None,
@@ -524,9 +521,10 @@ fn authority_matches_sni_certless_host_uses_default_cert() {
     // over a connection that also presented the default cert coalesces.
     let catch_all_with_cert = Domain {
         host: None,
-        cert_path: Some("/certs/default.pem".to_string()),
-        key_path: Some("/certs/default.key".to_string()),
-        acme: false,
+        cert: Some(CertSource::File {
+            cert_path: "/certs/default.pem".to_string(),
+            key_path: "/certs/default.key".to_string(),
+        }),
         headers: None,
         security: None,
         fingerprinting: None,

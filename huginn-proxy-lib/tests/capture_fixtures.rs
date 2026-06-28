@@ -20,8 +20,8 @@ use std::time::Duration;
 
 use arc_swap::ArcSwap;
 use huginn_proxy_lib::config::{
-    Backend, Domain, FingerprintConfig, KeepAliveConfig, ListenConfig, LoggingConfig, Route,
-    SecurityConfig, TelemetryConfig, TimeoutConfig,
+    Backend, CertSource, Domain, FingerprintConfig, KeepAliveConfig, ListenConfig, LoggingConfig,
+    Route, SecurityConfig, TelemetryConfig, TimeoutConfig,
 };
 use huginn_proxy_lib::fingerprinting::names;
 use huginn_proxy_lib::{Config, TlsConfig};
@@ -196,9 +196,10 @@ async fn capture_fingerprint_values() -> Result<(), Box<dyn std::error::Error + 
         }],
         domains: vec![Domain {
             host: None,
-            cert_path: Some(cert_file.path().to_string_lossy().into_owned()),
-            key_path: Some(key_file.path().to_string_lossy().into_owned()),
-            acme: false,
+            cert: Some(CertSource::File {
+                cert_path: cert_file.path().to_string_lossy().into_owned(),
+                key_path: key_file.path().to_string_lossy().into_owned(),
+            }),
             headers: None,
             security: None,
             fingerprinting: None,

@@ -5,7 +5,7 @@
 
 use std::sync::Arc;
 
-use huginn_proxy_lib::config::{ClientAuth, Domain, TlsOptions};
+use huginn_proxy_lib::config::{CertSource, Domain, TlsOptions};
 use huginn_proxy_lib::telemetry::Metrics;
 use huginn_proxy_lib::tls::{build_server_config_with_resolver, DynamicCertResolver};
 use rustls_pki_types::pem::PemObject;
@@ -29,9 +29,10 @@ async fn handshake_negotiated_alpn(
     let resolver = Arc::new(DynamicCertResolver::new(false));
     let domain = Domain {
         host: Some("localhost".to_string()),
-        cert_path: Some(cert_path.display().to_string()),
-        key_path: Some(key_path.display().to_string()),
-        acme: false,
+        cert: Some(CertSource::File {
+            cert_path: cert_path.display().to_string(),
+            key_path: key_path.display().to_string(),
+        }),
         headers: None,
         security: None,
         fingerprinting: None,
@@ -44,7 +45,7 @@ async fn handshake_negotiated_alpn(
         resolver,
         &["h2".to_string()],
         &TlsOptions::default(),
-        &ClientAuth::Disabled,
+        None,
         &Default::default(),
         acme_active,
     )?;

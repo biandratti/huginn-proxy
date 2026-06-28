@@ -31,7 +31,7 @@ pub async fn build_tls_acceptor(
         resolver,
         &tls_config.alpn,
         &tls_config.options,
-        &tls_config.client_auth,
+        tls_config.client_auth.as_ref(),
         &tls_config.session_resumption,
         acme_active,
     )?;

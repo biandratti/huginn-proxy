@@ -20,7 +20,7 @@ use tokio_rustls::TlsAcceptor;
 pub fn build_acceptor(
     alpn: &[String],
     options: &TlsOptions,
-    client_auth: &ClientAuth,
+    client_auth: Option<&ClientAuth>,
     acme_active: bool,
 ) -> huginn_proxy_lib::error::Result<TlsAcceptor> {
     crate::helpers::ensure_crypto_provider();

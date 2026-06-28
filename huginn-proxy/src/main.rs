@@ -183,17 +183,18 @@ async fn main() -> Result<(), BoxError> {
     #[cfg(feature = "acme")]
     let acme: Option<huginn_proxy_lib::AcmeRuntime> = match &static_cfg.acme {
         Some(acme_cfg) => {
-            // Only exact hosts flagged `acme = true` are ACME-managed (the loader rejects
-            // wildcards, host-less, and `client_auth = Required` for these).
+            // Hosts that resolve to ACME: explicit `cert = { type = "acme" }`, or an omitted
+            // `cert` while `[acme]` is configured (ACME-by-default). `[acme]` is present here, so
+            // `is_acme(true)`. The loader already rejected wildcards, host-less, and mTLS for these.
             let hosts: Vec<String> = dynamic_cfg
                 .load()
                 .domains
                 .iter()
-                .filter(|d| d.acme)
+                .filter(|d| d.is_acme(true))
                 .filter_map(|d| d.host.clone())
                 .collect();
             if hosts.is_empty() {
-                info!("[acme] is configured but no domain has `acme = true`; ACME disabled");
+                info!("[acme] is configured but no domain resolves to ACME; ACME disabled");
                 None
             } else {
                 // Cooperative shutdown bridge: cancel the ACME token once the proxy starts
