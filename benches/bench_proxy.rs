@@ -186,6 +186,7 @@ impl BenchFixture {
                 dynamic_cfg,
                 huginn_proxy_lib::Metrics::new_noop(),
                 None,
+                None,
                 huginn_proxy_lib::WatchOptions::default(),
                 shutdown_tx,
                 huginn_proxy_lib::Readiness::new(),

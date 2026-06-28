@@ -6,7 +6,7 @@ license = "MIT OR Apache-2.0"
 publish = false
 
 [features]
-acme = ["dep:huginn-acme"]
+acme = ["dep:huginn-acme", "dep:tokio-util"]
 ebpf-tcp = ["dep:huginn-ebpf"]
 
 [dependencies]
@@ -16,4 +16,5 @@ huginn-acme = { workspace = true, optional = true }
 huginn-ebpf = { path = "../huginn-ebpf", version = "0.0.2-beta.1", optional = true }
 huginn-proxy-lib = { path = "../huginn-proxy-lib", version = "0.0.2-beta.1" }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "signal"] }
+tokio-util = { workspace = true, optional = true }
 tracing.workspace = true

@@ -176,13 +176,73 @@ async fn main() -> Result<(), BoxError> {
         watch_delay_secs: cli.watch_delay_secs,
     };
 
-    // run() broadcasts shutdown_tx on SIGTERM/SIGINT and awaits
-    // cert-reload + config-watcher handles before returning.
+    // run() broadcasts shutdown_tx on SIGTERM/SIGINT and awaits cert-reload + config-watcher
+    // handles before returning. ACME (feature `acme`) is wired in here, mirroring `syn_probe`:
+    // `huginn-acme` drives the issuance/renewal state machines and hands back `(host, resolver)`
+    // pairs + tasks; the library only ever sees trait objects and shutdown handles.
+    #[cfg(feature = "acme")]
+    let acme: Option<huginn_proxy_lib::AcmeRuntime> = match &static_cfg.acme {
+        Some(acme_cfg) => {
+            // Only exact hosts flagged `acme = true` are ACME-managed (the loader rejects
+            // wildcards, host-less, and `client_auth = Required` for these).
+            let hosts: Vec<String> = dynamic_cfg
+                .load()
+                .domains
+                .iter()
+                .filter(|d| d.acme)
+                .filter_map(|d| d.host.clone())
+                .collect();
+            if hosts.is_empty() {
+                info!("[acme] is configured but no domain has `acme = true`; ACME disabled");
+                None
+            } else {
+                // Cooperative shutdown bridge: cancel the ACME token once the proxy starts
+                // draining, so each spawned state machine exits and its `ServiceHandle` (awaited
+                // in `run()`) joins cleanly.
+                let cancel = tokio_util::sync::CancellationToken::new();
+                let handles = huginn_acme::start_acme(
+                    &acme_cfg.contact_email,
+                    &acme_cfg.cache_dir,
+                    acme_cfg.staging,
+                    acme_cfg.directory_url.as_deref(),
+                    &hosts,
+                    cancel.clone(),
+                )?;
+                let mut acme_shutdown = shutdown_rx.clone();
+                tokio::spawn(async move {
+                    let _ = acme_shutdown.wait_for(|v| *v).await;
+                    cancel.cancel();
+                });
+                let tasks = handles
+                    .tasks
+                    .into_iter()
+                    .map(|handle| ServiceHandle { handle, name: ServiceName::Acme })
+                    .collect();
+                info!(domains = hosts.len(), "ACME enabled (TLS-ALPN-01)");
+                Some(huginn_proxy_lib::AcmeRuntime { resolvers: handles.resolvers, tasks })
+            }
+        }
+        None => None,
+    };
+    // Built without ACME support: warn loudly if the config expects it, so ACME-managed domains
+    // don't silently end up without a certificate.
+    #[cfg(not(feature = "acme"))]
+    let acme: Option<huginn_proxy_lib::AcmeRuntime> = {
+        if static_cfg.acme.is_some() {
+            tracing::warn!(
+                "[acme] is configured but this binary was built without the `acme` feature; \
+                 ACME-managed domains will have no certificate. Rebuild with `--features acme`."
+            );
+        }
+        None
+    };
+
     let result = run(
         Arc::clone(&static_cfg),
         Arc::clone(&dynamic_cfg),
         metrics,
         syn_probe,
+        acme,
         watch_opts,
         shutdown_tx,
         readiness,

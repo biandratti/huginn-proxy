@@ -51,6 +51,7 @@ pub fn shutdown_channel() -> (ShutdownSender, ShutdownWatch) {
 
 /// Identifies each background service for logging during shutdown.
 pub enum ServiceName {
+    Acme,
     CertReload,
     ConfigWatcher,
     MetricsServer,
@@ -59,6 +60,7 @@ pub enum ServiceName {
 impl fmt::Display for ServiceName {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
+            Self::Acme => "acme",
             Self::CertReload => "cert-reload",
             Self::ConfigWatcher => "config-watcher",
             Self::MetricsServer => "metrics-server",
