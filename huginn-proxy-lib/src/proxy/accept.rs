@@ -3,7 +3,9 @@ use crate::backend::{BackendSelector, UpstreamGateway};
 use crate::config::{FingerprintConfig, KeepAliveConfig, ProxyProtocolMode};
 use crate::fingerprinting::{SynResult, TcpObservation};
 use crate::proxy::connection::{ConnectionError, ConnectionManager};
-use crate::proxy::proxy_protocol::{looks_like_proxy_v2, read_proxy_header_v2};
+use crate::proxy::proxy_protocol::{
+    looks_like_proxy_v2, normalize_mapped_ipv4, read_proxy_header_v2,
+};
 use crate::proxy::reload::{SharedClientPool, SharedDynamicConfig, SharedRateLimiter};
 use crate::proxy::security_context::SecurityContext;
 use crate::proxy::transport::{
@@ -193,10 +195,11 @@ async fn resolve_peer(
         ProxyProtocolMode::Off => Some(socket_peer),
 
         mode => {
-            let trusted = !trusted_proxies.is_empty()
-                && trusted_proxies
-                    .iter()
-                    .any(|n| n.contains(&socket_peer.ip()));
+            // Normalize an IPv4-mapped IPv6 peer (dual-stack `[::]` listener accepting IPv4) so a
+            // configured IPv4 CIDR matches; otherwise the trust gate silently fails.
+            let peer_ip = normalize_mapped_ipv4(socket_peer.ip());
+            let trusted =
+                !trusted_proxies.is_empty() && trusted_proxies.iter().any(|n| n.contains(&peer_ip));
 
             // Untrusted peers are never parsed: `optional` serves them as a direct client;
             // `require` drops them since the listener is declared to only serve a known proxy.

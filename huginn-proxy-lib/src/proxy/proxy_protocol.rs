@@ -15,7 +15,7 @@
 //! aligned on the following TLS ClientHello.
 
 use std::fmt;
-use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6};
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6};
 
 use tokio::io::{AsyncRead, AsyncReadExt};
 use tokio::net::TcpStream;
@@ -31,6 +31,14 @@ const FIXED_LEN: usize = 16;
 const V4_ADDR_LEN: usize = 12;
 /// AF_INET6 address block: src(16) + dst(16) + src_port(2) + dst_port(2).
 const V6_ADDR_LEN: usize = 36;
+
+/// Maximum accepted `addr_len` in a v2 header.
+///
+/// The field is `u16` (max 65535), so an adversarial header could trigger a ~64 KB allocation per
+/// connection with no real data. Real-world address blocks are at most 216 bytes (AF_UNIX). 2048 is
+/// generous enough for any TLV payload a legitimate emitter would send while still bounding the
+/// allocation (same cap used by rust-rpxy).
+const V2_MAX_ADDR_LEN: usize = 2048;
 
 const CMD_LOCAL: u8 = 0x0;
 const CMD_PROXY: u8 = 0x1;
@@ -49,6 +57,8 @@ pub enum ProxyProtocolError {
     UnsupportedCommand(u8),
     /// The declared address length is too short for the announced family.
     Truncated,
+    /// The declared `addr_len` exceeds `V2_MAX_ADDR_LEN` — reject to prevent large allocation.
+    AddrLenTooLarge(usize),
 }
 
 impl fmt::Display for ProxyProtocolError {
@@ -63,6 +73,9 @@ impl fmt::Display for ProxyProtocolError {
                 write!(f, "unsupported PROXY protocol command: {c}")
             }
             ProxyProtocolError::Truncated => write!(f, "truncated PROXY v2 address block"),
+            ProxyProtocolError::AddrLenTooLarge(n) => {
+                write!(f, "PROXY v2 addr_len {n} exceeds maximum {V2_MAX_ADDR_LEN}")
+            }
         }
     }
 }
@@ -148,12 +161,32 @@ where
         .map_err(ProxyProtocolError::Io)?;
     let header = parse_fixed(&fixed)?;
 
+    if header.addr_len > V2_MAX_ADDR_LEN {
+        return Err(ProxyProtocolError::AddrLenTooLarge(header.addr_len));
+    }
     let mut addrs = vec![0u8; header.addr_len];
     stream
         .read_exact(&mut addrs)
         .await
         .map_err(ProxyProtocolError::Io)?;
     parse_source(&header, &addrs)
+}
+
+/// Normalize an IPv4-mapped IPv6 address (`::ffff:a.b.c.d`) to plain IPv4.
+///
+/// A dual-stack listener bound to `[::]` reports an incoming IPv4 connection with an
+/// IPv4-mapped IPv6 peer address. The `trusted_proxies` gate matches the peer against configured
+/// CIDRs, and an `IpNet::V4` entry does **not** contain an `IpAddr::V6` — so without this the
+/// trust check silently fails for an IPv4 proxy on a dual-stack listener and the whole feature
+/// degrades to `off`. Applied to the peer IP before the trust check. Mirrors rust-rpxy.
+pub fn normalize_mapped_ipv4(addr: IpAddr) -> IpAddr {
+    match addr {
+        IpAddr::V6(v6) => match v6.to_ipv4_mapped() {
+            Some(v4) => IpAddr::V4(v4),
+            None => IpAddr::V6(v6),
+        },
+        other => other,
+    }
 }
 
 /// Non-destructive check (`MSG_PEEK`) for the v2 signature.
@@ -176,7 +209,7 @@ pub async fn looks_like_proxy_v2(stream: &TcpStream) -> std::io::Result<bool> {
         if buf[..n] != V2_SIGNATURE[..n] {
             return Ok(false);
         }
-        // A trusted peer mid-send: yield and re-peek (bounded by the caller's timeout).
-        tokio::task::yield_now().await;
+        // A trusted peer mid-send: small sleep before re-peeking (bounded by caller's timeout).
+        tokio::time::sleep(std::time::Duration::from_millis(5)).await;
     }
 }

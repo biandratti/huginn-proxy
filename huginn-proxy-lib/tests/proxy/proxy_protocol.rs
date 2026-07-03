@@ -1,8 +1,8 @@
 use huginn_proxy_lib::proxy::proxy_protocol::{
-    read_proxy_header_v2, ProxyProtocolError, V2_SIGNATURE,
+    normalize_mapped_ipv4, read_proxy_header_v2, ProxyProtocolError, V2_SIGNATURE,
 };
 use std::io::Cursor;
-use std::net::Ipv6Addr;
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use tokio::io::AsyncReadExt;
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
@@ -124,6 +124,34 @@ async fn consumes_exactly_header_leaving_clienthello() -> TestResult {
     cursor.read_to_end(&mut rest).await?;
     assert_eq!(rest, client_hello, "ClientHello bytes must remain after the header");
     Ok(())
+}
+
+#[tokio::test]
+async fn oversized_addr_len_is_rejected() {
+    // addr_len far beyond any real address block must be rejected before allocation.
+    let mut bytes = Vec::new();
+    bytes.extend_from_slice(&V2_SIGNATURE);
+    bytes.push((2 << 4) | CMD_PROXY);
+    bytes.push((FAM_INET << 4) | 0x1);
+    bytes.extend_from_slice(&(4096u16).to_be_bytes()); // > V2_MAX_ADDR_LEN (2048)
+    let mut cursor = Cursor::new(bytes);
+    let result = read_proxy_header_v2(&mut cursor).await;
+    assert!(
+        matches!(result, Err(ProxyProtocolError::AddrLenTooLarge(4096))),
+        "got {result:?}"
+    );
+}
+
+#[test]
+fn normalizes_ipv4_mapped_ipv6() {
+    let mapped = IpAddr::V6(Ipv4Addr::new(10, 0, 0, 1).to_ipv6_mapped());
+    assert_eq!(normalize_mapped_ipv4(mapped), IpAddr::V4(Ipv4Addr::new(10, 0, 0, 1)));
+
+    // A plain IPv4 and a genuine IPv6 are returned unchanged.
+    let v4 = IpAddr::V4(Ipv4Addr::new(192, 168, 1, 1));
+    assert_eq!(normalize_mapped_ipv4(v4), v4);
+    let v6 = IpAddr::V6(Ipv6Addr::new(0x2001, 0xdb8, 0, 0, 0, 0, 0, 1));
+    assert_eq!(normalize_mapped_ipv4(v6), v6);
 }
 
 #[tokio::test]
