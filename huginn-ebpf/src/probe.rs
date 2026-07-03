@@ -3,7 +3,7 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 
 use aya::maps::{Array, HashMap, Map, MapData};
-use aya::programs::{Xdp, XdpFlags};
+use aya::programs::{Xdp, XdpMode as AyaXdpMode};
 use aya::{Ebpf, EbpfLoader};
 use tracing::{debug, info, warn};
 
@@ -59,7 +59,7 @@ impl EbpfProbe {
     /// - `syn_map_max_entries`: capacity of the LRU map (default 8192).
     /// - `xdp_mode`: [`XdpMode::Native`] (driver-level, default) or [`XdpMode::Skb`] (generic/software).
     ///
-    /// All dst values are patched into the XDP program's `.rodata` via `EbpfLoader::set_global`
+    /// All dst values are patched into the XDP program's `.rodata` via `EbpfLoader::override_global`
     /// before the kernel loads the program, matching `cilium/ebpf`'s `spec.Variables` pattern.
     pub fn new(
         interface: &str,
@@ -88,11 +88,11 @@ impl EbpfProbe {
         let bpf_dst_port: u16 = dst_port.to_be();
 
         let mut ebpf = EbpfLoader::new()
-            .set_global("dst_ip", &bpf_dst_ip, false)
-            .set_global("dst_ip_v6", &bpf_dst_ip_v6, false)
-            .set_global("dst_port", &bpf_dst_port, false)
-            .set_max_entries(pin::SYN_MAP_V4_NAME, syn_map_max_entries)
-            .set_max_entries(pin::SYN_MAP_V6_NAME, syn_map_max_entries)
+            .override_global("dst_ip", &bpf_dst_ip, false)
+            .override_global("dst_ip_v6", &bpf_dst_ip_v6, false)
+            .override_global("dst_port", &bpf_dst_port, false)
+            .map_max_entries(pin::SYN_MAP_V4_NAME, syn_map_max_entries)
+            .map_max_entries(pin::SYN_MAP_V6_NAME, syn_map_max_entries)
             .load(XDP_BPF_BYTES)
             .map_err(EbpfError::Load)?;
 
@@ -104,13 +104,13 @@ impl EbpfProbe {
 
         program.load().map_err(EbpfError::ProgramLoad)?;
 
-        let (xdp_flags, mode_str) = match xdp_mode {
-            XdpMode::Skb => (XdpFlags::SKB_MODE, "skb"),
-            XdpMode::Native => (XdpFlags::default(), "native"),
+        let (aya_mode, mode_str) = match xdp_mode {
+            XdpMode::Skb => (AyaXdpMode::Skb, "skb"),
+            XdpMode::Native => (AyaXdpMode::Driver, "native"),
         };
         info!(interface, mode = mode_str, "eBPF XDP attaching");
         program
-            .attach(interface, xdp_flags)
+            .attach(interface, aya_mode)
             .map_err(EbpfError::Attach)?;
 
         let filter_ip_v4 = if dst_ip_v4.is_unspecified() {
