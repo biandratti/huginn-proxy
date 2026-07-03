@@ -13,9 +13,10 @@ use crate::CaptureBackend;
 use crate::EbpfError;
 use crate::XdpAttachMode;
 
-/// Raw bytes of the compiled XDP BPF object, embedded at compile time.
+/// Raw bytes of the compiled BPF object (XDP + TC programs), embedded at compile time.
 /// `include_bytes_aligned!` ensures 8-byte alignment required by aya's ELF parser.
-static XDP_BPF_BYTES: &[u8] = aya::include_bytes_aligned!(concat!(env!("OUT_DIR"), "/xdp.bpf.o"));
+/// The path is set by `build.rs` via `cargo:rustc-env=BPF_OBJECT_PATH`.
+static BPF_OBJECT_BYTES: &[u8] = aya::include_bytes_aligned!(env!("BPF_OBJECT_PATH"));
 
 /// Default max entries for the TCP SYN LRU map when not overridden by the agent.
 /// Must match huginn-ebpf-programs's TCP_SYN_MAP_V4_MAX_ENTRIES (ELF default).
@@ -97,7 +98,7 @@ impl EbpfProbe {
             .override_global("dst_port", &bpf_dst_port, false)
             .map_max_entries(pin::SYN_MAP_V4_NAME, syn_map_max_entries)
             .map_max_entries(pin::SYN_MAP_V6_NAME, syn_map_max_entries)
-            .load(XDP_BPF_BYTES)
+            .load(BPF_OBJECT_BYTES)
             .map_err(EbpfError::Load)?;
 
         let mode_str = match capture {

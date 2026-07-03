@@ -1,6 +1,10 @@
 use std::path::PathBuf;
 use std::process::Command;
 
+/// Filename of the compiled BPF ELF object written to `OUT_DIR`.
+/// Consumed in `probe.rs` via `env!("BPF_OBJECT_PATH")`.
+const BPF_OBJECT_FILENAME: &str = "huginn.bpf.o";
+
 /// Compile the BPF kernel programs (`huginn-ebpf-programs`) using
 /// `cargo +nightly build` for the `bpfel-unknown-none` target.
 ///
@@ -76,8 +80,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Err(format!("BPF binary not found at {}", bpf_bin.display()).into());
     }
 
-    let out_file = out_dir.join("xdp.bpf.o");
+    let out_file = out_dir.join(BPF_OBJECT_FILENAME);
     std::fs::copy(&bpf_bin, &out_file)?;
 
+    println!("cargo:rustc-env=BPF_OBJECT_PATH={}", out_file.display());
     Ok(())
 }
