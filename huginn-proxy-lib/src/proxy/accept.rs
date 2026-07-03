@@ -9,6 +9,7 @@ use crate::proxy::security_context::SecurityContext;
 use crate::proxy::transport::{
     handle_plain_connection, handle_tls_connection, PlainConnectionConfig, TlsConnectionConfig,
 };
+use crate::telemetry::values as metric_values;
 use crate::telemetry::Metrics;
 use crate::tls::setup::SharedTlsAcceptor;
 use hyper_util::rt::TokioExecutor;
@@ -199,9 +200,14 @@ async fn resolve_peer(
 
             // Untrusted peers are never parsed: `optional` serves them as a direct client;
             // `require` drops them since the listener is declared to only serve a known proxy.
+            // An untrusted `optional` peer is ordinary direct traffic (never a PROXY candidate),
+            // so it is intentionally not counted in any proxy_protocol metric.
             if !trusted {
                 return match mode {
                     ProxyProtocolMode::Require => {
+                        ctx.metrics.record_proxy_protocol_dropped(
+                            metric_values::PROXY_PROTOCOL_DROP_UNTRUSTED_REQUIRE,
+                        );
                         warn!(?socket_peer, "drop: proxy_protocol=require + untrusted peer");
                         None
                     }
@@ -213,13 +219,23 @@ async fn resolve_peer(
             // intact for the TLS ClientHello.
             if mode == ProxyProtocolMode::Optional {
                 match timeout(timeout_dur, looks_like_proxy_v2(stream)).await {
-                    Ok(Ok(true)) => {}                         // header present → read it below
-                    Ok(Ok(false)) => return Some(socket_peer), // no header → direct client
+                    Ok(Ok(true)) => {} // header present → read it below
+                    Ok(Ok(false)) => {
+                        // trusted peer, no header → direct client
+                        ctx.metrics.record_proxy_protocol_passthrough();
+                        return Some(socket_peer);
+                    }
                     Ok(Err(e)) => {
+                        ctx.metrics.record_proxy_protocol_dropped(
+                            metric_values::PROXY_PROTOCOL_DROP_BAD_HEADER,
+                        );
                         warn!(?socket_peer, error = %e, "PROXY detect read error");
                         return None;
                     }
                     Err(_) => {
+                        ctx.metrics.record_proxy_protocol_dropped(
+                            metric_values::PROXY_PROTOCOL_DROP_TIMEOUT,
+                        );
                         warn!(?socket_peer, "PROXY detect timeout");
                         return None;
                     }
@@ -229,13 +245,24 @@ async fn resolve_peer(
             // Trusted peer with a header to read (`require` always, `optional` when detected).
             // A LOCAL command (health checks) yields `None` → fall back to the socket peer.
             match timeout(timeout_dur, read_proxy_header_v2(stream)).await {
-                Ok(Ok(Some(src))) => Some(src),
-                Ok(Ok(None)) => Some(socket_peer),
+                Ok(Ok(Some(src))) => {
+                    ctx.metrics.record_proxy_protocol_accepted();
+                    Some(src)
+                }
+                Ok(Ok(None)) => {
+                    ctx.metrics.record_proxy_protocol_passthrough();
+                    Some(socket_peer)
+                }
                 Ok(Err(e)) => {
+                    ctx.metrics.record_proxy_protocol_dropped(
+                        metric_values::PROXY_PROTOCOL_DROP_BAD_HEADER,
+                    );
                     warn!(?socket_peer, error = %e, "bad PROXY header");
                     None
                 }
                 Err(_) => {
+                    ctx.metrics
+                        .record_proxy_protocol_dropped(metric_values::PROXY_PROTOCOL_DROP_TIMEOUT);
                     warn!(?socket_peer, "PROXY header read timeout");
                     None
                 }
