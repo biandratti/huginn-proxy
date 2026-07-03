@@ -11,35 +11,43 @@ follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
-**PROXY protocol v2 support (`listen.proxy_protocol`)**
+**PROXY protocol support (`listen.proxy_protocol`)**
 
-Recover the real client `(src_ip, src_port)` when huginn runs behind an L4 proxy that does TLS
-passthrough. A new static option `listen.proxy_protocol` accepts `off` (default), `optional`
-(auto-detect a v2 header from a trusted peer, else behave as a direct client), or `require` (a
-trusted peer must send a valid v2 header).
+Recover the real client `(src_ip, src_port)` when huginn runs behind an L4 load balancer or
+ingress that prepends a [PROXY protocol](https://www.haproxy.org/download/2.0/doc/proxy-protocol.txt)
+header before TLS passthrough.
 
-A header is honored **only** from peers in `security.trusted_proxies` (anti-spoofing). When present,
-the recovered client address is used for the eBPF TCP-SYN lookup, `X-Forwarded-For` /
-`X-Forwarded-Port` (source port), rate limiting, IP filtering, and logs. Only v2 (binary) is
-supported; v1 (text) is not. See `SETTINGS.md`.
+New static option `listen.proxy_protocol`:
 
-**eBPF TC (clsact ingress) capture backend (`HUGINN_EBPF_CAPTURE`)**
+- `off` (default): never read a PROXY header; the TCP peer is the client.
+- `optional`: auto-detect a header from a **trusted** peer; otherwise treat the connection as direct.
+- `require`: a **trusted** peer must send a valid header, else the connection is dropped.
 
-The eBPF agent can now capture TCP SYNs at the **TC `clsact` ingress** hook in addition to XDP. A
-new env var `HUGINN_EBPF_CAPTURE` selects the backend: `xdp-native` (default), `xdp-skb`, or `tc`.
-The single embedded BPF object now ships both `huginn_xdp_syn` (XDP) and `huginn_tc_syn` (TC)
-programs sharing the **same maps, key encoding, and value layout** — the proxy reads the same pinned
-maps regardless of backend, so no proxy change is required.
+Both **v2** (binary; Traefik, Envoy, AWS NLB, …) and **v1** (text; legacy HAProxy `send-proxy`)
+encodings are supported and auto-detected. A header is honored only from peers listed in
+`security.trusted_proxies` (anti-spoofing). When present, the recovered address is used for the
+eBPF TCP-SYN lookup, `X-Forwarded-For` / `X-Forwarded-Port` (source port), rate limiting, IP
+filtering, and logs. Static option: changing it requires a restart. See `SETTINGS.md`.
 
-`tc` is required on **VLAN/bond** edge interfaces (e.g. `bond0.44`): those have no native XDP, and
-generic XDP drops GRO-merged data packets (the TLS ClientHello hangs). TC ingress reads via
-`bpf_skb_load_bytes` (GRO-safe) and returns `TC_ACT_OK`, so it never drops packets. The deprecated
-`HUGINN_EBPF_XDP_MODE` (`native`/`skb`) remains a back-compat alias. See `EBPF-SETUP.md` and
-`data/ebpf-vlan-tc-capture.md`.
+**eBPF capture backend selection (`HUGINN_EBPF_CAPTURE`)**
+
+The eBPF agent can attach the SYN capture program at **XDP** or **TC clsact ingress**. Set
+`HUGINN_EBPF_CAPTURE` on the **agent** (not the proxy):
+
+| Value | Hook | When to use |
+|---|---|---|
+| `xdp-native` (default) | driver-level XDP | Production NICs with native XDP support; lowest overhead |
+| `xdp-skb` | generic XDP | veth, loopback, dev VMs without native XDP |
+| `tc` | TC clsact ingress | VLAN/bond interfaces (e.g. `bond0.44`) where generic XDP drops GRO-merged data packets and TLS handshakes hang |
+
+Both `huginn_xdp_syn` and `huginn_tc_syn` ship in the same BPF object and share **identical maps,
+key encoding, and value layout**. The proxy reads the same pinned maps regardless of backend; no
+proxy config change is required. TC ingress reads via `bpf_skb_load_bytes` (GRO-safe) and returns
+`TC_ACT_OK`, so it never drops packets. See `EBPF-SETUP.md` and `data/ebpf-vlan-tc-capture.md`.
 
 ---
 
-## [0.0.2-beta.0]
+## [0.0.2-beta.1]
 
 ### Breaking changes
 

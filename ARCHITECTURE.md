@@ -38,6 +38,4 @@ pub type SynProbe = Arc<dyn Fn(SocketAddr) -> SynResult + Send + Sync>;
 
 `huginn-proxy` provides the implementation; `huginn-proxy-lib` only calls it.
 
-Behind an L4 passthrough proxy the accepted socket peer is the proxy, not the client, so the SYN key would be wrong. Enable `listen.proxy_protocol` (`optional`/`require`) so huginn reads a PROXY protocol v2 header from a trusted proxy and uses the client's `(src_ip, src_port)` from it as the `SynProbe` key (and for `X-Forwarded-*`).
-
 The capture hook is selectable via `HUGINN_EBPF_CAPTURE` (`xdp-native` | `xdp-skb` | `tc`). The single BPF object embeds two programs sharing the same maps/keys/values: `huginn_xdp_syn` (XDP) and `huginn_tc_syn` (TC `clsact` ingress). On **VLAN/bond** interfaces (no native XDP) use `tc`: generic XDP drops GRO-merged data packets, whereas TC ingress reads via `bpf_skb_load_bytes` (GRO-safe) and returns `TC_ACT_OK`, never dropping. The proxy reads the same pinned maps regardless of backend.

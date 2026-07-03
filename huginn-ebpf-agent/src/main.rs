@@ -3,15 +3,9 @@
 //! the proxy (Deployment) can open the pinned maps without needing
 //! CAP_NET_ADMIN or seccomp:unconfined.
 
-#![forbid(unsafe_code)]
-
-mod config;
-mod error;
-mod healthchecks;
-mod telemetry;
-use crate::config::from_env;
-use crate::error::Result;
 use huginn_ebpf::EbpfProbe;
+use huginn_ebpf_agent::config::{capture_label, from_env};
+use huginn_ebpf_agent::error::Result;
 use std::env;
 use std::sync::Arc;
 use tokio::signal;
@@ -60,7 +54,7 @@ async fn main() -> Result<()> {
     probe.pin_maps(&cfg.pin_path)?;
 
     let pin_path = Arc::new(cfg.pin_path.clone());
-    let (registry, metrics) = telemetry::init_metrics(pin_path)?;
+    let (registry, metrics) = huginn_ebpf_agent::telemetry::init_metrics(pin_path)?;
     metrics.set_ready();
 
     let registry = Arc::new(registry);
@@ -68,11 +62,16 @@ async fn main() -> Result<()> {
     let listen_addr = cfg.metrics_listen_addr.clone();
     let port = cfg.metrics_port;
     tokio::spawn(async move {
-        let _ =
-            telemetry::start_observability_server(&listen_addr, port, registry, pin_path_str).await;
+        let _ = huginn_ebpf_agent::telemetry::start_observability_server(
+            &listen_addr,
+            port,
+            registry,
+            pin_path_str,
+        )
+        .await;
     });
 
-    let capture_str = config::capture_label(cfg.capture);
+    let capture_str = capture_label(cfg.capture);
     tracing::info!(
         interface = %cfg.interface,
         pin_path = %cfg.pin_path,

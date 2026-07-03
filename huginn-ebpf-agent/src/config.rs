@@ -100,37 +100,26 @@ pub fn from_env(get_var: impl Fn(&str) -> Option<String>) -> Result<Config, Conf
 
 /// Resolve the capture backend from env.
 ///
-/// `HUGINN_EBPF_CAPTURE` (`xdp-native` | `xdp-skb` | `tc`) is the explicit selector and takes
-/// precedence. When unset, the deprecated `HUGINN_EBPF_XDP_MODE` (`native` | `skb`) is honored as
-/// a back-compat alias. With neither set, the default is `xdp-native` (today's behavior).
+/// `HUGINN_EBPF_CAPTURE` (`xdp-native` | `xdp-skb` | `tc`). When unset, defaults to `xdp-native`.
 ///
 /// On VLAN/bond edge interfaces, `tc` is the recommended value: generic XDP drops GRO-merged data
 /// packets there, while TC clsact ingress never drops. See `data/ebpf-vlan-tc-capture.md`.
-fn resolve_capture_backend(
+pub fn resolve_capture_backend(
     get_var: &impl Fn(&str) -> Option<String>,
 ) -> Result<CaptureBackend, ConfigError> {
-    if let Some(v) = get_var("HUGINN_EBPF_CAPTURE") {
-        return match v.as_str() {
-            "xdp-native" => Ok(CaptureBackend::Xdp(XdpAttachMode::Native)),
-            "xdp-skb" => Ok(CaptureBackend::Xdp(XdpAttachMode::Skb)),
-            "tc" => Ok(CaptureBackend::Tc),
-            other => Err(ConfigError::Invalid {
-                name: "HUGINN_EBPF_CAPTURE".to_string(),
-                value: other.to_string(),
-                reason: "must be 'xdp-native', 'xdp-skb', or 'tc'".to_string(),
-            }),
-        };
-    }
+    let Some(raw) = get_var("HUGINN_EBPF_CAPTURE") else {
+        return Ok(CaptureBackend::Xdp(XdpAttachMode::Native));
+    };
 
-    // Deprecated alias.
-    match get_var("HUGINN_EBPF_XDP_MODE").as_deref() {
-        Some("skb") => Ok(CaptureBackend::Xdp(XdpAttachMode::Skb)),
-        Some("native") | None => Ok(CaptureBackend::Xdp(XdpAttachMode::Native)),
-        Some(v) => Err(ConfigError::Invalid {
-            name: "HUGINN_EBPF_XDP_MODE".to_string(),
-            value: v.to_string(),
-            reason: "must be 'native' or 'skb' (deprecated: prefer HUGINN_EBPF_CAPTURE)"
-                .to_string(),
+    let v = raw.trim().to_ascii_lowercase();
+    match v.as_str() {
+        "xdp-native" => Ok(CaptureBackend::Xdp(XdpAttachMode::Native)),
+        "xdp-skb" => Ok(CaptureBackend::Xdp(XdpAttachMode::Skb)),
+        "tc" => Ok(CaptureBackend::Tc),
+        _ => Err(ConfigError::Invalid {
+            name: "HUGINN_EBPF_CAPTURE".to_string(),
+            value: raw,
+            reason: "must be 'xdp-native', 'xdp-skb', or 'tc' (case-insensitive)".to_string(),
         }),
     }
 }
@@ -141,187 +130,5 @@ pub fn capture_label(backend: CaptureBackend) -> &'static str {
         CaptureBackend::Xdp(XdpAttachMode::Native) => "xdp-native",
         CaptureBackend::Xdp(XdpAttachMode::Skb) => "xdp-skb",
         CaptureBackend::Tc => "tc",
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// Build a `get_var` closure from a list of (name, value) pairs.
-    fn env_of(pairs: &[(&'static str, &'static str)]) -> impl Fn(&str) -> Option<String> {
-        let map: std::collections::HashMap<String, String> = pairs
-            .iter()
-            .map(|(k, v)| ((*k).to_string(), (*v).to_string()))
-            .collect();
-        move |name: &str| map.get(name).cloned()
-    }
-
-    /// Assert the resolver returns `Ok(expected)`.
-    fn assert_resolves(env: impl Fn(&str) -> Option<String>, expected: CaptureBackend) {
-        let got = resolve_capture_backend(&env);
-        assert!(matches!(got, Ok(b) if b == expected), "expected {expected:?}, got {got:?}");
-    }
-
-    #[test]
-    fn capture_explicit_values_win() {
-        assert_resolves(
-            env_of(&[("HUGINN_EBPF_CAPTURE", "xdp-native")]),
-            CaptureBackend::Xdp(XdpAttachMode::Native),
-        );
-        assert_resolves(
-            env_of(&[("HUGINN_EBPF_CAPTURE", "xdp-skb")]),
-            CaptureBackend::Xdp(XdpAttachMode::Skb),
-        );
-        assert_resolves(env_of(&[("HUGINN_EBPF_CAPTURE", "tc")]), CaptureBackend::Tc);
-    }
-
-    #[test]
-    fn capture_takes_precedence_over_xdp_mode_alias() {
-        assert_resolves(
-            env_of(&[("HUGINN_EBPF_CAPTURE", "tc"), ("HUGINN_EBPF_XDP_MODE", "skb")]),
-            CaptureBackend::Tc,
-        );
-    }
-
-    #[test]
-    fn xdp_mode_alias_is_honored_when_capture_unset() {
-        assert_resolves(
-            env_of(&[("HUGINN_EBPF_XDP_MODE", "skb")]),
-            CaptureBackend::Xdp(XdpAttachMode::Skb),
-        );
-        assert_resolves(
-            env_of(&[("HUGINN_EBPF_XDP_MODE", "native")]),
-            CaptureBackend::Xdp(XdpAttachMode::Native),
-        );
-    }
-
-    #[test]
-    fn default_is_xdp_native() {
-        assert_resolves(env_of(&[]), CaptureBackend::Xdp(XdpAttachMode::Native));
-    }
-
-    #[test]
-    fn invalid_capture_value_is_rejected() {
-        let env = env_of(&[("HUGINN_EBPF_CAPTURE", "tcx")]);
-        assert!(matches!(
-            resolve_capture_backend(&env),
-            Err(ConfigError::Invalid { ref name, .. }) if name == "HUGINN_EBPF_CAPTURE"
-        ));
-    }
-
-    #[test]
-    fn invalid_xdp_mode_alias_is_rejected() {
-        let env = env_of(&[("HUGINN_EBPF_XDP_MODE", "generic")]);
-        assert!(matches!(
-            resolve_capture_backend(&env),
-            Err(ConfigError::Invalid { ref name, .. }) if name == "HUGINN_EBPF_XDP_MODE"
-        ));
-    }
-
-    #[test]
-    fn labels_round_trip() {
-        assert_eq!(capture_label(CaptureBackend::Xdp(XdpAttachMode::Native)), "xdp-native");
-        assert_eq!(capture_label(CaptureBackend::Xdp(XdpAttachMode::Skb)), "xdp-skb");
-        assert_eq!(capture_label(CaptureBackend::Tc), "tc");
-    }
-
-    // ── from_env ──────────────────────────────────────────────────────────────
-
-    /// The minimal set of required env vars (no optional ones), for happy-path tests.
-    const REQUIRED: &[(&str, &str)] = &[
-        ("HUGINN_EBPF_INTERFACE", "eth0"),
-        ("HUGINN_EBPF_DST_IP_V4", "10.0.0.1"),
-        ("HUGINN_EBPF_DST_PORT", "8443"),
-        ("HUGINN_EBPF_METRICS_ADDR", "0.0.0.0"),
-        ("HUGINN_EBPF_METRICS_PORT", "9100"),
-    ];
-
-    /// `REQUIRED` plus the given extra pairs.
-    fn required_with(extra: &[(&'static str, &'static str)]) -> impl Fn(&str) -> Option<String> {
-        let mut pairs: Vec<(&'static str, &'static str)> = REQUIRED.to_vec();
-        pairs.extend_from_slice(extra);
-        env_of(&pairs)
-    }
-
-    /// Parse `from_env`, panicking with a readable message on error.
-    fn parse_ok(env: impl Fn(&str) -> Option<String>) -> Config {
-        match from_env(env) {
-            Ok(cfg) => cfg,
-            Err(e) => panic!("expected Ok config, got {e:?}"),
-        }
-    }
-
-    #[test]
-    fn from_env_minimal_applies_defaults() {
-        let cfg = parse_ok(required_with(&[]));
-        assert_eq!(cfg.interface, "eth0");
-        assert_eq!(cfg.dst_ip_v4, Ipv4Addr::new(10, 0, 0, 1));
-        assert_eq!(cfg.dst_port, 8443);
-        assert_eq!(cfg.metrics_listen_addr, "0.0.0.0");
-        assert_eq!(cfg.metrics_port, 9100);
-        assert_eq!(cfg.dst_ip_v6, Ipv6Addr::UNSPECIFIED);
-        assert_eq!(cfg.pin_path, DEFAULT_PIN_PATH);
-        assert_eq!(cfg.syn_map_max_entries, huginn_ebpf::DEFAULT_SYN_MAP_MAX_ENTRIES);
-        assert!(matches!(cfg.capture, CaptureBackend::Xdp(XdpAttachMode::Native)));
-    }
-
-    #[test]
-    fn from_env_full_overrides_every_optional() {
-        let cfg = parse_ok(required_with(&[
-            ("HUGINN_EBPF_DST_IP_V6", "2001:db8::1"),
-            ("HUGINN_EBPF_PIN_PATH", "/run/bpf/huginn"),
-            ("HUGINN_EBPF_SYN_MAP_MAX_ENTRIES", "16384"),
-            ("HUGINN_EBPF_CAPTURE", "tc"),
-        ]));
-        assert_eq!(cfg.dst_ip_v6, Ipv6Addr::new(0x2001, 0x0db8, 0, 0, 0, 0, 0, 1));
-        assert_eq!(cfg.pin_path, "/run/bpf/huginn");
-        assert_eq!(cfg.syn_map_max_entries, 16384);
-        assert!(matches!(cfg.capture, CaptureBackend::Tc));
-    }
-
-    #[test]
-    fn from_env_missing_required_vars_are_reported() {
-        for missing in [
-            "HUGINN_EBPF_INTERFACE",
-            "HUGINN_EBPF_DST_IP_V4",
-            "HUGINN_EBPF_DST_PORT",
-            "HUGINN_EBPF_METRICS_ADDR",
-            "HUGINN_EBPF_METRICS_PORT",
-        ] {
-            let pairs: Vec<(&str, &str)> = REQUIRED
-                .iter()
-                .copied()
-                .filter(|(k, _)| *k != missing)
-                .collect();
-            let result = from_env(env_of(&pairs));
-            assert!(
-                matches!(result, Err(ConfigError::Missing { ref name }) if name == missing),
-                "removing {missing} should report it missing, got {result:?}"
-            );
-        }
-    }
-
-    #[test]
-    fn from_env_invalid_values_are_reported() {
-        for (name, bad) in [
-            ("HUGINN_EBPF_DST_IP_V4", "not-an-ip"),
-            ("HUGINN_EBPF_DST_IP_V6", "::gg::"),
-            ("HUGINN_EBPF_DST_PORT", "70000"),
-            ("HUGINN_EBPF_METRICS_PORT", "-1"),
-            ("HUGINN_EBPF_SYN_MAP_MAX_ENTRIES", "lots"),
-        ] {
-            let result = from_env(required_with(&[(name, bad)]));
-            assert!(
-                matches!(result, Err(ConfigError::Invalid { name: ref n, .. }) if n == name),
-                "{name}={bad} should be rejected as invalid, got {result:?}"
-            );
-        }
-    }
-
-    #[test]
-    fn from_env_wires_deprecated_xdp_mode_alias() {
-        let cfg = parse_ok(required_with(&[("HUGINN_EBPF_XDP_MODE", "skb")]));
-        assert!(matches!(cfg.capture, CaptureBackend::Xdp(XdpAttachMode::Skb)));
     }
 }

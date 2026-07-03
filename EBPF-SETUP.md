@@ -112,7 +112,6 @@ No `seccomp:unconfined` or `apparmor:unconfined` needed.
 | `HUGINN_EBPF_PIN_PATH` | `/sys/fs/bpf/huginn` | Pin directory (default shown) |
 | `HUGINN_EBPF_SYN_MAP_MAX_ENTRIES` | `8192` | LRU map capacity (default shown) |
 | `HUGINN_EBPF_CAPTURE` | `xdp-native` | Capture hook/backend: `xdp-native` (default, driver-level XDP), `xdp-skb` (generic XDP, for veth/loopback), or `tc` (clsact ingress) |
-| `HUGINN_EBPF_XDP_MODE` | _(unset)_ | **Deprecated** alias for `HUGINN_EBPF_CAPTURE`: `native`→`xdp-native`, `skb`→`xdp-skb`. Ignored when `HUGINN_EBPF_CAPTURE` is set. |
 
 #### Choosing a capture backend
 
