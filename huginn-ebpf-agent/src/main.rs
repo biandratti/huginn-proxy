@@ -73,8 +73,8 @@ async fn main() -> Result<()> {
     });
 
     let xdp_mode_str = match cfg.xdp_mode {
-        config::XdpMode::Native => "native",
-        config::XdpMode::Skb => "skb",
+        config::XdpAttachMode::Native => "native",
+        config::XdpAttachMode::Skb => "skb",
     };
     tracing::info!(
         interface = %cfg.interface,

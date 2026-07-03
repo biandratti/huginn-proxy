@@ -3,14 +3,14 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 
 use aya::maps::{Array, HashMap, Map, MapData};
-use aya::programs::{Xdp, XdpMode as AyaXdpMode};
+use aya::programs::{Xdp, XdpMode};
 use aya::{Ebpf, EbpfLoader};
 use tracing::{debug, info, warn};
 
 use crate::pin;
 use crate::types::{SynRawDataV4, SynRawDataV6};
 use crate::EbpfError;
-use crate::XdpMode;
+use crate::XdpAttachMode;
 
 /// Raw bytes of the compiled XDP BPF object, embedded at compile time.
 /// `include_bytes_aligned!` ensures 8-byte alignment required by aya's ELF parser.
@@ -57,7 +57,8 @@ impl EbpfProbe {
     /// - `dst_ip_v6`: proxy IPv6 listen IP. `::` disables the IPv6 destination filter.
     /// - `dst_port`: proxy listen port. Always active as a filter.
     /// - `syn_map_max_entries`: capacity of the LRU map (default 8192).
-    /// - `xdp_mode`: [`XdpMode::Native`] (driver-level, default) or [`XdpMode::Skb`] (generic/software).
+    /// - `xdp_mode`: [`XdpAttachMode::Native`] (driver-level, default) or [`XdpAttachMode::Skb`]
+    ///   (generic/software).
     ///
     /// All dst values are patched into the XDP program's `.rodata` via `EbpfLoader::override_global`
     /// before the kernel loads the program, matching `cilium/ebpf`'s `spec.Variables` pattern.
@@ -67,7 +68,7 @@ impl EbpfProbe {
         dst_ip_v6: Ipv6Addr,
         dst_port: u16,
         syn_map_max_entries: u32,
-        xdp_mode: XdpMode,
+        xdp_mode: XdpAttachMode,
     ) -> Result<Self, EbpfError> {
         // XDP compares ip->daddr and tcp->dest (both network-byte-order fields) against these
         // globals. On a little-endian CPU, network-order bytes [a,b,c,d] in the packet are read
@@ -105,8 +106,8 @@ impl EbpfProbe {
         program.load().map_err(EbpfError::ProgramLoad)?;
 
         let (aya_mode, mode_str) = match xdp_mode {
-            XdpMode::Skb => (AyaXdpMode::Skb, "skb"),
-            XdpMode::Native => (AyaXdpMode::Driver, "native"),
+            XdpAttachMode::Skb => (XdpMode::Skb, "skb"),
+            XdpAttachMode::Native => (XdpMode::Driver, "native"),
         };
         info!(interface, mode = mode_str, "eBPF XDP attaching");
         program
