@@ -4,7 +4,7 @@ use crate::config::watcher::spawn_config_watcher;
 use crate::config::StaticConfig;
 use crate::error::Result;
 pub use crate::proxy::accept::SynProbe;
-use crate::proxy::accept::{accept_loop, AcceptContext};
+use crate::proxy::accept::{accept_loop, warn_proxy_protocol_trust_gap, AcceptContext};
 use crate::proxy::connection::ConnectionManager;
 use crate::proxy::listener::{bind_listener, register_signal};
 use crate::proxy::reload::{
@@ -176,6 +176,13 @@ pub async fn run(
             Arc::clone(&ctx),
         ));
     }
+
+    // Fail-loud on a proxy_protocol config that can never trust a peer (require + empty
+    // trusted_proxies drops everything; optional + empty silently behaves as off).
+    warn_proxy_protocol_trust_gap(
+        static_cfg.listen.proxy_protocol,
+        &dynamic_cfg.load().security.trusted_proxies,
+    );
 
     readiness.mark_ready();
     info!("Proxy ready: accepting connections");
