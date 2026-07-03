@@ -8,7 +8,7 @@
 #   docker build --target ebpf  -f docker/proxy.Dockerfile .    (or just: docker build -f ...)
 
 # ── builder base ────────────────────────────────────────────────
-FROM rust:1.96.0-slim@sha256:3b05f7c617a200c41c3506097f0d15fc193a1c93bfd8f141007b47cac8f95d3c AS builder-base
+FROM rust:1.96.0-slim@sha256:6abf73f05806f36362d0ff2722f2250c6153398831edd0455e0e0baa1f78ecc7 AS builder-base
 RUN apt-get update -q && apt-get install -y --no-install-recommends \
     pkg-config libssl-dev \
     && rm -rf /var/lib/apt/lists/*
@@ -29,7 +29,7 @@ RUN cargo build --release -p huginn-proxy --features ebpf-tcp
 
 # ── runtime base ────────────────────────────────────────────────
 # debian:trixie-slim — matches rust:1.94.1-slim base (Debian 13, glibc 2.38+).
-FROM debian:trixie-slim@sha256:4e401d95de7083948053197a9c3913343cd06b706bf15eb6a0c3ccd26f436a0e AS runtime-base
+FROM debian:trixie-slim@sha256:28de0877c2189802884ccd20f15ee41c203573bd87bb6b883f5f46362d24c5c2 AS runtime-base
 RUN apt-get update -q && apt-get install -y --no-install-recommends \
     ca-certificates curl \
     && rm -rf /var/lib/apt/lists/*
