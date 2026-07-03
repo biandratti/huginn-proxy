@@ -16,7 +16,7 @@ pub use probe::{
 pub use types::{parse_syn_v4, parse_syn_v6, quirk_bits, SynRawDataV4, SynRawDataV6};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum XdpMode {
+pub enum XdpAttachMode {
     /// Driver-level (default). Requires NIC driver support; falls back silently to skb on older kernels.
     Native,
     /// Generic/SKB mode. Runs in the kernel stack. Works on any interface (veth, loopback, VMs).
