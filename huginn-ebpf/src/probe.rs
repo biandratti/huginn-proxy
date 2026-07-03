@@ -89,7 +89,7 @@ impl EbpfProbe {
         let bpf_dst_port: u16 = dst_port.to_be();
 
         let mut ebpf = EbpfLoader::new()
-            .override_global("dst_ip", &bpf_dst_ip, false)
+            .override_global("dst_ip_v4", &bpf_dst_ip, false)
             .override_global("dst_ip_v6", &bpf_dst_ip_v6, false)
             .override_global("dst_port", &bpf_dst_port, false)
             .map_max_entries(pin::SYN_MAP_V4_NAME, syn_map_max_entries)

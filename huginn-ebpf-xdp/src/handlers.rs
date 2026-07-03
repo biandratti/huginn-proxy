@@ -65,8 +65,8 @@ fn handle_ipv4(ctx: &XdpContext, mut offset: usize) -> Result<(), ()> {
     }
 
     // SAFETY: read_volatile required for loader-patched globals so the compiler does not cache.
-    let dst_ip_val = unsafe { core::ptr::read_volatile(&tcp_syn::dst_ip) };
-    if dst_ip_val != 0 && unsafe { (*ip).daddr } != dst_ip_val {
+    let dst_ip_v4_val = unsafe { core::ptr::read_volatile(&tcp_syn::dst_ip_v4) };
+    if dst_ip_v4_val != 0 && unsafe { (*ip).daddr } != dst_ip_v4_val {
         return Ok(());
     }
 
@@ -92,7 +92,7 @@ fn handle_ipv4(ctx: &XdpContext, mut offset: usize) -> Result<(), ()> {
         return Ok(());
     }
 
-    // Only TCP SYN (no ACK) matching dst_ip/dst_port reach here. Invalid or non-SYN packets
+    // Only TCP SYN (no ACK) matching dst_ip_v4/dst_port reach here. Invalid or non-SYN packets
     // are filtered above with return Ok(()) and never call the handler.
     // SAFETY: ip and tcp were validated by ptr_at and bounds; valid for the duration of this call.
     let ip_ref = unsafe { &*ip };

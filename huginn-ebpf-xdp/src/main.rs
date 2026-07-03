@@ -3,8 +3,8 @@
 //! Captures TCP SYN packets and stores raw handshake data in a BPF LRU hash map
 //! keyed by (src_ip, src_port). Direct Rust port of the former `bpf/xdp.c`.
 //!
-//! The map layout and global variable names (`dst_ip`, `dst_port`) are identical
-//! to the C version so `huginn-ebpf/src/probe.rs` requires no changes.
+//! The map layout and global variable names (`dst_ip_v4`, `dst_ip_v6`, `dst_port`) match the
+//! names patched by `huginn-ebpf/src/probe.rs` at load time.
 #![no_std]
 #![no_main]
 #![deny(unsafe_code)]
