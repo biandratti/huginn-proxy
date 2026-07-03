@@ -1,8 +1,9 @@
 use crate::backend::health_check::HealthRegistry;
 use crate::backend::{BackendSelector, UpstreamGateway};
-use crate::config::{FingerprintConfig, KeepAliveConfig};
+use crate::config::{FingerprintConfig, KeepAliveConfig, ProxyProtocolMode};
 use crate::fingerprinting::{SynResult, TcpObservation};
 use crate::proxy::connection::{ConnectionError, ConnectionManager};
+use crate::proxy::proxy_protocol::{looks_like_proxy_v2, read_proxy_header_v2};
 use crate::proxy::reload::{SharedClientPool, SharedDynamicConfig, SharedRateLimiter};
 use crate::proxy::security_context::SecurityContext;
 use crate::proxy::transport::{
@@ -12,11 +13,12 @@ use crate::telemetry::Metrics;
 use crate::tls::setup::SharedTlsAcceptor;
 use hyper_util::rt::TokioExecutor;
 use hyper_util::server::conn::auto::Builder as ConnBuilder;
+use ipnet::IpNet;
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
-use tokio::net::TcpListener;
-use tokio::time::{Duration, Instant};
+use tokio::net::{TcpListener, TcpStream};
+use tokio::time::{timeout, Duration, Instant};
 use tracing::warn;
 
 /// Callback type for TCP SYN fingerprint lookup.
@@ -40,6 +42,8 @@ pub struct AcceptContext {
     pub backend_selector: Arc<BackendSelector>,
     pub tls_handshake_timeout: Duration,
     pub connection_handling_timeout: Duration,
+    /// PROXY protocol v2 handling (static config). `Off` = today's behavior.
+    pub proxy_protocol: ProxyProtocolMode,
 }
 
 pub async fn accept_loop(
@@ -57,7 +61,7 @@ pub async fn accept_loop(
         // TODO: potential hang at shutdown, if the shutdown signal is set after the check above
         // but before this await, the loop blocks until a new client connects. Fix: use
         // tokio::select! to race listener.accept() against a shutdown notification.
-        let (stream, peer) = match listener.accept().await {
+        let (mut stream, socket_peer) = match listener.accept().await {
             Ok(pair) => pair,
             Err(e) => {
                 warn!(error = %e, ?addr, "accept error");
@@ -65,7 +69,8 @@ pub async fn accept_loop(
             }
         };
 
-        let guard = match connection_manager.try_accept(peer, &ctx.metrics) {
+        // Connection accounting is keyed on the real TCP peer, never the PROXY-declared client.
+        let guard = match connection_manager.try_accept(socket_peer, &ctx.metrics) {
             Ok(g) => g,
             Err(ConnectionError::Shutdown) => {
                 drop(stream);
@@ -77,6 +82,21 @@ pub async fn accept_loop(
             }
         };
 
+        // Loaded once here so the PROXY-protocol trust gate and the rest of the loop body share
+        // a single config snapshot (`trusted_proxies` lives in dynamic config).
+        let dynamic = ctx.dynamic_cfg.load();
+
+        // Resolve the effective client peer. Behind an L4 passthrough proxy this recovers the
+        // original client `(src_ip, src_port)` from the PROXY v2 header so the eBPF SYN lookup,
+        // `X-Forwarded-*`, rate-limiting, IP filtering and logs all see the real client.
+        let peer =
+            match resolve_peer(&ctx, &dynamic.security.trusted_proxies, &mut stream, socket_peer)
+                .await
+            {
+                Some(p) => p,
+                None => continue, // dropped (require + untrusted, bad header, or timeout)
+            };
+
         let syn_start = Instant::now();
         let syn_result = ctx.syn_probe.as_ref().map(|probe| probe(peer));
         let syn_duration = syn_start.elapsed().as_secs_f64();
@@ -86,7 +106,6 @@ pub async fn accept_loop(
             r.observation().cloned()
         });
 
-        let dynamic = ctx.dynamic_cfg.load();
         let rate_mgr = (**ctx.rate_limiter.load()).clone();
         let security = SecurityContext::new(
             dynamic.security.headers.clone(),
@@ -149,5 +168,78 @@ pub async fn accept_loop(
                 .await;
             }
         });
+    }
+}
+
+/// Resolve the effective client peer, honoring `listen.proxy_protocol`.
+///
+/// Returns `Some(peer)` to proceed (`peer` is the PROXY-declared client when a trusted peer sent
+/// a valid header, otherwise the socket peer) or `None` when the connection must be dropped
+/// (`require` + untrusted peer, malformed header, or a read timeout).
+///
+/// Security boundary: a PROXY header is parsed **only** when the immediate socket peer is in
+/// `trusted_proxies`. Untrusted peers are never parsed, so a direct attacker cannot forge a
+/// header to spoof its source (classic PROXY-protocol spoofing).
+async fn resolve_peer(
+    ctx: &AcceptContext,
+    trusted_proxies: &[IpNet],
+    stream: &mut TcpStream,
+    socket_peer: SocketAddr,
+) -> Option<SocketAddr> {
+    let timeout_dur = ctx.tls_handshake_timeout;
+
+    match ctx.proxy_protocol {
+        ProxyProtocolMode::Off => Some(socket_peer),
+
+        mode => {
+            let trusted = !trusted_proxies.is_empty()
+                && trusted_proxies
+                    .iter()
+                    .any(|n| n.contains(&socket_peer.ip()));
+
+            // Untrusted peers are never parsed: `optional` serves them as a direct client;
+            // `require` drops them since the listener is declared to only serve a known proxy.
+            if !trusted {
+                return match mode {
+                    ProxyProtocolMode::Require => {
+                        warn!(?socket_peer, "drop: proxy_protocol=require + untrusted peer");
+                        None
+                    }
+                    _ => Some(socket_peer),
+                };
+            }
+
+            // `optional`: auto-detect without consuming so a missing header leaves the stream
+            // intact for the TLS ClientHello.
+            if mode == ProxyProtocolMode::Optional {
+                match timeout(timeout_dur, looks_like_proxy_v2(stream)).await {
+                    Ok(Ok(true)) => {}                         // header present → read it below
+                    Ok(Ok(false)) => return Some(socket_peer), // no header → direct client
+                    Ok(Err(e)) => {
+                        warn!(?socket_peer, error = %e, "PROXY detect read error");
+                        return None;
+                    }
+                    Err(_) => {
+                        warn!(?socket_peer, "PROXY detect timeout");
+                        return None;
+                    }
+                }
+            }
+
+            // Trusted peer with a header to read (`require` always, `optional` when detected).
+            // A LOCAL command (health checks) yields `None` → fall back to the socket peer.
+            match timeout(timeout_dur, read_proxy_header_v2(stream)).await {
+                Ok(Ok(Some(src))) => Some(src),
+                Ok(Ok(None)) => Some(socket_peer),
+                Ok(Err(e)) => {
+                    warn!(?socket_peer, error = %e, "bad PROXY header");
+                    None
+                }
+                Err(_) => {
+                    warn!(?socket_peer, "PROXY header read timeout");
+                    None
+                }
+            }
+        }
     }
 }

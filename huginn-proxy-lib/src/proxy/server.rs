@@ -160,6 +160,7 @@ pub async fn run(
         connection_handling_timeout: Duration::from_secs(
             static_cfg.timeout.connection_handling_secs,
         ),
+        proxy_protocol: static_cfg.listen.proxy_protocol,
     });
 
     // Spawn one accept task per listener.
