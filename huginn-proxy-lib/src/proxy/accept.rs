@@ -194,16 +194,10 @@ async fn resolve_peer(
         ProxyProtocolMode::Off => Some(socket_peer),
 
         mode => {
-            // Normalize an IPv4-mapped IPv6 peer (dual-stack `[::]` listener accepting IPv4) so a
-            // configured IPv4 CIDR matches; otherwise the trust gate silently fails.
             let peer_ip = normalize_mapped_ipv4(socket_peer.ip());
             let trusted =
                 !trusted_proxies.is_empty() && trusted_proxies.iter().any(|n| n.contains(&peer_ip));
 
-            // Untrusted peers are never parsed: `optional` serves them as a direct client;
-            // `require` drops them since the listener is declared to only serve a known proxy.
-            // An untrusted `optional` peer is ordinary direct traffic (never a PROXY candidate),
-            // so it is intentionally not counted in any proxy_protocol metric.
             if !trusted {
                 return match mode {
                     ProxyProtocolMode::Require => {
@@ -217,8 +211,6 @@ async fn resolve_peer(
                 };
             }
 
-            // Trusted peer: detect the header version without consuming so a missing header (in
-            // `optional`) leaves the stream intact for the TLS ClientHello.
             let detection = match timeout(timeout_dur, detect_proxy_protocol(stream)).await {
                 Ok(Ok(d)) => d,
                 Ok(Err(e)) => {
@@ -236,8 +228,6 @@ async fn resolve_peer(
                 }
             };
 
-            // Dispatch to the matching reader. `None` means no header: `optional` serves the peer
-            // as a direct client, `require` drops it (listener is declared to only serve a proxy).
             let read_result = match detection {
                 ProxyProtocolDetection::None => {
                     return match mode {
@@ -276,8 +266,6 @@ async fn resolve_peer(
                     );
                     Some(src)
                 }
-                // LOCAL (v2) / UNKNOWN (v1): the emitter deliberately signalled no client (e.g.
-                // health checks) → fall back to the socket peer, quietly (expected).
                 Ok(Ok(ProxySource::Local)) => {
                     ctx.metrics.record_proxy_protocol_passthrough();
                     trace!(
@@ -286,9 +274,6 @@ async fn resolve_peer(
                     );
                     Some(socket_peer)
                 }
-                // PROXY command but a non-IP address family: we expected a client address and got
-                // none. Serve the connection on the socket peer, but warn + meter, correlation
-                // (eBPF SYN, X-Forwarded-*, backend signature validation) is degraded here.
                 Ok(Ok(ProxySource::NoClientAddr)) => {
                     ctx.metrics.record_proxy_protocol_no_client_addr();
                     warn!(

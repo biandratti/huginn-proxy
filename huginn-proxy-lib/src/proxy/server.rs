@@ -178,8 +178,6 @@ pub async fn run(
         ));
     }
 
-    // Fail-loud on a proxy_protocol config that can never trust a peer (require + empty
-    // trusted_proxies drops everything; optional + empty silently behaves as off).
     warn_proxy_protocol_trust_gap(
         static_cfg.listen.proxy_protocol,
         &dynamic_cfg.load().security.trusted_proxies,
