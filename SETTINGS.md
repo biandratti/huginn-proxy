@@ -69,7 +69,7 @@ Network interfaces and socket options. **Static** — requires restart to change
 |------------------|------------------|---------|----------------------------------------------------------------------------------------|
 | `addrs`          | array of strings | —       | One or more `host:port` addresses to bind. IPv6 addresses must be wrapped in brackets. |
 | `tcp_backlog`    | integer          | `4096`  | Kernel `listen(2)` backlog per socket. Increase under heavy connection bursts.         |
-| `proxy_protocol` | string           | `off`   | PROXY protocol v2 handling: `off`, `optional`, or `require`. See note below.          |
+| `proxy_protocol` | string           | `off`   | PROXY protocol handling (v1 and v2): `off`, `optional`, or `require`. See note below.  |
 
 > **`proxy_protocol`** lets huginn recover the real client `(src_ip, src_port)` when it sits behind
 > any L4 load balancer or ingress that prepends a [PROXY protocol](https://www.haproxy.org/download/2.0/doc/proxy-protocol.txt)
@@ -84,8 +84,11 @@ Network interfaces and socket options. **Static** — requires restart to change
 >
 > A header is honored **only** from peers listed in [`security.trusted_proxies`](#security)
 > (anti-spoofing). With an empty `trusted_proxies`, `optional` degrades to `off` (no peer is trusted)
-> and `require` drops every connection (fail-closed). Only the **binary encoding** (v2) is supported;
-> the text encoding (v1) is not. This is **static** — changing it requires a restart.
+> and `require` drops every connection (fail-closed). Both the **binary (v2)** and **text (v1)**
+> encodings are supported and auto-detected — v2 is what modern proxies emit (Traefik, Envoy, AWS
+> NLB), v1 is the legacy HAProxy `send-proxy` line. A `LOCAL` (v2) or `UNKNOWN` (v1) header, and any
+> non-IP address family (AF_UNIX/AF_UNSPEC), fall back to the TCP socket peer. This is **static** —
+> changing it requires a restart.
 
 <table>
 <thead>

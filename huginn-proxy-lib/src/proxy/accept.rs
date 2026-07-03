@@ -4,7 +4,8 @@ use crate::config::{FingerprintConfig, KeepAliveConfig, ProxyProtocolMode};
 use crate::fingerprinting::{SynResult, TcpObservation};
 use crate::proxy::connection::{ConnectionError, ConnectionManager};
 use crate::proxy::proxy_protocol::{
-    looks_like_proxy_v2, normalize_mapped_ipv4, read_proxy_header_v2,
+    detect_proxy_protocol, normalize_mapped_ipv4, read_proxy_header_v1, read_proxy_header_v2,
+    ProxyProtocolDetection, ProxySource,
 };
 use crate::proxy::reload::{SharedClientPool, SharedDynamicConfig, SharedRateLimiter};
 use crate::proxy::security_context::SecurityContext;
@@ -218,41 +219,57 @@ async fn resolve_peer(
                 };
             }
 
-            // `optional`: auto-detect without consuming so a missing header leaves the stream
-            // intact for the TLS ClientHello.
-            if mode == ProxyProtocolMode::Optional {
-                match timeout(timeout_dur, looks_like_proxy_v2(stream)).await {
-                    Ok(Ok(true)) => {} // header present → read it below
-                    Ok(Ok(false)) => {
-                        // trusted peer, no header → direct client
-                        ctx.metrics.record_proxy_protocol_passthrough();
-                        trace!(
-                            socket_peer = %socket_peer,
-                            "PROXY optional: no header, serving as direct client"
-                        );
-                        return Some(socket_peer);
-                    }
-                    Ok(Err(e)) => {
-                        ctx.metrics.record_proxy_protocol_dropped(
-                            metric_values::PROXY_PROTOCOL_DROP_BAD_HEADER,
-                        );
-                        warn!(?socket_peer, error = %e, "PROXY detect read error");
-                        return None;
-                    }
-                    Err(_) => {
-                        ctx.metrics.record_proxy_protocol_dropped(
-                            metric_values::PROXY_PROTOCOL_DROP_TIMEOUT,
-                        );
-                        warn!(?socket_peer, "PROXY detect timeout");
-                        return None;
-                    }
+            // Trusted peer: detect the header version without consuming so a missing header (in
+            // `optional`) leaves the stream intact for the TLS ClientHello.
+            let detection = match timeout(timeout_dur, detect_proxy_protocol(stream)).await {
+                Ok(Ok(d)) => d,
+                Ok(Err(e)) => {
+                    ctx.metrics.record_proxy_protocol_dropped(
+                        metric_values::PROXY_PROTOCOL_DROP_BAD_HEADER,
+                    );
+                    warn!(?socket_peer, error = %e, "PROXY detect read error");
+                    return None;
                 }
-            }
+                Err(_) => {
+                    ctx.metrics
+                        .record_proxy_protocol_dropped(metric_values::PROXY_PROTOCOL_DROP_TIMEOUT);
+                    warn!(?socket_peer, "PROXY detect timeout");
+                    return None;
+                }
+            };
 
-            // Trusted peer with a header to read (`require` always, `optional` when detected).
-            // A LOCAL command (health checks) yields `None` → fall back to the socket peer.
-            match timeout(timeout_dur, read_proxy_header_v2(stream)).await {
-                Ok(Ok(Some(src))) => {
+            // Dispatch to the matching reader. `None` means no header: `optional` serves the peer
+            // as a direct client, `require` drops it (listener is declared to only serve a proxy).
+            let read_result = match detection {
+                ProxyProtocolDetection::None => {
+                    return match mode {
+                        ProxyProtocolMode::Require => {
+                            ctx.metrics.record_proxy_protocol_dropped(
+                                metric_values::PROXY_PROTOCOL_DROP_BAD_HEADER,
+                            );
+                            warn!(?socket_peer, "drop: proxy_protocol=require + no PROXY header");
+                            None
+                        }
+                        _ => {
+                            ctx.metrics.record_proxy_protocol_passthrough();
+                            trace!(
+                                socket_peer = %socket_peer,
+                                "PROXY optional: no header, serving as direct client"
+                            );
+                            Some(socket_peer)
+                        }
+                    };
+                }
+                ProxyProtocolDetection::V1 => {
+                    timeout(timeout_dur, read_proxy_header_v1(stream)).await
+                }
+                ProxyProtocolDetection::V2 => {
+                    timeout(timeout_dur, read_proxy_header_v2(stream)).await
+                }
+            };
+
+            match read_result {
+                Ok(Ok(ProxySource::Client(src))) => {
                     ctx.metrics.record_proxy_protocol_accepted();
                     debug!(
                         socket_peer = %socket_peer,
@@ -261,12 +278,25 @@ async fn resolve_peer(
                     );
                     Some(src)
                 }
-                Ok(Ok(None)) => {
-                    // LOCAL command (e.g. health-check probe): keep the socket peer.
+                // LOCAL (v2) / UNKNOWN (v1): the emitter deliberately signalled no client (e.g.
+                // health checks) → fall back to the socket peer, quietly (expected).
+                Ok(Ok(ProxySource::Local)) => {
                     ctx.metrics.record_proxy_protocol_passthrough();
                     trace!(
                         socket_peer = %socket_peer,
-                        "PROXY LOCAL command: keeping socket peer"
+                        "PROXY LOCAL/UNKNOWN command: keeping socket peer"
+                    );
+                    Some(socket_peer)
+                }
+                // PROXY command but a non-IP address family: we expected a client address and got
+                // none. Serve the connection on the socket peer, but warn + meter — correlation
+                // (eBPF SYN, X-Forwarded-*, backend signature validation) is degraded here.
+                Ok(Ok(ProxySource::NoClientAddr)) => {
+                    ctx.metrics.record_proxy_protocol_no_client_addr();
+                    warn!(
+                        socket_peer = %socket_peer,
+                        "PROXY header carried a non-IP address family (AF_UNSPEC/AF_UNIX): no client \
+                         address recovered, correlation degraded; keeping socket peer"
                     );
                     Some(socket_peer)
                 }

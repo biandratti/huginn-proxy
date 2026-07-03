@@ -1,5 +1,6 @@
 use huginn_proxy_lib::proxy::proxy_protocol::{
-    normalize_mapped_ipv4, read_proxy_header_v2, ProxyProtocolError, V2_SIGNATURE,
+    normalize_mapped_ipv4, read_proxy_header_v1, read_proxy_header_v2, ProxyProtocolError,
+    ProxySource, V2_SIGNATURE,
 };
 use std::io::Cursor;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
@@ -48,7 +49,7 @@ async fn parses_valid_ipv4() -> TestResult {
     let header = build_header(CMD_PROXY, FAM_INET, &v4_block([192, 168, 1, 100], 51234));
     let mut cursor = Cursor::new(header);
     let src = read_proxy_header_v2(&mut cursor).await?;
-    assert_eq!(src, Some("192.168.1.100:51234".parse()?));
+    assert_eq!(src, ProxySource::Client("192.168.1.100:51234".parse()?));
     Ok(())
 }
 
@@ -58,27 +59,27 @@ async fn parses_valid_ipv6() -> TestResult {
     let header = build_header(CMD_PROXY, FAM_INET6, &v6_block(octets, 40000));
     let mut cursor = Cursor::new(header);
     let src = read_proxy_header_v2(&mut cursor).await?;
-    assert_eq!(src, Some("[2001:db8::1]:40000".parse()?));
+    assert_eq!(src, ProxySource::Client("[2001:db8::1]:40000".parse()?));
     Ok(())
 }
 
 #[tokio::test]
-async fn local_command_returns_none() -> TestResult {
-    // LOCAL command (health checks): no address block.
+async fn local_command_maps_to_local() -> TestResult {
+    // LOCAL command (health checks): no address block → expected, quiet passthrough.
     let header = build_header(CMD_LOCAL, 0x0, &[]);
     let mut cursor = Cursor::new(header);
     let src = read_proxy_header_v2(&mut cursor).await?;
-    assert_eq!(src, None);
+    assert_eq!(src, ProxySource::Local);
     Ok(())
 }
 
 #[tokio::test]
-async fn af_unspec_falls_back() -> TestResult {
-    // PROXY command but AF_UNSPEC family → no usable source.
+async fn af_unspec_is_no_client_addr() -> TestResult {
+    // PROXY command but AF_UNSPEC family → no usable source → flagged (warn + metric by caller).
     let header = build_header(CMD_PROXY, 0x0, &[]);
     let mut cursor = Cursor::new(header);
     let src = read_proxy_header_v2(&mut cursor).await?;
-    assert_eq!(src, None);
+    assert_eq!(src, ProxySource::NoClientAddr);
     Ok(())
 }
 
@@ -88,15 +89,17 @@ async fn bad_signature_is_rejected() {
     bytes[0] = 0xFF; // corrupt the signature
     let mut cursor = Cursor::new(bytes);
     let result = read_proxy_header_v2(&mut cursor).await;
-    assert!(matches!(result, Err(ProxyProtocolError::BadSignature)), "got {result:?}");
+    assert!(matches!(result, Err(ProxyProtocolError::Parse(_))), "got {result:?}");
 }
 
 #[tokio::test]
-async fn v1_text_header_is_unsupported_version() {
-    // A v1 text header ("PROXY TCP4 ...") does not match the binary signature.
+async fn v2_reader_rejects_a_v1_text_header() {
+    // A v1 text header fed to the v2 reader must error (the accept loop routes by version, so this
+    // only guards direct misuse). The bogus addr_len from the text bytes is caught by either the
+    // allocation cap or the ppp parser — both are acceptable failures.
     let mut cursor = Cursor::new(b"PROXY TCP4 1.2.3.4 5.6.7.8 1 2\r\n".to_vec());
     let result = read_proxy_header_v2(&mut cursor).await;
-    assert!(matches!(result, Err(ProxyProtocolError::BadSignature)), "got {result:?}");
+    assert!(result.is_err(), "got {result:?}");
 }
 
 #[tokio::test]
@@ -105,7 +108,7 @@ async fn truncated_address_block_errors() {
     let header = build_header(CMD_PROXY, FAM_INET, &[1, 2, 3, 4]);
     let mut cursor = Cursor::new(header);
     let result = read_proxy_header_v2(&mut cursor).await;
-    assert!(matches!(result, Err(ProxyProtocolError::Truncated)), "got {result:?}");
+    assert!(matches!(result, Err(ProxyProtocolError::Parse(_))), "got {result:?}");
 }
 
 #[tokio::test]
@@ -118,7 +121,7 @@ async fn consumes_exactly_header_leaving_clienthello() -> TestResult {
 
     let mut cursor = Cursor::new(stream);
     let src = read_proxy_header_v2(&mut cursor).await?;
-    assert_eq!(src, Some("203.0.113.5:12345".parse()?));
+    assert_eq!(src, ProxySource::Client("203.0.113.5:12345".parse()?));
 
     let mut rest = Vec::new();
     cursor.read_to_end(&mut rest).await?;
@@ -165,10 +168,67 @@ async fn ignores_trailing_tlvs_but_consumes_them() -> TestResult {
 
     let mut cursor = Cursor::new(stream);
     let src = read_proxy_header_v2(&mut cursor).await?;
-    assert_eq!(src, Some("10.1.2.3:5555".parse()?));
+    assert_eq!(src, ProxySource::Client("10.1.2.3:5555".parse()?));
 
     let mut rest = Vec::new();
     cursor.read_to_end(&mut rest).await?;
     assert_eq!(rest, client_hello);
     Ok(())
+}
+
+// --- v1 (text) header tests ---
+
+#[tokio::test]
+async fn v1_parses_tcp4() -> TestResult {
+    let mut cursor = Cursor::new(b"PROXY TCP4 192.168.1.100 10.0.0.1 45000 443\r\n".to_vec());
+    let src = read_proxy_header_v1(&mut cursor).await?;
+    assert_eq!(src, ProxySource::Client("192.168.1.100:45000".parse()?));
+    Ok(())
+}
+
+#[tokio::test]
+async fn v1_parses_tcp6() -> TestResult {
+    let mut cursor = Cursor::new(b"PROXY TCP6 2001:db8::1 2001:db8::2 45000 443\r\n".to_vec());
+    let src = read_proxy_header_v1(&mut cursor).await?;
+    assert_eq!(src, ProxySource::Client("[2001:db8::1]:45000".parse()?));
+    Ok(())
+}
+
+#[tokio::test]
+async fn v1_unknown_maps_to_local() -> TestResult {
+    let mut cursor = Cursor::new(b"PROXY UNKNOWN\r\n".to_vec());
+    assert_eq!(read_proxy_header_v1(&mut cursor).await?, ProxySource::Local);
+    Ok(())
+}
+
+#[tokio::test]
+async fn v1_consumes_exactly_leaving_clienthello() -> TestResult {
+    // Byte-by-byte read must stop at the CRLF, leaving the ClientHello untouched.
+    let client_hello = [0x16u8, 0x03, 0x01, 0x00, 0x2a, 0xde, 0xad];
+    let mut stream = b"PROXY TCP4 203.0.113.5 10.0.0.1 12345 443\r\n".to_vec();
+    stream.extend_from_slice(&client_hello);
+
+    let mut cursor = Cursor::new(stream);
+    let src = read_proxy_header_v1(&mut cursor).await?;
+    assert_eq!(src, ProxySource::Client("203.0.113.5:12345".parse()?));
+
+    let mut rest = Vec::new();
+    cursor.read_to_end(&mut rest).await?;
+    assert_eq!(rest, client_hello, "ClientHello bytes must remain after the v1 header");
+    Ok(())
+}
+
+#[tokio::test]
+async fn v1_malformed_is_rejected() {
+    let mut cursor = Cursor::new(b"PROXY TCP4 not_an_ip 10.0.0.1 45000 443\r\n".to_vec());
+    let result = read_proxy_header_v1(&mut cursor).await;
+    assert!(matches!(result, Err(ProxyProtocolError::Parse(_))), "got {result:?}");
+}
+
+#[tokio::test]
+async fn v1_overlong_without_crlf_is_rejected() {
+    // 120 bytes of 'A' with no CRLF exceeds the 107-byte v1 cap.
+    let mut cursor = Cursor::new(vec![b'A'; 120]);
+    let result = read_proxy_header_v1(&mut cursor).await;
+    assert!(matches!(result, Err(ProxyProtocolError::V1HeaderTooLong)), "got {result:?}");
 }

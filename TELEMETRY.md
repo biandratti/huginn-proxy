@@ -150,14 +150,15 @@ rate(huginn_connections_rejected_total[5m])
 
 ### 3. PROXY Protocol Metrics
 
-Emitted when `listen.proxy_protocol` is `optional` or `require`. All three counters are zero when
-`proxy_protocol = "off"`.
+Emitted when `listen.proxy_protocol` is `optional` or `require`. All counters are zero when
+`proxy_protocol = "off"`. Both PROXY protocol v1 (text) and v2 (binary) are parsed.
 
-| Metric                                  | Type    | Description                                                                               | Labels   |
-|-----------------------------------------|---------|-------------------------------------------------------------------------------------------|----------|
-| `huginn_proxy_protocol_accepted_total`    | Counter | Connections where the real client address was recovered from a PROXY header                | -        |
-| `huginn_proxy_protocol_passthrough_total` | Counter | Trusted-peer connections served with the socket peer (no PROXY header, or LOCAL command)   | -        |
-| `huginn_proxy_protocol_dropped_total`     | Counter | Connections dropped at the PROXY address-recovery gate                                     | `reason` |
+| Metric                                       | Type    | Description                                                                                      | Labels   |
+|----------------------------------------------|---------|--------------------------------------------------------------------------------------------------|----------|
+| `huginn_proxy_protocol_accepted_total`         | Counter | Connections where the real client address was recovered from a PROXY header                       | -        |
+| `huginn_proxy_protocol_passthrough_total`      | Counter | Trusted-peer connections served with the socket peer (no PROXY header, or a LOCAL/UNKNOWN command) | -        |
+| `huginn_proxy_protocol_no_client_addr_total`   | Counter | Trusted-peer PROXY command with a non-IP address family (AF_UNSPEC/AF_UNIX); correlation degraded  | -        |
+| `huginn_proxy_protocol_dropped_total`          | Counter | Connections dropped at the PROXY address-recovery gate                                             | `reason` |
 
 **Labels**:
 
@@ -178,13 +179,19 @@ sum by (reason) (rate(huginn_proxy_protocol_dropped_total[5m]))
 # Passthrough ratio (trusted peers with no header vs. total trusted-peer connections)
 rate(huginn_proxy_protocol_passthrough_total[5m])
   / (rate(huginn_proxy_protocol_accepted_total[5m]) + rate(huginn_proxy_protocol_passthrough_total[5m]))
+
+# Connections where a client IP was expected but not usable (degraded correlation)
+rate(huginn_proxy_protocol_no_client_addr_total[5m])
 ```
 
 > **Operational tip:** after enabling `proxy_protocol`, watch `huginn_proxy_protocol_accepted_total`.
 > If it stays at zero while `huginn_proxy_protocol_passthrough_total` climbs, the load balancer is
 > not sending headers (misconfigured edge, or wrong `trusted_proxies` CIDR). If
 > `huginn_proxy_protocol_dropped_total{reason="untrusted_require"}` climbs, a peer outside the
-> trusted range is reaching huginn directly.
+> trusted range is reaching huginn directly. Any non-zero `huginn_proxy_protocol_no_client_addr_total`
+> means a trusted proxy is sending PROXY headers without a usable client IP (non-IP address family) —
+> the connection is still served on the socket peer, but the eBPF SYN fingerprint and `X-Forwarded-*`
+> will not reflect the real client, so backend signature validation is degraded for those requests.
 
 ---
 

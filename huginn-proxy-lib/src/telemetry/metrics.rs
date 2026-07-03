@@ -85,8 +85,11 @@ pub struct Metrics {
     // PROXY protocol (source address recovery for L4-forwarded connections)
     /// Real client address recovered from a PROXY header sent by a trusted peer.
     pub proxy_protocol_accepted_total: Counter<u64>,
-    /// Trusted peer served with the socket peer (no header present, or a LOCAL command).
+    /// Trusted peer served with the socket peer (no header present, or a LOCAL/UNKNOWN command).
     pub proxy_protocol_passthrough_total: Counter<u64>,
+    /// Trusted peer sent a PROXY command with a non-IP address family (AF_UNSPEC/AF_UNIX): no client
+    /// address could be recovered, so correlation (eBPF SYN, XFF) is degraded for that connection.
+    pub proxy_protocol_no_client_addr_total: Counter<u64>,
     /// Connection dropped at the address-recovery gate. reason=untrusted_require|bad_header|timeout
     pub proxy_protocol_dropped_total: Counter<u64>,
 
@@ -246,7 +249,11 @@ impl Metrics {
                 .build(),
             proxy_protocol_passthrough_total: meter
                 .u64_counter("huginn_proxy_protocol_passthrough_total")
-                .with_description("Total trusted-peer connections served with the socket peer (no PROXY header present, or a LOCAL command)")
+                .with_description("Total trusted-peer connections served with the socket peer (no PROXY header present, or a LOCAL/UNKNOWN command)")
+                .build(),
+            proxy_protocol_no_client_addr_total: meter
+                .u64_counter("huginn_proxy_protocol_no_client_addr_total")
+                .with_description("Total trusted-peer connections where a PROXY command carried a non-IP address family (AF_UNSPEC/AF_UNIX); the client address could not be recovered and correlation is degraded")
                 .build(),
             proxy_protocol_dropped_total: meter
                 .u64_counter("huginn_proxy_protocol_dropped_total")
@@ -788,9 +795,15 @@ impl Metrics {
         self.proxy_protocol_accepted_total.add(1, &[]);
     }
 
-    /// Trusted peer served with the socket peer (no header present, or a LOCAL command).
+    /// Trusted peer served with the socket peer (no header present, or a LOCAL/UNKNOWN command).
     pub fn record_proxy_protocol_passthrough(&self) {
         self.proxy_protocol_passthrough_total.add(1, &[]);
+    }
+
+    /// Trusted peer sent a PROXY command with a non-IP address family (AF_UNSPEC/AF_UNIX): the
+    /// client address could not be recovered, so correlation is degraded for that connection.
+    pub fn record_proxy_protocol_no_client_addr(&self) {
+        self.proxy_protocol_no_client_addr_total.add(1, &[]);
     }
 
     /// Connection dropped at the address-recovery gate. `reason` should be one of the
