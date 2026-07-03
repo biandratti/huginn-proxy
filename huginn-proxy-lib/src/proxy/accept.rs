@@ -20,7 +20,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::time::{timeout, Duration, Instant};
-use tracing::{error, warn};
+use tracing::{debug, error, trace, warn};
 
 /// Callback type for TCP SYN fingerprint lookup.
 ///
@@ -223,6 +223,10 @@ async fn resolve_peer(
                     Ok(Ok(false)) => {
                         // trusted peer, no header → direct client
                         ctx.metrics.record_proxy_protocol_passthrough();
+                        trace!(
+                            socket_peer = %socket_peer,
+                            "PROXY optional: no header, serving as direct client"
+                        );
                         return Some(socket_peer);
                     }
                     Ok(Err(e)) => {
@@ -247,10 +251,20 @@ async fn resolve_peer(
             match timeout(timeout_dur, read_proxy_header_v2(stream)).await {
                 Ok(Ok(Some(src))) => {
                     ctx.metrics.record_proxy_protocol_accepted();
+                    debug!(
+                        socket_peer = %socket_peer,
+                        real_client = %src,
+                        "PROXY header: real client recovered"
+                    );
                     Some(src)
                 }
                 Ok(Ok(None)) => {
+                    // LOCAL command (e.g. health-check probe): keep the socket peer.
                     ctx.metrics.record_proxy_protocol_passthrough();
+                    trace!(
+                        socket_peer = %socket_peer,
+                        "PROXY LOCAL command: keeping socket peer"
+                    );
                     Some(socket_peer)
                 }
                 Ok(Err(e)) => {

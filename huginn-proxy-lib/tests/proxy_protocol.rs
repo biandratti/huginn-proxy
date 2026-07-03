@@ -28,11 +28,11 @@ use tokio_rustls::rustls::pki_types::ServerName;
 use tokio_rustls::rustls::{ClientConfig, RootCertStore};
 use tokio_rustls::TlsConnector;
 
+use huginn_proxy_lib::config::load_from_path;
 use huginn_proxy_lib::config::{
     Backend, Domain, FingerprintConfig, KeepAliveConfig, ListenConfig, LoggingConfig,
     ProxyProtocolMode, Route, SecurityConfig, TelemetryConfig, TimeoutConfig,
 };
-use huginn_proxy_lib::config::load_from_path;
 use huginn_proxy_lib::{Config, Metrics, TlsConfig, WatchOptions};
 
 type BoxError = Box<dyn std::error::Error + Send + Sync>;
@@ -295,7 +295,11 @@ async fn spawn_proxy_tls(
             proxy_protocol: proxy_protocol_mode,
             ..Default::default()
         },
-        backends: vec![Backend { address: backend.to_string(), http_version: None, health_check: None }],
+        backends: vec![Backend {
+            address: backend.to_string(),
+            http_version: None,
+            health_check: None,
+        }],
         domains: vec![Domain {
             host: Some("localhost".to_string()),
             cert_path: Some(cert_file.path().to_string_lossy().into_owned()),
@@ -386,9 +390,8 @@ async fn connect_tls_after_proxy_header(
     server_cert_der: &[u8],
 ) -> Result<tokio_rustls::client::TlsStream<TcpStream>, Box<dyn std::error::Error + Send + Sync>> {
     let mut root_store = RootCertStore::empty();
-    root_store.add(tokio_rustls::rustls::pki_types::CertificateDer::from(
-        server_cert_der.to_vec(),
-    ))?;
+    root_store
+        .add(tokio_rustls::rustls::pki_types::CertificateDer::from(server_cert_der.to_vec()))?;
 
     let client_config = ClientConfig::builder()
         .with_root_certificates(root_store)
@@ -422,18 +425,14 @@ async fn tls_proxy_header_before_clienthello() -> TestResult {
 
     let mut tls_stream = connect_tls_after_proxy_header(proxy, &header, &cert_der).await?;
 
-    let request =
-        b"GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n";
+    let request = b"GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n";
     tls_stream.write_all(request).await?;
 
     let mut buf = Vec::new();
     tls_stream.read_to_end(&mut buf).await?;
     let resp = String::from_utf8_lossy(&buf);
 
-    assert!(
-        resp.contains("200"),
-        "expected a 200 response over TLS, got: {resp}"
-    );
+    assert!(resp.contains("200"), "expected a 200 response over TLS, got: {resp}");
     assert!(
         resp.contains("xff=203.0.113.99"),
         "X-Forwarded-For should be the PROXY-declared client IP, got: {resp}"

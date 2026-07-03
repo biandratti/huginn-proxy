@@ -9,7 +9,7 @@ agent**.
 
 Huginn Proxy provides comprehensive telemetry through:
 
-- **Prometheus Metrics** - 48 metrics covering connections, requests, TLS, fingerprinting, backends, active health
+- **Prometheus Metrics** - 51 metrics covering connections, PROXY protocol, requests, TLS, fingerprinting, backends, active health
   checks, throughput, rate limiting, IP filtering, header manipulation, mTLS, config hot reload, TLS certificate
   hot reload, and fingerprint spoofing detection
 - **Health Check Endpoints** - Kubernetes-ready: `/health`, `/ready`, `/live`, `/metrics`
@@ -148,7 +148,47 @@ rate(huginn_connections_rejected_total[5m])
 
 ---
 
-### 3. Request Metrics
+### 3. PROXY Protocol Metrics
+
+Emitted when `listen.proxy_protocol` is `optional` or `require`. All three counters are zero when
+`proxy_protocol = "off"`.
+
+| Metric                                  | Type    | Description                                                                               | Labels   |
+|-----------------------------------------|---------|-------------------------------------------------------------------------------------------|----------|
+| `huginn_proxy_protocol_accepted_total`    | Counter | Connections where the real client address was recovered from a PROXY header                | -        |
+| `huginn_proxy_protocol_passthrough_total` | Counter | Trusted-peer connections served with the socket peer (no PROXY header, or LOCAL command)   | -        |
+| `huginn_proxy_protocol_dropped_total`     | Counter | Connections dropped at the PROXY address-recovery gate                                     | `reason` |
+
+**Labels**:
+
+- `reason` (on `huginn_proxy_protocol_dropped_total`):
+  - `untrusted_require` — `proxy_protocol=require` and the peer is not in `trusted_proxies`
+  - `bad_header` — signature mismatch, truncated header, or unsupported command/address family
+  - `timeout` — peek or header read exceeded `timeout.tls_handshake_secs`
+
+**Example queries**:
+
+```promql
+# Real-client recovery rate (connections/s where PROXY header was parsed)
+rate(huginn_proxy_protocol_accepted_total[5m])
+
+# Drop rate by reason
+sum by (reason) (rate(huginn_proxy_protocol_dropped_total[5m]))
+
+# Passthrough ratio (trusted peers with no header vs. total trusted-peer connections)
+rate(huginn_proxy_protocol_passthrough_total[5m])
+  / (rate(huginn_proxy_protocol_accepted_total[5m]) + rate(huginn_proxy_protocol_passthrough_total[5m]))
+```
+
+> **Operational tip:** after enabling `proxy_protocol`, watch `huginn_proxy_protocol_accepted_total`.
+> If it stays at zero while `huginn_proxy_protocol_passthrough_total` climbs, the load balancer is
+> not sending headers (misconfigured edge, or wrong `trusted_proxies` CIDR). If
+> `huginn_proxy_protocol_dropped_total{reason="untrusted_require"}` climbs, a peer outside the
+> trusted range is reaching huginn directly.
+
+---
+
+### 4. Request Metrics
 
 | Metric                             | Type      | Description                                                       | Labels                                                 |
 |------------------------------------|-----------|-------------------------------------------------------------------|--------------------------------------------------------|
@@ -221,7 +261,7 @@ sum by (route) (rate(huginn_requests_total{status_code=~"5.."}[5m]))
 
 ---
 
-### 4. TLS Handshake Metrics
+### 5. TLS Handshake Metrics
 
 | Metric                                  | Type      | Description              | Labels                        |
 |-----------------------------------------|-----------|--------------------------|-------------------------------|
@@ -258,7 +298,7 @@ histogram_quantile(0.95, rate(huginn_tls_handshake_duration_seconds_bucket[5m]))
 
 ---
 
-### 5. Fingerprinting Metrics
+### 6. Fingerprinting Metrics
 
 #### TLS Fingerprinting (JA4)
 
@@ -351,7 +391,7 @@ histogram_quantile(0.95, rate(huginn_tls_fingerprint_extraction_duration_seconds
 
 ---
 
-### 6. Backend Metrics
+### 7. Backend Metrics
 
 | Metric                            | Type      | Description                    | Labels                                                          |
 |-----------------------------------|-----------|--------------------------------|-----------------------------------------------------------------|
@@ -427,7 +467,7 @@ sum by (backend) (rate(huginn_health_check_probes_total{result="fail"}[5m]))
 
 ---
 
-### 7. Rate Limiting Metrics
+### 8. Rate Limiting Metrics
 
 | Metric                             | Type    | Description                                   | Labels                        |
 |------------------------------------|---------|-----------------------------------------------|-------------------------------|
@@ -466,7 +506,7 @@ sum by (strategy) (rate(huginn_rate_limit_allowed_total[5m]))
 
 ---
 
-### 8. Error Metrics
+### 9. Error Metrics
 
 | Metric                | Type    | Description          | Labels                    |
 |-----------------------|---------|----------------------|---------------------------|
@@ -489,7 +529,7 @@ rate(huginn_errors_total[5m])
 
 ---
 
-### 9. IP Filtering Metrics
+### 10. IP Filtering Metrics
 
 | Metric                            | Type    | Description                              | Labels |
 |-----------------------------------|---------|------------------------------------------|--------|
@@ -516,7 +556,7 @@ rate(huginn_ip_filter_allowed_total[5m])
 
 ---
 
-### 10. Header Manipulation Metrics
+### 11. Header Manipulation Metrics
 
 | Metric                         | Type    | Description                                  | Labels    |
 |--------------------------------|---------|----------------------------------------------|-----------|
@@ -545,7 +585,7 @@ sum by (context) (rate(huginn_headers_removed_total[5m]))
 
 ---
 
-### 11. mTLS Metrics
+### 12. mTLS Metrics
 
 | Metric                          | Type    | Description                                                       | Labels     |
 |---------------------------------|---------|-------------------------------------------------------------------|------------|
@@ -578,7 +618,7 @@ sum by (protocol) (rate(huginn_mtls_connections_total[5m]))
 
 ---
 
-### 12. Config Hot Reload Metrics
+### 13. Config Hot Reload Metrics
 
 | Metric                                        | Type    | Description                                  | Labels   |
 |-----------------------------------------------|---------|----------------------------------------------|----------|
@@ -604,7 +644,7 @@ sum by (protocol) (rate(huginn_mtls_connections_total[5m]))
 
 ---
 
-### 13. TLS Certificate Hot Reload Metrics
+### 14. TLS Certificate Hot Reload Metrics
 
 | Metric                                          | Type    | Description                                                            | Labels            |
 |-------------------------------------------------|---------|------------------------------------------------------------------------|-------------------|
@@ -649,7 +689,7 @@ sum by (protocol) (rate(huginn_mtls_connections_total[5m]))
 
 ---
 
-### 14. Build Info
+### 15. Build Info
 
 | Metric              | Type  | Description                  | Labels                    |
 |---------------------|-------|------------------------------|---------------------------|
