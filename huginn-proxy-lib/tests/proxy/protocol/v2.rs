@@ -95,7 +95,7 @@ async fn bad_signature_is_rejected() {
 async fn v2_reader_rejects_a_v1_text_header() {
     // A v1 text header fed to the v2 reader must error (the accept loop routes by version, so this
     // only guards direct misuse). The bogus addr_len from the text bytes is caught by either the
-    // allocation cap or the ppp parser — both are acceptable failures.
+    // allocation cap or the ppp parser; both are acceptable failures.
     let mut cursor = Cursor::new(b"PROXY TCP4 1.2.3.4 5.6.7.8 1 2\r\n".to_vec());
     let result = read_proxy_header_v2(&mut cursor).await;
     assert!(result.is_err(), "got {result:?}");

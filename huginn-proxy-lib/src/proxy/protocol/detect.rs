@@ -1,7 +1,7 @@
 //! Non-destructive version detection for an inbound connection.
 //!
 //! Peeks (`MSG_PEEK`) the first bytes to classify the stream as PROXY v1, v2, or neither, without
-//! consuming anything — so a missing header leaves the stream intact for the TLS ClientHello.
+//! consuming anything, so a missing header leaves the stream intact for the TLS ClientHello.
 
 use tokio::net::TcpStream;
 
@@ -11,7 +11,7 @@ use super::v2::V2_SIGNATURE;
 /// Outcome of non-destructively sniffing the first bytes of a connection.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ProxyProtocolDetection {
-    /// No PROXY header — the first bytes match neither signature (e.g. a TLS ClientHello).
+    /// No PROXY header: the first bytes match neither signature (e.g. a TLS ClientHello).
     None,
     /// A v1 text header (`PROXY …\r\n`).
     V1,

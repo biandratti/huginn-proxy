@@ -47,7 +47,7 @@ fn source_from_v2(header: &ppp::v2::Header) -> ProxySource {
 /// Read and **consume** a PROXY protocol v2 header from `stream`.
 ///
 /// Frames the read (fixed 16 bytes + the declared address length, TLVs included) so the stream is
-/// left aligned on the byte that follows the header — the TLS ClientHello in the passthrough case —
+/// left aligned on the byte that follows the header (TLS ClientHello in passthrough),
 /// then delegates field parsing to [`ppp`].
 ///
 /// Generic over `AsyncRead` so it can be unit-tested with in-memory buffers; the accept loop

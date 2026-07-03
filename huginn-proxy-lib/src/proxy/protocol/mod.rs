@@ -6,15 +6,15 @@
 //! load balancer to recover the original client `(src_ip, src_port)`.
 //!
 //! The recovered address replaces the socket peer for eBPF SYN correlation, `X-Forwarded-*`,
-//! rate-limiting, IP filtering and logs. See `data/proxy-protocol.md` for the full design.
+//! rate-limiting, IP filtering and logs.
 //!
 //! Both encodings are supported, one reader per version:
 //!
-//! - [`v2`] — the binary encoding, the primary path (Traefik, Envoy, AWS NLB, most modern LBs).
-//! - [`v1`] — the legacy text line (e.g. HAProxy `send-proxy`).
+//! - `v2`: the binary encoding, the primary path (Traefik, Envoy, AWS NLB, most modern LBs).
+//! - `v1`: the legacy text line (e.g. HAProxy `send-proxy`).
 //!
-//! In both cases the stream is left aligned on the byte that follows the header — the TLS
-//! ClientHello in the passthrough case — so [`detect`]ion via `MSG_PEEK` and consume-exactly-N keep
+//! In both cases the stream is left aligned on the byte that follows the header (the TLS
+//! ClientHello in passthrough), so detection via `MSG_PEEK` and consume-exactly-N keep
 //! the handshake intact. The `P` (`0x50`) that starts a v1 line and the `0x0D` that starts a v2
 //! header are both distinct from a TLS record type, so a missing header is detected without
 //! consuming.
@@ -46,7 +46,7 @@ pub enum ProxyProtocolError {
     Io(std::io::Error),
     /// The `ppp` parser rejected the header bytes (bad signature/version/family, truncation, …).
     Parse(String),
-    /// The declared v2 `addr_len` exceeds `V2_MAX_ADDR_LEN` — rejected before allocating.
+    /// The declared v2 `addr_len` exceeds `V2_MAX_ADDR_LEN`, rejected before allocating.
     AddrLenTooLarge(usize),
     /// A v1 text header reached `V1_MAX_LENGTH` bytes without a terminating `\r\n`.
     V1HeaderTooLong,
@@ -80,7 +80,7 @@ pub enum ProxySource {
     Local,
     /// PROXY command carrying a non-IP address family (AF_UNSPEC / AF_UNIX): a client address was
     /// expected but none is usable. The caller still falls back to the socket peer, but correlation
-    /// (eBPF SYN lookup, `X-Forwarded-*`) is degraded — worth a warning and a metric.
+    /// (eBPF SYN lookup, `X-Forwarded-*`) is degraded; worth a warning and a metric.
     NoClientAddr,
 }
 
@@ -88,7 +88,7 @@ pub enum ProxySource {
 ///
 /// A dual-stack listener bound to `[::]` reports an incoming IPv4 connection with an
 /// IPv4-mapped IPv6 peer address. The `trusted_proxies` gate matches the peer against configured
-/// CIDRs, and an `IpNet::V4` entry does **not** contain an `IpAddr::V6` — so without this the
+/// CIDRs, and an `IpNet::V4` entry does **not** contain an `IpAddr::V6`, so without this the
 /// trust check silently fails for an IPv4 proxy on a dual-stack listener and the whole feature
 /// degrades to `off`. Applied to the peer IP before the trust check. Mirrors rust-rpxy.
 pub fn normalize_mapped_ipv4(addr: IpAddr) -> IpAddr {
@@ -105,7 +105,7 @@ pub fn normalize_mapped_ipv4(addr: IpAddr) -> IpAddr {
 ///
 /// The PROXY header is only ever honored from an IP in `security.trusted_proxies`. When that list
 /// is empty there is no peer to trust, so:
-/// - `require` drops **every** connection (fail-closed) — almost always a misconfiguration → `error`
+/// - `require` drops **every** connection (fail-closed), almost always a misconfiguration → `error`
 /// - `optional` never parses a header, silently degrading to `off` → `warn`
 ///
 /// `trusted_proxies` is dynamic (hot-reloadable), so this is checked both at startup and on each
