@@ -6,11 +6,11 @@
 
 **`huginn-proxy-lib`** - Core proxy logic. Platform-agnostic. Handles TCP accept, TLS, HTTP routing, fingerprint header injection, backend forwarding, rate limiting, telemetry, and connection management.
 
-**`huginn-ebpf-common`** - Shared `no_std` crate for TCP SYN fingerprinting. Defines `SynRawDataV4` / `SynRawDataV6` layout, `quirk_bits` constants, and `make_key(src_ip, src_port)` encoding. Used by both `huginn-ebpf-xdp` (kernel) and `huginn-ebpf` (userspace) so map layout and key encoding stay in sync. Optional feature `aya` enables `aya::Pod` for those types in userspace only.
+**`huginn-ebpf-common`** - Shared `no_std` crate for TCP SYN fingerprinting. Defines `SynRawDataV4` / `SynRawDataV6` layout, `quirk_bits` constants, and `make_key(src_ip, src_port)` encoding. Used by both `huginn-ebpf-programs` (kernel) and `huginn-ebpf` (userspace) so map layout and key encoding stay in sync. Optional feature `aya` enables `aya::Pod` for those types in userspace only.
 
-**`huginn-ebpf`** - eBPF loader. Linux-only, gated behind the `ebpf-tcp` feature. Opens pinned BPF maps (or loads XDP when embedded), reads `SynRawDataV4` / `SynRawDataV6` from the map, and exposes `parse_syn()` to turn raw captured data into a `TcpObservation`. Depends on `huginn-ebpf-common` for types and `quirk_bits`.
+**`huginn-ebpf`** - eBPF loader. Linux-only, gated behind the `ebpf-tcp` feature. Opens pinned BPF maps (or loads the capture program when embedded), reads `SynRawDataV4` / `SynRawDataV6` from the map, and exposes `parse_syn()` to turn raw captured data into a `TcpObservation`. Depends on `huginn-ebpf-common` for types and `quirk_bits`.
 
-**`huginn-ebpf-xdp`** - BPF kernel program. Compiled with nightly for `bpfel-unknown-none`, embedded into `huginn-ebpf` at build time. Captures TCP SYN packets and writes `SynRawDataV4` / `SynRawDataV6` into BPF LRU maps keyed by `(src_ip, src_port)`. Ships two hooks in one object — `huginn_xdp_syn` (XDP) and `huginn_tc_syn` (TC `clsact` ingress, for VLAN/bond) — sharing the same maps and capture logic. Depends on `huginn-ebpf-common` for those types, `quirk_bits`, and `make_key`.
+**`huginn-ebpf-programs`** - BPF kernel programs. Compiled with nightly for `bpfel-unknown-none`, embedded into `huginn-ebpf` at build time. Ships two hooks in one object that share maps, key encoding, and value layout: `huginn_xdp_syn` (XDP, for physical/veth interfaces) and `huginn_tc_syn` (TC `clsact` ingress, for VLAN/bond interfaces where generic XDP drops GRO-merged data packets). Depends on `huginn-ebpf-common` for types, `quirk_bits`, and `make_key`.
 
 **`huginn-ebpf-agent`** - Standalone eBPF agent. Loads the selected capture program (XDP or TC, via `HUGINN_EBPF_CAPTURE`), pins BPF maps to `/sys/fs/bpf/huginn/`, and stays alive until SIGTERM. Designed to run as a DaemonSet so that the proxy (Deployment) can open pinned maps without `CAP_NET_ADMIN`.
 
@@ -19,7 +19,7 @@
 ## TCP SYN fingerprinting via eBPF/XDP
 
 ```
-huginn-ebpf-xdp (kernel)          huginn-ebpf                huginn-proxy
+huginn-ebpf-programs (kernel)      huginn-ebpf                huginn-proxy
 ───────────────────────────────    ──────────────────────     ──────────────────
 SynRawDataV4 { window, ip_ttl,     parse_syn(&raw)            match result {
   optlen, options[40],          →    parse_options_raw()   →    Hit(obs) → inject headers

@@ -3,7 +3,7 @@
 //! Shared logic for TCP SYN fingerprinting between the XDP program and userspace.
 //!
 //! Contract: `quirk_bits`, `SynRawDataV4`/`SynRawDataV6` layout, and key encoding must match
-//! both `huginn-ebpf-xdp` and `huginn-ebpf`.
+//! both `huginn-ebpf-programs` and `huginn-ebpf`.
 
 pub mod quirk_bits;
 pub mod syn_raw_v4;

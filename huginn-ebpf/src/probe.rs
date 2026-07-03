@@ -18,7 +18,7 @@ use crate::XdpAttachMode;
 static XDP_BPF_BYTES: &[u8] = aya::include_bytes_aligned!(concat!(env!("OUT_DIR"), "/xdp.bpf.o"));
 
 /// Default max entries for the TCP SYN LRU map when not overridden by the agent.
-/// Must match huginn-ebpf-xdp's TCP_SYN_MAP_V4_MAX_ENTRIES (ELF default).
+/// Must match huginn-ebpf-programs's TCP_SYN_MAP_V4_MAX_ENTRIES (ELF default).
 pub const DEFAULT_SYN_MAP_MAX_ENTRIES: u32 = 8192;
 
 enum ProbeInner {
@@ -58,7 +58,7 @@ impl EbpfProbe {
     /// - `dst_ip_v6`: proxy IPv6 listen IP. `::` disables the IPv6 destination filter.
     /// - `dst_port`: proxy listen port. Always active as a filter.
     /// - `syn_map_max_entries`: capacity of the LRU map (default 8192).
-    /// - `backend`: [`CaptureBackend::Xdp`] (driver/generic XDP) or [`CaptureBackend::Tc`]
+    /// - `capture`: [`CaptureBackend::Xdp`] (driver/generic XDP) or [`CaptureBackend::Tc`]
     ///   (clsact ingress; required on VLAN/bond interfaces where generic XDP drops GRO-merged
     ///   data packets).
     ///
@@ -71,7 +71,7 @@ impl EbpfProbe {
         dst_ip_v6: Ipv6Addr,
         dst_port: u16,
         syn_map_max_entries: u32,
-        backend: CaptureBackend,
+        capture: CaptureBackend,
     ) -> Result<Self, EbpfError> {
         // XDP compares ip->daddr and tcp->dest (both network-byte-order fields) against these
         // globals. On a little-endian CPU, network-order bytes [a,b,c,d] in the packet are read
@@ -100,7 +100,7 @@ impl EbpfProbe {
             .load(XDP_BPF_BYTES)
             .map_err(EbpfError::Load)?;
 
-        let mode_str = match backend {
+        let mode_str = match capture {
             CaptureBackend::Xdp(xdp_mode) => attach_xdp(&mut ebpf, interface, xdp_mode)?,
             CaptureBackend::Tc => attach_tc(&mut ebpf, interface)?,
         };

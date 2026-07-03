@@ -26,7 +26,7 @@ fi
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$REPO_ROOT"
 
-# All Cargo.toml files (includes huginn-ebpf-xdp which is outside the workspace)
+# All Cargo.toml files (includes huginn-ebpf-programs which is outside the workspace)
 mapfile -t TOMLS < <(find . -name "Cargo.toml" -not -path "*/target/*")
 
 for f in "${TOMLS[@]}"; do
