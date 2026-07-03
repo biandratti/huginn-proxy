@@ -6,6 +6,7 @@ mod h2c_forwarding;
 mod handler;
 mod http_result;
 mod path_manipulation;
+mod protocol;
 mod reload;
 mod resolve;
 mod router;

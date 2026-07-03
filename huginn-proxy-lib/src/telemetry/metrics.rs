@@ -42,6 +42,10 @@ pub mod values {
     pub const REASON_SHUTDOWN: &str = "shutdown";
     pub const HEALTH_PROBE_OK: &str = "ok";
     pub const HEALTH_PROBE_FAIL: &str = "fail";
+    /// PROXY protocol drop reasons for `proxy_protocol_dropped_total{reason=...}`.
+    pub const PROXY_PROTOCOL_DROP_UNTRUSTED_REQUIRE: &str = "untrusted_require";
+    pub const PROXY_PROTOCOL_DROP_BAD_HEADER: &str = "bad_header";
+    pub const PROXY_PROTOCOL_DROP_TIMEOUT: &str = "timeout";
 }
 
 #[derive(Clone)]
@@ -77,6 +81,17 @@ pub struct Metrics {
     // Fingerprint spoofing detection metrics
     // header label: the proxy-authoritative header name the client attempted to supply
     pub fingerprint_spoofing_attempts_total: Counter<u64>,
+
+    // PROXY protocol (source address recovery for L4-forwarded connections)
+    /// Real client address recovered from a PROXY header sent by a trusted peer.
+    pub proxy_protocol_accepted_total: Counter<u64>,
+    /// Trusted peer served with the socket peer (no header present, or a LOCAL/UNKNOWN command).
+    pub proxy_protocol_passthrough_total: Counter<u64>,
+    /// Trusted peer sent a PROXY command with a non-IP address family (AF_UNSPEC/AF_UNIX): no client
+    /// address could be recovered, so correlation (eBPF SYN, XFF) is degraded for that connection.
+    pub proxy_protocol_no_client_addr_total: Counter<u64>,
+    /// Connection dropped at the address-recovery gate. reason=untrusted_require|bad_header|timeout
+    pub proxy_protocol_dropped_total: Counter<u64>,
 
     pub backend_requests_total: Counter<u64>,
     pub backend_errors_total: Counter<u64>,
@@ -232,6 +247,23 @@ impl Metrics {
             fingerprint_spoofing_attempts_total: meter
                 .u64_counter("huginn_fingerprint_spoofing_attempts_total")
                 .with_description("Total number of proxy-authoritative fingerprint headers supplied by clients (spoofing attempts). header=the stripped header name")
+                .build(),
+
+            proxy_protocol_accepted_total: meter
+                .u64_counter("huginn_proxy_protocol_accepted_total")
+                .with_description("Total connections where the real client address was recovered from a PROXY header sent by a trusted peer")
+                .build(),
+            proxy_protocol_passthrough_total: meter
+                .u64_counter("huginn_proxy_protocol_passthrough_total")
+                .with_description("Total trusted-peer connections served with the socket peer (no PROXY header present, or a LOCAL/UNKNOWN command)")
+                .build(),
+            proxy_protocol_no_client_addr_total: meter
+                .u64_counter("huginn_proxy_protocol_no_client_addr_total")
+                .with_description("Total trusted-peer connections where a PROXY command carried a non-IP address family (AF_UNSPEC/AF_UNIX); the client address could not be recovered and correlation is degraded")
+                .build(),
+            proxy_protocol_dropped_total: meter
+                .u64_counter("huginn_proxy_protocol_dropped_total")
+                .with_description("Total connections dropped at the PROXY address-recovery gate. reason=untrusted_require|bad_header|timeout")
                 .build(),
 
             backend_requests_total: meter
@@ -773,6 +805,29 @@ impl Metrics {
         if result == "malformed" {
             self.tcp_syn_fingerprint_failures_total.add(1, &[]);
         }
+    }
+
+    /// Real client address recovered from a PROXY header sent by a trusted peer.
+    pub fn record_proxy_protocol_accepted(&self) {
+        self.proxy_protocol_accepted_total.add(1, &[]);
+    }
+
+    /// Trusted peer served with the socket peer (no header present, or a LOCAL/UNKNOWN command).
+    pub fn record_proxy_protocol_passthrough(&self) {
+        self.proxy_protocol_passthrough_total.add(1, &[]);
+    }
+
+    /// Trusted peer sent a PROXY command with a non-IP address family (AF_UNSPEC/AF_UNIX): the
+    /// client address could not be recovered, so correlation is degraded for that connection.
+    pub fn record_proxy_protocol_no_client_addr(&self) {
+        self.proxy_protocol_no_client_addr_total.add(1, &[]);
+    }
+
+    /// Connection dropped at the address-recovery gate. `reason` should be one of the
+    /// `values::PROXY_PROTOCOL_DROP_*` constants.
+    pub fn record_proxy_protocol_dropped(&self, reason: &'static str) {
+        self.proxy_protocol_dropped_total
+            .add(1, &[KeyValue::new(labels::REASON, reason)]);
     }
 }
 

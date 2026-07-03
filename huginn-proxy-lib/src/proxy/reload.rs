@@ -4,6 +4,7 @@ use crate::config::{
     StaticConfig,
 };
 use crate::proxy::client_pool::ClientPool;
+use crate::proxy::protocol::warn_proxy_protocol_trust_gap;
 use crate::security::RateLimitManager;
 use crate::telemetry::Metrics;
 use crate::tls::DynamicCertResolver;
@@ -85,6 +86,11 @@ pub async fn try_reload(
     let old_dynamic = dynamic_cfg.load();
 
     audit_config_changes(&old_dynamic, &new_dynamic);
+
+    warn_proxy_protocol_trust_gap(
+        static_cfg.listen.proxy_protocol,
+        &new_dynamic.security.trusted_proxies,
+    );
 
     let hash = fnv1a_hash(&new_dynamic);
     let old_hash = fnv1a_hash(&old_dynamic);
