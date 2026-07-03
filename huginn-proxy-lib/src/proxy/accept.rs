@@ -3,7 +3,7 @@ use crate::backend::{BackendSelector, UpstreamGateway};
 use crate::config::{FingerprintConfig, KeepAliveConfig, ProxyProtocolMode};
 use crate::fingerprinting::{SynResult, TcpObservation};
 use crate::proxy::connection::{ConnectionError, ConnectionManager};
-use crate::proxy::proxy_protocol::{
+use crate::proxy::protocol::{
     detect_proxy_protocol, normalize_mapped_ipv4, read_proxy_header_v1, read_proxy_header_v2,
     ProxyProtocolDetection, ProxySource,
 };
@@ -23,7 +23,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::time::{timeout, Duration, Instant};
-use tracing::{debug, error, trace, warn};
+use tracing::{debug, trace, warn};
 
 /// Callback type for TCP SYN fingerprint lookup.
 ///
@@ -315,31 +315,5 @@ async fn resolve_peer(
                 }
             }
         }
-    }
-}
-
-/// Diagnose a `proxy_protocol` configuration that can never trust a peer.
-///
-/// The PROXY header is only ever honored from an IP in `security.trusted_proxies`. When that list
-/// is empty there is no peer to trust, so:
-/// - `require` drops **every** connection (fail-closed) — almost always a misconfiguration → `error`
-/// - `optional` never parses a header, silently degrading to `off` → `warn`
-///
-/// `trusted_proxies` is dynamic (hot-reloadable), so this is checked both at startup and on each
-/// reload. `off` is a no-op.
-pub(crate) fn warn_proxy_protocol_trust_gap(mode: ProxyProtocolMode, trusted_proxies: &[IpNet]) {
-    if !trusted_proxies.is_empty() {
-        return;
-    }
-    match mode {
-        ProxyProtocolMode::Require => error!(
-            "proxy_protocol=require but security.trusted_proxies is empty: every connection will \
-             be dropped (no peer can be trusted to send a PROXY header)"
-        ),
-        ProxyProtocolMode::Optional => warn!(
-            "proxy_protocol=optional but security.trusted_proxies is empty: no peer is trusted, \
-             the PROXY header is never parsed (effectively behaves as off)"
-        ),
-        ProxyProtocolMode::Off => {}
     }
 }

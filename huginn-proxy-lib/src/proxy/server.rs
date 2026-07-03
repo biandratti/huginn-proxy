@@ -4,9 +4,10 @@ use crate::config::watcher::spawn_config_watcher;
 use crate::config::StaticConfig;
 use crate::error::Result;
 pub use crate::proxy::accept::SynProbe;
-use crate::proxy::accept::{accept_loop, warn_proxy_protocol_trust_gap, AcceptContext};
+use crate::proxy::accept::{accept_loop, AcceptContext};
 use crate::proxy::connection::ConnectionManager;
 use crate::proxy::listener::{bind_listener, register_signal};
+use crate::proxy::protocol::warn_proxy_protocol_trust_gap;
 use crate::proxy::reload::{
     initial_client_pool, initial_rate_limiter, try_reload, SharedDynamicConfig,
 };

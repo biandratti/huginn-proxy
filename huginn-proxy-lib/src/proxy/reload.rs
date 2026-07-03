@@ -3,8 +3,8 @@ use crate::config::{
     load_from_path, Backend, BackendPoolConfig, Domain, DynamicConfig, RateLimitConfig,
     StaticConfig,
 };
-use crate::proxy::accept::warn_proxy_protocol_trust_gap;
 use crate::proxy::client_pool::ClientPool;
+use crate::proxy::protocol::warn_proxy_protocol_trust_gap;
 use crate::security::RateLimitManager;
 use crate::telemetry::Metrics;
 use crate::tls::DynamicCertResolver;
