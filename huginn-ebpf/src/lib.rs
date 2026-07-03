@@ -23,21 +23,34 @@ pub enum XdpAttachMode {
     Skb,
 }
 
+/// Which BPF hook captures TCP SYNs. Both hooks live in the same ELF and share all maps; the
+/// loader attaches exactly one.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CaptureBackend {
+    /// XDP (`huginn_xdp_syn`). Native or generic/SKB mode. Best on physical/veth interfaces.
+    /// On VLAN/bond interfaces only generic XDP attaches, and generic XDP **drops GRO-merged data
+    /// packets** for single-buffer programs — use [`CaptureBackend::Tc`] there instead.
+    Xdp(XdpAttachMode),
+    /// TC clsact ingress (`huginn_tc_syn`). Reads via `bpf_skb_load_bytes` (GRO-safe) and never
+    /// drops packets. Works on veth/VLAN/bond/physical alike. Recommended on VLAN/bond edges.
+    Tc,
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum EbpfError {
     #[error("failed to load BPF object: {0}")]
     Load(#[from] aya::EbpfError),
 
-    #[error("XDP program 'huginn_xdp_syn' not found in BPF object")]
+    #[error("BPF program not found in BPF object (expected 'huginn_xdp_syn' or 'huginn_tc_syn')")]
     ProgramNotFound,
 
-    #[error("BPF program is not an XDP program: {0}")]
+    #[error("BPF program has an unexpected type: {0}")]
     ProgramType(#[source] aya::programs::ProgramError),
 
-    #[error("failed to load XDP program into kernel: {0}")]
+    #[error("failed to load BPF program into kernel: {0}")]
     ProgramLoad(#[source] aya::programs::ProgramError),
 
-    #[error("failed to attach XDP program to interface: {0}")]
+    #[error("failed to attach BPF program to interface: {0}")]
     Attach(#[source] aya::programs::ProgramError),
 
     #[error("failed to pin BPF map '{name}': {source}")]

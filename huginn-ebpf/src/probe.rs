@@ -3,12 +3,13 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 
 use aya::maps::{Array, HashMap, Map, MapData};
-use aya::programs::{Xdp, XdpMode};
+use aya::programs::{tc, SchedClassifier, TcAttachType, Xdp, XdpMode};
 use aya::{Ebpf, EbpfLoader};
 use tracing::{debug, info, warn};
 
 use crate::pin;
 use crate::types::{SynRawDataV4, SynRawDataV6};
+use crate::CaptureBackend;
 use crate::EbpfError;
 use crate::XdpAttachMode;
 
@@ -57,18 +58,20 @@ impl EbpfProbe {
     /// - `dst_ip_v6`: proxy IPv6 listen IP. `::` disables the IPv6 destination filter.
     /// - `dst_port`: proxy listen port. Always active as a filter.
     /// - `syn_map_max_entries`: capacity of the LRU map (default 8192).
-    /// - `xdp_mode`: [`XdpAttachMode::Native`] (driver-level, default) or [`XdpAttachMode::Skb`]
-    ///   (generic/software).
+    /// - `backend`: [`CaptureBackend::Xdp`] (driver/generic XDP) or [`CaptureBackend::Tc`]
+    ///   (clsact ingress; required on VLAN/bond interfaces where generic XDP drops GRO-merged
+    ///   data packets).
     ///
-    /// All dst values are patched into the XDP program's `.rodata` via `EbpfLoader::override_global`
+    /// All dst values are patched into the program's `.rodata` via `EbpfLoader::override_global`
     /// before the kernel loads the program, matching `cilium/ebpf`'s `spec.Variables` pattern.
+    /// Both hooks share the same `.rodata` globals and maps in the single embedded ELF.
     pub fn new(
         interface: &str,
         dst_ip_v4: Ipv4Addr,
         dst_ip_v6: Ipv6Addr,
         dst_port: u16,
         syn_map_max_entries: u32,
-        xdp_mode: XdpAttachMode,
+        backend: CaptureBackend,
     ) -> Result<Self, EbpfError> {
         // XDP compares ip->daddr and tcp->dest (both network-byte-order fields) against these
         // globals. On a little-endian CPU, network-order bytes [a,b,c,d] in the packet are read
@@ -97,22 +100,10 @@ impl EbpfProbe {
             .load(XDP_BPF_BYTES)
             .map_err(EbpfError::Load)?;
 
-        let program: &mut Xdp = ebpf
-            .program_mut("huginn_xdp_syn")
-            .ok_or(EbpfError::ProgramNotFound)?
-            .try_into()
-            .map_err(EbpfError::ProgramType)?;
-
-        program.load().map_err(EbpfError::ProgramLoad)?;
-
-        let (aya_mode, mode_str) = match xdp_mode {
-            XdpAttachMode::Skb => (XdpMode::Skb, "skb"),
-            XdpAttachMode::Native => (XdpMode::Driver, "native"),
+        let mode_str = match backend {
+            CaptureBackend::Xdp(xdp_mode) => attach_xdp(&mut ebpf, interface, xdp_mode)?,
+            CaptureBackend::Tc => attach_tc(&mut ebpf, interface)?,
         };
-        info!(interface, mode = mode_str, "eBPF XDP attaching");
-        program
-            .attach(interface, aya_mode)
-            .map_err(EbpfError::Attach)?;
 
         let filter_ip_v4 = if dst_ip_v4.is_unspecified() {
             "any".to_string()
@@ -130,7 +121,7 @@ impl EbpfProbe {
             filter_ip_v6,
             dst_port,
             mode = mode_str,
-            "eBPF XDP TCP SYN fingerprinting attached"
+            "eBPF TCP SYN fingerprinting attached"
         );
 
         Ok(Self {
@@ -498,6 +489,56 @@ impl EbpfProbe {
     pub fn interface(&self) -> &str {
         &self.interface
     }
+}
+
+/// Load and attach the XDP program (`huginn_xdp_syn`). Returns the mode label for logging.
+fn attach_xdp(
+    ebpf: &mut Ebpf,
+    interface: &str,
+    xdp_mode: XdpAttachMode,
+) -> Result<&'static str, EbpfError> {
+    let program: &mut Xdp = ebpf
+        .program_mut("huginn_xdp_syn")
+        .ok_or(EbpfError::ProgramNotFound)?
+        .try_into()
+        .map_err(EbpfError::ProgramType)?;
+
+    program.load().map_err(EbpfError::ProgramLoad)?;
+
+    let (aya_mode, mode_str) = match xdp_mode {
+        XdpAttachMode::Skb => (XdpMode::Skb, "xdp-skb"),
+        XdpAttachMode::Native => (XdpMode::Driver, "xdp-native"),
+    };
+    info!(interface, mode = mode_str, "eBPF XDP attaching");
+    program
+        .attach(interface, aya_mode)
+        .map_err(EbpfError::Attach)?;
+    Ok(mode_str)
+}
+
+/// Load and attach the TC clsact ingress classifier (`huginn_tc_syn`). Returns the mode label.
+///
+/// A `clsact` qdisc must exist before attaching an ingress classifier. `qdisc_add_clsact` is
+/// idempotent at the netlink layer (a pre-existing qdisc returns `EEXIST`), so a non-fatal error
+/// here is logged and ignored: a leftover qdisc from a previous run is harmless and reused.
+fn attach_tc(ebpf: &mut Ebpf, interface: &str) -> Result<&'static str, EbpfError> {
+    if let Err(e) = tc::qdisc_add_clsact(interface) {
+        warn!(interface, error = %e, "clsact qdisc add returned an error (continuing; likely already present)");
+    }
+
+    let program: &mut SchedClassifier = ebpf
+        .program_mut("huginn_tc_syn")
+        .ok_or(EbpfError::ProgramNotFound)?
+        .try_into()
+        .map_err(EbpfError::ProgramType)?;
+
+    program.load().map_err(EbpfError::ProgramLoad)?;
+
+    info!(interface, mode = "tc", "eBPF TC clsact ingress attaching");
+    program
+        .attach(interface, TcAttachType::Ingress)
+        .map_err(EbpfError::Attach)?;
+    Ok("tc")
 }
 
 /// Read the `syn_insert_failures_v4` counter from a pinned map at `base_path`.

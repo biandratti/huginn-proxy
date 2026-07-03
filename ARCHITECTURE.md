@@ -10,9 +10,9 @@
 
 **`huginn-ebpf`** - eBPF loader. Linux-only, gated behind the `ebpf-tcp` feature. Opens pinned BPF maps (or loads XDP when embedded), reads `SynRawDataV4` / `SynRawDataV6` from the map, and exposes `parse_syn()` to turn raw captured data into a `TcpObservation`. Depends on `huginn-ebpf-common` for types and `quirk_bits`.
 
-**`huginn-ebpf-xdp`** - XDP kernel program. Compiled with nightly for `bpfel-unknown-none`, embedded into `huginn-ebpf` at build time. Captures TCP SYN packets and writes `SynRawDataV4` / `SynRawDataV6` into BPF LRU maps keyed by `(src_ip, src_port)`. Depends on `huginn-ebpf-common` for those types, `quirk_bits`, and `make_key`.
+**`huginn-ebpf-xdp`** - BPF kernel program. Compiled with nightly for `bpfel-unknown-none`, embedded into `huginn-ebpf` at build time. Captures TCP SYN packets and writes `SynRawDataV4` / `SynRawDataV6` into BPF LRU maps keyed by `(src_ip, src_port)`. Ships two hooks in one object — `huginn_xdp_syn` (XDP) and `huginn_tc_syn` (TC `clsact` ingress, for VLAN/bond) — sharing the same maps and capture logic. Depends on `huginn-ebpf-common` for those types, `quirk_bits`, and `make_key`.
 
-**`huginn-ebpf-agent`** - Standalone eBPF agent. Loads the XDP program, pins BPF maps to `/sys/fs/bpf/huginn/`, and stays alive until SIGTERM. Designed to run as a DaemonSet so that the proxy (Deployment) can open pinned maps without `CAP_NET_ADMIN`.
+**`huginn-ebpf-agent`** - Standalone eBPF agent. Loads the selected capture program (XDP or TC, via `HUGINN_EBPF_CAPTURE`), pins BPF maps to `/sys/fs/bpf/huginn/`, and stays alive until SIGTERM. Designed to run as a DaemonSet so that the proxy (Deployment) can open pinned maps without `CAP_NET_ADMIN`.
 
 ---
 
@@ -37,3 +37,7 @@ pub type SynProbe = Arc<dyn Fn(SocketAddr) -> SynResult + Send + Sync>;
 ```
 
 `huginn-proxy` provides the implementation; `huginn-proxy-lib` only calls it.
+
+Behind an L4 passthrough proxy the accepted socket peer is the proxy, not the client, so the SYN key would be wrong. Enable `listen.proxy_protocol` (`optional`/`require`) so huginn reads a PROXY protocol v2 header from a trusted proxy and uses the client's `(src_ip, src_port)` from it as the `SynProbe` key (and for `X-Forwarded-*`).
+
+The capture hook is selectable via `HUGINN_EBPF_CAPTURE` (`xdp-native` | `xdp-skb` | `tc`). The single BPF object embeds two programs sharing the same maps/keys/values: `huginn_xdp_syn` (XDP) and `huginn_tc_syn` (TC `clsact` ingress). On **VLAN/bond** interfaces (no native XDP) use `tc`: generic XDP drops GRO-merged data packets, whereas TC ingress reads via `bpf_skb_load_bytes` (GRO-safe) and returns `TC_ACT_OK`, never dropping. The proxy reads the same pinned maps regardless of backend.

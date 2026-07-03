@@ -55,7 +55,7 @@ async fn main() -> Result<()> {
         cfg.dst_ip_v6,
         cfg.dst_port,
         cfg.syn_map_max_entries,
-        cfg.xdp_mode,
+        cfg.capture,
     )?;
     probe.pin_maps(&cfg.pin_path)?;
 
@@ -72,23 +72,20 @@ async fn main() -> Result<()> {
             telemetry::start_observability_server(&listen_addr, port, registry, pin_path_str).await;
     });
 
-    let xdp_mode_str = match cfg.xdp_mode {
-        config::XdpAttachMode::Native => "native",
-        config::XdpAttachMode::Skb => "skb",
-    };
+    let capture_str = config::capture_label(cfg.capture);
     tracing::info!(
         interface = %cfg.interface,
         pin_path = %cfg.pin_path,
         dst_ip_v4 = %cfg.dst_ip_v4,
         dst_ip_v6 = %cfg.dst_ip_v6,
         dst_port = %cfg.dst_port,
-        xdp_mode = xdp_mode_str,
+        capture = capture_str,
         "eBPF agent ready, waiting for SIGTERM"
     );
 
     wait_for_shutdown_signal().await?;
 
-    tracing::info!("Shutting down, unpinning maps and detaching XDP");
+    tracing::info!("Shutting down, unpinning maps and detaching capture program");
     EbpfProbe::unpin_maps(&cfg.pin_path);
     drop(probe);
 

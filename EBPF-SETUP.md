@@ -111,7 +111,27 @@ No `seccomp:unconfined` or `apparmor:unconfined` needed.
 | `HUGINN_EBPF_DST_PORT` | `7000` | Destination port filter (proxy listen port) |
 | `HUGINN_EBPF_PIN_PATH` | `/sys/fs/bpf/huginn` | Pin directory (default shown) |
 | `HUGINN_EBPF_SYN_MAP_MAX_ENTRIES` | `8192` | LRU map capacity (default shown) |
-| `HUGINN_EBPF_XDP_MODE` | `native` | XDP attach mode: `native` (default, driver-level) or `skb` (generic, for veth/loopback) |
+| `HUGINN_EBPF_CAPTURE` | `xdp-native` | Capture hook/backend: `xdp-native` (default, driver-level XDP), `xdp-skb` (generic XDP, for veth/loopback), or `tc` (clsact ingress) |
+| `HUGINN_EBPF_XDP_MODE` | _(unset)_ | **Deprecated** alias for `HUGINN_EBPF_CAPTURE`: `native`→`xdp-native`, `skb`→`xdp-skb`. Ignored when `HUGINN_EBPF_CAPTURE` is set. |
+
+#### Choosing a capture backend
+
+Both hooks live in the same BPF object and share identical maps, key encoding, and value layout —
+the proxy reads the same pinned maps regardless of backend. Only the kernel hook and attach
+mechanism differ.
+
+- **`xdp-native`** — driver-level XDP. Lowest overhead. Requires NIC driver XDP support.
+- **`xdp-skb`** — generic XDP in the kernel stack. Works on veth/loopback/VMs.
+- **`tc`** — TC `clsact` **ingress** classifier. Reads packet bytes via `bpf_skb_load_bytes`
+  (GRO-safe) and returns `TC_ACT_OK`, so it **never drops** packets and works on **VLAN/bond**
+  interfaces.
+
+> **VLAN/bond edge interfaces (e.g. `bond0.44`): use `tc`.** These drivers have no native XDP, so
+> XDP can only attach in **generic** mode — and generic XDP **drops GRO-merged data packets** for
+> single-buffer programs (the SYN often passes but the following TLS ClientHello is dropped, so
+> connections hang). TC ingress avoids this entirely. Capabilities are the same as the XDP path
+> (`CAP_NET_ADMIN` + `CAP_BPF`/`CAP_PERFMON` + host network namespace); no new privileges.
+> See `data/ebpf-vlan-tc-capture.md` for the full root-cause analysis.
 
 ### Proxy configuration (`config.toml`)
 
