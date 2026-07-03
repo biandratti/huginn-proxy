@@ -2254,6 +2254,8 @@ dependencies = [
  "fastrand",
  "futures-io",
 ]
+
+[[package]]
 name = "pkg-config"
 version = "0.3.33"
 source = "registry+https://github.com/rust-lang/crates.io-index"
