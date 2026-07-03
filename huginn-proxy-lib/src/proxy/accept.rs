@@ -46,7 +46,6 @@ pub struct AcceptContext {
     pub backend_selector: Arc<BackendSelector>,
     pub tls_handshake_timeout: Duration,
     pub connection_handling_timeout: Duration,
-    /// PROXY protocol v2 handling (static config). `Off` = today's behavior.
     pub proxy_protocol: ProxyProtocolMode,
 }
 
@@ -86,13 +85,12 @@ pub async fn accept_loop(
             }
         };
 
-        // Loaded once here so the PROXY-protocol trust gate and the rest of the loop body share
-        // a single config snapshot (`trusted_proxies` lives in dynamic config).
         let dynamic = ctx.dynamic_cfg.load();
 
         // Resolve the effective client peer. Behind an L4 passthrough proxy this recovers the
-        // original client `(src_ip, src_port)` from the PROXY v2 header so the eBPF SYN lookup,
-        // `X-Forwarded-*`, rate-limiting, IP filtering and logs all see the real client.
+        // original client `(src_ip, src_port)` from the PROXY protocol header (v1 or v2) so the
+        // eBPF SYN lookup, `X-Forwarded-*`, rate-limiting, IP filtering and logs all see the real
+        // client.
         let peer =
             match resolve_peer(&ctx, &dynamic.security.trusted_proxies, &mut stream, socket_peer)
                 .await
@@ -289,7 +287,7 @@ async fn resolve_peer(
                     Some(socket_peer)
                 }
                 // PROXY command but a non-IP address family: we expected a client address and got
-                // none. Serve the connection on the socket peer, but warn + meter — correlation
+                // none. Serve the connection on the socket peer, but warn + meter, correlation
                 // (eBPF SYN, X-Forwarded-*, backend signature validation) is degraded here.
                 Ok(Ok(ProxySource::NoClientAddr)) => {
                     ctx.metrics.record_proxy_protocol_no_client_addr();
