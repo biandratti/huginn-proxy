@@ -146,7 +146,7 @@ pub fn increment_syn_malformed_v6() {
     }
 }
 
-// ── Globals patched at load time by EbpfLoader::set_global ───────────────────
+// ── Globals patched at load time by EbpfLoader::override_global ──────────────
 //
 // XDP reads them via read_volatile to prevent the compiler from caching.
 
@@ -154,12 +154,13 @@ pub fn increment_syn_malformed_v6() {
 #[allow(non_upper_case_globals)]
 pub static dst_port: u16 = 0;
 
+/// IPv4 destination address filter (`0` = accept any destination).
 #[no_mangle]
 #[allow(non_upper_case_globals)]
-pub static dst_ip: u32 = 0;
+pub static dst_ip_v4: u32 = 0;
 
 /// IPv6 destination address filter (all-zeros = accept any destination).
-/// Each byte patched at load time by EbpfLoader::set_global.
+/// Each byte patched at load time by EbpfLoader::override_global.
 #[no_mangle]
 #[allow(non_upper_case_globals)]
 pub static dst_ip_v6: [u8; 16] = [0u8; 16];
