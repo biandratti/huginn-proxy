@@ -7,9 +7,7 @@ use base64::prelude::*;
 use blocking::unblock;
 use rustls_acme::{AccountCache, CertCache};
 
-/// Subdirectory under `base_dir` where ACME account keys are stored.
-/// Shared across all domains managed by this cache instance.
-const ACCOUNTS_SUBDIR: &str = "accounts";
+use crate::constants::ACME_ACCOUNT_SUBDIR;
 
 /// Mode for newly-created cache directories on Unix. Directories that already
 /// exist are not modified; this only takes effect when the directory is actually
@@ -92,7 +90,7 @@ impl DirCache {
     /// Certificate files are stored in `base_dir/{domain}/`.
     pub fn new(base_dir: impl AsRef<Path>, domain: &str) -> Self {
         Self {
-            account_dir: base_dir.as_ref().join(ACCOUNTS_SUBDIR),
+            account_dir: base_dir.as_ref().join(ACME_ACCOUNT_SUBDIR),
             cert_dir: base_dir.as_ref().join(domain),
         }
     }

@@ -73,9 +73,6 @@ pub async fn run(
     // the composite-aware serviceability check below (so an ACME-only deploy doesn't warn).
     let acme_active = acme.as_ref().is_some_and(|rt| !rt.resolvers.is_empty());
 
-    // Rebind as mutable to extract cert_ready_rx before the runtime is consumed inside the
-    // TLS block. The `mut` lives here, not on the parameter, since it is an implementation
-    // detail of this function and not part of the public contract.
     let mut acme = acme;
     let acme_cert_ready_rx: Option<watch::Receiver<bool>> =
         acme.as_mut().and_then(|rt| rt.cert_ready_rx.take());

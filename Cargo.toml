@@ -28,9 +28,9 @@ ahash = "0.8.12"
 arc-swap = "1.9.1"
 async-trait = "0.1"
 aws-lc-rs = { version = "1.5", features = ["aws-lc-sys"] }
+aya = "0.14.0"
 base64 = "0.22"
 blocking = "1.4"
-aya = "0.14.0"
 bytes = "1.12.0"
 clap = { version = "4.6.1", features = ["derive", "env"] }
 criterion = { version = "0.8.2", features = ["html_reports"] }
