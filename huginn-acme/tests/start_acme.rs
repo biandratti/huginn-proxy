@@ -6,8 +6,8 @@ type TestResult = Result<(), Box<dyn std::error::Error + Send + Sync>>;
 
 const BOGUS_DIRECTORY: &str = "https://127.0.0.1:1/directory";
 
-#[test]
-fn rejects_empty_domains() {
+#[tokio::test]
+async fn rejects_empty_domains() {
     let result = start_acme(
         "ops@example.com",
         "/tmp/huginn-acme-test",
@@ -17,12 +17,13 @@ fn rejects_empty_domains() {
         &[],
         CancellationToken::new(),
         None,
-    );
+    )
+    .await;
     assert!(matches!(result, Err(AcmeError::NoDomains)));
 }
 
-#[test]
-fn rejects_missing_directory_ca() {
+#[tokio::test]
+async fn rejects_missing_directory_ca() {
     let result = start_acme(
         "ops@example.com",
         "/tmp/huginn-acme-test",
@@ -32,15 +33,16 @@ fn rejects_missing_directory_ca() {
         &["api.example.com".to_string()],
         CancellationToken::new(),
         None,
-    );
+    )
+    .await;
     assert!(
         matches!(result, Err(AcmeError::DirectoryCaRead { .. })),
         "expected DirectoryCaRead for a missing CA path"
     );
 }
 
-#[test]
-fn rejects_empty_directory_ca() -> TestResult {
+#[tokio::test]
+async fn rejects_empty_directory_ca() -> TestResult {
     let nanos = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_nanos())
@@ -57,7 +59,8 @@ fn rejects_empty_directory_ca() -> TestResult {
         &["api.example.com".to_string()],
         CancellationToken::new(),
         None,
-    );
+    )
+    .await;
     let _ = std::fs::remove_file(&ca_path);
     assert!(
         matches!(result, Err(AcmeError::DirectoryCaEmpty { .. })),
@@ -84,7 +87,8 @@ async fn builds_one_lowercased_resolver_per_domain() -> TestResult {
         &domains,
         cancel,
         None,
-    )?;
+    )
+    .await?;
 
     // One `(host, resolver)` pair per domain, host lowercased for case-insensitive SNI.
     assert_eq!(handles.resolvers.len(), 2);

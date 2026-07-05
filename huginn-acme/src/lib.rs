@@ -7,12 +7,12 @@
 
 #![forbid(unsafe_code)]
 
-use std::path::PathBuf;
+pub mod dir_cache;
+
 use std::sync::Arc;
 
 use futures_util::StreamExt;
 use rustls_acme::acme::{LETS_ENCRYPT_PRODUCTION_DIRECTORY, LETS_ENCRYPT_STAGING_DIRECTORY};
-use rustls_acme::caches::DirCache;
 use rustls_acme::rustls::crypto::aws_lc_rs;
 use rustls_acme::rustls::server::ResolvesServerCert;
 use rustls_acme::rustls::{ClientConfig, RootCertStore};
@@ -23,6 +23,8 @@ use rustls_pki_types::CertificateDer;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info, warn};
+
+use crate::dir_cache::DirCache;
 
 /// Callback invoked for every ACME state-machine event.
 ///
@@ -82,6 +84,18 @@ pub enum AcmeError {
     /// Building the rustls client config for the ACME directory failed.
     #[error("failed to build ACME directory TLS config: {0}")]
     DirectoryTls(#[from] rustls_acme::rustls::Error),
+    /// The ACME cache directory is not writable. Without write access the proxy would
+    /// obtain a certificate from the CA and then silently fail to persist it, burning
+    /// rate-limit quota on every restart.
+    #[error("ACME cache directory not writable for domain '{domain}' at '{path}': {source}")]
+    CacheNotWritable {
+        /// Domain whose cache directory failed the write check.
+        domain: String,
+        /// Cache directory path.
+        path: String,
+        /// Underlying I/O error.
+        source: std::io::Error,
+    },
 }
 
 /// Build a rustls [`ClientConfig`] that trusts **only** the CA(s) in `ca_path` (PEM) for the
@@ -141,8 +155,14 @@ pub struct AcmeHandles {
 /// - `cancel`: cancelling it makes every spawned task exit at its next poll.
 /// - `on_event`: optional [`OnAcmeEvent`] callback invoked on every state-machine event.
 ///   Tracing logs are always emitted regardless of whether a callback is provided.
+///
+/// # Errors
+///
+/// Returns [`AcmeError::CacheNotWritable`] if any domain's cache directory cannot be written to.
+/// This check runs before spawning any task, so a misconfigured `cache_dir` fails fast at startup
+/// instead of silently losing issued certificates and burning CA rate-limit quota.
 #[allow(clippy::too_many_arguments)]
-pub fn start_acme(
+pub async fn start_acme(
     contact_email: &str,
     cache_dir: &str,
     staging: bool,
@@ -172,6 +192,20 @@ pub fn start_acme(
     let mut tasks = Vec::with_capacity(domains.len());
 
     for domain in domains {
+        // One `DirCache` per domain (per-domain cert subdir, shared accounts subdir).
+        // Verify write access before spawning any task: a missing or read-only cache_dir
+        // would let the ACME flow succeed, then silently fail to persist the cert, burning
+        // LE rate-limit quota on every restart.
+        let cache = DirCache::new(cache_dir, domain.as_str());
+        cache
+            .verify_write_permissions()
+            .await
+            .map_err(|source| AcmeError::CacheNotWritable {
+                domain: domain.clone(),
+                path: cache_dir.to_string(),
+                source,
+            })?;
+
         // One `AcmeState` (and one cert) per domain. A custom directory CA (Pebble/private)
         // replaces the default webpki client config; otherwise the webpki default is kept.
         let config = match &client_config {
@@ -180,7 +214,7 @@ pub fn start_acme(
         };
         let mut state = config
             .contact_push(format!("mailto:{contact_email}"))
-            .cache(DirCache::new(PathBuf::from(cache_dir)))
+            .cache(cache)
             .directory(directory)
             .state();
 

@@ -226,8 +226,6 @@ async fn main() -> Result<(), BoxError> {
                         }
                     }
                 });
-                // The outer Arc (`acme_ready_tx`) is no longer needed; the closure holds the
-                // only remaining reference through `ready_tx`.
                 drop(acme_ready_tx);
 
                 let handles = huginn_acme::start_acme(
@@ -239,7 +237,8 @@ async fn main() -> Result<(), BoxError> {
                     &hosts,
                     cancel.clone(),
                     Some(on_event),
-                )?;
+                )
+                .await?;
                 let mut acme_shutdown = shutdown_rx.clone();
                 tokio::spawn(async move {
                     let _ = acme_shutdown.wait_for(|v| *v).await;
