@@ -177,6 +177,11 @@ pub struct Metrics {
     /// timestamp of the most recent event in each outcome bucket. A stale `success` timestamp
     /// (no renewal in N days) can signal a stuck state machine.
     pub acme_last_event_timestamp_seconds: Gauge<f64>,
+    /// `huginn_acme_cert_ready{domain}`: 1 once the first certificate for this domain has been
+    /// deployed (either a new issuance or a cached cert loaded from disk); 0 before that and
+    /// after shutdown. Used to drive readiness gating: `/ready` returns 503 until this gauge
+    /// is 1 for at least one domain.
+    pub acme_cert_ready: Gauge<u64>,
 }
 
 impl Metrics {
@@ -436,6 +441,10 @@ impl Metrics {
             acme_last_event_timestamp_seconds: meter
                 .f64_gauge("huginn_acme_last_event_timestamp_seconds")
                 .with_description("Unix timestamp of the most recent ACME event per domain and outcome (result=success|error)")
+                .build(),
+            acme_cert_ready: meter
+                .u64_gauge("huginn_acme_cert_ready")
+                .with_description("1 once the first certificate for the domain is deployed (new issuance or cached); 0 otherwise")
                 .build(),
         }
     }
@@ -840,6 +849,16 @@ impl Metrics {
             .add(1, &[domain_kv.clone(), KeyValue::new(labels::EVENT, values::ACME_EVENT_ERROR)]);
         self.acme_last_event_timestamp_seconds
             .record(now, &[domain_kv, KeyValue::new(labels::RESULT, values::RELOAD_ERROR)]);
+    }
+
+    /// Set the per-domain cert-ready gauge (`huginn_acme_cert_ready{domain}`).
+    ///
+    /// Call with `ready = true` on the first `DeployedNewCert` or `DeployedCachedCert` event
+    /// for a domain. The gauge drives readiness gating: the proxy defers `/ready` until at
+    /// least one ACME domain has this set to 1.
+    pub fn set_acme_cert_ready(&self, domain: &str, ready: bool) {
+        self.acme_cert_ready
+            .record(u64::from(ready), &[KeyValue::new(labels::DOMAIN, domain.to_string())]);
     }
 
     /// Record a rejected incoming connection.

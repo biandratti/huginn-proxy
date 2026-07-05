@@ -704,6 +704,7 @@ sum by (protocol) (rate(huginn_mtls_connections_total[5m]))
 | `huginn_acme_cert_renewals_total`              | Counter | Total ACME certificate issuance/renewal attempts (startup cache loads excluded)               | `domain`, `result`        |
 | `huginn_acme_events_total`                     | Counter | Granular ACME state-machine event counter                                                     | `domain`, `event`         |
 | `huginn_acme_last_event_timestamp_seconds`     | Gauge   | Unix timestamp of the most recent ACME event per domain and outcome                           | `domain`, `result`        |
+| `huginn_acme_cert_ready`                       | Gauge   | 1 once the first certificate for this domain is deployed; 0 before that                      | `domain`                  |
 
 **Label values**:
 
@@ -722,12 +723,22 @@ sum by (protocol) (rate(huginn_mtls_connections_total[5m]))
   failure, cache I/O error, cert parse error, etc.).
 - A stale `huginn_acme_last_event_timestamp_seconds{result="success"}` (no update in several days)
   indicates the renewal state machine may be stuck.
+- `huginn_acme_cert_ready` is set to 1 on the first `DeployedNewCert` or `DeployedCachedCert`
+  event for a domain. It drives readiness gating: `run()` defers `mark_ready()` until this
+  fires for at least one domain, preventing the load-balancer from routing traffic before a
+  certificate exists on the listener. Startup timeout: 300 s.
 
 **Example queries**:
 
 ```promql
 # Is ACME active and for how many domains?
 huginn_acme_domains
+
+# Is at least one ACME domain ready (has a deployed cert)?
+min(huginn_acme_cert_ready) == 1
+
+# Alert: any domain still has no cert 5 minutes after startup
+huginn_acme_cert_ready == 0
 
 # Alert: any renewal failure in the last hour
 rate(huginn_acme_cert_renewals_total{result="error"}[1h]) > 0

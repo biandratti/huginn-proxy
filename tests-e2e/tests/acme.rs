@@ -128,7 +128,7 @@ async fn acme_cert_is_issued_by_pebble_for_the_domain() -> TestResult {
 
     let (_, cert) = x509_parser::parse_x509_certificate(leaf.as_ref())
         .map_err(|e| format!("failed to parse leaf certificate: {e}"))?;
-    
+
     let issuer = cert.issuer().to_string();
     assert!(issuer.contains("Pebble"), "leaf issuer should be Pebble, got: {issuer}");
 

@@ -196,15 +196,27 @@ async fn main() -> Result<(), BoxError> {
             } else {
                 let cancel = tokio_util::sync::CancellationToken::new();
 
+                // Channel used to gate `/ready` until the first ACME cert is deployed.
+                // The sender lives inside `on_event` (wrapped in Arc so the closure can be
+                // cloned across domains). The receiver is passed to `AcmeRuntime` and read
+                // by `run()` before calling `readiness.mark_ready()`.
+                let (acme_ready_tx, acme_ready_rx) = tokio::sync::watch::channel(false);
+                let acme_ready_tx = Arc::new(acme_ready_tx);
+
                 let metrics_for_acme = Arc::clone(&metrics);
+                let ready_tx = Arc::clone(&acme_ready_tx);
                 let on_event: huginn_acme::OnAcmeEvent = Arc::new(move |domain, event| {
                     use huginn_acme::AcmeEvent;
                     match event {
                         AcmeEvent::DeployedNewCert => {
                             metrics_for_acme.record_acme_renewal_success(domain);
+                            metrics_for_acme.set_acme_cert_ready(domain, true);
+                            ready_tx.send(true).ok();
                         }
                         AcmeEvent::DeployedCachedCert => {
                             metrics_for_acme.record_acme_cached_cert(domain);
+                            metrics_for_acme.set_acme_cert_ready(domain, true);
+                            ready_tx.send(true).ok();
                         }
                         AcmeEvent::CacheStored => {
                             metrics_for_acme.record_acme_cache_stored(domain);
@@ -214,6 +226,10 @@ async fn main() -> Result<(), BoxError> {
                         }
                     }
                 });
+                // The outer Arc (`acme_ready_tx`) is no longer needed; the closure holds the
+                // only remaining reference through `ready_tx`.
+                drop(acme_ready_tx);
+
                 let handles = huginn_acme::start_acme(
                     &acme_cfg.contact_email,
                     &acme_cfg.cache_dir,
@@ -235,7 +251,11 @@ async fn main() -> Result<(), BoxError> {
                     .map(|handle| ServiceHandle { handle, name: ServiceName::Acme })
                     .collect();
                 info!(domains = hosts.len(), "ACME enabled (TLS-ALPN-01)");
-                Some(huginn_proxy_lib::AcmeRuntime { resolvers: handles.resolvers, tasks })
+                Some(huginn_proxy_lib::AcmeRuntime {
+                    resolvers: handles.resolvers,
+                    tasks,
+                    cert_ready_rx: Some(acme_ready_rx),
+                })
             }
         }
         None => None,

@@ -5,6 +5,7 @@ use crate::config::StaticConfig;
 use crate::error::Result;
 pub use crate::proxy::accept::SynProbe;
 use crate::proxy::accept::{accept_loop, AcceptContext};
+pub use crate::proxy::acme_runtime::AcmeRuntime;
 use crate::proxy::connection::ConnectionManager;
 use crate::proxy::listener::{bind_listener, register_signal};
 use crate::proxy::protocol::warn_proxy_protocol_trust_gap;
@@ -27,21 +28,6 @@ use tokio::sync::watch;
 use tokio::time::Duration;
 use tokio_rustls::rustls::server::ResolvesServerCert;
 use tracing::{info, warn};
-
-/// Pre-built ACME runtime injected into [`run`], mirroring how `syn_probe` is injected.
-///
-/// Constructed entirely outside the library by the binary (feature `acme`): it calls
-/// `huginn_acme::start_acme`, wraps each returned `JoinHandle` in a [`ServiceHandle`], and
-/// hands the resulting `(host, resolver)` pairs and tasks here. The library never depends on
-/// `rustls-acme`; it only sees trait objects and shutdown handles (same boundary discipline as
-/// `huginn-ebpf`).
-pub struct AcmeRuntime {
-    /// `(exact host, resolver)` per ACME domain; used to build the [`CompositeResolver`]'s
-    /// SNI routing table. Hosts are matched case-insensitively (the composite lowercases them).
-    pub resolvers: Vec<(String, Arc<dyn ResolvesServerCert>)>,
-    /// Background issuance/renewal tasks, already wrapped for ordered cooperative shutdown.
-    pub tasks: Vec<ServiceHandle>,
-}
 
 #[allow(clippy::too_many_arguments)]
 pub async fn run(
@@ -86,6 +72,13 @@ pub async fn run(
     // moved into the composite, and used both for the ALPN `acme-tls/1` advertisement and for
     // the composite-aware serviceability check below (so an ACME-only deploy doesn't warn).
     let acme_active = acme.as_ref().is_some_and(|rt| !rt.resolvers.is_empty());
+
+    // Rebind as mutable to extract cert_ready_rx before the runtime is consumed inside the
+    // TLS block. The `mut` lives here, not on the parameter, since it is an implementation
+    // detail of this function and not part of the public contract.
+    let mut acme = acme;
+    let acme_cert_ready_rx: Option<watch::Receiver<bool>> =
+        acme.as_mut().and_then(|rt| rt.cert_ready_rx.take());
 
     // Build the static cert resolver and load initial certs from the current dynamic config.
     // `None` when TLS is not configured (plain HTTP mode). This is the resolver the hot-reload
@@ -234,6 +227,29 @@ pub async fn run(
         static_cfg.listen.proxy_protocol,
         &dynamic_cfg.load().security.trusted_proxies,
     );
+
+    // If ACME is active, defer `/ready` until the first certificate is deployed. This prevents
+    // the LB from routing traffic during a cold start before a cert exists on the listener.
+    // The timeout is defence-in-depth: if issuance stalls (rate-limit, network outage) the
+    // proxy eventually marks itself ready anyway so health-check failures trigger the alert
+    // instead of leaving the pod in a permanent not-ready loop.
+    // (D4 will make this timeout configurable via `[acme].ready_timeout_secs`.)
+    if let Some(mut rx) = acme_cert_ready_rx {
+        const ACME_READY_TIMEOUT_SECS: u64 = 300;
+        match tokio::time::timeout(
+            Duration::from_secs(ACME_READY_TIMEOUT_SECS),
+            rx.wait_for(|v| *v),
+        )
+        .await
+        {
+            Ok(Ok(_)) => info!("ACME: first certificate deployed, marking proxy ready"),
+            Ok(Err(_)) => warn!("ACME ready channel closed before first certificate"),
+            Err(_) => warn!(
+                timeout_secs = ACME_READY_TIMEOUT_SECS,
+                "Timed out waiting for first ACME certificate; marking proxy ready without cert"
+            ),
+        }
+    }
 
     readiness.mark_ready();
     info!("Proxy ready: accepting connections");
