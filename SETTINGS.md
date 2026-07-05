@@ -889,7 +889,7 @@ certificates are persisted under `cache_dir`.
 
 | Key             | Type   | Default      | Description                                                                                                   |
 |-----------------|--------|--------------|---------------------------------------------------------------------------------------------------------------|
-| `contact_email` | string | —            | Contact email registered with the ACME account (sent as a `mailto:` contact). Required.                       |
+| `contacts`      | array of string | — | Contact emails registered with the ACME account (each sent as a `mailto:` contact). At least one non-empty entry is required. |
 | `cache_dir`     | string | —            | Filesystem directory for the ACME cache (account key + issued certificates). Must be **writable and persistent across restarts** to avoid re-issuing on every boot. Required. |
 | `staging`       | bool   | `false`      | Use the Let's Encrypt **staging** directory (higher rate limits, untrusted certs) instead of production. Ignored when `directory_url` is set. |
 | `directory_url` | string | `null`       | Override the ACME directory URL (a private CA, or Pebble for tests). Takes precedence over `staging`.          |
@@ -908,7 +908,7 @@ certificates are persisted under `cache_dir`.
 
 ```toml
 [acme]
-contact_email = "ops@example.com"
+contacts = ["ops@example.com"]
 cache_dir = "/var/lib/huginn-proxy/acme"
 staging = false
 # directory_url = "https://acme.example.com/directory"   # optional, overrides `staging`
@@ -920,7 +920,8 @@ staging = false
 
 ```yaml
 acme:
-  contact_email: "ops@example.com"
+  contacts:
+    - "ops@example.com"
   cache_dir: "/var/lib/huginn-proxy/acme"
   staging: false
   # directory_url: "https://acme.example.com/directory"  # optional, overrides `staging`

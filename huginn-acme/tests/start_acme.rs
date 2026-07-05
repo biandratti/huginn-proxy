@@ -9,7 +9,7 @@ const BOGUS_DIRECTORY: &str = "https://127.0.0.1:1/directory";
 #[tokio::test]
 async fn rejects_empty_domains() {
     let result = start_acme(
-        "ops@example.com",
+        &["ops@example.com".to_string()],
         "/tmp/huginn-acme-test",
         true,
         None,
@@ -25,7 +25,7 @@ async fn rejects_empty_domains() {
 #[tokio::test]
 async fn rejects_missing_directory_ca() {
     let result = start_acme(
-        "ops@example.com",
+        &["ops@example.com".to_string()],
         "/tmp/huginn-acme-test",
         false,
         None,
@@ -51,7 +51,7 @@ async fn rejects_empty_directory_ca() -> TestResult {
     std::fs::write(&ca_path, b"")?;
 
     let result = start_acme(
-        "ops@example.com",
+        &["ops@example.com".to_string()],
         "/tmp/huginn-acme-test",
         false,
         None,
@@ -79,7 +79,7 @@ async fn builds_one_lowercased_resolver_per_domain() -> TestResult {
     cancel.cancel();
 
     let handles = start_acme(
-        "ops@example.com",
+        &["ops@example.com".to_string()],
         &cache_dir.to_string_lossy(),
         true,
         Some(BOGUS_DIRECTORY),

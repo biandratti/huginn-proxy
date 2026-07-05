@@ -397,7 +397,7 @@ backends = [{ address = "backend:9000" }]
 alpn = ["h2"]
 
 [acme]
-contact_email = "ops@example.com"
+contacts = ["ops@example.com"]
 cache_dir = "/var/lib/huginn-proxy/acme"
 
 [[domains]]
@@ -411,7 +411,7 @@ routes = [{ prefix = "/", backend = "backend:9000" }]
     assert!(cfg.domains[0].is_acme(true));
     assert!(cfg.domains[0].cert_file().is_none());
     let acme = cfg.acme.ok_or("acme block missing")?;
-    assert_eq!(acme.contact_email, "ops@example.com");
+    assert_eq!(acme.contacts, vec!["ops@example.com".to_string()]);
     assert!(!acme.staging);
 
     let _ = fs::remove_file(&path);
@@ -431,7 +431,7 @@ backends = [{ address = "backend:9000" }]
 alpn = ["h2"]
 
 [acme]
-contact_email = "ops@example.com"
+contacts = ["ops@example.com"]
 cache_dir = "/var/lib/huginn-proxy/acme"
 
 [[domains]]
@@ -483,7 +483,7 @@ listen = { addrs = ["127.0.0.1:0"] }
 backends = [{ address = "backend:9000" }]
 
 [acme]
-contact_email = "ops@example.com"
+contacts = ["ops@example.com"]
 cache_dir = "/tmp/acme"
 
 [[domains]]
@@ -501,6 +501,34 @@ cert = { type = "acme" }
 }
 
 #[test]
+fn rejects_acme_with_empty_contacts() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let path = tmp_path("acme-empty-contacts");
+    let toml = r#"
+listen = { addrs = ["127.0.0.1:0"] }
+backends = [{ address = "backend:9000" }]
+
+[tls]
+alpn = ["h2"]
+
+[acme]
+contacts = []
+cache_dir = "/tmp/acme"
+
+[[domains]]
+host = "api.example.com"
+cert = { type = "acme" }
+"#;
+    fs::write(&path, toml)?;
+    let err = match load_from_path(&path) {
+        Ok(_) => panic!("should reject [acme] with empty contacts"),
+        Err(e) => e.to_string(),
+    };
+    assert!(err.contains("`contacts` must contain at least one"), "got: {err}");
+    let _ = fs::remove_file(&path);
+    Ok(())
+}
+
+#[test]
 fn rejects_acme_on_catch_all() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let path = tmp_path("acme-catchall");
     let toml = r#"
@@ -511,7 +539,7 @@ backends = [{ address = "backend:9000" }]
 alpn = ["h2"]
 
 [acme]
-contact_email = "ops@example.com"
+contacts = ["ops@example.com"]
 cache_dir = "/tmp/acme"
 
 [[domains]]
@@ -539,7 +567,7 @@ backends = [{ address = "backend:9000" }]
 alpn = ["h2"]
 
 [acme]
-contact_email = "ops@example.com"
+contacts = ["ops@example.com"]
 cache_dir = "/tmp/acme"
 
 [[domains]]
@@ -567,7 +595,7 @@ backends = [{ address = "backend:9000" }]
 alpn = ["h2"]
 
 [acme]
-contact_email = "ops@example.com"
+contacts = ["ops@example.com"]
 cache_dir = "/tmp/acme"
 
 [[domains]]
@@ -601,7 +629,7 @@ backends = [{{ address = "backend:9000" }}]
 alpn = ["h2"]
 
 [acme]
-contact_email = "ops@example.com"
+contacts = ["ops@example.com"]
 cache_dir = "/tmp/acme"
 
 [[domains]]
@@ -637,7 +665,7 @@ alpn = ["h2"]
 client_auth = {{ ca_cert_path = "{}" }}
 
 [acme]
-contact_email = "ops@example.com"
+contacts = ["ops@example.com"]
 cache_dir = "/tmp/acme"
 
 [[domains]]

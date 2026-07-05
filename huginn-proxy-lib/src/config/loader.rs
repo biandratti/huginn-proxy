@@ -71,6 +71,16 @@ fn validate_config(cfg: &Config) -> Result<()> {
     // `[acme]` present ⇒ a domain with no explicit `cert` is ACME-managed (ACME-by-default).
     let acme_global = cfg.acme.is_some();
 
+    // The ACME account requires at least one contact; reject an empty/blank `contacts` list
+    // up front so issuance never starts with an unregisterable account.
+    if let Some(acme) = &cfg.acme {
+        if acme.contacts.iter().all(|c| c.trim().is_empty()) {
+            return Err(ProxyError::Config(
+                "[acme]: `contacts` must contain at least one non-empty email".to_string(),
+            ));
+        }
+    }
+
     for domain in &cfg.domains {
         let host = domain.label();
         match &domain.cert {

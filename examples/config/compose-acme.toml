@@ -23,7 +23,7 @@ host = "proxy.huginn.local"
 alpn = ["h2", "http/1.1"]
 
 [acme]
-contact_email = "ops@example.com"
+contacts = ["ops@example.com"]
 cache_dir = "/var/lib/huginn-proxy/acme"
 # Local Pebble directory instead of Let's Encrypt.
 directory_url = "https://pebble:14000/dir"

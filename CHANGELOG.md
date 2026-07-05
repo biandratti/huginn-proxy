@@ -19,7 +19,7 @@ A new `[acme]` block enables in-process certificate issuance and renewal through
 
 ```toml
 [acme]
-contact_email = "ops@example.com"
+contacts = ["ops@example.com"]
 cache_dir = "/var/lib/huginn-proxy/acme"
 # staging = true            # use the staging directory while testing
 # directory_url = "https://acme-v02.api.letsencrypt.org/directory"
@@ -37,8 +37,8 @@ require it, e.g. ZeroSSL/Google Public CA, must be used via a file cert). A new
 
 **Private/test ACME servers** — new optional `[acme].directory_ca_path`
 
-Trusts a custom PEM CA for the ACME **directory** connection instead of the compiled-in public
-(webpki) roots, so the proxy can talk to a private or test ACME server (e.g.
+Trusts a custom PEM CA for the ACME **directory** connection instead of the platform/OS trust
+store, so the proxy can talk to a private or test ACME server (e.g.
 [Pebble](https://github.com/letsencrypt/pebble)) served with a self-signed CA. The published
 `plain` and `ebpf` images are now built with the `acme` feature (ACME stays inert until an
 `[acme]` block is configured), and `examples/docker-compose.acme.yml` is a fully self-contained

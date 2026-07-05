@@ -229,7 +229,7 @@ async fn main() -> Result<(), BoxError> {
                 drop(acme_ready_tx);
 
                 let handles = huginn_acme::start_acme(
-                    &acme_cfg.contact_email,
+                    &acme_cfg.contacts,
                     &acme_cfg.cache_dir,
                     acme_cfg.staging,
                     acme_cfg.directory_url.as_deref(),

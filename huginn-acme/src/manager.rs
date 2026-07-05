@@ -135,7 +135,7 @@ pub struct AcmeHandles {
 /// instead of silently losing issued certificates and burning CA rate-limit quota.
 #[allow(clippy::too_many_arguments)]
 pub async fn start_acme(
-    contact_email: &str,
+    contacts: &[String],
     cache_dir: &str,
     staging: bool,
     directory_url: Option<&str>,
@@ -147,6 +147,9 @@ pub async fn start_acme(
     if domains.is_empty() {
         return Err(AcmeError::NoDomains);
     }
+
+    // Prefix each contact with `mailto:` once; shared across every domain's account config.
+    let contacts: Vec<String> = contacts.iter().map(|c| format!("mailto:{c}")).collect();
 
     let directory = directory_url.unwrap_or(if staging {
         LETS_ENCRYPT_STAGING
@@ -187,7 +190,7 @@ pub async fn start_acme(
         // custom CA for Pebble) is shared across every domain via `client_config`.
         let cache = DirCache::new(cache_dir, &host);
         let mut state = AcmeConfig::new_with_client_config([host.as_str()], client_config.clone())
-            .contact_push(format!("mailto:{contact_email}"))
+            .contact(contacts.iter())
             .cache(cache)
             .directory(directory)
             .state();

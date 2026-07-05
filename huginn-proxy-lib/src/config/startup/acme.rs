@@ -14,8 +14,11 @@ use serde::Deserialize;
 /// that require it (ZeroSSL, Google Public CA, Sectigo, …) must be used via a file cert.
 #[derive(Debug, Deserialize, Clone, PartialEq, Eq)]
 pub struct AcmeConfig {
-    /// Contact email registered with the ACME account (sent as `mailto:` contact).
-    pub contact_email: String,
+    /// Contact emails registered with the ACME account (each sent as a `mailto:` contact).
+    ///
+    /// At least one is required; validated in `config/loader.rs`. Multiple contacts are
+    /// supported, matching the ACME account model.
+    pub contacts: Vec<String>,
     /// Use the Let's Encrypt staging directory instead of production.
     ///
     /// Ignored when `directory_url` is set. Default: `false` (production).
@@ -26,11 +29,12 @@ pub struct AcmeConfig {
     /// When set, takes precedence over `staging`. Default: `None`.
     #[serde(default)]
     pub directory_url: Option<String>,
-    /// PEM bundle to trust for the ACME **directory** TLS connection instead of the compiled-in
-    /// public (webpki) roots.
+    /// PEM bundle to trust for the ACME **directory** TLS connection instead of the platform/OS
+    /// trust store.
     ///
     /// Needed only for private/test ACME servers (e.g. Pebble) whose directory is served with a
-    /// self-signed CA. Leave unset for public CAs like Let's Encrypt. Default: `None`.
+    /// self-signed CA. Leave unset for public CAs like Let's Encrypt (uses the system root store).
+    /// Default: `None`.
     #[serde(default)]
     pub directory_ca_path: Option<String>,
     /// Filesystem directory for the ACME cache (account key + issued certificates).
