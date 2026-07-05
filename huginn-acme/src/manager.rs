@@ -13,6 +13,7 @@ use rustls_acme::AcmeConfig;
 use rustls_acme::EventOk;
 use rustls_pki_types::pem::PemObject;
 use rustls_pki_types::CertificateDer;
+use rustls_platform_verifier::Verifier;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info, warn};
@@ -48,32 +49,53 @@ pub enum AcmeEvent {
     Error,
 }
 
-/// Build a rustls [`ClientConfig`] that trusts **only** the CA(s) in `ca_path` (PEM) for the
-/// ACME directory connection. Used for private/test ACME servers (e.g. Pebble) whose CA is not
-/// in the compiled-in webpki roots. Pins the workspace's `aws-lc-rs` provider so it matches the
-/// rest of huginn's TLS stack (no global `CryptoProvider` default is installed).
-fn directory_client_config(ca_path: &str) -> Result<Arc<ClientConfig>, AcmeError> {
-    let bytes = std::fs::read(ca_path)
-        .map_err(|source| AcmeError::DirectoryCaRead { path: ca_path.to_string(), source })?;
-    let certs: Vec<CertificateDer<'static>> = CertificateDer::pem_slice_iter(&bytes)
-        .collect::<Result<Vec<_>, rustls_pki_types::pem::Error>>()
-        .map_err(|source| AcmeError::DirectoryCaParse { path: ca_path.to_string(), source })?
-        .into_iter()
-        .map(|c| c.into_owned())
-        .collect();
-    if certs.is_empty() {
-        return Err(AcmeError::DirectoryCaEmpty { path: ca_path.to_string() });
-    }
+/// Build the rustls [`ClientConfig`] used for the ACME **directory** connection.
+///
+/// - `Some(ca_path)`: trust **only** the CA(s) in that PEM bundle. For private/test ACME
+///   servers (e.g. Pebble) whose CA is not a public root.
+/// - `None`: trust the **platform / OS trust store** via `rustls-platform-verifier`
+///   (rpxy-acme behavior). Container images must ship a system CA bundle (e.g.
+///   `ca-certificates`) for this default path to validate a public CA like Let's Encrypt.
+///
+/// Always pins the workspace's `aws-lc-rs` provider explicitly (never `CryptoProvider`'s
+/// global default), so huginn installs no global crypto state.
+fn directory_client_config(ca_path: Option<&str>) -> Result<Arc<ClientConfig>, AcmeError> {
+    let provider = Arc::new(aws_lc_rs::default_provider());
 
-    let mut roots = RootCertStore::empty();
-    for cert in certs {
-        roots.add(cert)?;
-    }
+    let config = match ca_path {
+        Some(path) => {
+            let bytes = std::fs::read(path)
+                .map_err(|source| AcmeError::DirectoryCaRead { path: path.to_string(), source })?;
+            let certs: Vec<CertificateDer<'static>> = CertificateDer::pem_slice_iter(&bytes)
+                .collect::<Result<Vec<_>, rustls_pki_types::pem::Error>>()
+                .map_err(|source| AcmeError::DirectoryCaParse { path: path.to_string(), source })?
+                .into_iter()
+                .map(|c| c.into_owned())
+                .collect();
+            if certs.is_empty() {
+                return Err(AcmeError::DirectoryCaEmpty { path: path.to_string() });
+            }
 
-    let config = ClientConfig::builder_with_provider(Arc::new(aws_lc_rs::default_provider()))
-        .with_safe_default_protocol_versions()?
-        .with_root_certificates(roots)
-        .with_no_client_auth();
+            let mut roots = RootCertStore::empty();
+            for cert in certs {
+                roots.add(cert)?;
+            }
+
+            ClientConfig::builder_with_provider(provider)
+                .with_safe_default_protocol_versions()?
+                .with_root_certificates(roots)
+                .with_no_client_auth()
+        }
+        None => {
+            let verifier = Verifier::new(provider.clone()).map_err(AcmeError::DirectoryVerifier)?;
+            ClientConfig::builder_with_provider(provider)
+                .with_safe_default_protocol_versions()?
+                .dangerous()
+                .with_custom_certificate_verifier(Arc::new(verifier))
+                .with_no_client_auth()
+        }
+    };
+
     Ok(Arc::new(config))
 }
 
@@ -100,8 +122,8 @@ pub struct AcmeHandles {
 /// - `directory_url`: overrides the directory; when `None`, picks Let's Encrypt
 ///   staging/production from `staging`.
 /// - `directory_ca_path`: PEM bundle to trust for the **directory** TLS connection instead of the
-///   compiled-in webpki roots. Needed for private/test ACME servers (e.g. Pebble) with a
-///   self-signed CA; leave `None` for public CAs like Let's Encrypt.
+///   platform/OS trust store. Needed for private/test ACME servers (e.g. Pebble) with a
+///   self-signed CA; leave `None` for public CAs like Let's Encrypt (uses the system roots).
 /// - `cancel`: cancelling it makes every spawned task exit at its next poll.
 /// - `on_event`: optional [`OnAcmeEvent`] callback invoked on every state-machine event.
 ///   Tracing logs are always emitted regardless of whether a callback is provided.
@@ -132,11 +154,9 @@ pub async fn start_acme(
         LETS_ENCRYPT_PRODUCTION
     });
 
-    // Built once and shared across domains; `None` keeps rustls-acme's default webpki roots.
-    let client_config = match directory_ca_path {
-        Some(path) => Some(directory_client_config(path)?),
-        None => None,
-    };
+    // Built once and shared across domains. With a custom CA path we trust only that bundle
+    // (Pebble/private); otherwise we trust the platform/OS trust store (rpxy-acme behavior).
+    let client_config = directory_client_config(directory_ca_path)?;
 
     // Normalize once so the cert cache directory and the SNI resolver key always agree.
     // Config already lowercases hosts, but this keeps the crate correct in isolation.
@@ -163,14 +183,10 @@ pub async fn start_acme(
 
     for host in hosts {
         // One `AcmeState` (and one cert) per domain, with a per-domain cert subdir and the
-        // shared `accounts/` subdir. A custom directory CA (Pebble/private) replaces the default
-        // webpki client config; otherwise the webpki default is kept.
+        // shared `accounts/` subdir. The directory TLS trust anchor (platform store, or the
+        // custom CA for Pebble) is shared across every domain via `client_config`.
         let cache = DirCache::new(cache_dir, &host);
-        let config = match &client_config {
-            Some(cc) => AcmeConfig::new_with_client_config([host.as_str()], cc.clone()),
-            None => AcmeConfig::new([host.as_str()]),
-        };
-        let mut state = config
+        let mut state = AcmeConfig::new_with_client_config([host.as_str()], client_config.clone())
             .contact_push(format!("mailto:{contact_email}"))
             .cache(cache)
             .directory(directory)

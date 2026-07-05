@@ -13,6 +13,7 @@ blocking.workspace = true
 futures-util.workspace = true
 rustls-acme.workspace = true
 rustls-pki-types.workspace = true
+rustls-platform-verifier.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true

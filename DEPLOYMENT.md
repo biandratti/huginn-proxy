@@ -288,5 +288,6 @@ Operational requirements specific to ACME:
 - **No global mTLS.** ACME is **incompatible with global mTLS** (`[tls.client_auth]`) and is rejected at config validation — TLS-ALPN-01 cannot complete when the listener demands a client certificate.
 - **No wildcards.** TLS-ALPN-01 issues per-host certs only; wildcard domains must use `cert = { type = "file" }` (e.g. cert-manager with a DNS-01 solver).
 - **Private/test directories.** Point `[acme].directory_url` at a non-public ACME server and trust its CA with `[acme].directory_ca_path`. The local Pebble demo in [`examples/README.md`](examples/README.md) shows a full self-contained issuance.
+- **System CA bundle required.** For public CAs (Let's Encrypt), the ACME directory TLS connection is validated against the **platform/OS trust store**. Container images must ship a system CA bundle (e.g. install `ca-certificates`); otherwise the directory handshake fails. Use `[acme].directory_ca_path` to bypass this for private CAs.
 
 Observe issuance with the `huginn_acme_domains` gauge ([TELEMETRY.md](TELEMETRY.md) §14) and the `ACME event … DeployedNewCert` log lines.

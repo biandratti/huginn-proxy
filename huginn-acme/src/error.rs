@@ -31,6 +31,11 @@ pub enum AcmeError {
     /// Building the rustls client config for the ACME directory failed.
     #[error("failed to build ACME directory TLS config: {0}")]
     DirectoryTls(#[from] rustls_acme::rustls::Error),
+    /// Building the platform certificate verifier (system trust store) for the ACME
+    /// directory connection failed. Container images must ship a system CA bundle
+    /// (e.g. `ca-certificates`) for the default (non-custom-CA) path to work.
+    #[error("failed to build platform certificate verifier for ACME directory: {0}")]
+    DirectoryVerifier(rustls_acme::rustls::Error),
     /// The ACME cache directory is not writable. Without write access the proxy would
     /// obtain a certificate from the CA and then silently fail to persist it, burning
     /// rate-limit quota on every restart.

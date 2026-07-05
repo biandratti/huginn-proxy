@@ -893,7 +893,7 @@ certificates are persisted under `cache_dir`.
 | `cache_dir`     | string | —            | Filesystem directory for the ACME cache (account key + issued certificates). Must be **writable and persistent across restarts** to avoid re-issuing on every boot. Required. |
 | `staging`       | bool   | `false`      | Use the Let's Encrypt **staging** directory (higher rate limits, untrusted certs) instead of production. Ignored when `directory_url` is set. |
 | `directory_url` | string | `null`       | Override the ACME directory URL (a private CA, or Pebble for tests). Takes precedence over `staging`.          |
-| `directory_ca_path` | string | `null`   | PEM bundle to trust for the **directory** TLS connection instead of the compiled-in public (webpki) roots. Needed only for private/test ACME servers (e.g. Pebble) served with a self-signed CA; leave unset for public CAs like Let's Encrypt. See `examples/docker-compose.acme.yml` for a local Pebble demo. |
+| `directory_ca_path` | string | `null`   | PEM bundle to trust for the **directory** TLS connection instead of the platform/OS trust store. Needed only for private/test ACME servers (e.g. Pebble) served with a self-signed CA; leave unset for public CAs like Let's Encrypt (uses the system root store, so container images must ship a CA bundle such as `ca-certificates`). See `examples/docker-compose.acme.yml` for a local Pebble demo. |
 
 <table>
 <thead>

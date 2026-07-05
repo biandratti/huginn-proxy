@@ -1232,6 +1232,7 @@ dependencies = [
  "futures-util",
  "rustls-acme",
  "rustls-pki-types",
+ "rustls-platform-verifier",
  "tempfile",
  "thiserror 2.0.18",
  "tokio",
@@ -2858,7 +2859,6 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tokio-util",
- "webpki-roots 1.0.8",
  "x509-parser 0.16.0",
 ]
 
