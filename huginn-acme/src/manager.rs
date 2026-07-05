@@ -10,7 +10,6 @@ use rustls_acme::rustls::crypto::aws_lc_rs;
 use rustls_acme::rustls::server::ResolvesServerCert;
 use rustls_acme::rustls::{ClientConfig, RootCertStore};
 use rustls_acme::AcmeConfig;
-use rustls_acme::EventOk;
 use rustls_pki_types::pem::PemObject;
 use rustls_pki_types::CertificateDer;
 use rustls_platform_verifier::Verifier;
@@ -21,33 +20,7 @@ use tracing::{error, info, warn};
 use crate::constants::{LETS_ENCRYPT_PRODUCTION, LETS_ENCRYPT_STAGING};
 use crate::dir_cache::DirCache;
 use crate::error::AcmeError;
-
-/// Callback invoked for every ACME state-machine event.
-///
-/// Receives `(domain, event)`. Designed for metrics injection following the `SynProbe`
-/// boundary pattern: `huginn-acme` stays decoupled from the metrics crate; the binary wires
-/// in a closure that calls `Metrics`.
-pub type OnAcmeEvent = Arc<dyn Fn(&str, AcmeEvent) + Send + Sync>;
-
-/// A normalized, metrics-ready view of one ACME state-machine event.
-///
-/// This type is intentionally **decoupled from Prometheus / OpenTelemetry**: `huginn-acme`
-/// does not depend on `huginn-proxy-lib` or any metrics crate. The binary (`huginn-proxy`)
-/// receives these via the `on_event` callback and translates them into `Metrics` calls,
-/// same boundary discipline as `SynProbe`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum AcmeEvent {
-    /// A brand-new certificate was issued or renewed and hot-swapped into the resolver.
-    /// This is the primary signal for the renewal-success counter.
-    DeployedNewCert,
-    /// A previously-cached certificate was loaded from disk at startup.
-    /// Does not count as a renewal; it is a successful startup signal.
-    DeployedCachedCert,
-    /// The certificate or ACME account was persisted to the on-disk cache.
-    CacheStored,
-    /// Any error in the issuance / renewal / cache cycle.
-    Error,
-}
+use crate::events::{acme_event_from_ok, AcmeEvent, OnAcmeEvent};
 
 /// Build the rustls [`ClientConfig`] used for the ACME **directory** connection.
 ///
@@ -233,13 +206,4 @@ pub async fn start_acme(
     }
 
     Ok(AcmeHandles { resolvers, tasks })
-}
-
-/// Map a `rustls-acme` [`EventOk`] to our decoupled [`AcmeEvent`].
-pub fn acme_event_from_ok(ok: &EventOk) -> AcmeEvent {
-    match ok {
-        EventOk::DeployedNewCert => AcmeEvent::DeployedNewCert,
-        EventOk::DeployedCachedCert => AcmeEvent::DeployedCachedCert,
-        EventOk::CertCacheStore | EventOk::AccountCacheStore => AcmeEvent::CacheStored,
-    }
 }
