@@ -700,7 +700,7 @@ sum by (protocol) (rate(huginn_mtls_connections_total[5m]))
 
 | Metric                                         | Type    | Description                                                                                   | Labels                    |
 |------------------------------------------------|---------|-----------------------------------------------------------------------------------------------|---------------------------|
-| `huginn_acme_domains`                          | Gauge   | Number of domains served by in-process ACME (TLS-ALPN-01); set once at startup               | —                         |
+| `huginn_acme_domains`                          | Gauge   | Number of domains served by in-process ACME (TLS-ALPN-01); set once at startup               | -                         |
 | `huginn_acme_cert_renewals_total`              | Counter | Total ACME certificate issuance/renewal attempts (startup cache loads excluded)               | `domain`, `result`        |
 | `huginn_acme_events_total`                     | Counter | Granular ACME state-machine event counter                                                     | `domain`, `event`         |
 | `huginn_acme_last_event_timestamp_seconds`     | Gauge   | Unix timestamp of the most recent ACME event per domain and outcome                           | `domain`, `result`        |
@@ -716,7 +716,7 @@ sum by (protocol) (rate(huginn_mtls_connections_total[5m]))
   config has an `[acme]` block with at least one ACME-managed domain.
 - `huginn_acme_domains` is set **once at startup** and does not change at runtime (adding/removing
   an ACME domain requires a restart).
-- `huginn_acme_cert_renewals_total{result="success"}` counts `DeployedNewCert` events only —
+- `huginn_acme_cert_renewals_total{result="success"}` counts `DeployedNewCert` events only:
   actual issuances and renewals. Startup cache loads (`deployed_cached`) are NOT counted here.
 - `huginn_acme_cert_renewals_total{result="error"}` counts any `EventError` variant (order
   failure, cache I/O error, cert parse error, etc.).

@@ -166,14 +166,14 @@ pub struct Metrics {
     /// Number of domains served by in-process ACME (TLS-ALPN-01). Set once at startup; `0`
     /// (the default) means ACME is inactive.
     pub acme_domains: Gauge<u64>,
-    /// `huginn_acme_cert_renewals_total{domain, result="success|error"}` — total certificate
+    /// `huginn_acme_cert_renewals_total{domain, result="success|error"}`: total certificate
     /// issuance/renewal attempts. `success` = `DeployedNewCert`; `error` = any `EventError`.
     /// Startup cache loads (`DeployedCachedCert`) are NOT counted here.
     pub acme_cert_renewals_total: Counter<u64>,
-    /// `huginn_acme_events_total{domain, event}` — granular event counter for dashboards/debug.
+    /// `huginn_acme_events_total{domain, event}`: granular event counter for dashboards/debug.
     /// `event` is one of `deployed_new | deployed_cached | cache_stored | error`.
     pub acme_events_total: Counter<u64>,
-    /// `huginn_acme_last_event_timestamp_seconds{domain, result="success|error"}` — Unix
+    /// `huginn_acme_last_event_timestamp_seconds{domain, result="success|error"}`: Unix
     /// timestamp of the most recent event in each outcome bucket. A stale `success` timestamp
     /// (no renewal in N days) can signal a stuck state machine.
     pub acme_last_event_timestamp_seconds: Gauge<f64>,

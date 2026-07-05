@@ -90,7 +90,7 @@ fn validate_config(cfg: &Config) -> Result<()> {
                 }
             }
             // No explicit cert: ACME-by-default when `[acme]` is configured. Otherwise, under
-            // `[tls]` every domain must declare its own `cert` — no implicit default/catch-all
+            // `[tls]` every domain must declare its own `cert`; no implicit default/catch-all
             // fallback (fail-fast, so the config stays explicit). Without `[tls]` (plain HTTP)
             // certs are irrelevant.
             None => {

@@ -35,8 +35,8 @@ pub type OnAcmeEvent = Arc<dyn Fn(&str, AcmeEvent) + Send + Sync>;
 ///
 /// This type is intentionally **decoupled from Prometheus / OpenTelemetry**: `huginn-acme`
 /// does not depend on `huginn-proxy-lib` or any metrics crate. The binary (`huginn-proxy`)
-/// receives these via the `on_event` callback and translates them into `Metrics` calls —
-/// the same boundary discipline as `SynProbe`.
+/// receives these via the `on_event` callback and translates them into `Metrics` calls,
+/// same boundary discipline as `SynProbe`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AcmeEvent {
     /// A brand-new certificate was issued or renewed and hot-swapped into the resolver.
@@ -130,7 +130,7 @@ pub struct AcmeHandles {
 /// Start one ACME state machine per exact domain (separate certs, rpxy-acme style).
 ///
 /// `rustls-acme` (feature `aws-lc-rs`) threads the crypto provider explicitly via
-/// `builder_with_provider`, so this never installs a global `CryptoProvider` default —
+/// `builder_with_provider`, so this never installs a global `CryptoProvider` default.
 /// huginn stays free of global crypto state.
 ///
 /// - `directory_url`: overrides the directory; when `None`, picks Let's Encrypt

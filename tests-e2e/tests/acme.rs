@@ -11,7 +11,7 @@
 //! ```
 //!
 //! The two checks together prove a real ACME issuance: the served leaf is issued by Pebble (not a
-//! static/default cert — the `:8443` listener has no file cert configured) and traffic flows
+//! static/default cert; the `:8443` listener has no file cert configured) and traffic flows
 //! through it to the backend.
 
 use std::net::SocketAddr;
@@ -128,9 +128,7 @@ async fn acme_cert_is_issued_by_pebble_for_the_domain() -> TestResult {
 
     let (_, cert) = x509_parser::parse_x509_certificate(leaf.as_ref())
         .map_err(|e| format!("failed to parse leaf certificate: {e}"))?;
-
-    // Issued by Pebble's runtime issuance CA — proves a real ACME issuance, since the `:8443`
-    // listener has no static/default certificate to fall back to.
+    
     let issuer = cert.issuer().to_string();
     assert!(issuer.contains("Pebble"), "leaf issuer should be Pebble, got: {issuer}");
 

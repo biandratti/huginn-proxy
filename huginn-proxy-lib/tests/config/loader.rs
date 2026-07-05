@@ -500,9 +500,6 @@ cert = { type = "acme" }
     Ok(())
 }
 
-// Note: the old `rejects_acme_with_cert_paths` test is gone by design — `CertSource` makes
-// "ACME together with cert/key paths" unrepresentable, so there is no invalid state to reject.
-
 #[test]
 fn rejects_acme_on_catch_all() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let path = tmp_path("acme-catchall");
@@ -561,9 +558,6 @@ cert = { type = "acme" }
 
 #[test]
 fn rejects_wildcard_under_global_acme() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    // With a global `[acme]` block, a wildcard domain that omits `cert` resolves to
-    // ACME-by-default — but TLS-ALPN-01 cannot issue wildcards, so it must error (use an
-    // explicit `cert = { type = "file" }` for a wildcard via an external issuer).
     let path = tmp_path("acme-global-wildcard");
     let toml = r#"
 listen = { addrs = ["127.0.0.1:0"] }
@@ -593,8 +587,6 @@ routes = [{ prefix = "/", backend = "backend:9000" }]
 #[test]
 fn allows_wildcard_file_cert_under_global_acme(
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    // A wildcard with an explicit `cert = { type = "file" }` is the supported escape hatch even
-    // when `[acme]` is global: the file cert (e.g. from cert-manager) overrides ACME-by-default.
     let path = tmp_path("acme-global-wildcard-file");
     let cert_path = tmp_path("wildcard.crt");
     let key_path = tmp_path("wildcard.key");
@@ -667,9 +659,6 @@ cert = {{ type = "acme" }}
 
 #[test]
 fn rejects_tls_domain_without_cert() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    // Under `[tls]`, every domain must declare its own `cert`. There is no implicit
-    // default/catch-all fallback: a TLS domain that omits `cert` (and no global `[acme]`)
-    // is a configuration error, so the config stays explicit and simple.
     let path = tmp_path("tls-no-cert");
     let toml = r#"
 listen = { addrs = ["127.0.0.1:0"] }
@@ -694,7 +683,6 @@ routes = [{ prefix = "/", backend = "backend:9000" }]
 
 #[test]
 fn allows_cert_less_domain_without_tls() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    // Without `[tls]` (plain HTTP), certs are irrelevant, so a cert-less domain is fine.
     let path = tmp_path("plain-no-cert");
     let toml = r#"
 listen = { addrs = ["127.0.0.1:0"] }

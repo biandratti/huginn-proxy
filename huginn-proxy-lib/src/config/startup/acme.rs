@@ -4,8 +4,8 @@ use serde::Deserialize;
 ///
 /// ACME drives an account and background issuance/renewal tasks, so it is part of
 /// [`crate::config::StaticConfig`] and requires a restart to change. Presence of this
-/// block is required by any domain that resolves to ACME — an explicit
-/// `cert = { type = "acme" }` or an omitted `cert` (ACME-by-default) — validated in
+/// block is required by any domain that resolves to ACME: either an explicit
+/// `cert = { type = "acme" }` or an omitted `cert` (ACME-by-default), validated in
 /// `config/loader.rs`.
 ///
 /// Only exact hosts are supported (no wildcards, no catch-all); wildcards are delegated
