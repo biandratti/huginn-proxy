@@ -17,11 +17,39 @@ use rustls_acme::rustls::crypto::aws_lc_rs;
 use rustls_acme::rustls::server::ResolvesServerCert;
 use rustls_acme::rustls::{ClientConfig, RootCertStore};
 use rustls_acme::AcmeConfig;
+use rustls_acme::EventOk;
 use rustls_pki_types::pem::PemObject;
 use rustls_pki_types::CertificateDer;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
-use tracing::{error, info};
+use tracing::{error, info, warn};
+
+/// Callback invoked for every ACME state-machine event.
+///
+/// Receives `(domain, event)`. Designed for metrics injection following the `SynProbe`
+/// boundary pattern: `huginn-acme` stays decoupled from the metrics crate; the binary wires
+/// in a closure that calls `Metrics`.
+pub type OnAcmeEvent = Arc<dyn Fn(&str, AcmeEvent) + Send + Sync>;
+
+/// A normalized, metrics-ready view of one ACME state-machine event.
+///
+/// This type is intentionally **decoupled from Prometheus / OpenTelemetry**: `huginn-acme`
+/// does not depend on `huginn-proxy-lib` or any metrics crate. The binary (`huginn-proxy`)
+/// receives these via the `on_event` callback and translates them into `Metrics` calls —
+/// the same boundary discipline as `SynProbe`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AcmeEvent {
+    /// A brand-new certificate was issued or renewed and hot-swapped into the resolver.
+    /// This is the primary signal for the renewal-success counter.
+    DeployedNewCert,
+    /// A previously-cached certificate was loaded from disk at startup.
+    /// Does not count as a renewal; it is a successful startup signal.
+    DeployedCachedCert,
+    /// The certificate or ACME account was persisted to the on-disk cache.
+    CacheStored,
+    /// Any error in the issuance / renewal / cache cycle.
+    Error,
+}
 
 /// Errors returned while wiring up ACME.
 #[derive(Debug, thiserror::Error)]
@@ -111,6 +139,9 @@ pub struct AcmeHandles {
 ///   compiled-in webpki roots. Needed for private/test ACME servers (e.g. Pebble) with a
 ///   self-signed CA; leave `None` for public CAs like Let's Encrypt.
 /// - `cancel`: cancelling it makes every spawned task exit at its next poll.
+/// - `on_event`: optional [`OnAcmeEvent`] callback invoked on every state-machine event.
+///   Tracing logs are always emitted regardless of whether a callback is provided.
+#[allow(clippy::too_many_arguments)]
 pub fn start_acme(
     contact_email: &str,
     cache_dir: &str,
@@ -119,6 +150,7 @@ pub fn start_acme(
     directory_ca_path: Option<&str>,
     domains: &[String],
     cancel: CancellationToken,
+    on_event: Option<OnAcmeEvent>,
 ) -> Result<AcmeHandles, AcmeError> {
     if domains.is_empty() {
         return Err(AcmeError::NoDomains);
@@ -157,6 +189,7 @@ pub fn start_acme(
 
         let host = domain.clone();
         let cancel = cancel.clone();
+        let cb: Option<OnAcmeEvent> = on_event.clone();
         let task = tokio::spawn(async move {
             loop {
                 tokio::select! {
@@ -165,10 +198,21 @@ pub fn start_acme(
                         break;
                     }
                     event = state.next() => match event {
-                        Some(Ok(ok)) => info!(domain = %host, event = ?ok, "ACME event"),
-                        Some(Err(err)) => error!(domain = %host, error = ?err, "ACME error"),
+                        Some(Ok(ok)) => {
+                            let acme_event = acme_event_from_ok(&ok);
+                            info!(domain = %host, event = ?ok, "ACME event");
+                            if let Some(ref f) = cb {
+                                f(&host, acme_event);
+                            }
+                        }
+                        Some(Err(ref err)) => {
+                            error!(domain = %host, error = ?err, "ACME error");
+                            if let Some(ref f) = cb {
+                                f(&host, AcmeEvent::Error);
+                            }
+                        }
                         None => {
-                            info!(domain = %host, "ACME stream ended");
+                            warn!(domain = %host, "ACME stream ended unexpectedly");
                             break;
                         }
                     },
@@ -179,4 +223,13 @@ pub fn start_acme(
     }
 
     Ok(AcmeHandles { resolvers, tasks })
+}
+
+/// Map a `rustls-acme` [`EventOk`] to our decoupled [`AcmeEvent`].
+pub fn acme_event_from_ok(ok: &EventOk) -> AcmeEvent {
+    match ok {
+        EventOk::DeployedNewCert => AcmeEvent::DeployedNewCert,
+        EventOk::DeployedCachedCert => AcmeEvent::DeployedCachedCert,
+        EventOk::CertCacheStore | EventOk::AccountCacheStore => AcmeEvent::CacheStored,
+    }
 }

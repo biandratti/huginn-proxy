@@ -698,24 +698,51 @@ sum by (protocol) (rate(huginn_mtls_connections_total[5m]))
 
 ### 14. ACME Metrics
 
-| Metric                 | Type  | Description                                                              | Labels |
-|------------------------|-------|--------------------------------------------------------------------------|--------|
-| `huginn_acme_domains`  | Gauge | Number of domains served by in-process ACME (TLS-ALPN-01)               | —      |
+| Metric                                         | Type    | Description                                                                                   | Labels                    |
+|------------------------------------------------|---------|-----------------------------------------------------------------------------------------------|---------------------------|
+| `huginn_acme_domains`                          | Gauge   | Number of domains served by in-process ACME (TLS-ALPN-01); set once at startup               | —                         |
+| `huginn_acme_cert_renewals_total`              | Counter | Total ACME certificate issuance/renewal attempts (startup cache loads excluded)               | `domain`, `result`        |
+| `huginn_acme_events_total`                     | Counter | Granular ACME state-machine event counter                                                     | `domain`, `event`         |
+| `huginn_acme_last_event_timestamp_seconds`     | Gauge   | Unix timestamp of the most recent ACME event per domain and outcome                           | `domain`, `result`        |
+
+**Label values**:
+
+- `result`: `success` · `error`
+- `event`: `deployed_new` · `deployed_cached` · `cache_stored` · `error`
 
 **Notes**:
 
-- Only emitted when the binary is built with `--features acme` **and** the config has an `[acme]`
-  block with at least one ACME-managed domain. Otherwise the series is absent (treat as `0`).
-- Set **once at startup**: the ACME domain set is fixed at boot (adding/removing an ACME domain
-  requires a restart), so this gauge does not change at runtime.
-- This MVP does not emit per-event issuance/renewal/error metrics; those ACME events are written to
-  the logs by the `huginn-acme` crate. Renewal-failure alerting via dedicated metrics is a planned
-  enhancement (WIP TODO).
+- All ACME metrics are only emitted when the binary is built with `--features acme` **and** the
+  config has an `[acme]` block with at least one ACME-managed domain.
+- `huginn_acme_domains` is set **once at startup** and does not change at runtime (adding/removing
+  an ACME domain requires a restart).
+- `huginn_acme_cert_renewals_total{result="success"}` counts `DeployedNewCert` events only —
+  actual issuances and renewals. Startup cache loads (`deployed_cached`) are NOT counted here.
+- `huginn_acme_cert_renewals_total{result="error"}` counts any `EventError` variant (order
+  failure, cache I/O error, cert parse error, etc.).
+- A stale `huginn_acme_last_event_timestamp_seconds{result="success"}` (no update in several days)
+  indicates the renewal state machine may be stuck.
 
 **Example queries**:
 
-- Is ACME active and for how many domains: `huginn_acme_domains`
-- Alert if ACME unexpectedly serves zero domains: `huginn_acme_domains == 0`
+```promql
+# Is ACME active and for how many domains?
+huginn_acme_domains
+
+# Alert: any renewal failure in the last hour
+rate(huginn_acme_cert_renewals_total{result="error"}[1h]) > 0
+
+# Alert: no successful renewal event for a domain in the last 60 days
+# (Let's Encrypt renews ~30 days before expiry; 60d without a success event is abnormal)
+(time() - huginn_acme_last_event_timestamp_seconds{result="success"}) > 5184000
+
+# Renewal success rate by domain
+rate(huginn_acme_cert_renewals_total{result="success"}[7d])
+  / rate(huginn_acme_cert_renewals_total[7d])
+
+# Latest event type per domain (for dashboards)
+huginn_acme_events_total
+```
 
 ---
 

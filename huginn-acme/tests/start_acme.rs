@@ -1,15 +1,9 @@
-//! Integration tests for the public `start_acme` entry point: domain validation, one
-//! `(host, resolver)` pair per domain (host lowercased for case-insensitive SNI), and
-//! cooperative shutdown via the `CancellationToken`.
-
 use huginn_acme::{start_acme, AcmeError};
 use tokio::time::{timeout, Duration};
 use tokio_util::sync::CancellationToken;
 
 type TestResult = Result<(), Box<dyn std::error::Error + Send + Sync>>;
 
-// A well-formed but unreachable directory so a stray `state.next()` poll never contacts a
-// real ACME server; the pre-cancelled token makes every task break before issuance anyway.
 const BOGUS_DIRECTORY: &str = "https://127.0.0.1:1/directory";
 
 #[test]
@@ -22,6 +16,7 @@ fn rejects_empty_domains() {
         None,
         &[],
         CancellationToken::new(),
+        None,
     );
     assert!(matches!(result, Err(AcmeError::NoDomains)));
 }
@@ -36,6 +31,7 @@ fn rejects_missing_directory_ca() {
         Some("/nonexistent/huginn-acme/pebble-ca.pem"),
         &["api.example.com".to_string()],
         CancellationToken::new(),
+        None,
     );
     assert!(
         matches!(result, Err(AcmeError::DirectoryCaRead { .. })),
@@ -45,7 +41,6 @@ fn rejects_missing_directory_ca() {
 
 #[test]
 fn rejects_empty_directory_ca() -> TestResult {
-    // A readable-but-empty bundle parses to zero certificates → distinct, actionable error.
     let nanos = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_nanos())
@@ -61,6 +56,7 @@ fn rejects_empty_directory_ca() -> TestResult {
         Some(&ca_path.to_string_lossy()),
         &["api.example.com".to_string()],
         CancellationToken::new(),
+        None,
     );
     let _ = std::fs::remove_file(&ca_path);
     assert!(
@@ -87,6 +83,7 @@ async fn builds_one_lowercased_resolver_per_domain() -> TestResult {
         None,
         &domains,
         cancel,
+        None,
     )?;
 
     // One `(host, resolver)` pair per domain, host lowercased for case-insensitive SNI.

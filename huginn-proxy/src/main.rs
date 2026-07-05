@@ -183,9 +183,6 @@ async fn main() -> Result<(), BoxError> {
     #[cfg(feature = "acme")]
     let acme: Option<huginn_proxy_lib::AcmeRuntime> = match &static_cfg.acme {
         Some(acme_cfg) => {
-            // Hosts that resolve to ACME: explicit `cert = { type = "acme" }`, or an omitted
-            // `cert` while `[acme]` is configured (ACME-by-default). `[acme]` is present here, so
-            // `is_acme(true)`. The loader already rejected wildcards, host-less, and mTLS for these.
             let hosts: Vec<String> = dynamic_cfg
                 .load()
                 .domains
@@ -197,10 +194,26 @@ async fn main() -> Result<(), BoxError> {
                 info!("[acme] is configured but no domain resolves to ACME; ACME disabled");
                 None
             } else {
-                // Cooperative shutdown bridge: cancel the ACME token once the proxy starts
-                // draining, so each spawned state machine exits and its `ServiceHandle` (awaited
-                // in `run()`) joins cleanly.
                 let cancel = tokio_util::sync::CancellationToken::new();
+
+                let metrics_for_acme = Arc::clone(&metrics);
+                let on_event: huginn_acme::OnAcmeEvent = Arc::new(move |domain, event| {
+                    use huginn_acme::AcmeEvent;
+                    match event {
+                        AcmeEvent::DeployedNewCert => {
+                            metrics_for_acme.record_acme_renewal_success(domain);
+                        }
+                        AcmeEvent::DeployedCachedCert => {
+                            metrics_for_acme.record_acme_cached_cert(domain);
+                        }
+                        AcmeEvent::CacheStored => {
+                            metrics_for_acme.record_acme_cache_stored(domain);
+                        }
+                        AcmeEvent::Error => {
+                            metrics_for_acme.record_acme_error(domain);
+                        }
+                    }
+                });
                 let handles = huginn_acme::start_acme(
                     &acme_cfg.contact_email,
                     &acme_cfg.cache_dir,
@@ -209,6 +222,7 @@ async fn main() -> Result<(), BoxError> {
                     acme_cfg.directory_ca_path.as_deref(),
                     &hosts,
                     cancel.clone(),
+                    Some(on_event),
                 )?;
                 let mut acme_shutdown = shutdown_rx.clone();
                 tokio::spawn(async move {
