@@ -1,10 +1,12 @@
 #![no_std]
 
-//! Shared logic for TCP SYN fingerprinting between the XDP program and userspace.
+//! Shared logic for TCP SYN fingerprinting between the BPF kernel programs and userspace.
 //!
 //! Contract: `quirk_bits`, `SynRawDataV4`/`SynRawDataV6` layout, and key encoding must match
 //! both `huginn-ebpf-programs` and `huginn-ebpf`.
 
+pub mod constants;
+pub mod headers;
 pub mod quirk_bits;
 pub mod syn_raw_v4;
 pub mod syn_raw_v6;
