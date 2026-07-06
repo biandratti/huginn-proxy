@@ -1,3 +1,8 @@
+//! Raw packet access for the XDP pipeline.
+//!
+//! XDP hands the program a pointer window (`ctx.data()`..`ctx.data_end()`); reading a header means
+//! bounds-checking an offset and casting. This is intrinsically `unsafe` and verifier-mandated, so
+//! it is confined to this module.
 #![allow(unsafe_code)]
 
 use aya_ebpf::programs::XdpContext;

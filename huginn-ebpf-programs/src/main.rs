@@ -22,17 +22,16 @@ use aya_ebpf::{
 };
 
 mod constants;
-mod handlers;
 mod headers;
-mod helpers;
 mod signals;
 mod tc;
+mod xdp;
 
 // ── Entry points ─────────────────────────────────────────────────────────────
 
 #[xdp]
 pub fn huginn_xdp_syn(ctx: XdpContext) -> u32 {
-    match handlers::try_xdp_syn(&ctx) {
+    match xdp::try_xdp_syn(&ctx) {
         Ok(()) => XDP_PASS,
         Err(()) => XDP_PASS,
     }

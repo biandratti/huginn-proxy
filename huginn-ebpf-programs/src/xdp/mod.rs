@@ -1,12 +1,22 @@
+//! XDP capture pipeline.
+//!
+//! Parses L2/L3/L4 via **direct packet access** (`packet::ptr_at` + raw deref) and dispatches TCP
+//! SYNs to the shared `signals::tcp_syn` handlers. This is the fast, driver/generic-XDP path used
+//! on physical/veth interfaces. On VLAN/bond interfaces use the TC path instead (see `crate::tc`).
+//!
+//! Direct packet access is intrinsic to XDP and the verifier requires the bounds-check-then-deref
+//! idiom, so this module retains `unsafe`; `packet.rs` confines the pointer arithmetic.
 #![allow(unsafe_code)]
+
+mod packet;
 
 use aya_ebpf::programs::XdpContext;
 use core::mem;
 
 use crate::constants::*;
 use crate::headers::{EthHdr, Ip4Hdr, Ip6Hdr, TcpHdr, VlanHdr};
-use crate::helpers::ptr_at;
 use crate::signals::tcp_syn;
+use packet::ptr_at;
 
 /// XDP pipeline: parse L2/L3/L4 and dispatch to each signal's handler.
 ///

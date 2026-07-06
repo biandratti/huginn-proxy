@@ -1,14 +1,17 @@
-//! TC (clsact) ingress classifier for TCP SYN fingerprinting.
+//! TC (clsact) ingress capture pipeline for TCP SYN fingerprinting.
 //!
-//! Functional mirror of the XDP pipeline in `handlers.rs`, but over `TcContext`. TC ingress runs
-//! in the network stack and reads packet bytes via `bpf_skb_load_bytes` (`ctx.load`), which the
-//! kernel makes available even for **non-linear / GRO-merged** skbs. Returning `TC_ACT_OK` never
-//! drops the packet, so it works on VLAN/bond interfaces where generic XDP drops GRO-merged data
-//! packets. See `data/ebpf-vlan-tc-capture.md`.
+//! Functional mirror of the XDP pipeline in `crate::xdp`, but over `TcContext`. TC ingress runs in
+//! the network stack and reads packet bytes via `bpf_skb_load_bytes` (`ctx.load`), which the kernel
+//! makes available even for **non-linear / GRO-merged** skbs. Returning `TC_ACT_OK` never drops the
+//! packet, so it works on VLAN/bond interfaces where generic XDP drops GRO-merged data packets. See
+//! `data/ebpf-vlan-tc-capture.md`.
 //!
-//! The capture logic (dst filter, SYN-no-ACK gate, quirks, map writes) is identical to XDP — only
+//! The capture logic (dst filter, SYN-no-ACK gate, quirks, map writes) is identical to XDP; only
 //! the packet-access layer changes. The map set, names, key encoding, and value layout are reused
 //! unchanged via `signals::tcp_syn`, keeping the on-disk contract byte-for-byte identical.
+//!
+//! Unlike `crate::xdp`, this pipeline reads packets safely (`ctx.load` returns values by copy). The
+//! only `unsafe` is reading the loader-patched globals via `read_volatile`.
 #![allow(unsafe_code)]
 
 use aya_ebpf::programs::TcContext;
