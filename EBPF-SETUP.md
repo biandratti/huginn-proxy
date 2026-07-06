@@ -105,13 +105,13 @@ No `seccomp:unconfined` or `apparmor:unconfined` needed.
 
 | Variable | Example | Description |
 |---|---|---|
-| `HUGINN_EBPF_INTERFACE` | `eth0` | Network interface to attach XDP to |
+| `HUGINN_EBPF_INTERFACE` | `eth0` | Network interface for the capture program (XDP or TC) |
 | `HUGINN_EBPF_DST_IP_V4` | `0.0.0.0` | IPv4 destination filter (`0.0.0.0` = no filter) |
 | `HUGINN_EBPF_DST_IP_V6` | `::` | IPv6 destination filter (`::` = no filter); quote in YAML if needed |
 | `HUGINN_EBPF_DST_PORT` | `7000` | Destination port filter (proxy listen port) |
 | `HUGINN_EBPF_PIN_PATH` | `/sys/fs/bpf/huginn` | Pin directory (default shown) |
 | `HUGINN_EBPF_SYN_MAP_MAX_ENTRIES` | `8192` | LRU map capacity (default shown) |
-| `HUGINN_EBPF_CAPTURE` | `xdp-native` | Capture hook/backend: `xdp-native` (default, driver-level XDP), `xdp-skb` (generic XDP, for veth/loopback), or `tc` (clsact ingress) |
+| `HUGINN_EBPF_CAPTURE` | `xdp-native` | Capture backend: `xdp-native` (driver XDP, default), `xdp-skb` (generic XDP, veth/loopback/VMs), or `tc` (clsact ingress; GRO-safe when native XDP is unavailable, e.g. VLAN/bond on generic XDP). Same BPF maps either way. |
 | `HUGINN_EBPF_LOG_LEVEL` | `off` | Verbosity of in-kernel `aya-log` datapath logging: `off` (default), `error`, `warn`, `info`, `debug`, `trace`. The kernel emits only records at/above the level (`debug` = per-capture, `warn` = map-insert failures), so the level gate runs in-kernel and `off` is zero-cost on the hot path. When non-`off` and `RUST_LOG` is unset, the agent defaults its filter to that level so records are shown. For diagnostics only. |
 
 #### Choosing a capture backend
@@ -126,12 +126,11 @@ mechanism differ.
   (GRO-safe) and returns `TC_ACT_OK`, so it **never drops** packets and works on **VLAN/bond**
   interfaces.
 
-> **VLAN/bond edge interfaces (e.g. `bond0.44`): use `tc`.** These drivers have no native XDP, so
-> XDP can only attach in **generic** mode — and generic XDP **drops GRO-merged data packets** for
-> single-buffer programs (the SYN often passes but the following TLS ClientHello is dropped, so
-> connections hang). TC ingress avoids this entirely. Capabilities are the same as the XDP path
-> (`CAP_NET_ADMIN` + `CAP_BPF`/`CAP_PERFMON` + host network namespace); no new privileges.
-> See `data/ebpf-vlan-tc-capture.md` for the full root-cause analysis.
+> Use `tc` when native XDP is not available and you would otherwise fall back to generic XDP
+> (`xdp-skb`). Generic XDP does not handle GRO-aggregated (multi-buffer) packets — the program
+> only sees the first segment and non-linear skbs are dropped. TC `clsact` ingress runs after GRO
+> and reads the full skb via `bpf_skb_load_bytes`, so it is not affected. Capabilities are the
+> same (`CAP_NET_ADMIN` + `CAP_BPF`/`CAP_PERFMON`); no new privileges required.
 
 ### Proxy configuration (`config.toml`)
 

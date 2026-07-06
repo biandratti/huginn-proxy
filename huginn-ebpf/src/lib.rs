@@ -1,4 +1,3 @@
-// eBPF is Linux-only.
 #![cfg(target_os = "linux")]
 // Unsafe only in types.rs (`unsafe impl aya::Pod`).
 #![deny(unsafe_code)]
@@ -14,7 +13,7 @@ pub use config::{CaptureBackend, XdpAttachMode};
 pub use error::EbpfError;
 pub use log_level::EbpfLogLevel;
 pub use probe::{
-    syn_captured_count_from_path, syn_captured_v6_count_from_path,
+    is_stale, syn_captured_count_from_path, syn_captured_v6_count_from_path,
     syn_insert_failures_count_from_path, syn_insert_failures_v6_count_from_path,
     syn_malformed_count_from_path, syn_malformed_v6_count_from_path, EbpfLogPoller, EbpfProbe,
     DEFAULT_SYN_MAP_MAX_ENTRIES,

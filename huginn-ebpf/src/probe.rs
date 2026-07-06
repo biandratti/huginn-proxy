@@ -424,17 +424,13 @@ impl EbpfProbe {
             return None;
         }
 
-        let stale_threshold = u64::from(self.syn_map_max_entries) * 2;
         if let Some(current_tick) = self.read_current_tick() {
-            let age = current_tick.saturating_sub(val.tick);
-            if age > stale_threshold {
+            if is_stale(val.tick, current_tick, self.syn_map_max_entries) {
                 warn!(
                     ?src_ip,
                     src_port,
                     stored_tick = val.tick,
                     current_tick,
-                    age,
-                    threshold = stale_threshold,
                     "SYN v6 map entry is stale - discarding"
                 );
                 return None;
@@ -473,22 +469,13 @@ impl EbpfProbe {
             return None;
         }
 
-        // Stale detection: compare stored tick against the current global counter.
-        // If many SYNs have arrived since this entry was written, the entry may
-        // belong to an earlier connection that reused the same src_ip:src_port.
-        // Threshold 2× map size: enough margin for slow HTTP sessions, but discard
-        // entries that are likely from a previous connection (port reuse).
-        let stale_threshold = u64::from(self.syn_map_max_entries) * 2;
         if let Some(current_tick) = self.read_current_tick() {
-            let age = current_tick.saturating_sub(val.tick);
-            if age > stale_threshold {
+            if is_stale(val.tick, current_tick, self.syn_map_max_entries) {
                 warn!(
                     ?src_ip,
                     src_port,
                     stored_tick = val.tick,
                     current_tick,
-                    age,
-                    threshold = stale_threshold,
                     "SYN map entry is stale - discarding"
                 );
                 return None;
@@ -667,6 +654,16 @@ pub fn syn_malformed_v6_count_from_path(base_path: &str) -> Option<u64> {
 fn read_percpu_counter_from_path(path: impl AsRef<std::path::Path>) -> Option<u64> {
     let data = MapData::from_pin(path.as_ref()).ok()?;
     read_percpu_counter(&Map::PerCpuArray(data))
+}
+
+/// Returns `true` when a map entry is too old to be trusted.
+///
+/// `stored_tick` is the global SYN counter at capture time; `current_tick` is the
+/// counter now. An entry is stale when more than `2 x syn_map_max_entries` SYNs have
+/// arrived since capture, enough to have evicted and reused the LRU slot once.
+pub fn is_stale(stored_tick: u64, current_tick: u64, syn_map_max_entries: u32) -> bool {
+    let threshold = u64::from(syn_map_max_entries).saturating_mul(2);
+    current_tick.saturating_sub(stored_tick) > threshold
 }
 
 /// BPF map key for IPv4 lookup. Must match kernel `make_key_v4`.

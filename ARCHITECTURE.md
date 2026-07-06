@@ -8,24 +8,25 @@
 
 **`huginn-ebpf-common`** - Shared `no_std` crate for TCP SYN fingerprinting. Defines `SynRawDataV4` / `SynRawDataV6` layout, `quirk_bits` constants, and `make_key(src_ip, src_port)` encoding. Used by both `huginn-ebpf-programs` (kernel) and `huginn-ebpf` (userspace) so map layout and key encoding stay in sync. Optional feature `aya` enables `aya::Pod` for those types in userspace only.
 
-**`huginn-ebpf`** - eBPF loader. Linux-only, gated behind the `ebpf-tcp` feature. Opens pinned BPF maps (or loads the capture program when embedded), reads `SynRawDataV4` / `SynRawDataV6` from the map, and exposes `parse_syn()` to turn raw captured data into a `TcpObservation`. Depends on `huginn-ebpf-common` for types and `quirk_bits`.
+**`huginn-ebpf`** - eBPF loader. Linux-only, gated behind the `ebpf-tcp` feature. Opens pinned BPF maps (or loads the capture program when embedded), reads `SynRawDataV4` / `SynRawDataV6` from the map, and exposes `parse_syn_v4()` / `parse_syn_v6()` to turn raw captured data into a `TcpObservation`. Depends on `huginn-ebpf-common` for types and `quirk_bits`.
 
-**`huginn-ebpf-programs`** - BPF kernel programs. Compiled with nightly for `bpfel-unknown-none`, embedded into `huginn-ebpf` at build time. Ships two hooks in one object that share maps, key encoding, and value layout: `huginn_xdp_syn` (XDP, for physical/veth interfaces) and `huginn_tc_syn` (TC `clsact` ingress, for VLAN/bond interfaces where generic XDP drops GRO-merged data packets). Depends on `huginn-ebpf-common` for types, `quirk_bits`, and `make_key`.
+**`huginn-ebpf-programs`** - BPF kernel programs. Compiled with nightly for `bpfel-unknown-none`, embedded into `huginn-ebpf` at build time. Ships two hooks in one object that share maps, key encoding, and value layout: `huginn_xdp_syn` (XDP) and `huginn_tc_syn` (TC `clsact` ingress, GRO-safe). Depends on `huginn-ebpf-common` for types, `quirk_bits`, and `make_key`.
 
 **`huginn-ebpf-agent`** - Standalone eBPF agent. Loads the selected capture program (XDP or TC, via `HUGINN_EBPF_CAPTURE`), pins BPF maps to `/sys/fs/bpf/huginn/`, and stays alive until SIGTERM. Designed to run as a DaemonSet so that the proxy (Deployment) can open pinned maps without `CAP_NET_ADMIN`.
 
 ---
 
-## TCP SYN fingerprinting via eBPF/XDP
+## TCP SYN fingerprinting via eBPF
 
 ```
-huginn-ebpf-programs (kernel)      huginn-ebpf                huginn-proxy
-───────────────────────────────    ──────────────────────     ──────────────────
-SynRawDataV4 { window, ip_ttl,     parse_syn(&raw)            match result {
-  optlen, options[40],          →    parse_options_raw()   →    Hit(obs) → inject headers
-  quirks, ip_olen, tick }             ttl::calculate_ttl()       Miss     → skip
-  (layout from huginn-ebpf-common)   window_size::detect…()     Malformed→ skip
-                                   → Option<TcpObservation>  }
+huginn-ebpf-programs (kernel)      huginn-ebpf                      huginn-proxy
+───────────────────────────────    ──────────────────────────────   ──────────────────
+SynRawDataV4 / SynRawDataV6        parse_syn_v4(&raw) /             match result {
+  { window, ip_ttl, optlen,    →     parse_syn_v6(&raw)         →     Hit(obs) → inject headers
+    options[40], quirks, tick }        parse_options_raw()              Miss     → skip
+  (layout: huginn-ebpf-common)        ttl::calculate_ttl()             Malformed→ skip
+                                       window_size::detect…()        }
+                                   → Option<TcpObservation>
 ```
 
 `SynRawDataV4` / `SynRawDataV6` and the map key encoding are defined in **`huginn-ebpf-common`** so kernel and userspace never drift.
@@ -38,4 +39,4 @@ pub type SynProbe = Arc<dyn Fn(SocketAddr) -> SynResult + Send + Sync>;
 
 `huginn-proxy` provides the implementation; `huginn-proxy-lib` only calls it.
 
-The capture hook is selectable via `HUGINN_EBPF_CAPTURE` (`xdp-native` | `xdp-skb` | `tc`). The single BPF object embeds two programs sharing the same maps/keys/values: `huginn_xdp_syn` (XDP) and `huginn_tc_syn` (TC `clsact` ingress). On **VLAN/bond** interfaces (no native XDP) use `tc`: generic XDP drops GRO-merged data packets, whereas TC ingress reads via `bpf_skb_load_bytes` (GRO-safe) and returns `TC_ACT_OK`, never dropping. The proxy reads the same pinned maps regardless of backend.
+The capture hook is selectable via `HUGINN_EBPF_CAPTURE` (`xdp-native` | `xdp-skb` | `tc`). The single BPF object embeds both programs sharing the same maps, key encoding, and value layout. `tc` reads via `bpf_skb_load_bytes` (GRO-safe) and returns `TC_ACT_OK`; the proxy reads the same pinned maps regardless of backend. See `EBPF-SETUP.md` for backend selection guidance.

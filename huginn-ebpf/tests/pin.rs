@@ -62,3 +62,65 @@ fn test_constant_names_match_expected() {
 fn test_default_pin_base() {
     assert_eq!(pin::DEFAULT_PIN_BASE, "/sys/fs/bpf/huginn");
 }
+
+// ── IPv6 paths ────────────────────────────────────────────────────────────────
+
+#[test]
+fn test_syn_map_v6_path_ends_with_map_name() {
+    let path = pin::syn_map_v6_path("/sys/fs/bpf/huginn");
+    assert_eq!(path.file_name().and_then(|p| p.to_str()), Some(pin::SYN_MAP_V6_NAME));
+}
+
+#[test]
+fn test_insert_failures_v6_path_ends_with_map_name() {
+    let path = pin::insert_failures_v6_path("/sys/fs/bpf/huginn");
+    assert_eq!(
+        path.file_name().and_then(|p: &std::ffi::OsStr| p.to_str()),
+        Some(pin::SYN_INSERT_FAILURES_V6_NAME)
+    );
+}
+
+#[test]
+fn test_syn_captured_v6_path_ends_with_map_name() {
+    let path = pin::syn_captured_v6_path("/sys/fs/bpf/huginn");
+    assert_eq!(
+        path.file_name().and_then(|p: &std::ffi::OsStr| p.to_str()),
+        Some(pin::SYN_CAPTURED_V6_NAME)
+    );
+}
+
+#[test]
+fn test_syn_malformed_v6_path_ends_with_map_name() {
+    let path = pin::syn_malformed_v6_path("/sys/fs/bpf/huginn");
+    assert_eq!(
+        path.file_name().and_then(|p: &std::ffi::OsStr| p.to_str()),
+        Some(pin::SYN_MALFORMED_V6_NAME)
+    );
+}
+
+// ── Constants ─────────────────────────────────────────────────────────────────
+
+#[test]
+fn test_v6_constant_names_match_expected() {
+    assert_eq!(pin::SYN_MAP_V6_NAME, "tcp_syn_map_v6");
+    assert_eq!(pin::SYN_INSERT_FAILURES_V6_NAME, "syn_insert_failures_v6");
+    assert_eq!(pin::SYN_CAPTURED_V6_NAME, "syn_captured_v6");
+    assert_eq!(pin::SYN_MALFORMED_V6_NAME, "syn_malformed_v6");
+}
+
+#[test]
+fn test_v4_and_v6_map_names_differ() {
+    assert_ne!(pin::SYN_MAP_V4_NAME, pin::SYN_MAP_V6_NAME);
+    assert_ne!(pin::SYN_INSERT_FAILURES_V4_NAME, pin::SYN_INSERT_FAILURES_V6_NAME);
+    assert_ne!(pin::SYN_CAPTURED_V4_NAME, pin::SYN_CAPTURED_V6_NAME);
+    assert_ne!(pin::SYN_MALFORMED_V4_NAME, pin::SYN_MALFORMED_V6_NAME);
+}
+
+#[test]
+fn test_all_v6_paths_start_with_base() {
+    let base = "/tmp/test-bpf";
+    assert!(pin::syn_map_v6_path(base).starts_with(Path::new(base)));
+    assert!(pin::insert_failures_v6_path(base).starts_with(Path::new(base)));
+    assert!(pin::syn_captured_v6_path(base).starts_with(Path::new(base)));
+    assert!(pin::syn_malformed_v6_path(base).starts_with(Path::new(base)));
+}
