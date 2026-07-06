@@ -16,3 +16,14 @@ pub enum CaptureBackend {
     /// TC clsact ingress (`huginn_tc_syn`). GRO-safe via `bpf_skb_load_bytes`.
     Tc,
 }
+
+impl CaptureBackend {
+    /// Canonical string label used for parsing and logging (e.g. `HUGINN_EBPF_CAPTURE`).
+    pub fn as_str(self) -> &'static str {
+        match self {
+            CaptureBackend::Xdp(XdpAttachMode::Native) => "xdp-native",
+            CaptureBackend::Xdp(XdpAttachMode::Skb) => "xdp-skb",
+            CaptureBackend::Tc => "tc",
+        }
+    }
+}

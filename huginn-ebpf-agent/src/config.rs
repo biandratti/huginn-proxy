@@ -138,12 +138,3 @@ pub fn resolve_capture_backend(
         }),
     }
 }
-
-/// Human-readable label for the resolved capture backend (for startup logging).
-pub fn capture_label(backend: CaptureBackend) -> &'static str {
-    match backend {
-        CaptureBackend::Xdp(XdpAttachMode::Native) => "xdp-native",
-        CaptureBackend::Xdp(XdpAttachMode::Skb) => "xdp-skb",
-        CaptureBackend::Tc => "tc",
-    }
-}

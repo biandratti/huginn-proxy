@@ -1,5 +1,6 @@
-//! Parity between make_bpf_key_v4/v6 (userspace) and huginn_ebpf_common (shared).
-//! Ensures the reverse proxy and the eBPF daemon use the same map key encoding.
+//! BPF map key encoding: parity between userspace (make_bpf_key_v4/v6) and the shared
+//! kernel/userspace implementation in huginn_ebpf_common. A mismatch here means proxy
+//! lookups would never hit kernel map entries.
 
 use std::net::{Ipv4Addr, Ipv6Addr};
 

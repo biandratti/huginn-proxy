@@ -1,7 +1,7 @@
 //! eBPF agent: loads the capture program, pins maps, serves metrics.
 
 use huginn_ebpf::{EbpfLogLevel, EbpfLogPoller, EbpfProbe};
-use huginn_ebpf_agent::config::{capture_label, from_env};
+use huginn_ebpf_agent::config::from_env;
 use huginn_ebpf_agent::error::Result;
 use std::env;
 use std::sync::Arc;
@@ -104,7 +104,7 @@ async fn main() -> Result<()> {
         .await;
     });
 
-    let capture_str = capture_label(cfg.capture);
+    let capture_str = cfg.capture.as_str();
     tracing::info!(
         interface = %cfg.interface,
         pin_path = %cfg.pin_path,

@@ -2,8 +2,8 @@ use std::collections::HashMap;
 use std::net::{Ipv4Addr, Ipv6Addr};
 
 use huginn_ebpf_agent::config::{
-    capture_label, from_env, resolve_capture_backend, CaptureBackend, ConfigError, EbpfLogLevel,
-    XdpAttachMode, DEFAULT_PIN_PATH,
+    from_env, resolve_capture_backend, CaptureBackend, ConfigError, EbpfLogLevel, XdpAttachMode,
+    DEFAULT_PIN_PATH,
 };
 
 /// Build a `get_var` closure from a list of (name, value) pairs.
@@ -63,9 +63,9 @@ fn invalid_capture_value_is_rejected() {
 
 #[test]
 fn labels_round_trip() {
-    assert_eq!(capture_label(CaptureBackend::Xdp(XdpAttachMode::Native)), "xdp-native");
-    assert_eq!(capture_label(CaptureBackend::Xdp(XdpAttachMode::Skb)), "xdp-skb");
-    assert_eq!(capture_label(CaptureBackend::Tc), "tc");
+    assert_eq!(CaptureBackend::Xdp(XdpAttachMode::Native).as_str(), "xdp-native");
+    assert_eq!(CaptureBackend::Xdp(XdpAttachMode::Skb).as_str(), "xdp-skb");
+    assert_eq!(CaptureBackend::Tc.as_str(), "tc");
 }
 
 // ── from_env ──────────────────────────────────────────────────────────────
