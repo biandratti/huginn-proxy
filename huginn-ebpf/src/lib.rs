@@ -1,6 +1,5 @@
 #![cfg(target_os = "linux")]
-// Unsafe only in types.rs (`unsafe impl aya::Pod`).
-#![deny(unsafe_code)]
+#![forbid(unsafe_code)]
 
 pub mod config;
 pub mod error;

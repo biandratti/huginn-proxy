@@ -1,5 +1,4 @@
 //! TC clsact ingress capture. GRO-safe alternative to XDP on VLAN/bond edges.
-#![deny(unsafe_code)]
 
 use aya_ebpf::programs::TcContext;
 use aya_log_ebpf::{debug, warn};
