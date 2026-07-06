@@ -15,8 +15,6 @@ pub struct Config {
     pub capture: CaptureBackend,
     pub metrics_listen_addr: String,
     pub metrics_port: u16,
-    /// Verbosity of the in-kernel `aya-log` datapath logging, forwarded to the agent's tracing
-    /// subscriber. [`EbpfLogLevel::Off`] by default; higher levels add hot-path-gated overhead only.
     pub log_level: EbpfLogLevel,
 }
 
@@ -104,11 +102,6 @@ pub fn from_env(get_var: impl Fn(&str) -> Option<String>) -> Result<Config, Conf
     })
 }
 
-/// Resolve the eBPF datapath log level from `HUGINN_EBPF_LOG_LEVEL`.
-///
-/// Accepts `off`/`error`/`warn`/`info`/`debug`/`trace` (case-insensitive). Unset defaults to
-/// [`EbpfLogLevel::Off`]. Any other value is a hard error, matching the strictness of the other
-/// typed env vars.
 fn resolve_log_level(
     get_var: &impl Fn(&str) -> Option<String>,
 ) -> Result<EbpfLogLevel, ConfigError> {
@@ -123,12 +116,9 @@ fn resolve_log_level(
     })
 }
 
-/// Resolve the capture backend from env.
+/// Resolve `HUGINN_EBPF_CAPTURE` (`xdp-native` | `xdp-skb` | `tc`). Default: `xdp-native`.
 ///
-/// `HUGINN_EBPF_CAPTURE` (`xdp-native` | `xdp-skb` | `tc`). When unset, defaults to `xdp-native`.
-///
-/// On VLAN/bond edge interfaces, `tc` is the recommended value: generic XDP drops GRO-merged data
-/// packets there, while TC clsact ingress never drops. See `data/ebpf-vlan-tc-capture.md`.
+/// On VLAN/bond edges prefer `tc`: generic XDP drops GRO-merged packets; TC never drops.
 pub fn resolve_capture_backend(
     get_var: &impl Fn(&str) -> Option<String>,
 ) -> Result<CaptureBackend, ConfigError> {

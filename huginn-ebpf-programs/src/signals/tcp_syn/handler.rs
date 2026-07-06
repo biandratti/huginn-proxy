@@ -12,22 +12,11 @@ use huginn_ebpf_common::quirk_bits::{
 };
 use huginn_ebpf_common::{make_key_v4, make_key_v6, SynRawDataV4, SynRawDataV6};
 
-/// Error from the TCP SYN handler.
-///
-/// Only one variant today: the BPF map insert failed (e.g. LRU at capacity).
-/// This does **not** mean "invalid packet" or "wrong type": by the time we're called,
-/// the pipeline has already validated Ethernet, IPv4, TCP, and SYN-without-ACK.
 #[derive(Clone, Copy)]
 pub enum TcpSynError {
-    /// Could not insert (src_ip, src_port) → SynRawDataV4 into the LRU map.
     MapInsertFailed,
 }
 
-/// Handle an IPv4 TCP SYN: compute quirks, build SynRawDataV4, insert into map.
-///
-/// Called from the pipeline after it has parsed Ethernet, IPv4, and TCP and
-/// confirmed SYN (no ACK) and passed the destination filter.
-/// `ip` and `tcp` are references to packet memory validated by the pipeline.
 #[allow(unsafe_code)]
 pub fn handle_tcp_syn_v4(
     ctx: &XdpContext,
@@ -36,7 +25,7 @@ pub fn handle_tcp_syn_v4(
     ip_hdr_len: usize,
 ) -> Result<(), TcpSynError> {
     // Must stay inline so the BPF verifier tracks packet bounds in this frame.
-    // SAFETY: tcp is a valid ref to packet memory; options start immediately after the header.
+    // SAFETY: tcp is valid packet memory; options start immediately after the header.
     let tcp_hdr_len = usize::from(tcp.doff()).saturating_mul(4);
     let declared_optlen = tcp_hdr_len
         .saturating_sub(mem::size_of::<TcpHdr>())
@@ -52,7 +41,7 @@ pub fn handle_tcp_syn_v4(
         if next_ptr as usize > data_end {
             break;
         }
-        // SAFETY: we checked next_ptr <= data_end before reading.
+        // SAFETY: next_ptr <= data_end checked above.
         *slot = unsafe { *byte_ptr };
         actual_copied = actual_copied.saturating_add(1);
     }
@@ -60,12 +49,7 @@ pub fn handle_tcp_syn_v4(
     finish_tcp_syn_v4(ip, tcp, ip_hdr_len, options, actual_copied as u8)
 }
 
-/// Shared post-parse body for IPv4: compute quirks, build [`SynRawDataV4`], insert into the map.
-///
-/// Both capture hooks call this with already-parsed headers and an already-populated option
-/// buffer: the **XDP** hook reads options via direct packet access, the **TC** hook via
-/// `bpf_skb_load_bytes` (GRO-safe). `optlen` is the number of valid option bytes in `options`.
-/// This contains no packet access, so it is identical and verifier-trivial for both hooks.
+// Shared by XDP (direct packet access) and TC (`bpf_skb_load_bytes`). No packet access here.
 #[inline(always)]
 pub fn finish_tcp_syn_v4(
     ip: &Ip4Hdr,
@@ -99,11 +83,6 @@ pub fn finish_tcp_syn_v4(
     Ok(())
 }
 
-/// Handle an IPv6 TCP SYN: compute quirks, build SynRawDataV6, insert into map.
-///
-/// Called from the pipeline after it has parsed Ethernet, IPv6, and TCP and
-/// confirmed SYN (no ACK) and passed the destination filter.
-/// `ip6` and `tcp` are references to packet memory validated by the pipeline.
 #[allow(unsafe_code)]
 pub fn handle_tcp_syn_v6(ctx: &XdpContext, ip6: &Ip6Hdr, tcp: &TcpHdr) -> Result<(), TcpSynError> {
     let tcp_hdr_len = usize::from(tcp.doff()).saturating_mul(4);
@@ -121,7 +100,7 @@ pub fn handle_tcp_syn_v6(ctx: &XdpContext, ip6: &Ip6Hdr, tcp: &TcpHdr) -> Result
         if next_ptr as usize > data_end {
             break;
         }
-        // SAFETY: we checked next_ptr <= data_end before reading.
+        // SAFETY: next_ptr <= data_end checked above.
         *slot = unsafe { *byte_ptr };
         actual_copied = actual_copied.saturating_add(1);
     }
@@ -129,7 +108,6 @@ pub fn handle_tcp_syn_v6(ctx: &XdpContext, ip6: &Ip6Hdr, tcp: &TcpHdr) -> Result
     finish_tcp_syn_v6(ip6, tcp, options, actual_copied as u8)
 }
 
-/// Shared post-parse body for IPv6 (see [`finish_tcp_syn_v4`] for the rationale).
 #[inline(always)]
 pub fn finish_tcp_syn_v6(
     ip6: &Ip6Hdr,

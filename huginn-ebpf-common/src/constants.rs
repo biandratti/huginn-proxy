@@ -40,15 +40,6 @@ pub const TCPOPT_MAXLEN: usize = 40;
 pub const TCP_SYN_MAP_V4_MAX_ENTRIES: u32 = 8192;
 pub const TCP_SYN_MAP_V6_MAX_ENTRIES: u32 = 8192;
 
-// ── BPF program (entry-point) names ───────────────────────────────────────────
-//
-// Single source of truth for the ELF program names. The kernel crate
-// (`huginn-ebpf-programs`) statically asserts its `#[xdp]`/`#[classifier]` fn
-// identifiers equal these (see its `main.rs`), and the userspace loader
-// (`huginn-ebpf`) looks the programs up by them — so the two sides can never
-// silently drift and break the attach contract.
-
-/// XDP capture program name (matches `huginn_xdp_syn` in `huginn-ebpf-programs`).
+// BPF program entry-point names. Kernel `main.rs` asserts these match the fn identifiers.
 pub const XDP_SYN_PROGRAM: &str = "huginn_xdp_syn";
-/// TC clsact ingress classifier name (matches `huginn_tc_syn` in `huginn-ebpf-programs`).
 pub const TC_SYN_PROGRAM: &str = "huginn_tc_syn";

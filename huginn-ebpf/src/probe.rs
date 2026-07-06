@@ -35,10 +35,7 @@ enum ProbeInner {
     Pinned(Box<PinnedMaps>),
 }
 
-/// Maps opened from the agent's pins for the proxy (read-only) side.
-///
-/// The agent pins all of these in [`EbpfProbe::pin_maps`], so `from_pinned` opens every one and
-/// fails if any is missing.
+/// Maps opened from the agent's pins for the proxy side.
 struct PinnedMaps {
     syn_map_v4: Map,
     syn_map_v6: Map,
@@ -51,13 +48,7 @@ struct PinnedMaps {
     malformed_v6: Map,
 }
 
-/// Manages eBPF TCP SYN capture and map lookups.
-///
-/// - The **agent** calls [`EbpfProbe::new`] to load the capture program and own the maps.
-/// - The **proxy** calls [`EbpfProbe::from_pinned`] to read maps pinned by the agent.
-///
-/// Both code paths store the SYN map capacity (`syn_map_max_entries`); the proxy uses it
-/// for stale detection in [`lookup`](Self::lookup) (entry is stale if age > 2× that value).
+/// Agent loads and attaches; proxy reads pinned maps. Stale threshold is 2x `syn_map_max_entries`.
 pub struct EbpfProbe {
     inner: ProbeInner,
     interface: String,
@@ -65,19 +56,13 @@ pub struct EbpfProbe {
     log_level: EbpfLogLevel,
 }
 
-/// Drain handle for eBPF debug logs, produced by [`EbpfProbe::take_debug_log_poller`].
-///
-/// `aya-log` does not spawn its own polling task: the ring buffer must be drained by the
-/// caller. This wraps the [`aya_log::EbpfLogger`] and exposes the file descriptor (via [`AsFd`] /
-/// [`AsRawFd`]) plus [`flush`](Self::flush), so the owner (the agent, which has a Tokio runtime)
-/// can register it with `tokio::io::unix::AsyncFd` and flush whenever the fd becomes readable.
+/// Ring-buffer drain handle for `aya-log`. Caller must poll the fd and call [`flush`](Self::flush).
 pub struct EbpfLogPoller {
     inner: EbpfLogger<&'static dyn Log>,
 }
 
 impl EbpfLogPoller {
-    /// Drain all pending records from the eBPF log ring buffer, forwarding them to the `log`
-    /// facade (bridged to `tracing` by the agent's subscriber). Call after the fd reports readable.
+    /// Drain pending records from the eBPF log ring buffer.
     pub fn flush(&mut self) {
         self.inner.flush();
     }
@@ -610,7 +595,6 @@ fn read_percpu_counter(map: &Map) -> Option<u64> {
     Some(per_cpu.iter().fold(0u64, |acc, &v| acc.wrapping_add(v)))
 }
 
-/// Load and attach the XDP program (`huginn_xdp_syn`). Returns the mode label for logging.
 fn attach_xdp(
     ebpf: &mut Ebpf,
     interface: &str,
@@ -635,11 +619,7 @@ fn attach_xdp(
     Ok(mode_str)
 }
 
-/// Load and attach the TC clsact ingress classifier (`huginn_tc_syn`). Returns the mode label.
-///
-/// A `clsact` qdisc must exist before attaching an ingress classifier. `qdisc_add_clsact` is
-/// idempotent at the netlink layer (a pre-existing qdisc returns `EEXIST`), so a non-fatal error
-/// here is logged and ignored: a leftover qdisc from a previous run is harmless and reused.
+// clsact qdisc must exist; EEXIST from a prior run is ignored.
 fn attach_tc(ebpf: &mut Ebpf, interface: &str) -> Result<&'static str, EbpfError> {
     if let Err(e) = tc::qdisc_add_clsact(interface) {
         warn!(interface, error = %e, "clsact qdisc add returned an error (continuing; likely already present)");
@@ -660,35 +640,26 @@ fn attach_tc(ebpf: &mut Ebpf, interface: &str) -> Result<&'static str, EbpfError
     Ok("tc")
 }
 
-/// Read the `syn_insert_failures_v4` counter from a pinned map at `base_path`.
-///
-/// Used by the agent's metrics server without sharing the probe (avoids `Send` on `EbpfProbe`).
-/// Returns `None` if the map cannot be opened or read.
 pub fn syn_insert_failures_count_from_path(base_path: &str) -> Option<u64> {
     read_percpu_counter_from_path(pin::insert_failures_v4_path(base_path))
 }
 
-/// Read the `syn_captured_v4` counter from a pinned map at `base_path`.
 pub fn syn_captured_count_from_path(base_path: &str) -> Option<u64> {
     read_percpu_counter_from_path(pin::syn_captured_v4_path(base_path))
 }
 
-/// Read the `syn_malformed_v4` counter from a pinned map at `base_path`.
 pub fn syn_malformed_count_from_path(base_path: &str) -> Option<u64> {
     read_percpu_counter_from_path(pin::syn_malformed_v4_path(base_path))
 }
 
-/// Read the `syn_insert_failures_v6` counter from a pinned map at `base_path`.
 pub fn syn_insert_failures_v6_count_from_path(base_path: &str) -> Option<u64> {
     read_percpu_counter_from_path(pin::insert_failures_v6_path(base_path))
 }
 
-/// Read the `syn_captured_v6` counter from a pinned map at `base_path`.
 pub fn syn_captured_v6_count_from_path(base_path: &str) -> Option<u64> {
     read_percpu_counter_from_path(pin::syn_captured_v6_path(base_path))
 }
 
-/// Read the `syn_malformed_v6` counter from a pinned map at `base_path`.
 pub fn syn_malformed_v6_count_from_path(base_path: &str) -> Option<u64> {
     read_percpu_counter_from_path(pin::syn_malformed_v6_path(base_path))
 }
@@ -698,13 +669,7 @@ fn read_percpu_counter_from_path(path: impl AsRef<std::path::Path>) -> Option<u6
     read_percpu_counter(&Map::PerCpuArray(data))
 }
 
-/// Build the BPF map lookup key matching the BPF program's `make_key_v4()` (IPv4).
-///
-/// The BPF program: `((__u64)ip->saddr << 16) | tcp->source`
-/// Both `ip->saddr` and `tcp->source` are in network byte order as seen by
-/// the LE CPU (i.e., the raw BE bytes interpreted as a LE integer value).
-///
-/// From Rust's `Ipv4Addr` and host-byte-order port, we reconstruct the same key.
+/// BPF map key for IPv4 lookup. Must match kernel `make_key_v4`.
 pub fn make_bpf_key_v4(src_ip: Ipv4Addr, src_port: u16) -> u64 {
     // ip->saddr: network-order bytes [a,b,c,d] read by LE CPU = u32::from_ne_bytes([a,b,c,d])
     let ip_ne = u32::from_ne_bytes(src_ip.octets());
@@ -713,11 +678,7 @@ pub fn make_bpf_key_v4(src_ip: Ipv4Addr, src_port: u16) -> u64 {
     (u64::from(ip_ne) << 16) | u64::from(port_ne)
 }
 
-/// Build the BPF map lookup key matching the BPF program's `make_key_v6()` (IPv6).
-///
-/// Layout: 16 bytes of IPv6 address (network byte order) followed by 2 bytes of
-/// TCP source port (network byte order). Matches the kernel-side `make_key_v6` in
-/// `huginn-ebpf-common`.
+/// BPF map key for IPv6 lookup. Must match kernel `make_key_v6`.
 pub fn make_bpf_key_v6(src_ip: Ipv6Addr, src_port: u16) -> [u8; 18] {
     let mut key = [0u8; 18];
     key[..16].copy_from_slice(&src_ip.octets());

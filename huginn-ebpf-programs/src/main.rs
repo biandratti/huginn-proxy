@@ -1,16 +1,4 @@
-//! BPF program for TCP SYN fingerprinting.
-//!
-//! Captures TCP SYN packets and stores raw handshake data in a BPF LRU hash map
-//! keyed by (src_ip, src_port). Direct Rust port of the former `bpf/xdp.c`.
-//!
-//! Two capture hooks share the same maps and capture logic in this single ELF:
-//!   - `huginn_xdp_syn` (XDP): driver/generic hook, used on physical/veth interfaces.
-//!   - `huginn_tc_syn` (TC clsact ingress): used on VLAN/bond interfaces where generic XDP drops
-//!     GRO-merged data packets. See `data/ebpf-vlan-tc-capture.md`.
-//!
-//! The loader (`huginn-ebpf/src/probe.rs`) picks which one to attach. The map layout and global
-//! variable names (`dst_ip_v4`, `dst_ip_v6`, `dst_port`) are identical so the userspace contract
-//! is unchanged.
+//! TCP SYN capture: XDP and TC clsact hooks in one ELF.
 #![no_std]
 #![no_main]
 #![deny(unsafe_code)]
@@ -25,8 +13,6 @@ mod signals;
 mod tc;
 mod xdp;
 
-// ── Entry points ─────────────────────────────────────────────────────────────
-
 #[xdp]
 pub fn huginn_xdp_syn(ctx: XdpContext) -> u32 {
     match xdp::try_xdp_syn(&ctx) {
@@ -35,17 +21,13 @@ pub fn huginn_xdp_syn(ctx: XdpContext) -> u32 {
     }
 }
 
-/// TC clsact ingress classifier. Passive, read-only capture: always returns `TC_ACT_OK`
-/// (the analogue of `XDP_PASS`), never `TC_ACT_SHOT`, so the datapath is never disturbed.
 #[classifier]
 pub fn huginn_tc_syn(ctx: TcContext) -> i32 {
     let _ = tc::try_tc_syn(&ctx);
     TC_ACT_OK
 }
 
-// Compile-time guarantee that these entry-point names stay in sync with the shared
-// constants the userspace loader (`huginn-ebpf`) attaches by. Renaming a fn without
-// updating the constant (or vice versa) fails the build instead of breaking at runtime.
+// Entry-point names must match huginn_ebpf_common::constants::{XDP_SYN_PROGRAM, TC_SYN_PROGRAM}.
 const _: () = assert!(huginn_ebpf_common::str_eq(
     stringify!(huginn_xdp_syn),
     huginn_ebpf_common::constants::XDP_SYN_PROGRAM,
@@ -54,8 +36,6 @@ const _: () = assert!(huginn_ebpf_common::str_eq(
     stringify!(huginn_tc_syn),
     huginn_ebpf_common::constants::TC_SYN_PROGRAM,
 ));
-
-// ── Required for no_std + no_main ────────────────────────────────────────────
 
 #[panic_handler]
 fn panic(_info: &core::panic::PanicInfo) -> ! {

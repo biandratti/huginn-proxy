@@ -1,7 +1,4 @@
-//! Standalone eBPF agent that loads the XDP program, pins BPF maps, and
-//! stays alive until SIGTERM. Designed to run as a DaemonSet so that
-//! the proxy (Deployment) can open the pinned maps without needing
-//! CAP_NET_ADMIN or seccomp:unconfined.
+//! eBPF agent: loads the capture program, pins maps, serves metrics.
 
 use huginn_ebpf::{EbpfLogLevel, EbpfLogPoller, EbpfProbe};
 use huginn_ebpf_agent::config::{capture_label, from_env};
@@ -12,11 +9,7 @@ use tokio::io::unix::AsyncFd;
 use tokio::io::Interest;
 use tokio::signal;
 
-/// Spawn a background task that drains the eBPF log ring buffer whenever its fd is readable.
-///
-/// The poller's fd is edge-triggered via `AsyncFd`; on each readiness we `flush()` all pending
-/// records (forwarded to the tracing subscriber) and clear readiness. If the fd registration
-/// fails the task logs once and exits — losing debug logs must never take down the agent.
+/// Drain the eBPF log ring buffer when its fd is readable.
 fn spawn_ebpf_log_drain(poller: EbpfLogPoller) {
     tokio::spawn(async move {
         let mut async_fd = match AsyncFd::with_interest(poller, Interest::READABLE) {
@@ -57,8 +50,7 @@ async fn main() -> Result<()> {
     let get_var = |name: &str| env::var(name).ok();
     let cfg = from_env(get_var)?;
 
-    // When eBPF logging is enabled and RUST_LOG is unset, default the filter to the chosen level so
-    // the kernel records are actually shown; otherwise they could be filtered out below `info`.
+    // Default RUST_LOG to the eBPF log level when logging is enabled.
     let fallback_level = match cfg.log_level {
         EbpfLogLevel::Off => "info",
         other => other.as_str(),
@@ -67,8 +59,6 @@ async fn main() -> Result<()> {
     let env_filter = tracing_subscriber::EnvFilter::try_from_default_env()
         .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new(default_level));
 
-    // `.init()` also installs the log->tracing bridge (tracing-subscriber's `tracing-log`
-    // feature), so `aya-log` records emitted via the `log` facade reach this subscriber.
     tracing_subscriber::fmt().with_env_filter(env_filter).init();
 
     let iface_path = std::path::Path::new("/sys/class/net").join(&cfg.interface);
@@ -92,8 +82,6 @@ async fn main() -> Result<()> {
     )?;
     probe.pin_maps(&cfg.pin_path)?;
 
-    // If logging is enabled, drain the eBPF log ring buffer on a background task. aya-log does not
-    // poll itself: we register the ring-buffer fd with tokio and flush on readability.
     if let Some(poller) = probe.take_debug_log_poller()? {
         spawn_ebpf_log_drain(poller);
     }
