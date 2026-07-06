@@ -10,8 +10,10 @@ pub mod types;
 
 pub mod pin;
 pub use probe::{
-    syn_captured_count_from_path, syn_insert_failures_count_from_path,
-    syn_malformed_count_from_path, EbpfProbe, DEFAULT_SYN_MAP_MAX_ENTRIES,
+    syn_captured_count_from_path, syn_captured_v6_count_from_path,
+    syn_insert_failures_count_from_path, syn_insert_failures_v6_count_from_path,
+    syn_malformed_count_from_path, syn_malformed_v6_count_from_path, EbpfProbe,
+    DEFAULT_SYN_MAP_MAX_ENTRIES,
 };
 pub use types::{parse_syn_v4, parse_syn_v6, quirk_bits, SynRawDataV4, SynRawDataV6};
 

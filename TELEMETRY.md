@@ -730,11 +730,15 @@ same health endpoints as the proxy.
 
 | Metric                          | Type               | Description                                                            | Labels                    |
 |---------------------------------|--------------------|------------------------------------------------------------------------|---------------------------|
-| `tcp_syn_captured_total`        | Observable counter | Number of TCP SYN signatures successfully captured                     | -                         |
-| `tcp_syn_insert_failures_total` | Observable counter | Number of TCP SYN map insert failures (e.g. LRU full)                  | -                         |
-| `tcp_syn_malformed_total`       | Observable counter | Number of malformed TCP packets (e.g. doff too short) that matched dst | -                         |
+| `tcp_syn_captured_total`        | Observable counter | Number of TCP SYN signatures successfully captured                     | `family`                  |
+| `tcp_syn_insert_failures_total` | Observable counter | Number of TCP SYN map insert failures (e.g. LRU full)                  | `family`                  |
+| `tcp_syn_malformed_total`       | Observable counter | Number of malformed TCP packets (e.g. doff too short) that matched dst | `family`                  |
 | `agent_up`                      | Gauge              | 1 if the agent has pinned maps and is running                          | -                         |
 | `huginn_ebpf_agent_build_info`  | Gauge              | Build information (always 1)                                           | `version`, `rust_version` |
+
+- `family` (on the three `tcp_syn_*_total` counters): `ipv4` or `ipv6`, the IP version of the
+  captured/failed/malformed SYN. Sum across both for a protocol-agnostic total
+  (e.g. `sum(rate(tcp_syn_captured_total[$__rate_interval]))`).
 
 ## Grafana Dashboard Suggestions
 

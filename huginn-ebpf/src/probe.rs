@@ -560,6 +560,21 @@ pub fn syn_malformed_count_from_path(base_path: &str) -> Option<u64> {
     read_array_counter_from_path(pin::syn_malformed_v4_path(base_path))
 }
 
+/// Read the `syn_insert_failures_v6` counter from a pinned map at `base_path`.
+pub fn syn_insert_failures_v6_count_from_path(base_path: &str) -> Option<u64> {
+    read_array_counter_from_path(pin::insert_failures_v6_path(base_path))
+}
+
+/// Read the `syn_captured_v6` counter from a pinned map at `base_path`.
+pub fn syn_captured_v6_count_from_path(base_path: &str) -> Option<u64> {
+    read_array_counter_from_path(pin::syn_captured_v6_path(base_path))
+}
+
+/// Read the `syn_malformed_v6` counter from a pinned map at `base_path`.
+pub fn syn_malformed_v6_count_from_path(base_path: &str) -> Option<u64> {
+    read_array_counter_from_path(pin::syn_malformed_v6_path(base_path))
+}
+
 fn read_array_counter_from_path(path: impl AsRef<std::path::Path>) -> Option<u64> {
     let data = MapData::from_pin(path.as_ref()).ok()?;
     let map = Map::Array(data);

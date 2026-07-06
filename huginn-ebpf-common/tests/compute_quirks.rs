@@ -65,7 +65,7 @@ fn syn_tcp() -> TcpHdr {
 #[test]
 fn v4_df_set() {
     let q = compute_v4(&ip4(IP_DF, 1234, 0), &syn_tcp());
-    assert!(q & quirk_bits::DF != 0);
+    assert_ne!(q & quirk_bits::DF, 0);
 }
 
 #[test]
@@ -77,7 +77,7 @@ fn v4_df_clear() {
 #[test]
 fn v4_nonzero_id_when_df_set_and_id_nonzero() {
     let q = compute_v4(&ip4(IP_DF, 0x1234, 0), &syn_tcp());
-    assert!(q & quirk_bits::NONZERO_ID != 0);
+    assert_ne!(q & quirk_bits::NONZERO_ID, 0);
     assert_eq!(q & quirk_bits::ZERO_ID, 0);
 }
 
@@ -90,7 +90,7 @@ fn v4_no_nonzero_id_when_df_set_and_id_zero() {
 #[test]
 fn v4_zero_id_when_df_clear_and_id_zero() {
     let q = compute_v4(&ip4(0, 0, 0), &syn_tcp());
-    assert!(q & quirk_bits::ZERO_ID != 0);
+    assert_ne!(q & quirk_bits::ZERO_ID, 0);
     assert_eq!(q & quirk_bits::NONZERO_ID, 0);
 }
 
@@ -118,26 +118,26 @@ fn v4_must_be_zero_absent_when_rf_clear() {
 fn v4_ecn_via_tcp_ece() {
     let t = tcp(0x0200 | 0x00A0 | 0x4000, 0, 0, 0); // ECE bit = 0x4000
     let q = compute_v4(&ip4(IP_DF, 1, 0), &t);
-    assert!(q & quirk_bits::ECN != 0);
+    assert_ne!(q & quirk_bits::ECN, 0);
 }
 
 #[test]
 fn v4_ecn_via_tcp_cwr() {
     let t = tcp(0x0200 | 0x00A0 | 0x8000, 0, 0, 0); // CWR bit = 0x8000
     let q = compute_v4(&ip4(IP_DF, 1, 0), &t);
-    assert!(q & quirk_bits::ECN != 0);
+    assert_ne!(q & quirk_bits::ECN, 0);
 }
 
 #[test]
 fn v4_ecn_via_ip_tos_ce() {
     let q = compute_v4(&ip4(IP_DF, 1, IP_TOS_CE), &syn_tcp());
-    assert!(q & quirk_bits::ECN != 0);
+    assert_ne!(q & quirk_bits::ECN, 0);
 }
 
 #[test]
 fn v4_ecn_via_ip_tos_ect() {
     let q = compute_v4(&ip4(IP_DF, 1, IP_TOS_ECT), &syn_tcp());
-    assert!(q & quirk_bits::ECN != 0);
+    assert_ne!(q & quirk_bits::ECN, 0);
 }
 
 #[test]
@@ -152,7 +152,7 @@ fn v4_no_ecn_when_clean() {
 fn v4_seq_zero() {
     let t = tcp(0x0200 | 0x00A0, 0, 0, 0);
     let q = compute_v4(&ip4(IP_DF, 1, 0), &t);
-    assert!(q & quirk_bits::SEQ_ZERO != 0);
+    assert_ne!(q & quirk_bits::SEQ_ZERO, 0);
 }
 
 #[test]
@@ -166,14 +166,14 @@ fn v4_seq_nonzero() {
 fn v4_ack_nonzero() {
     let t = tcp(0x0200 | 0x00A0, 0, 1, 0);
     let q = compute_v4(&ip4(IP_DF, 1, 0), &t);
-    assert!(q & quirk_bits::ACK_NONZERO != 0);
+    assert_ne!(q & quirk_bits::ACK_NONZERO, 0);
 }
 
 #[test]
 fn v4_urg_ptr_nonzero() {
     let t = tcp(0x0200 | 0x00A0, 0, 0, 1);
     let q = compute_v4(&ip4(IP_DF, 1, 0), &t);
-    assert!(q & quirk_bits::NONZERO_URG != 0);
+    assert_ne!(q & quirk_bits::NONZERO_URG, 0);
 }
 
 #[test]
@@ -181,7 +181,7 @@ fn v4_urg_flag() {
     // URG flag = bit 13 = 0x2000
     let t = tcp(0x0200 | 0x00A0 | 0x2000, 0, 0, 0);
     let q = compute_v4(&ip4(IP_DF, 1, 0), &t);
-    assert!(q & quirk_bits::URG != 0);
+    assert_ne!(q & quirk_bits::URG, 0);
 }
 
 #[test]
@@ -189,7 +189,7 @@ fn v4_push_flag() {
     // PSH flag = bit 11 = 0x0800
     let t = tcp(0x0200 | 0x00A0 | 0x0800, 0, 0, 0);
     let q = compute_v4(&ip4(IP_DF, 1, 0), &t);
-    assert!(q & quirk_bits::PUSH != 0);
+    assert_ne!(q & quirk_bits::PUSH, 0);
 }
 
 #[test]
@@ -197,7 +197,7 @@ fn v4_ns_flag() {
     // NS = bit 3 of low byte = 0x0008
     let t = tcp(0x0200 | 0x00A0 | 0x0008, 0, 0, 0);
     let q = compute_v4(&ip4(IP_DF, 1, 0), &t);
-    assert!(q & quirk_bits::NS != 0);
+    assert_ne!(q & quirk_bits::NS, 0);
 }
 
 #[test]
@@ -226,7 +226,7 @@ fn v6_never_sets_ipv4_quirks() {
 fn v6_ecn_via_tcp_ece() {
     let t = tcp(0x0200 | 0x00A0 | 0x4000, 0, 0, 0);
     let q = compute_v6(&ip6(0x60, 0x00), &t);
-    assert!(q & quirk_bits::ECN != 0);
+    assert_ne!(q & quirk_bits::ECN, 0);
 }
 
 #[test]
@@ -234,7 +234,7 @@ fn v6_ecn_via_traffic_class_ce() {
     // tc = 0x03 (CE|ECT bits); tc_high=0x00, tc_low in flow_lbl[0] high nibble = 0x30
     // priority_version = 0x60 (ver=6, tc_high=0), flow_lbl[0] = 0x30
     let q = compute_v6(&ip6(0x60, 0x30), &syn_tcp());
-    assert!(q & quirk_bits::ECN != 0);
+    assert_ne!(q & quirk_bits::ECN, 0);
 }
 
 #[test]
@@ -249,21 +249,21 @@ fn v6_no_ecn_when_clean() {
 fn v6_seq_zero() {
     let t = tcp(0x0200 | 0x00A0, 0, 0, 0);
     let q = compute_v6(&ip6(0x60, 0x00), &t);
-    assert!(q & quirk_bits::SEQ_ZERO != 0);
+    assert_ne!(q & quirk_bits::SEQ_ZERO, 0);
 }
 
 #[test]
 fn v6_ack_nonzero() {
     let t = tcp(0x0200 | 0x00A0, 0, 1, 0);
     let q = compute_v6(&ip6(0x60, 0x00), &t);
-    assert!(q & quirk_bits::ACK_NONZERO != 0);
+    assert_ne!(q & quirk_bits::ACK_NONZERO, 0);
 }
 
 #[test]
 fn v6_push_flag() {
     let t = tcp(0x0200 | 0x00A0 | 0x0800, 0, 0, 0);
     let q = compute_v6(&ip6(0x60, 0x00), &t);
-    assert!(q & quirk_bits::PUSH != 0);
+    assert_ne!(q & quirk_bits::PUSH, 0);
 }
 
 #[test]
