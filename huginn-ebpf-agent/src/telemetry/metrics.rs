@@ -43,6 +43,10 @@ impl Metrics {
         self.agent_up.record(1, &[]);
     }
 
+    pub fn set_not_ready(&self) {
+        self.agent_up.record(0, &[]);
+    }
+
     pub fn set_build_info(&self) {
         let version = env!("CARGO_PKG_VERSION");
         let rust_version = env!("CARGO_PKG_RUST_VERSION");

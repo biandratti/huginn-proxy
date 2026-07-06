@@ -119,6 +119,7 @@ async fn main() -> Result<()> {
     wait_for_shutdown_signal().await?;
 
     tracing::info!("Shutting down, unpinning maps and detaching capture program");
+    metrics.set_not_ready();
     EbpfProbe::unpin_maps(&cfg.pin_path);
     drop(probe);
 

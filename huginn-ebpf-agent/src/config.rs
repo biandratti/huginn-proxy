@@ -23,7 +23,7 @@ pub enum ConfigError {
     #[error("environment variable {name} is required")]
     Missing { name: String },
 
-    #[error("environment variable {name}: invalid value '{value}' — {reason}")]
+    #[error("environment variable {name}: invalid value '{value}': {reason}")]
     Invalid {
         name: String,
         value: String,
