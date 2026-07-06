@@ -21,8 +21,6 @@ use aya_ebpf::{
     programs::{TcContext, XdpContext},
 };
 
-mod constants;
-mod headers;
 mod signals;
 mod tc;
 mod xdp;
@@ -44,6 +42,18 @@ pub fn huginn_tc_syn(ctx: TcContext) -> i32 {
     let _ = tc::try_tc_syn(&ctx);
     TC_ACT_OK
 }
+
+// Compile-time guarantee that these entry-point names stay in sync with the shared
+// constants the userspace loader (`huginn-ebpf`) attaches by. Renaming a fn without
+// updating the constant (or vice versa) fails the build instead of breaking at runtime.
+const _: () = assert!(huginn_ebpf_common::str_eq(
+    stringify!(huginn_xdp_syn),
+    huginn_ebpf_common::constants::XDP_SYN_PROGRAM,
+));
+const _: () = assert!(huginn_ebpf_common::str_eq(
+    stringify!(huginn_tc_syn),
+    huginn_ebpf_common::constants::TC_SYN_PROGRAM,
+));
 
 // ── Required for no_std + no_main ────────────────────────────────────────────
 

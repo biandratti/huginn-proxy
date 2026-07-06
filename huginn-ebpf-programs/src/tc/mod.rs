@@ -19,9 +19,9 @@ use aya_ebpf::programs::TcContext;
 use aya_log_ebpf::{debug, warn};
 use core::mem;
 
-use crate::constants::*;
-use crate::headers::{EthHdr, Ip4Hdr, Ip6Hdr, TcpHdr, VlanHdr};
 use crate::signals::tcp_syn;
+use huginn_ebpf_common::constants::*;
+use huginn_ebpf_common::headers::{EthHdr, Ip4Hdr, Ip6Hdr, TcpHdr, VlanHdr};
 
 /// TC ingress pipeline: parse L2/L3/L4 and dispatch TCP SYNs to the shared finishers.
 ///

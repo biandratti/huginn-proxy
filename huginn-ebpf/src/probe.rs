@@ -7,6 +7,7 @@ use aya::maps::{Array, HashMap, Map, MapData, PerCpuArray};
 use aya::programs::{tc, SchedClassifier, TcAttachType, Xdp, XdpMode};
 use aya::{Ebpf, EbpfLoader};
 use aya_log::EbpfLogger;
+use huginn_ebpf_common::constants::{TC_SYN_PROGRAM, XDP_SYN_PROGRAM};
 use log::Log;
 use tracing::{debug, info, warn};
 
@@ -616,7 +617,7 @@ fn attach_xdp(
     xdp_mode: XdpAttachMode,
 ) -> Result<&'static str, EbpfError> {
     let program: &mut Xdp = ebpf
-        .program_mut("huginn_xdp_syn")
+        .program_mut(XDP_SYN_PROGRAM)
         .ok_or(EbpfError::ProgramNotFound)?
         .try_into()
         .map_err(EbpfError::ProgramType)?;
@@ -645,7 +646,7 @@ fn attach_tc(ebpf: &mut Ebpf, interface: &str) -> Result<&'static str, EbpfError
     }
 
     let program: &mut SchedClassifier = ebpf
-        .program_mut("huginn_tc_syn")
+        .program_mut(TC_SYN_PROGRAM)
         .ok_or(EbpfError::ProgramNotFound)?
         .try_into()
         .map_err(EbpfError::ProgramType)?;

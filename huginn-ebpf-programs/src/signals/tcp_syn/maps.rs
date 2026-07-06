@@ -3,7 +3,7 @@ use aya_ebpf::{
     maps::{Array, LruHashMap, PerCpuArray},
 };
 
-use crate::constants::{TCP_SYN_MAP_V4_MAX_ENTRIES, TCP_SYN_MAP_V6_MAX_ENTRIES};
+use huginn_ebpf_common::constants::{TCP_SYN_MAP_V4_MAX_ENTRIES, TCP_SYN_MAP_V6_MAX_ENTRIES};
 use huginn_ebpf_common::{SynRawDataV4, SynRawDataV6};
 
 // ── BPF maps (TCP SYN signal — IPv4) ─────────────────────────────────────────

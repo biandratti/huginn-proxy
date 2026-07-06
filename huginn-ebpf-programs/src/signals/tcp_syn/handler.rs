@@ -1,13 +1,15 @@
-use aya_ebpf::programs::XdpContext;
-use core::mem;
-use crate::constants::TCPOPT_MAXLEN;
-use crate::headers::{Ip4Hdr, Ip6Hdr, TcpHdr};
 use super::maps::{
     increment_syn_captured_v4, increment_syn_captured_v6, increment_syn_insert_failures_v4,
     increment_syn_insert_failures_v6, read_and_increment_syn_counter, tcp_syn_map_v4,
     tcp_syn_map_v6,
 };
-use super::quirk_bits;
+use aya_ebpf::programs::XdpContext;
+use core::mem;
+use huginn_ebpf_common::constants::TCPOPT_MAXLEN;
+use huginn_ebpf_common::headers::{Ip4Hdr, Ip6Hdr, TcpHdr};
+use huginn_ebpf_common::quirk_bits::{
+    compute_v4 as compute_quirks_v4, compute_v6 as compute_quirks_v6,
+};
 use huginn_ebpf_common::{make_key_v4, make_key_v6, SynRawDataV4, SynRawDataV6};
 
 /// Error from the TCP SYN handler.
@@ -73,7 +75,7 @@ pub fn finish_tcp_syn_v4(
     optlen: u8,
 ) -> Result<(), TcpSynError> {
     let tick = read_and_increment_syn_counter();
-    let quirks = quirk_bits::compute_quirks_v4(ip, tcp);
+    let quirks = compute_quirks_v4(ip, tcp);
 
     let syn_raw_data = SynRawDataV4 {
         src_addr: ip.saddr,
@@ -89,7 +91,7 @@ pub fn finish_tcp_syn_v4(
     };
 
     let key = make_key_v4(ip.saddr, tcp.source);
-    if tcp_syn_map_v4.insert(&key, &syn_raw_data, 0).is_err() {
+    if tcp_syn_map_v4.insert(key, syn_raw_data, 0).is_err() {
         increment_syn_insert_failures_v4();
         return Err(TcpSynError::MapInsertFailed);
     }
@@ -103,11 +105,7 @@ pub fn finish_tcp_syn_v4(
 /// confirmed SYN (no ACK) and passed the destination filter.
 /// `ip6` and `tcp` are references to packet memory validated by the pipeline.
 #[allow(unsafe_code)]
-pub fn handle_tcp_syn_v6(
-    ctx: &XdpContext,
-    ip6: &Ip6Hdr,
-    tcp: &TcpHdr,
-) -> Result<(), TcpSynError> {
+pub fn handle_tcp_syn_v6(ctx: &XdpContext, ip6: &Ip6Hdr, tcp: &TcpHdr) -> Result<(), TcpSynError> {
     let tcp_hdr_len = usize::from(tcp.doff()).saturating_mul(4);
     let declared_optlen = tcp_hdr_len
         .saturating_sub(mem::size_of::<TcpHdr>())
@@ -140,7 +138,7 @@ pub fn finish_tcp_syn_v6(
     optlen: u8,
 ) -> Result<(), TcpSynError> {
     let tick = read_and_increment_syn_counter();
-    let quirks = quirk_bits::compute_quirks_v6(ip6, tcp);
+    let quirks = compute_quirks_v6(ip6, tcp);
 
     let syn_raw_data = SynRawDataV6 {
         src_addr: ip6.saddr,
@@ -156,7 +154,7 @@ pub fn finish_tcp_syn_v6(
     };
 
     let key = make_key_v6(ip6.saddr, tcp.source);
-    if tcp_syn_map_v6.insert(&key, &syn_raw_data, 0).is_err() {
+    if tcp_syn_map_v6.insert(key, syn_raw_data, 0).is_err() {
         increment_syn_insert_failures_v6();
         return Err(TcpSynError::MapInsertFailed);
     }

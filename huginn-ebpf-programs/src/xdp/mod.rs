@@ -14,10 +14,11 @@ use aya_ebpf::programs::XdpContext;
 use aya_log_ebpf::{debug, warn};
 use core::mem;
 
-use crate::constants::*;
-use crate::headers::{EthHdr, Ip4Hdr, Ip6Hdr, TcpHdr, VlanHdr};
-use crate::signals::tcp_syn;
+use huginn_ebpf_common::constants::*;
+use huginn_ebpf_common::headers::{EthHdr, Ip4Hdr, Ip6Hdr, TcpHdr, VlanHdr};
 use packet::ptr_at;
+
+use crate::signals::tcp_syn;
 
 /// XDP pipeline: parse L2/L3/L4 and dispatch to each signal's handler.
 ///

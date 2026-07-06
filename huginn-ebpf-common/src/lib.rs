@@ -14,6 +14,27 @@ pub mod syn_raw_v6;
 pub use syn_raw_v4::SynRawDataV4;
 pub use syn_raw_v6::SynRawDataV6;
 
+/// Const-evaluable string equality, for compile-time interface assertions.
+///
+/// Used by the kernel crate to tie its BPF entry-point fn names to the shared
+/// [`constants::XDP_SYN_PROGRAM`] / [`constants::TC_SYN_PROGRAM`] at build time.
+#[inline]
+#[must_use]
+pub const fn str_eq(a: &str, b: &str) -> bool {
+    let (a, b) = (a.as_bytes(), b.as_bytes());
+    if a.len() != b.len() {
+        return false;
+    }
+    let mut i = 0;
+    while i < a.len() {
+        if a[i] != b[i] {
+            return false;
+        }
+        i = i.wrapping_add(1);
+    }
+    true
+}
+
 /// Build the BPF map key from source IP and port (IPv4).
 ///
 /// Both `src_ip` and `src_port` are in network byte order as read by the LE CPU.
