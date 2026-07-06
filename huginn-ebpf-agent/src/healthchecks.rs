@@ -4,9 +4,19 @@
 use huginn_ebpf::pin;
 use std::path::Path;
 
+const REQUIRED_PINS: &[&str] = &[
+    pin::SYN_MAP_V4_NAME,
+    pin::SYN_MAP_V6_NAME,
+    pin::COUNTER_NAME,
+    pin::SYN_INSERT_FAILURES_V4_NAME,
+    pin::SYN_INSERT_FAILURES_V6_NAME,
+    pin::SYN_CAPTURED_V4_NAME,
+    pin::SYN_CAPTURED_V6_NAME,
+    pin::SYN_MALFORMED_V4_NAME,
+    pin::SYN_MALFORMED_V6_NAME,
+];
+
 pub fn pins_exist(base: &str) -> bool {
     let base = Path::new(base);
-    base.join(pin::SYN_MAP_V4_NAME).exists()
-        && base.join(pin::COUNTER_NAME).exists()
-        && base.join(pin::SYN_INSERT_FAILURES_V4_NAME).exists()
+    REQUIRED_PINS.iter().all(|name| base.join(name).exists())
 }

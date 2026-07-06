@@ -1,5 +1,5 @@
 # Shared no_std logic for TCP SYN fingerprinting.
-# Used by huginn-ebpf-xdp (XDP program) and huginn-ebpf (userspace).
+# Used by huginn-ebpf-programs (BPF kernel programs) and huginn-ebpf (userspace).
 # Must compile for bpfel-unknown-none and for host (tests).
 
 [package]

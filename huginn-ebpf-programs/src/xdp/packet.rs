@@ -1,16 +1,12 @@
-#![allow(unsafe_code)]
+//! Bounds-checked packet pointer access for XDP.
 
 use aya_ebpf::programs::XdpContext;
 use core::mem;
 
-/// Returns a const pointer to `T` at `offset` bytes from the start of the
-/// packet, or `None` if the access would exceed `data_end`.
-///
 /// # Safety
 ///
-/// The caller may only dereference the returned pointer if `Some` was returned.
-/// Bounds are checked against `ctx.data_end()` before the cast; the verifier
-/// accepts this pattern.
+/// Caller may only dereference when `Some` is returned.
+#[allow(unsafe_code)]
 #[inline(always)]
 pub unsafe fn ptr_at<T>(ctx: &XdpContext, offset: usize) -> Option<*const T> {
     let start = ctx.data();

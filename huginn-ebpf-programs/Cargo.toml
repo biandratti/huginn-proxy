@@ -5,15 +5,16 @@
 [workspace]
 
 [package]
-name = "huginn-ebpf-xdp"
+name = "huginn-ebpf-programs"
 version = "0.0.2-beta.1"
 edition = "2021"
 publish = false
 
 [dependencies]
-aya-ebpf = "0.1.1"
+aya-ebpf = "0.2.1"
+aya-log-ebpf = "0.2.0"
 huginn-ebpf-common = { path = "../huginn-ebpf-common" }
 
 [[bin]]
-name = "huginn-ebpf-xdp"
+name = "huginn-ebpf-programs"
 path = "src/main.rs"

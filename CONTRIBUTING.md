@@ -22,13 +22,13 @@ Requires Rust stable. Install from [rustup.rs](https://rustup.rs/).
 | `huginn-ebpf/` | reads pinned BPF maps |
 | `huginn-ebpf-agent/` | XDP agent binary |
 | `huginn-ebpf-common/` | shared types |
-| `huginn-ebpf-xdp/` | XDP kernel program (nightly, outside workspace) |
+| `huginn-ebpf-programs/` | BPF kernel programs (XDP + TC, nightly, outside workspace) |
 | `examples/` | Docker Compose stacks and configs |
 | `src/` | documentation site (Astro Starlight) |
 
 ## eBPF
 
-The XDP crate (`huginn-ebpf-xdp`) is Linux-only and needs `bpf-linker` + Rust nightly with `rust-src`. For most changes — proxy logic, config, fingerprinting, docs — the standard workspace build is enough. The CI action `.github/actions/setup-ebpf-build` handles the full setup automatically.
+The kernel programs crate (`huginn-ebpf-programs`) is Linux-only and needs `bpf-linker` + Rust nightly with `rust-src`. For most changes — proxy logic, config, fingerprinting, docs — the standard workspace build is enough. The CI action `.github/actions/setup-ebpf-build` handles the full setup automatically.
 
 ```bash
 # standard
@@ -57,8 +57,8 @@ cargo clippy --workspace --all-features --all-targets -- \
   -D clippy::missing_panics_doc \
   -D clippy::redundant_field_names
 
-# lint (XDP crate — Linux only)
-cd huginn-ebpf-xdp && cargo clippy -- \
+# lint (BPF kernel programs crate, Linux only)
+cd huginn-ebpf-programs && cargo clippy -- \
   -D warnings \
   -D clippy::expect_used \
   -D clippy::unreachable \

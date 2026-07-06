@@ -1793,12 +1793,12 @@
       "gridPos": {
         "x": 0,
         "y": 110,
-        "w": 12,
+        "w": 8,
         "h": 8
       },
       "targets": [
         {
-          "expr": "rate(tcp_syn_captured_total_total[$__rate_interval]) or on() vector(0)",
+          "expr": "sum(rate(tcp_syn_captured_total_total[$__rate_interval])) or on() vector(0)",
           "legendFormat": "captured/s",
           "refId": "A"
         }
@@ -1823,21 +1823,63 @@
       "type": "timeseries",
       "title": "TCP SYN Failures (agent)",
       "gridPos": {
-        "x": 12,
+        "x": 8,
         "y": 110,
-        "w": 12,
+        "w": 8,
         "h": 8
       },
       "targets": [
         {
-          "expr": "rate(tcp_syn_insert_failures_total_total[$__rate_interval]) or on() vector(0)",
+          "expr": "sum(rate(tcp_syn_insert_failures_total_total[$__rate_interval])) or on() vector(0)",
           "legendFormat": "insert failures/s",
           "refId": "A"
         },
         {
-          "expr": "rate(tcp_syn_malformed_total_total[$__rate_interval]) or on() vector(0)",
+          "expr": "sum(rate(tcp_syn_malformed_total_total[$__rate_interval])) or on() vector(0)",
           "legendFormat": "malformed/s",
           "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        }
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 108,
+      "type": "timeseries",
+      "title": "TCP SYN by Family (agent)",
+      "gridPos": {
+        "x": 16,
+        "y": 110,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "sum by (family) (rate(tcp_syn_captured_total_total[$__rate_interval])) or on() vector(0)",
+          "legendFormat": "captured/s {{family}}",
+          "refId": "A"
+        },
+        {
+          "expr": "sum by (family) (rate(tcp_syn_insert_failures_total_total[$__rate_interval])) or on() vector(0)",
+          "legendFormat": "failures/s {{family}}",
+          "refId": "B"
+        },
+        {
+          "expr": "sum by (family) (rate(tcp_syn_malformed_total_total[$__rate_interval])) or on() vector(0)",
+          "legendFormat": "malformed/s {{family}}",
+          "refId": "C"
         }
       ],
       "fieldConfig": {

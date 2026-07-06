@@ -13,11 +13,6 @@ struct OptionQuirks {
     trailing_nonzero: bool,
 }
 
-/// Scan raw TCP option bytes for values needed to derive option-based quirks.
-///
-/// Uses slice operations instead of index arithmetic to satisfy
-/// `clippy::arithmetic_side_effects`. Assumes the bytes are already validated
-/// as non-malformed by `parse_options_raw`.
 fn scan_option_quirks(opts: &[u8]) -> OptionQuirks {
     let mut rest = opts;
     let mut ts_val = None;
@@ -94,16 +89,6 @@ fn decode_quirks(bits: u32) -> Vec<Quirk> {
     v
 }
 
-/// Parse a TCP SYN fingerprint from raw XDP-captured IPv6 data.
-///
-/// Returns `Some(TcpObservation)` on success, or `None` when TCP options are
-/// malformed. A `WARN` log is emitted for the latter.
-///
-/// Constants hardcoded from XDP IPv6 invariants:
-/// - `ip_version = V6`: only IPv6 SYN packets are stored in `tcp_syn_map_v6`.
-/// - `pclass = Zero`: TCP SYN packets never carry a payload.
-/// - `ip_olen = 0`: IPv6 has no IP options (extension headers not tracked yet).
-/// - `ip_plus_tcp = 60`: IPv6 fixed header (40 bytes) + TCP fixed header (20 bytes).
 pub fn parse_syn_v6(raw: &SynRawDataV6) -> Option<TcpObservation> {
     let window_host = u16::from_be(raw.window);
     let valid_opts = &raw.options[..usize::from(raw.optlen.min(40))];
@@ -159,14 +144,6 @@ pub fn parse_syn_v6(raw: &SynRawDataV6) -> Option<TcpObservation> {
     })
 }
 
-/// Parse a TCP SYN fingerprint from raw XDP-captured data.
-///
-/// Returns `Some(TcpObservation)` on success, or `None` when TCP options are
-/// malformed (`ParsedTcpOptions::malformed`). A `WARN` log is emitted for the latter.
-///
-/// Constants hardcoded from XDP invariants:
-/// - `ip_version = V4`: the XDP program filters out non-IPv4 at entry.
-/// - `pclass = Zero`: TCP SYN packets never carry a payload by protocol definition.
 pub fn parse_syn_v4(raw: &SynRawDataV4) -> Option<TcpObservation> {
     let window_host = u16::from_be(raw.window);
     let valid_opts = &raw.options[..usize::from(raw.optlen.min(40))];

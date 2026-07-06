@@ -89,8 +89,9 @@ Fingerprints are automatically extracted and injected as headers:
 - **TLS (JA4_s1r)**: `x-tls-ja4-s1r` - raw hex, ephemeral extensions excluded (huginn-net-tls Stable v1)
 - **HTTP/2 (Akamai)**: `x-http2-akamai`: Extracted from HTTP/2 connections only
   using [huginn-net-http](https://crates.io/crates/huginn-net-http)
-- **TCP SYN (p0f-style)**: `x-tcp-p0f` - Raw TCP SYN signature extracted via eBPF/XDP
-  using [huginn-net-tcp](https://crates.io/crates/huginn-net-tcp). Requires `tcp_enabled = true`
+- **TCP SYN (p0f-style)**: `x-tcp-p0f` - Raw TCP SYN signature extracted via eBPF (XDP or TC clsact
+  ingress, configured on the agent with `HUGINN_EBPF_CAPTURE`) using
+  [huginn-net-tcp](https://crates.io/crates/huginn-net-tcp). Requires `tcp_enabled = true`
   and the `ebpf-tcp` feature. Present on all requests of a connection (the fingerprint is
   captured once at TCP accept time and reused). IPv4 and IPv6 SYNs are captured when the next
   header after the fixed IPv6 header is TCP (see [FEATURES.md](FEATURES.md)).
@@ -121,7 +122,7 @@ x-tls-ja4-s1r: t13d3111h2_002f,0033,...,ccaa_000a,..._0403,...
 # HTTP/2 (Akamai)
 x-http2-akamai:   3:100;4:10485760;2:0|1048510465|0|m,s,a,p
 
-# TCP SYN (p0f) [eBPF/XDP]
+# TCP SYN (p0f) [eBPF]
 x-tcp-p0f: 4:64+0:0:1460:mss*44,7:mss,sok,ts,nop,ws:df,id+:0
 
 # Forwarded

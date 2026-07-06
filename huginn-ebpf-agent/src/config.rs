@@ -2,7 +2,7 @@ use huginn_ebpf::pin;
 use std::net::{Ipv4Addr, Ipv6Addr};
 
 pub const DEFAULT_PIN_PATH: &str = pin::DEFAULT_PIN_BASE;
-pub use huginn_ebpf::XdpAttachMode;
+pub use huginn_ebpf::{CaptureBackend, EbpfLogLevel, XdpAttachMode};
 
 #[derive(Debug, Clone)]
 pub struct Config {
@@ -12,9 +12,10 @@ pub struct Config {
     pub dst_port: u16,
     pub pin_path: String,
     pub syn_map_max_entries: u32,
-    pub xdp_mode: XdpAttachMode,
+    pub capture: CaptureBackend,
     pub metrics_listen_addr: String,
     pub metrics_port: u16,
+    pub log_level: EbpfLogLevel,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -22,7 +23,7 @@ pub enum ConfigError {
     #[error("environment variable {name} is required")]
     Missing { name: String },
 
-    #[error("environment variable {name}: invalid value '{value}' — {reason}")]
+    #[error("environment variable {name}: invalid value '{value}': {reason}")]
     Invalid {
         name: String,
         value: String,
@@ -83,20 +84,9 @@ pub fn from_env(get_var: impl Fn(&str) -> Option<String>) -> Result<Config, Conf
         reason: "must be a valid port number (1-65535)".to_string(),
     })?;
 
-    let xdp_mode = match get_var("HUGINN_EBPF_XDP_MODE") {
-        None => XdpAttachMode::Native,
-        Some(raw) => match raw.trim().to_ascii_lowercase().as_str() {
-            "skb" => XdpAttachMode::Skb,
-            "native" => XdpAttachMode::Native,
-            _ => {
-                return Err(ConfigError::Invalid {
-                    name: "HUGINN_EBPF_XDP_MODE".to_string(),
-                    value: raw,
-                    reason: "must be 'native' or 'skb' (case-insensitive)".to_string(),
-                });
-            }
-        },
-    };
+    let capture = resolve_capture_backend(&get_var)?;
+
+    let log_level = resolve_log_level(&get_var)?;
 
     Ok(Config {
         interface,
@@ -105,8 +95,46 @@ pub fn from_env(get_var: impl Fn(&str) -> Option<String>) -> Result<Config, Conf
         dst_port,
         pin_path,
         syn_map_max_entries,
-        xdp_mode,
+        capture,
         metrics_listen_addr,
         metrics_port,
+        log_level,
     })
+}
+
+fn resolve_log_level(
+    get_var: &impl Fn(&str) -> Option<String>,
+) -> Result<EbpfLogLevel, ConfigError> {
+    let Some(raw) = get_var("HUGINN_EBPF_LOG_LEVEL") else {
+        return Ok(EbpfLogLevel::Off);
+    };
+    EbpfLogLevel::parse(&raw).ok_or_else(|| ConfigError::Invalid {
+        name: "HUGINN_EBPF_LOG_LEVEL".to_string(),
+        value: raw,
+        reason: "must be one of: off, error, warn, info, debug, trace (case-insensitive)"
+            .to_string(),
+    })
+}
+
+/// Resolve `HUGINN_EBPF_CAPTURE` (`xdp-native` | `xdp-skb` | `tc`). Default: `xdp-native`.
+///
+/// On VLAN/bond edges prefer `tc`: generic XDP drops GRO-merged packets; TC never drops.
+pub fn resolve_capture_backend(
+    get_var: &impl Fn(&str) -> Option<String>,
+) -> Result<CaptureBackend, ConfigError> {
+    let Some(raw) = get_var("HUGINN_EBPF_CAPTURE") else {
+        return Ok(CaptureBackend::Xdp(XdpAttachMode::Native));
+    };
+
+    let v = raw.trim().to_ascii_lowercase();
+    match v.as_str() {
+        "xdp-native" => Ok(CaptureBackend::Xdp(XdpAttachMode::Native)),
+        "xdp-skb" => Ok(CaptureBackend::Xdp(XdpAttachMode::Skb)),
+        "tc" => Ok(CaptureBackend::Tc),
+        _ => Err(ConfigError::Invalid {
+            name: "HUGINN_EBPF_CAPTURE".to_string(),
+            value: raw,
+            reason: "must be 'xdp-native', 'xdp-skb', or 'tc' (case-insensitive)".to_string(),
+        }),
+    }
 }

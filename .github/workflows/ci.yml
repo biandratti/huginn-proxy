@@ -126,11 +126,11 @@ jobs:
             -D clippy::unimplemented \
             -D clippy::missing_panics_doc \
             -D clippy::redundant_field_names
-      - name: Check lint (huginn-ebpf-xdp)
-        # huginn-ebpf-xdp is intentionally outside the workspace (nightly + bpfel-unknown-none).
+      - name: Check lint (huginn-ebpf-programs)
+        # huginn-ebpf-programs is intentionally outside the workspace (nightly + bpfel-unknown-none).
         # Its rust-toolchain.toml pins nightly automatically; bpf-linker is already installed by setup-ebpf-build.
         run: |
-          cd huginn-ebpf-xdp
+          cd huginn-ebpf-programs
           cargo clippy -- \
             -D warnings \
             -D clippy::expect_used \

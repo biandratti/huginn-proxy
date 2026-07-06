@@ -1,6 +1,9 @@
 # Deployment Guide
 
-Production deployment examples for Docker and Kubernetes.
+Deployment examples for Docker and Kubernetes (raw manifests).
+
+> huginn-proxy is a standalone reverse proxy binary/container. It is not a Kubernetes Ingress
+> controller and has no Helm chart, CRD, or Ingress class integration.
 
 Image tags and release binaries (GHCR, musl/glibc, eBPF): see [DEPLOYMENT-MATRIX.md](DEPLOYMENT-MATRIX.md).
 
@@ -47,17 +50,23 @@ docker compose -f docker-compose.release-ebpf.yml up -d
 
 ## Kubernetes
 
-Two workloads: the eBPF agent as **DaemonSet** (1 per node) and the proxy as **Deployment** (N replicas).
+> **huginn-proxy is not a Kubernetes Ingress controller.** There is no Helm chart, CRD, or
+> Ingress class integration. The YAML snippets below are abbreviated examples of how to run
+> the proxy as a standard Deployment and the eBPF agent as a DaemonSet using raw manifests.
+
+Two workloads: the eBPF agent as a **DaemonSet** (1 per node) and the proxy as a **Deployment**.
 
 ### eBPF Agent (DaemonSet)
 
-Loads XDP and pins BPF maps to `/sys/fs/bpf/huginn/`. Exposes `/metrics` and `/ready` on a configurable address and port (env vars `HUGINN_EBPF_METRICS_ADDR`, `HUGINN_EBPF_METRICS_PORT`; e.g. `127.0.0.1:9091`). Use an HTTP readiness probe to the same address and port, path `/ready`.
+Loads the capture program and pins BPF maps to `/sys/fs/bpf/huginn/`. Exposes `/metrics` and `/ready` on a configurable address and port (env vars `HUGINN_EBPF_METRICS_ADDR`, `HUGINN_EBPF_METRICS_PORT`; e.g. `127.0.0.1:9091`). Use an HTTP readiness probe to the same address and port, path `/ready`.
+
+**Capture backend in Kubernetes:** `tc` is recommended over `xdp-native` for most clusters. CNI overlays (Flannel VXLAN, Weave, Calico VXLAN) place traffic on veth pairs where native XDP driver support is not guaranteed, and generic XDP (`xdp-skb`) drops GRO-aggregated packets. TC clsact ingress runs after GRO and works on any interface. Use `xdp-native` only if you have confirmed driver XDP support on the node's physical NIC and no overlay is involved.
 
 Key security settings:
 
 ```yaml
 spec:
-  hostNetwork: true                    # XDP on the node's real interface
+  hostNetwork: true                    # agent attaches to the node's real interface
   containers:
     - name: ebpf-agent
       securityContext:
@@ -67,7 +76,9 @@ spec:
           type: Unconfined              # bpf() syscall required
       env:
         - name: HUGINN_EBPF_INTERFACE
-          value: "eth0"                 # or node's primary interface
+          value: "eth0"                 # node's primary interface
+        - name: HUGINN_EBPF_CAPTURE
+          value: "tc"                   # recommended; use xdp-native if driver XDP is available
         - name: HUGINN_EBPF_DST_IP_V4
           value: "0.0.0.0"
         - name: HUGINN_EBPF_DST_PORT
