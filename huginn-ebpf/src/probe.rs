@@ -1,6 +1,6 @@
 use std::net::{Ipv4Addr, Ipv6Addr};
 use std::os::unix::fs::PermissionsExt;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use aya::maps::{Array, HashMap, Map, MapData};
 use aya::programs::{tc, SchedClassifier, TcAttachType, Xdp, XdpMode};
@@ -30,11 +30,20 @@ enum ProbeInner {
     Pinned(Box<PinnedMaps>),
 }
 
+/// Maps opened from the agent's pins for the proxy (read-only) side.
+///
+/// The agent pins all of these in [`EbpfProbe::pin_maps`], so `from_pinned` opens every one and
+/// fails if any is missing.
 struct PinnedMaps {
     syn_map_v4: Map,
     syn_map_v6: Map,
     counter: Map,
     insert_failures_v4: Map,
+    insert_failures_v6: Map,
+    captured_v4: Map,
+    captured_v6: Map,
+    malformed_v4: Map,
+    malformed_v6: Map,
 }
 
 /// Manages eBPF TCP SYN capture and map lookups.
@@ -141,26 +150,15 @@ impl EbpfProbe {
     /// (e.g. `HUGINN_EBPF_SYN_MAP_MAX_ENTRIES`); it is used for stale entry detection.
     /// This constructor does not load or attach any XDP program, the agent owns that lifecycle.
     pub fn from_pinned(base_path: &str, syn_map_max_entries: u32) -> Result<Self, EbpfError> {
-        let syn_map_path = pin::syn_map_v4_path(base_path);
-        let syn_map_v6_path = pin::syn_map_v6_path(base_path);
-        let counter_path = pin::counter_path(base_path);
-        let insert_failures_path = pin::insert_failures_v4_path(base_path);
-
-        let syn_data = MapData::from_pin(&syn_map_path).map_err(|e| EbpfError::FromPin {
-            path: syn_map_path.display().to_string(),
-            source: e,
-        })?;
-        let syn_data_v6 = MapData::from_pin(&syn_map_v6_path).map_err(|e| EbpfError::FromPin {
-            path: syn_map_v6_path.display().to_string(),
-            source: e,
-        })?;
-        let counter_data = MapData::from_pin(&counter_path).map_err(|e| EbpfError::FromPin {
-            path: counter_path.display().to_string(),
-            source: e,
-        })?;
-        let insert_failures_data = MapData::from_pin(&insert_failures_path).map_err(|e| {
-            EbpfError::FromPin { path: insert_failures_path.display().to_string(), source: e }
-        })?;
+        let syn_data = open_pinned_map(pin::syn_map_v4_path(base_path))?;
+        let syn_data_v6 = open_pinned_map(pin::syn_map_v6_path(base_path))?;
+        let counter_data = open_pinned_map(pin::counter_path(base_path))?;
+        let insert_failures_v4 = open_pinned_map(pin::insert_failures_v4_path(base_path))?;
+        let insert_failures_v6 = open_pinned_map(pin::insert_failures_v6_path(base_path))?;
+        let captured_v4 = open_pinned_map(pin::syn_captured_v4_path(base_path))?;
+        let captured_v6 = open_pinned_map(pin::syn_captured_v6_path(base_path))?;
+        let malformed_v4 = open_pinned_map(pin::syn_malformed_v4_path(base_path))?;
+        let malformed_v6 = open_pinned_map(pin::syn_malformed_v6_path(base_path))?;
 
         info!(base_path, "eBPF TCP SYN fingerprinting connected to pinned maps");
 
@@ -169,7 +167,12 @@ impl EbpfProbe {
                 syn_map_v4: Map::LruHashMap(syn_data),
                 syn_map_v6: Map::LruHashMap(syn_data_v6),
                 counter: Map::Array(counter_data),
-                insert_failures_v4: Map::Array(insert_failures_data),
+                insert_failures_v4: Map::Array(insert_failures_v4),
+                insert_failures_v6: Map::Array(insert_failures_v6),
+                captured_v4: Map::Array(captured_v4),
+                captured_v6: Map::Array(captured_v6),
+                malformed_v4: Map::Array(malformed_v4),
+                malformed_v6: Map::Array(malformed_v6),
             })),
             interface: String::new(),
             syn_map_max_entries,
@@ -463,33 +466,69 @@ impl EbpfProbe {
         }
     }
 
-    fn insert_failures_map(&self) -> Option<&Map> {
-        match &self.inner {
-            ProbeInner::Embedded { ebpf } => ebpf.map(pin::SYN_INSERT_FAILURES_V4_NAME),
-            ProbeInner::Pinned(p) => Some(&p.insert_failures_v4),
-        }
-    }
-
     /// Read the current value of the global SYN counter from the `syn_counter` BPF map.
     fn read_current_tick(&self) -> Option<u64> {
-        let map = self.counter_map()?;
-        let array = Array::<_, u64>::try_from(map).ok()?;
-        array.get(&0, 0).ok()
+        read_array_counter(self.counter_map()?)
     }
 
-    /// Read the number of TCP SYN map insert failures (e.g. LRU full).
+    /// Read a single-slot `Array<u64>` counter map, working in both `Embedded` and `Pinned` modes.
     ///
-    /// The XDP program increments this counter when `tcp_syn_map_v4.insert()` fails.
-    /// Expose as a metric (e.g. `tcp_syn_insert_failures_total`) for observability.
+    /// `name` selects the map by name in embedded mode; `pick` selects the pinned map in pinned
+    /// mode. Returns `None` only if the embedded map is absent or cannot be read as an `Array<u64>`.
+    fn counter_from(&self, name: &str, pick: impl Fn(&PinnedMaps) -> &Map) -> Option<u64> {
+        let map = match &self.inner {
+            ProbeInner::Embedded { ebpf } => ebpf.map(name)?,
+            ProbeInner::Pinned(p) => pick(p),
+        };
+        read_array_counter(map)
+    }
+
+    /// Number of IPv4 TCP SYN map insert failures (e.g. LRU full).
+    /// Exposed as `tcp_syn_insert_failures_total{family="ipv4"}`.
     pub fn syn_insert_failures_count(&self) -> Option<u64> {
-        let map = self.insert_failures_map()?;
-        let array = Array::<_, u64>::try_from(map).ok()?;
-        array.get(&0, 0).ok()
+        self.counter_from(pin::SYN_INSERT_FAILURES_V4_NAME, |p| &p.insert_failures_v4)
+    }
+
+    /// Number of IPv6 TCP SYN map insert failures.
+    pub fn syn_insert_failures_count_v6(&self) -> Option<u64> {
+        self.counter_from(pin::SYN_INSERT_FAILURES_V6_NAME, |p| &p.insert_failures_v6)
+    }
+
+    /// Number of successfully captured IPv4 TCP SYN signatures.
+    pub fn syn_captured_count(&self) -> Option<u64> {
+        self.counter_from(pin::SYN_CAPTURED_V4_NAME, |p| &p.captured_v4)
+    }
+
+    /// Number of successfully captured IPv6 TCP SYN signatures.
+    pub fn syn_captured_count_v6(&self) -> Option<u64> {
+        self.counter_from(pin::SYN_CAPTURED_V6_NAME, |p| &p.captured_v6)
+    }
+
+    /// Number of malformed IPv4 TCP packets (e.g. doff too short) that matched the dst filter.
+    pub fn syn_malformed_count(&self) -> Option<u64> {
+        self.counter_from(pin::SYN_MALFORMED_V4_NAME, |p| &p.malformed_v4)
+    }
+
+    /// Number of malformed IPv6 TCP packets that matched the dst filter.
+    pub fn syn_malformed_count_v6(&self) -> Option<u64> {
+        self.counter_from(pin::SYN_MALFORMED_V6_NAME, |p| &p.malformed_v6)
     }
 
     pub fn interface(&self) -> &str {
         &self.interface
     }
+}
+
+/// Open a pinned map by path, mapping open failures to [`EbpfError::FromPin`].
+fn open_pinned_map(path: PathBuf) -> Result<MapData, EbpfError> {
+    MapData::from_pin(&path)
+        .map_err(|e| EbpfError::FromPin { path: path.display().to_string(), source: e })
+}
+
+/// Read slot 0 of a single-entry `Array<u64>` counter map.
+fn read_array_counter(map: &Map) -> Option<u64> {
+    let array = Array::<_, u64>::try_from(map).ok()?;
+    array.get(&0, 0).ok()
 }
 
 /// Load and attach the XDP program (`huginn_xdp_syn`). Returns the mode label for logging.
@@ -577,9 +616,7 @@ pub fn syn_malformed_v6_count_from_path(base_path: &str) -> Option<u64> {
 
 fn read_array_counter_from_path(path: impl AsRef<std::path::Path>) -> Option<u64> {
     let data = MapData::from_pin(path.as_ref()).ok()?;
-    let map = Map::Array(data);
-    let array = Array::<_, u64>::try_from(map).ok()?;
-    array.get(&0, 0).ok()
+    read_array_counter(&Map::Array(data))
 }
 
 /// Build the BPF map lookup key matching the BPF program's `make_key_v4()` (IPv4).
