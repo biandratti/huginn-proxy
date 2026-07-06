@@ -5,14 +5,16 @@
 // All other unsafe is denied.
 #![deny(unsafe_code)]
 
+pub mod log_level;
 pub mod probe;
 pub mod types;
 
 pub mod pin;
+pub use log_level::EbpfLogLevel;
 pub use probe::{
     syn_captured_count_from_path, syn_captured_v6_count_from_path,
     syn_insert_failures_count_from_path, syn_insert_failures_v6_count_from_path,
-    syn_malformed_count_from_path, syn_malformed_v6_count_from_path, EbpfProbe,
+    syn_malformed_count_from_path, syn_malformed_v6_count_from_path, EbpfLogPoller, EbpfProbe,
     DEFAULT_SYN_MAP_MAX_ENTRIES,
 };
 pub use types::{parse_syn_v4, parse_syn_v6, quirk_bits, SynRawDataV4, SynRawDataV6};
@@ -75,4 +77,7 @@ pub enum EbpfError {
         #[source]
         source: std::io::Error,
     },
+
+    #[error("failed to initialize eBPF debug logger: {0}")]
+    LogInit(#[source] aya_log::Error),
 }

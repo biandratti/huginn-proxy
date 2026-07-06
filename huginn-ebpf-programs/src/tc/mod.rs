@@ -16,6 +16,7 @@
 #![deny(unsafe_code)]
 
 use aya_ebpf::programs::TcContext;
+use aya_log_ebpf::{debug, warn};
 use core::mem;
 
 use crate::constants::*;
@@ -103,7 +104,21 @@ fn handle_ipv4(ctx: &TcContext, offset: usize) -> Result<(), ()> {
 
     let opts_offset = tcp_offset.saturating_add(mem::size_of::<TcpHdr>());
     let (options, optlen) = load_tcp_options(ctx, opts_offset, tcp_hdr_len);
-    tcp_syn::finish_tcp_syn_v4(&ip, &tcp, ip_hdr_len, options, optlen).map_err(|_| ())
+    let result = tcp_syn::finish_tcp_syn_v4(&ip, &tcp, ip_hdr_len, options, optlen);
+    let lvl = tcp_syn::log_level();
+    match result {
+        Ok(()) if lvl >= tcp_syn::level::DEBUG => debug!(
+            ctx,
+            "tc: captured TCP SYN v4 sport={} dport={}",
+            u16::from_be(tcp.source),
+            u16::from_be(tcp.dest)
+        ),
+        Err(_) if lvl >= tcp_syn::level::WARN => {
+            warn!(ctx, "tc: TCP SYN v4 map insert failed (LRU full?)")
+        }
+        _ => {}
+    }
+    result.map_err(|_| ())
 }
 
 /// Parse IPv6 + TCP from the skb and dispatch a SYN to `finish_tcp_syn_v6`.
@@ -145,7 +160,21 @@ fn handle_ipv6(ctx: &TcContext, offset: usize) -> Result<(), ()> {
 
     let opts_offset = tcp_offset.saturating_add(mem::size_of::<TcpHdr>());
     let (options, optlen) = load_tcp_options(ctx, opts_offset, tcp_hdr_len);
-    tcp_syn::finish_tcp_syn_v6(&ip6, &tcp, options, optlen).map_err(|_| ())
+    let result = tcp_syn::finish_tcp_syn_v6(&ip6, &tcp, options, optlen);
+    let lvl = tcp_syn::log_level();
+    match result {
+        Ok(()) if lvl >= tcp_syn::level::DEBUG => debug!(
+            ctx,
+            "tc: captured TCP SYN v6 sport={} dport={}",
+            u16::from_be(tcp.source),
+            u16::from_be(tcp.dest)
+        ),
+        Err(_) if lvl >= tcp_syn::level::WARN => {
+            warn!(ctx, "tc: TCP SYN v6 map insert failed (LRU full?)")
+        }
+        _ => {}
+    }
+    result.map_err(|_| ())
 }
 
 /// Read the TCP options block into a fixed 40-byte buffer, one byte at a time via `ctx.load::<u8>`.

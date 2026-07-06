@@ -1,16 +1,20 @@
 use std::net::{Ipv4Addr, Ipv6Addr};
+use std::os::fd::{AsFd, AsRawFd, BorrowedFd, RawFd};
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 
 use aya::maps::{Array, HashMap, Map, MapData, PerCpuArray};
 use aya::programs::{tc, SchedClassifier, TcAttachType, Xdp, XdpMode};
 use aya::{Ebpf, EbpfLoader};
+use aya_log::EbpfLogger;
+use log::Log;
 use tracing::{debug, info, warn};
 
 use crate::pin;
 use crate::types::{SynRawDataV4, SynRawDataV6};
 use crate::CaptureBackend;
 use crate::EbpfError;
+use crate::EbpfLogLevel;
 use crate::XdpAttachMode;
 
 /// Raw bytes of the compiled BPF object (XDP + TC programs), embedded at compile time.
@@ -57,6 +61,37 @@ pub struct EbpfProbe {
     inner: ProbeInner,
     interface: String,
     syn_map_max_entries: u32,
+    log_level: EbpfLogLevel,
+}
+
+/// Drain handle for eBPF debug logs, produced by [`EbpfProbe::take_debug_log_poller`].
+///
+/// `aya-log` does not spawn its own polling task: the ring buffer must be drained by the
+/// caller. This wraps the [`aya_log::EbpfLogger`] and exposes the file descriptor (via [`AsFd`] /
+/// [`AsRawFd`]) plus [`flush`](Self::flush), so the owner (the agent, which has a Tokio runtime)
+/// can register it with `tokio::io::unix::AsyncFd` and flush whenever the fd becomes readable.
+pub struct EbpfLogPoller {
+    inner: EbpfLogger<&'static dyn Log>,
+}
+
+impl EbpfLogPoller {
+    /// Drain all pending records from the eBPF log ring buffer, forwarding them to the `log`
+    /// facade (bridged to `tracing` by the agent's subscriber). Call after the fd reports readable.
+    pub fn flush(&mut self) {
+        self.inner.flush();
+    }
+}
+
+impl AsFd for EbpfLogPoller {
+    fn as_fd(&self) -> BorrowedFd<'_> {
+        self.inner.as_fd()
+    }
+}
+
+impl AsRawFd for EbpfLogPoller {
+    fn as_raw_fd(&self) -> RawFd {
+        self.inner.as_fd().as_raw_fd()
+    }
 }
 
 impl EbpfProbe {
@@ -71,6 +106,11 @@ impl EbpfProbe {
     /// - `capture`: [`CaptureBackend::Xdp`] (driver/generic XDP) or [`CaptureBackend::Tc`]
     ///   (clsact ingress; required on VLAN/bond interfaces where generic XDP drops GRO-merged
     ///   data packets).
+    /// - `log_level`: verbosity of the in-kernel `aya-log` datapath logging. Patched into the
+    ///   program's `log_level` global so the pipelines emit only records at or above it (`debug!`
+    ///   on capture, `warn!` on map-insert failure). [`EbpfLogLevel::Off`] (the default) means the
+    ///   logging code is compiled in but never executed, so the production hot path pays nothing.
+    ///   When non-off, drain the records via [`take_debug_log_poller`](Self::take_debug_log_poller).
     ///
     /// All dst values are patched into the program's `.rodata` via `EbpfLoader::override_global`
     /// before the kernel loads the program. Both hooks share the same `.rodata` globals and maps
@@ -82,6 +122,7 @@ impl EbpfProbe {
         dst_port: u16,
         syn_map_max_entries: u32,
         capture: CaptureBackend,
+        log_level: EbpfLogLevel,
     ) -> Result<Self, EbpfError> {
         // The BPF program compares ip->daddr and tcp->dest (both network-byte-order fields)
         // against these globals. On a little-endian CPU, network-order bytes [a,b,c,d] in the
@@ -101,10 +142,15 @@ impl EbpfProbe {
         // tcp->dest in network byte order as read by LE CPU = port.to_be()
         let bpf_dst_port: u16 = dst_port.to_be();
 
+        // 0 = logging off (default); higher = more verbose (log::LevelFilter encoding). The
+        // capture pipelines only emit records at or above this level.
+        let bpf_log_level: u8 = log_level.as_u8();
+
         let mut ebpf = EbpfLoader::new()
             .override_global("dst_ip_v4", &bpf_dst_ip, false)
             .override_global("dst_ip_v6", &bpf_dst_ip_v6, false)
             .override_global("dst_port", &bpf_dst_port, false)
+            .override_global("log_level", &bpf_log_level, false)
             .map_max_entries(pin::SYN_MAP_V4_NAME, syn_map_max_entries)
             .map_max_entries(pin::SYN_MAP_V6_NAME, syn_map_max_entries)
             .load(BPF_OBJECT_BYTES)
@@ -138,6 +184,7 @@ impl EbpfProbe {
             inner: ProbeInner::Embedded { ebpf },
             interface: interface.to_string(),
             syn_map_max_entries,
+            log_level,
         })
     }
 
@@ -176,7 +223,27 @@ impl EbpfProbe {
             })),
             interface: String::new(),
             syn_map_max_entries,
+            log_level: EbpfLogLevel::Off,
         })
+    }
+
+    /// Take the eBPF debug-log drain handle, if a non-off log level was set at [`new`](Self::new).
+    ///
+    /// Returns `Ok(None)` when logging is off or in pinned (proxy) mode. On success the caller owns
+    /// an [`EbpfLogPoller`] and is responsible for draining it (e.g. registering its fd with
+    /// `tokio::io::unix::AsyncFd` and calling [`EbpfLogPoller::flush`] on readability). This takes
+    /// the `AYA_LOGS` ring-buffer map out of the loaded object, so it may only be called once.
+    pub fn take_debug_log_poller(&mut self) -> Result<Option<EbpfLogPoller>, EbpfError> {
+        if self.log_level == EbpfLogLevel::Off {
+            return Ok(None);
+        }
+        match &mut self.inner {
+            ProbeInner::Embedded { ebpf } => {
+                let inner = EbpfLogger::init(ebpf).map_err(EbpfError::LogInit)?;
+                Ok(Some(EbpfLogPoller { inner }))
+            }
+            ProbeInner::Pinned(_) => Ok(None),
+        }
     }
 
     /// Pin the BPF maps to `base_path` so other processes can open them.

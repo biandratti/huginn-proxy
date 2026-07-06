@@ -11,6 +11,7 @@
 mod packet;
 
 use aya_ebpf::programs::XdpContext;
+use aya_log_ebpf::{debug, warn};
 use core::mem;
 
 use crate::constants::*;
@@ -109,7 +110,21 @@ fn handle_ipv4(ctx: &XdpContext, mut offset: usize) -> Result<(), ()> {
     let tcp_ref = unsafe { &*tcp };
     // On MapInsertFailed we still pass the packet. The handler increments syn_insert_failures;
     // the agent/proxy reads it via EbpfProbe::syn_insert_failures_count() and can expose it as a metric.
-    tcp_syn::handle_tcp_syn_v4(ctx, ip_ref, tcp_ref, ip_hdr_len).map_err(|_| ())
+    let result = tcp_syn::handle_tcp_syn_v4(ctx, ip_ref, tcp_ref, ip_hdr_len);
+    let lvl = tcp_syn::log_level();
+    match result {
+        Ok(()) if lvl >= tcp_syn::level::DEBUG => debug!(
+            ctx,
+            "xdp: captured TCP SYN v4 sport={} dport={}",
+            u16::from_be(tcp_ref.source),
+            u16::from_be(tcp_ref.dest)
+        ),
+        Err(_) if lvl >= tcp_syn::level::WARN => {
+            warn!(ctx, "xdp: TCP SYN v4 map insert failed (LRU full?)")
+        }
+        _ => {}
+    }
+    result.map_err(|_| ())
 }
 
 /// Parse IPv6 header and dispatch TCP SYN to `handle_tcp_syn_v6`.
@@ -161,5 +176,19 @@ fn handle_ipv6(ctx: &XdpContext, mut offset: usize) -> Result<(), ()> {
     // SAFETY: ip6 and tcp were validated by ptr_at and bounds; valid for the duration of this call.
     let ip6_ref = unsafe { &*ip6 };
     let tcp_ref = unsafe { &*tcp };
-    tcp_syn::handle_tcp_syn_v6(ctx, ip6_ref, tcp_ref).map_err(|_| ())
+    let result = tcp_syn::handle_tcp_syn_v6(ctx, ip6_ref, tcp_ref);
+    let lvl = tcp_syn::log_level();
+    match result {
+        Ok(()) if lvl >= tcp_syn::level::DEBUG => debug!(
+            ctx,
+            "xdp: captured TCP SYN v6 sport={} dport={}",
+            u16::from_be(tcp_ref.source),
+            u16::from_be(tcp_ref.dest)
+        ),
+        Err(_) if lvl >= tcp_syn::level::WARN => {
+            warn!(ctx, "xdp: TCP SYN v6 map insert failed (LRU full?)")
+        }
+        _ => {}
+    }
+    result.map_err(|_| ())
 }

@@ -2,8 +2,8 @@ use std::collections::HashMap;
 use std::net::{Ipv4Addr, Ipv6Addr};
 
 use huginn_ebpf_agent::config::{
-    capture_label, from_env, resolve_capture_backend, CaptureBackend, ConfigError, XdpAttachMode,
-    DEFAULT_PIN_PATH,
+    capture_label, from_env, resolve_capture_backend, CaptureBackend, ConfigError, EbpfLogLevel,
+    XdpAttachMode, DEFAULT_PIN_PATH,
 };
 
 /// Build a `get_var` closure from a list of (name, value) pairs.
@@ -106,6 +106,7 @@ fn from_env_minimal_applies_defaults() {
     assert_eq!(cfg.pin_path, DEFAULT_PIN_PATH);
     assert_eq!(cfg.syn_map_max_entries, huginn_ebpf::DEFAULT_SYN_MAP_MAX_ENTRIES);
     assert!(matches!(cfg.capture, CaptureBackend::Xdp(XdpAttachMode::Native)));
+    assert_eq!(cfg.log_level, EbpfLogLevel::Off, "log level must default to off");
 }
 
 #[test]
@@ -115,11 +116,32 @@ fn from_env_full_overrides_every_optional() {
         ("HUGINN_EBPF_PIN_PATH", "/run/bpf/huginn"),
         ("HUGINN_EBPF_SYN_MAP_MAX_ENTRIES", "16384"),
         ("HUGINN_EBPF_CAPTURE", "tc"),
+        ("HUGINN_EBPF_LOG_LEVEL", "debug"),
     ]));
     assert_eq!(cfg.dst_ip_v6, Ipv6Addr::new(0x2001, 0x0db8, 0, 0, 0, 0, 0, 1));
     assert_eq!(cfg.pin_path, "/run/bpf/huginn");
     assert_eq!(cfg.syn_map_max_entries, 16384);
     assert!(matches!(cfg.capture, CaptureBackend::Tc));
+    assert_eq!(
+        cfg.log_level,
+        EbpfLogLevel::Debug,
+        "HUGINN_EBPF_LOG_LEVEL=debug should be parsed"
+    );
+}
+
+#[test]
+fn log_level_accepts_all_levels_case_insensitively() {
+    for (raw, expected) in [
+        (" off ", EbpfLogLevel::Off),
+        ("ERROR", EbpfLogLevel::Error),
+        ("Warn", EbpfLogLevel::Warn),
+        ("info", EbpfLogLevel::Info),
+        ("debug", EbpfLogLevel::Debug),
+        ("TRACE", EbpfLogLevel::Trace),
+    ] {
+        let cfg = parse_ok(required_with(&[("HUGINN_EBPF_LOG_LEVEL", raw)]));
+        assert_eq!(cfg.log_level, expected, "{raw:?} should parse to {expected:?}");
+    }
 }
 
 #[test]
@@ -152,6 +174,7 @@ fn from_env_invalid_values_are_reported() {
         ("HUGINN_EBPF_DST_PORT", "70000"),
         ("HUGINN_EBPF_METRICS_PORT", "-1"),
         ("HUGINN_EBPF_SYN_MAP_MAX_ENTRIES", "lots"),
+        ("HUGINN_EBPF_LOG_LEVEL", "verbose"),
     ] {
         let result = from_env(required_with(&[(name, bad)]));
         assert!(

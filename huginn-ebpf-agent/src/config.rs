@@ -2,7 +2,7 @@ use huginn_ebpf::pin;
 use std::net::{Ipv4Addr, Ipv6Addr};
 
 pub const DEFAULT_PIN_PATH: &str = pin::DEFAULT_PIN_BASE;
-pub use huginn_ebpf::{CaptureBackend, XdpAttachMode};
+pub use huginn_ebpf::{CaptureBackend, EbpfLogLevel, XdpAttachMode};
 
 #[derive(Debug, Clone)]
 pub struct Config {
@@ -15,6 +15,9 @@ pub struct Config {
     pub capture: CaptureBackend,
     pub metrics_listen_addr: String,
     pub metrics_port: u16,
+    /// Verbosity of the in-kernel `aya-log` datapath logging, forwarded to the agent's tracing
+    /// subscriber. [`EbpfLogLevel::Off`] by default; higher levels add hot-path-gated overhead only.
+    pub log_level: EbpfLogLevel,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -85,6 +88,8 @@ pub fn from_env(get_var: impl Fn(&str) -> Option<String>) -> Result<Config, Conf
 
     let capture = resolve_capture_backend(&get_var)?;
 
+    let log_level = resolve_log_level(&get_var)?;
+
     Ok(Config {
         interface,
         dst_ip_v4,
@@ -95,6 +100,26 @@ pub fn from_env(get_var: impl Fn(&str) -> Option<String>) -> Result<Config, Conf
         capture,
         metrics_listen_addr,
         metrics_port,
+        log_level,
+    })
+}
+
+/// Resolve the eBPF datapath log level from `HUGINN_EBPF_LOG_LEVEL`.
+///
+/// Accepts `off`/`error`/`warn`/`info`/`debug`/`trace` (case-insensitive). Unset defaults to
+/// [`EbpfLogLevel::Off`]. Any other value is a hard error, matching the strictness of the other
+/// typed env vars.
+fn resolve_log_level(
+    get_var: &impl Fn(&str) -> Option<String>,
+) -> Result<EbpfLogLevel, ConfigError> {
+    let Some(raw) = get_var("HUGINN_EBPF_LOG_LEVEL") else {
+        return Ok(EbpfLogLevel::Off);
+    };
+    EbpfLogLevel::parse(&raw).ok_or_else(|| ConfigError::Invalid {
+        name: "HUGINN_EBPF_LOG_LEVEL".to_string(),
+        value: raw,
+        reason: "must be one of: off, error, warn, info, debug, trace (case-insensitive)"
+            .to_string(),
     })
 }
 
