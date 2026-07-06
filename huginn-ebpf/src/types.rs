@@ -94,12 +94,12 @@ fn decode_quirks(bits: u32) -> Vec<Quirk> {
     v
 }
 
-/// Parse a TCP SYN fingerprint from raw XDP-captured IPv6 data.
+/// Parse a TCP SYN fingerprint from a raw BPF-captured IPv6 entry.
 ///
 /// Returns `Some(TcpObservation)` on success, or `None` when TCP options are
 /// malformed. A `WARN` log is emitted for the latter.
 ///
-/// Constants hardcoded from XDP IPv6 invariants:
+/// Constants hardcoded from the BPF program's IPv6 capture invariants:
 /// - `ip_version = V6`: only IPv6 SYN packets are stored in `tcp_syn_map_v6`.
 /// - `pclass = Zero`: TCP SYN packets never carry a payload.
 /// - `ip_olen = 0`: IPv6 has no IP options (extension headers not tracked yet).
@@ -159,13 +159,13 @@ pub fn parse_syn_v6(raw: &SynRawDataV6) -> Option<TcpObservation> {
     })
 }
 
-/// Parse a TCP SYN fingerprint from raw XDP-captured data.
+/// Parse a TCP SYN fingerprint from a raw BPF-captured IPv4 entry.
 ///
 /// Returns `Some(TcpObservation)` on success, or `None` when TCP options are
 /// malformed (`ParsedTcpOptions::malformed`). A `WARN` log is emitted for the latter.
 ///
-/// Constants hardcoded from XDP invariants:
-/// - `ip_version = V4`: the XDP program filters out non-IPv4 at entry.
+/// Constants hardcoded from the BPF program's IPv4 capture invariants:
+/// - `ip_version = V4`: the BPF program filters out non-IPv4 at entry.
 /// - `pclass = Zero`: TCP SYN packets never carry a payload by protocol definition.
 pub fn parse_syn_v4(raw: &SynRawDataV4) -> Option<TcpObservation> {
     let window_host = u16::from_be(raw.window);

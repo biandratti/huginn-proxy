@@ -23,8 +23,8 @@ static BPF_OBJECT_BYTES: &[u8] = aya::include_bytes_aligned!(env!("BPF_OBJECT_PA
 pub const DEFAULT_SYN_MAP_MAX_ENTRIES: u32 = 8192;
 
 enum ProbeInner {
-    /// Used by `huginn-ebpf-agent`: owns the BPF object and XDP program.
-    /// Dropping detaches XDP from the interface.
+    /// Used by `huginn-ebpf-agent`: owns the BPF object and the attached capture program (XDP or TC).
+    /// Dropping detaches the program from the interface.
     Embedded { ebpf: Ebpf },
     /// Used by `huginn-proxy`: reads maps pinned by the agent.
     Pinned(Box<PinnedMaps>),
@@ -37,9 +37,9 @@ struct PinnedMaps {
     insert_failures_v4: Map,
 }
 
-/// Manages eBPF XDP SYN data lookups.
+/// Manages eBPF TCP SYN capture and map lookups.
 ///
-/// - The **agent** calls [`EbpfProbe::new`] to load XDP and own the maps.
+/// - The **agent** calls [`EbpfProbe::new`] to load the capture program and own the maps.
 /// - The **proxy** calls [`EbpfProbe::from_pinned`] to read maps pinned by the agent.
 ///
 /// Both code paths store the SYN map capacity (`syn_map_max_entries`); the proxy uses it
@@ -51,7 +51,7 @@ pub struct EbpfProbe {
 }
 
 impl EbpfProbe {
-    /// Load the XDP BPF program and attach it to the given network interface.
+    /// Load and attach the BPF capture program (XDP or TC) to the given network interface.
     ///
     /// # Parameters
     /// - `interface`: network interface name (e.g., `"eth0"`)
@@ -64,8 +64,8 @@ impl EbpfProbe {
     ///   data packets).
     ///
     /// All dst values are patched into the program's `.rodata` via `EbpfLoader::override_global`
-    /// before the kernel loads the program, matching `cilium/ebpf`'s `spec.Variables` pattern.
-    /// Both hooks share the same `.rodata` globals and maps in the single embedded ELF.
+    /// before the kernel loads the program. Both hooks share the same `.rodata` globals and maps
+    /// in the single embedded ELF.
     pub fn new(
         interface: &str,
         dst_ip_v4: Ipv4Addr,
@@ -74,12 +74,12 @@ impl EbpfProbe {
         syn_map_max_entries: u32,
         capture: CaptureBackend,
     ) -> Result<Self, EbpfError> {
-        // XDP compares ip->daddr and tcp->dest (both network-byte-order fields) against these
-        // globals. On a little-endian CPU, network-order bytes [a,b,c,d] in the packet are read
-        // as u32::from_ne_bytes([a,b,c,d]). We replicate the same encoding here so the
-        // comparison in xdp.c works correctly.
+        // The BPF program compares ip->daddr and tcp->dest (both network-byte-order fields)
+        // against these globals. On a little-endian CPU, network-order bytes [a,b,c,d] in the
+        // packet are read as u32::from_ne_bytes([a,b,c,d]). We replicate the same encoding here
+        // so the comparison in the BPF program works correctly.
         //
-        // 0.0.0.0 → bpf_dst_ip = 0 → XDP skips the IPv4 destination check.
+        // 0.0.0.0 → bpf_dst_ip = 0 → BPF program skips the IPv4 destination check.
         let bpf_dst_ip: u32 = if dst_ip_v4.is_unspecified() {
             0
         } else {
@@ -567,9 +567,9 @@ fn read_array_counter_from_path(path: impl AsRef<std::path::Path>) -> Option<u64
     array.get(&0, 0).ok()
 }
 
-/// Build the BPF map lookup key matching the XDP program's `make_key_v4()` (IPv4).
+/// Build the BPF map lookup key matching the BPF program's `make_key_v4()` (IPv4).
 ///
-/// The XDP program: `((__u64)ip->saddr << 16) | tcp->source`
+/// The BPF program: `((__u64)ip->saddr << 16) | tcp->source`
 /// Both `ip->saddr` and `tcp->source` are in network byte order as seen by
 /// the LE CPU (i.e., the raw BE bytes interpreted as a LE integer value).
 ///
@@ -582,7 +582,7 @@ pub fn make_bpf_key_v4(src_ip: Ipv4Addr, src_port: u16) -> u64 {
     (u64::from(ip_ne) << 16) | u64::from(port_ne)
 }
 
-/// Build the BPF map lookup key matching the XDP program's `make_key_v6()` (IPv6).
+/// Build the BPF map lookup key matching the BPF program's `make_key_v6()` (IPv6).
 ///
 /// Layout: 16 bytes of IPv6 address (network byte order) followed by 2 bytes of
 /// TCP source port (network byte order). Matches the kernel-side `make_key_v6` in
