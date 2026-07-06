@@ -10,9 +10,10 @@
 //! the packet-access layer changes. The map set, names, key encoding, and value layout are reused
 //! unchanged via `signals::tcp_syn`, keeping the on-disk contract byte-for-byte identical.
 //!
-//! Unlike `crate::xdp`, this pipeline reads packets safely (`ctx.load` returns values by copy). The
-//! only `unsafe` is reading the loader-patched globals via `read_volatile`.
-#![allow(unsafe_code)]
+//! Unlike `crate::xdp`, this pipeline is fully safe: `ctx.load` returns values by copy, and the
+//! loader-patched globals are read through the safe accessors in `signals::tcp_syn`. No `unsafe`
+//! appears here, so the module denies it outright.
+#![deny(unsafe_code)]
 
 use aya_ebpf::programs::TcContext;
 use core::mem;
@@ -76,8 +77,7 @@ fn handle_ipv4(ctx: &TcContext, offset: usize) -> Result<(), ()> {
         return Ok(());
     }
 
-    // SAFETY: read_volatile required for loader-patched globals so the compiler does not cache.
-    let dst_ip_v4_val = unsafe { core::ptr::read_volatile(&tcp_syn::dst_ip_v4) };
+    let dst_ip_v4_val = tcp_syn::dst_ip_v4();
     if dst_ip_v4_val != 0 && ip.daddr != dst_ip_v4_val {
         return Ok(());
     }
@@ -92,8 +92,7 @@ fn handle_ipv4(ctx: &TcContext, offset: usize) -> Result<(), ()> {
         return Ok(());
     }
 
-    // SAFETY: read_volatile for loader-patched global.
-    let dst_port_val = unsafe { core::ptr::read_volatile(&tcp_syn::dst_port) };
+    let dst_port_val = tcp_syn::dst_port();
     if dst_port_val != 0 && tcp.dest != dst_port_val {
         return Ok(());
     }
@@ -119,8 +118,7 @@ fn handle_ipv6(ctx: &TcContext, offset: usize) -> Result<(), ()> {
     }
 
     // IPv6 destination address filter (all-zeros = accept any).
-    // SAFETY: read_volatile for loader-patched global array.
-    let dst_ip_v6_val = unsafe { core::ptr::read_volatile(&tcp_syn::dst_ip_v6) };
+    let dst_ip_v6_val = tcp_syn::dst_ip_v6();
     let is_zero = dst_ip_v6_val.iter().all(|&b| b == 0);
     if !is_zero && ip6.daddr != dst_ip_v6_val {
         return Ok(());
@@ -136,8 +134,7 @@ fn handle_ipv6(ctx: &TcContext, offset: usize) -> Result<(), ()> {
         return Ok(());
     }
 
-    // SAFETY: read_volatile for loader-patched global.
-    let dst_port_val = unsafe { core::ptr::read_volatile(&tcp_syn::dst_port) };
+    let dst_port_val = tcp_syn::dst_port();
     if dst_port_val != 0 && tcp.dest != dst_port_val {
         return Ok(());
     }

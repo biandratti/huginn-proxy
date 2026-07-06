@@ -1,5 +1,3 @@
-#![allow(unsafe_code)]
-
 use aya_ebpf::programs::XdpContext;
 use core::mem;
 use crate::constants::TCPOPT_MAXLEN;
@@ -28,6 +26,7 @@ pub enum TcpSynError {
 /// Called from the pipeline after it has parsed Ethernet, IPv4, and TCP and
 /// confirmed SYN (no ACK) and passed the destination filter.
 /// `ip` and `tcp` are references to packet memory validated by the pipeline.
+#[allow(unsafe_code)]
 pub fn handle_tcp_syn_v4(
     ctx: &XdpContext,
     ip: &Ip4Hdr,
@@ -103,6 +102,7 @@ pub fn finish_tcp_syn_v4(
 /// Called from the pipeline after it has parsed Ethernet, IPv6, and TCP and
 /// confirmed SYN (no ACK) and passed the destination filter.
 /// `ip6` and `tcp` are references to packet memory validated by the pipeline.
+#[allow(unsafe_code)]
 pub fn handle_tcp_syn_v6(
     ctx: &XdpContext,
     ip6: &Ip6Hdr,

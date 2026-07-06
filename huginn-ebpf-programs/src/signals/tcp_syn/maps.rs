@@ -1,5 +1,3 @@
-#![allow(unsafe_code)]
-
 use aya_ebpf::{
     macros::map,
     maps::{Array, LruHashMap},
@@ -61,15 +59,17 @@ pub static syn_malformed_v6: Array<u64> = Array::with_max_entries(1, 0);
 
 // ── Safe wrappers around map counter access ──────────────────────────────────
 //
-// All unsafe for these arrays is confined here. If get_ptr_mut fails we return a default
-// (no panic, no UB). Invalid pointer use would be UB; we only deref when get_ptr_mut
-// returned Some (aya guarantees that is a valid map slot).
+// All unsafe for these arrays is confined to these fns (each carries its own
+// `#[allow(unsafe_code)]`). If get_ptr_mut fails we return a default (no panic, no UB). We only
+// deref when get_ptr_mut returned Some (aya guarantees that is a valid map slot).
 
 /// Read and increment the global SYN counter (shared by V4 and V6 for stale detection).
 /// Returns the value before increment.
+#[allow(unsafe_code)]
 #[inline(always)]
 pub fn read_and_increment_syn_counter() -> u64 {
     if let Some(ptr) = syn_counter.get_ptr_mut(0) {
+        // SAFETY: ptr came from get_ptr_mut(Some) → a valid, uniquely-owned map slot.
         unsafe {
             let current = *ptr;
             *ptr = current.wrapping_add(1);
@@ -81,9 +81,11 @@ pub fn read_and_increment_syn_counter() -> u64 {
 }
 
 /// Increment the insert-failures counter for IPv4 (for observability when map insert fails).
+#[allow(unsafe_code)]
 #[inline(always)]
 pub fn increment_syn_insert_failures_v4() {
     if let Some(ptr) = syn_insert_failures_v4.get_ptr_mut(0) {
+        // SAFETY: ptr came from get_ptr_mut(Some) → a valid, uniquely-owned map slot.
         unsafe {
             let v = *ptr;
             *ptr = v.wrapping_add(1);
@@ -92,9 +94,11 @@ pub fn increment_syn_insert_failures_v4() {
 }
 
 /// Increment the syn_captured counter for IPv4 (successful insert into LRU map).
+#[allow(unsafe_code)]
 #[inline(always)]
 pub fn increment_syn_captured_v4() {
     if let Some(ptr) = syn_captured_v4.get_ptr_mut(0) {
+        // SAFETY: ptr came from get_ptr_mut(Some) → a valid, uniquely-owned map slot.
         unsafe {
             let v = *ptr;
             *ptr = v.wrapping_add(1);
@@ -103,9 +107,11 @@ pub fn increment_syn_captured_v4() {
 }
 
 /// Increment the syn_malformed counter for IPv4 (TCP packet matched dst but header invalid).
+#[allow(unsafe_code)]
 #[inline(always)]
 pub fn increment_syn_malformed_v4() {
     if let Some(ptr) = syn_malformed_v4.get_ptr_mut(0) {
+        // SAFETY: ptr came from get_ptr_mut(Some) → a valid, uniquely-owned map slot.
         unsafe {
             let v = *ptr;
             *ptr = v.wrapping_add(1);
@@ -114,9 +120,11 @@ pub fn increment_syn_malformed_v4() {
 }
 
 /// Increment the insert-failures counter for IPv6.
+#[allow(unsafe_code)]
 #[inline(always)]
 pub fn increment_syn_insert_failures_v6() {
     if let Some(ptr) = syn_insert_failures_v6.get_ptr_mut(0) {
+        // SAFETY: ptr came from get_ptr_mut(Some) → a valid, uniquely-owned map slot.
         unsafe {
             let v = *ptr;
             *ptr = v.wrapping_add(1);
@@ -125,9 +133,11 @@ pub fn increment_syn_insert_failures_v6() {
 }
 
 /// Increment the syn_captured counter for IPv6.
+#[allow(unsafe_code)]
 #[inline(always)]
 pub fn increment_syn_captured_v6() {
     if let Some(ptr) = syn_captured_v6.get_ptr_mut(0) {
+        // SAFETY: ptr came from get_ptr_mut(Some) → a valid, uniquely-owned map slot.
         unsafe {
             let v = *ptr;
             *ptr = v.wrapping_add(1);
@@ -136,9 +146,11 @@ pub fn increment_syn_captured_v6() {
 }
 
 /// Increment the syn_malformed counter for IPv6.
+#[allow(unsafe_code)]
 #[inline(always)]
 pub fn increment_syn_malformed_v6() {
     if let Some(ptr) = syn_malformed_v6.get_ptr_mut(0) {
+        // SAFETY: ptr came from get_ptr_mut(Some) → a valid, uniquely-owned map slot.
         unsafe {
             let v = *ptr;
             *ptr = v.wrapping_add(1);
@@ -148,19 +160,45 @@ pub fn increment_syn_malformed_v6() {
 
 // ── Globals patched at load time by EbpfLoader::override_global ──────────────
 //
-// XDP reads them via read_volatile to prevent the compiler from caching.
+// The loader patches these read-only globals (by exported symbol name) before the
+// program loads. The statics are private; the capture pipelines read them through the
+// accessor fns below, which wrap `read_volatile` (so the compiler cannot cache the
+// pre-patch value) and keep that `unsafe` confined to this module.
 
-#[no_mangle]
-#[allow(non_upper_case_globals)]
-pub static dst_port: u16 = 0;
+#[allow(unsafe_code)]
+#[export_name = "dst_port"]
+static DST_PORT: u16 = 0;
 
 /// IPv4 destination address filter (`0` = accept any destination).
-#[no_mangle]
-#[allow(non_upper_case_globals)]
-pub static dst_ip_v4: u32 = 0;
+#[allow(unsafe_code)]
+#[export_name = "dst_ip_v4"]
+static DST_IP_V4: u32 = 0;
 
 /// IPv6 destination address filter (all-zeros = accept any destination).
-/// Each byte patched at load time by EbpfLoader::override_global.
-#[no_mangle]
-#[allow(non_upper_case_globals)]
-pub static dst_ip_v6: [u8; 16] = [0u8; 16];
+#[allow(unsafe_code)]
+#[export_name = "dst_ip_v6"]
+static DST_IP_V6: [u8; 16] = [0u8; 16];
+
+/// Read the loader-patched destination port filter (network byte order; `0` = any).
+#[allow(unsafe_code)]
+#[inline(always)]
+pub fn dst_port() -> u16 {
+    // SAFETY: read_volatile of a loader-patched read-only global; no aliasing, prevents caching.
+    unsafe { core::ptr::read_volatile(&DST_PORT) }
+}
+
+/// Read the loader-patched IPv4 destination filter (`0` = any).
+#[allow(unsafe_code)]
+#[inline(always)]
+pub fn dst_ip_v4() -> u32 {
+    // SAFETY: read_volatile of a loader-patched read-only global; no aliasing, prevents caching.
+    unsafe { core::ptr::read_volatile(&DST_IP_V4) }
+}
+
+/// Read the loader-patched IPv6 destination filter (all-zeros = any).
+#[allow(unsafe_code)]
+#[inline(always)]
+pub fn dst_ip_v6() -> [u8; 16] {
+    // SAFETY: read_volatile of a loader-patched read-only global; no aliasing, prevents caching.
+    unsafe { core::ptr::read_volatile(&DST_IP_V6) }
+}

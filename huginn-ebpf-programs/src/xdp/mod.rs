@@ -5,8 +5,8 @@
 //! on physical/veth interfaces. On VLAN/bond interfaces use the TC path instead (see `crate::tc`).
 //!
 //! Direct packet access is intrinsic to XDP and the verifier requires the bounds-check-then-deref
-//! idiom, so this module retains `unsafe`; `packet.rs` confines the pointer arithmetic.
-#![allow(unsafe_code)]
+//! idiom, so this module retains `unsafe`; `packet.rs` confines the pointer arithmetic. Each fn that
+//! dereferences packet pointers carries its own `#[allow(unsafe_code)]` + `// SAFETY` note.
 
 mod packet;
 
@@ -21,6 +21,7 @@ use packet::ptr_at;
 /// XDP pipeline: parse L2/L3/L4 and dispatch to each signal's handler.
 ///
 /// Handles both IPv4 (`ETH_P_IPV4`) and IPv6 (`ETH_P_IPV6`) TCP SYN packets.
+#[allow(unsafe_code)]
 pub fn try_xdp_syn(ctx: &XdpContext) -> Result<(), ()> {
     let mut offset = 0usize;
 
@@ -54,6 +55,7 @@ pub fn try_xdp_syn(ctx: &XdpContext) -> Result<(), ()> {
 }
 
 /// Parse IPv4 header and dispatch TCP SYN to `handle_tcp_syn_v4`.
+#[allow(unsafe_code)]
 fn handle_ipv4(ctx: &XdpContext, mut offset: usize) -> Result<(), ()> {
     // ── IPv4 ──────────────────────────────────────────────────────────────────
     // SAFETY: ptr_at checked bounds.
@@ -74,8 +76,7 @@ fn handle_ipv4(ctx: &XdpContext, mut offset: usize) -> Result<(), ()> {
         return Ok(());
     }
 
-    // SAFETY: read_volatile required for loader-patched globals so the compiler does not cache.
-    let dst_ip_v4_val = unsafe { core::ptr::read_volatile(&tcp_syn::dst_ip_v4) };
+    let dst_ip_v4_val = tcp_syn::dst_ip_v4();
     if dst_ip_v4_val != 0 && unsafe { (*ip).daddr } != dst_ip_v4_val {
         return Ok(());
     }
@@ -92,8 +93,7 @@ fn handle_ipv4(ctx: &XdpContext, mut offset: usize) -> Result<(), ()> {
         return Ok(());
     }
 
-    // SAFETY: read_volatile for loader-patched global.
-    let dst_port_val = unsafe { core::ptr::read_volatile(&tcp_syn::dst_port) };
+    let dst_port_val = tcp_syn::dst_port();
     if dst_port_val != 0 && unsafe { (*tcp).dest } != dst_port_val {
         return Ok(());
     }
@@ -118,6 +118,7 @@ fn handle_ipv4(ctx: &XdpContext, mut offset: usize) -> Result<(), ()> {
 /// are fingerprinted. Packets with extension headers before TCP are passed
 /// without fingerprinting. Possible spoofing risk: a malicious actor could
 /// send a packet with an extension header before TCP to bypass the fingerprinting.
+#[allow(unsafe_code)]
 fn handle_ipv6(ctx: &XdpContext, mut offset: usize) -> Result<(), ()> {
     // ── IPv6 ──────────────────────────────────────────────────────────────────
     // SAFETY: ptr_at checked bounds.
@@ -129,8 +130,7 @@ fn handle_ipv6(ctx: &XdpContext, mut offset: usize) -> Result<(), ()> {
     }
 
     // IPv6 destination address filter (all-zeros = accept any).
-    // SAFETY: read_volatile for loader-patched global array.
-    let dst_ip_v6_val = unsafe { core::ptr::read_volatile(&tcp_syn::dst_ip_v6) };
+    let dst_ip_v6_val = tcp_syn::dst_ip_v6();
     let is_zero = dst_ip_v6_val.iter().all(|&b| b == 0);
     if !is_zero {
         let daddr = unsafe { (*ip6).daddr };
@@ -149,8 +149,7 @@ fn handle_ipv6(ctx: &XdpContext, mut offset: usize) -> Result<(), ()> {
         return Ok(());
     }
 
-    // SAFETY: read_volatile for loader-patched global.
-    let dst_port_val = unsafe { core::ptr::read_volatile(&tcp_syn::dst_port) };
+    let dst_port_val = tcp_syn::dst_port();
     if dst_port_val != 0 && unsafe { (*tcp).dest } != dst_port_val {
         return Ok(());
     }
