@@ -19,7 +19,7 @@ pub use types::{parse_syn_v4, parse_syn_v6, quirk_bits, SynRawDataV4, SynRawData
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum XdpAttachMode {
-    /// Driver-level (default). Requires NIC driver support; falls back silently to skb on older kernels.
+    /// Driver-level (default). Requires NIC driver XDP support.
     Native,
     /// Generic/SKB mode. Runs in the kernel stack. Works on any interface (veth, loopback, VMs).
     Skb,

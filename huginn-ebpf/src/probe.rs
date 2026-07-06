@@ -2,7 +2,7 @@ use std::net::{Ipv4Addr, Ipv6Addr};
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 
-use aya::maps::{Array, HashMap, Map, MapData};
+use aya::maps::{Array, HashMap, Map, MapData, PerCpuArray};
 use aya::programs::{tc, SchedClassifier, TcAttachType, Xdp, XdpMode};
 use aya::{Ebpf, EbpfLoader};
 use tracing::{debug, info, warn};
@@ -167,12 +167,12 @@ impl EbpfProbe {
                 syn_map_v4: Map::LruHashMap(syn_data),
                 syn_map_v6: Map::LruHashMap(syn_data_v6),
                 counter: Map::Array(counter_data),
-                insert_failures_v4: Map::Array(insert_failures_v4),
-                insert_failures_v6: Map::Array(insert_failures_v6),
-                captured_v4: Map::Array(captured_v4),
-                captured_v6: Map::Array(captured_v6),
-                malformed_v4: Map::Array(malformed_v4),
-                malformed_v6: Map::Array(malformed_v6),
+                insert_failures_v4: Map::PerCpuArray(insert_failures_v4),
+                insert_failures_v6: Map::PerCpuArray(insert_failures_v6),
+                captured_v4: Map::PerCpuArray(captured_v4),
+                captured_v6: Map::PerCpuArray(captured_v6),
+                malformed_v4: Map::PerCpuArray(malformed_v4),
+                malformed_v6: Map::PerCpuArray(malformed_v6),
             })),
             interface: String::new(),
             syn_map_max_entries,
@@ -471,16 +471,18 @@ impl EbpfProbe {
         read_array_counter(self.counter_map()?)
     }
 
-    /// Read a single-slot `Array<u64>` counter map, working in both `Embedded` and `Pinned` modes.
+    /// Read a single-slot `PerCpuArray<u64>` counter map (summed across CPUs), working in both
+    /// `Embedded` and `Pinned` modes.
     ///
     /// `name` selects the map by name in embedded mode; `pick` selects the pinned map in pinned
-    /// mode. Returns `None` only if the embedded map is absent or cannot be read as an `Array<u64>`.
+    /// mode. Returns `None` only if the embedded map is absent or cannot be read as a
+    /// `PerCpuArray<u64>`.
     fn counter_from(&self, name: &str, pick: impl Fn(&PinnedMaps) -> &Map) -> Option<u64> {
         let map = match &self.inner {
             ProbeInner::Embedded { ebpf } => ebpf.map(name)?,
             ProbeInner::Pinned(p) => pick(p),
         };
-        read_array_counter(map)
+        read_percpu_counter(map)
     }
 
     /// Number of IPv4 TCP SYN map insert failures (e.g. LRU full).
@@ -525,10 +527,19 @@ fn open_pinned_map(path: PathBuf) -> Result<MapData, EbpfError> {
         .map_err(|e| EbpfError::FromPin { path: path.display().to_string(), source: e })
 }
 
-/// Read slot 0 of a single-entry `Array<u64>` counter map.
+/// Read slot 0 of a single-entry `Array<u64>` counter map (used for the global tick).
 fn read_array_counter(map: &Map) -> Option<u64> {
     let array = Array::<_, u64>::try_from(map).ok()?;
     array.get(&0, 0).ok()
+}
+
+/// Read slot 0 of a single-entry `PerCpuArray<u64>` counter map, summing the per-CPU values.
+///
+/// The kernel increments a per-CPU slot (race-free); the meaningful total is the sum across CPUs.
+fn read_percpu_counter(map: &Map) -> Option<u64> {
+    let array = PerCpuArray::<_, u64>::try_from(map).ok()?;
+    let per_cpu = array.get(&0, 0).ok()?;
+    Some(per_cpu.iter().fold(0u64, |acc, &v| acc.wrapping_add(v)))
 }
 
 /// Load and attach the XDP program (`huginn_xdp_syn`). Returns the mode label for logging.
@@ -586,37 +597,37 @@ fn attach_tc(ebpf: &mut Ebpf, interface: &str) -> Result<&'static str, EbpfError
 /// Used by the agent's metrics server without sharing the probe (avoids `Send` on `EbpfProbe`).
 /// Returns `None` if the map cannot be opened or read.
 pub fn syn_insert_failures_count_from_path(base_path: &str) -> Option<u64> {
-    read_array_counter_from_path(pin::insert_failures_v4_path(base_path))
+    read_percpu_counter_from_path(pin::insert_failures_v4_path(base_path))
 }
 
 /// Read the `syn_captured_v4` counter from a pinned map at `base_path`.
 pub fn syn_captured_count_from_path(base_path: &str) -> Option<u64> {
-    read_array_counter_from_path(pin::syn_captured_v4_path(base_path))
+    read_percpu_counter_from_path(pin::syn_captured_v4_path(base_path))
 }
 
 /// Read the `syn_malformed_v4` counter from a pinned map at `base_path`.
 pub fn syn_malformed_count_from_path(base_path: &str) -> Option<u64> {
-    read_array_counter_from_path(pin::syn_malformed_v4_path(base_path))
+    read_percpu_counter_from_path(pin::syn_malformed_v4_path(base_path))
 }
 
 /// Read the `syn_insert_failures_v6` counter from a pinned map at `base_path`.
 pub fn syn_insert_failures_v6_count_from_path(base_path: &str) -> Option<u64> {
-    read_array_counter_from_path(pin::insert_failures_v6_path(base_path))
+    read_percpu_counter_from_path(pin::insert_failures_v6_path(base_path))
 }
 
 /// Read the `syn_captured_v6` counter from a pinned map at `base_path`.
 pub fn syn_captured_v6_count_from_path(base_path: &str) -> Option<u64> {
-    read_array_counter_from_path(pin::syn_captured_v6_path(base_path))
+    read_percpu_counter_from_path(pin::syn_captured_v6_path(base_path))
 }
 
 /// Read the `syn_malformed_v6` counter from a pinned map at `base_path`.
 pub fn syn_malformed_v6_count_from_path(base_path: &str) -> Option<u64> {
-    read_array_counter_from_path(pin::syn_malformed_v6_path(base_path))
+    read_percpu_counter_from_path(pin::syn_malformed_v6_path(base_path))
 }
 
-fn read_array_counter_from_path(path: impl AsRef<std::path::Path>) -> Option<u64> {
+fn read_percpu_counter_from_path(path: impl AsRef<std::path::Path>) -> Option<u64> {
     let data = MapData::from_pin(path.as_ref()).ok()?;
-    read_array_counter(&Map::Array(data))
+    read_percpu_counter(&Map::PerCpuArray(data))
 }
 
 /// Build the BPF map lookup key matching the BPF program's `make_key_v4()` (IPv4).

@@ -1,6 +1,6 @@
 use aya_ebpf::{
     macros::map,
-    maps::{Array, LruHashMap},
+    maps::{Array, LruHashMap, PerCpuArray},
 };
 
 use crate::constants::{TCP_SYN_MAP_V4_MAX_ENTRIES, TCP_SYN_MAP_V6_MAX_ENTRIES};
@@ -13,6 +13,10 @@ use huginn_ebpf_common::{SynRawDataV4, SynRawDataV6};
 pub static tcp_syn_map_v4: LruHashMap<u64, SynRawDataV4> =
     LruHashMap::with_max_entries(TCP_SYN_MAP_V4_MAX_ENTRIES, 0);
 
+/// Global SYN counter (shared across V4 and V6) used as a monotonic "tick" for stale detection.
+/// Intentionally a plain `Array` (not per-CPU) because it needs a single global sequence; the
+/// cross-CPU increment is non-atomic and therefore approximate, which the 2× map-size stale
+/// threshold in the reader absorbs.
 #[map]
 #[allow(non_upper_case_globals)]
 pub static syn_counter: Array<u64> = Array::with_max_entries(1, 0);
@@ -21,18 +25,18 @@ pub static syn_counter: Array<u64> = Array::with_max_entries(1, 0);
 /// Read by the agent/proxy for observability (e.g. metric `tcp_syn_insert_failures_total`).
 #[map]
 #[allow(non_upper_case_globals)]
-pub static syn_insert_failures_v4: Array<u64> = Array::with_max_entries(1, 0);
+pub static syn_insert_failures_v4: PerCpuArray<u64> = PerCpuArray::with_max_entries(1, 0);
 
 /// Counter of successfully captured IPv4 TCP SYN signatures.
 /// Incremented when insert into tcp_syn_map_v4 succeeds.
 #[map]
 #[allow(non_upper_case_globals)]
-pub static syn_captured_v4: Array<u64> = Array::with_max_entries(1, 0);
+pub static syn_captured_v4: PerCpuArray<u64> = PerCpuArray::with_max_entries(1, 0);
 
 /// Counter of malformed IPv4 TCP packets (e.g. doff too short) that matched dst filter.
 #[map]
 #[allow(non_upper_case_globals)]
-pub static syn_malformed_v4: Array<u64> = Array::with_max_entries(1, 0);
+pub static syn_malformed_v4: PerCpuArray<u64> = PerCpuArray::with_max_entries(1, 0);
 
 // ── BPF maps (TCP SYN signal — IPv6) ─────────────────────────────────────────
 
@@ -45,23 +49,27 @@ pub static tcp_syn_map_v6: LruHashMap<[u8; 18], SynRawDataV6> =
 /// Counter of IPv6 SYN map insert failures.
 #[map]
 #[allow(non_upper_case_globals)]
-pub static syn_insert_failures_v6: Array<u64> = Array::with_max_entries(1, 0);
+pub static syn_insert_failures_v6: PerCpuArray<u64> = PerCpuArray::with_max_entries(1, 0);
 
 /// Counter of successfully captured IPv6 TCP SYN signatures.
 #[map]
 #[allow(non_upper_case_globals)]
-pub static syn_captured_v6: Array<u64> = Array::with_max_entries(1, 0);
+pub static syn_captured_v6: PerCpuArray<u64> = PerCpuArray::with_max_entries(1, 0);
 
 /// Counter of malformed IPv6 TCP packets that matched the dst filter.
 #[map]
 #[allow(non_upper_case_globals)]
-pub static syn_malformed_v6: Array<u64> = Array::with_max_entries(1, 0);
+pub static syn_malformed_v6: PerCpuArray<u64> = PerCpuArray::with_max_entries(1, 0);
 
 // ── Safe wrappers around map counter access ──────────────────────────────────
 //
 // All unsafe for these arrays is confined to these fns (each carries its own
 // `#[allow(unsafe_code)]`). If get_ptr_mut fails we return a default (no panic, no UB). We only
 // deref when get_ptr_mut returned Some (aya guarantees that is a valid map slot).
+//
+// The six observability counters are `PerCpuArray`, so `get_ptr_mut(0)` returns *this CPU's* slot:
+// the increment is genuinely uniquely-owned (no other CPU touches it) and race-free. The reader in
+// the loader sums the per-CPU slots. `syn_counter` is the one exception (plain `Array`, see above).
 
 /// Read and increment the global SYN counter (shared by V4 and V6 for stale detection).
 /// Returns the value before increment.
