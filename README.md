@@ -1,7 +1,7 @@
 <div align="center">
-  <img src="huginn-proxy.png" alt="Huginn Proxy Logo" width="350"/>
+  <img src="huginn-proxy-small.png" alt="Huginn Proxy Logo" width="180"/>
 
-# Huginn Proxy
+# Húginn Prøxy
 
 [![License](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg)](https://github.com/biandratti/huginn-proxy#license)
 [![Release](https://github.com/biandratti/huginn-proxy/actions/workflows/release.yml/badge.svg)](https://github.com/biandratti/huginn-proxy/actions/workflows/release.yml)
@@ -24,7 +24,7 @@
 **Huginn Proxy** is a reverse proxy built on [Tokio](https://tokio.rs), [Hyper](https://hyper.rs),
 and [Rustls](https://github.com/rustls/rustls). It routes incoming connections to backend services while passively
 extracting TLS (JA4), HTTP/2 (Akamai), and TCP SYN (p0f-style) fingerprints and injecting them as headers. TCP SYN
-fingerprinting is implemented via an XDP eBPF program using [Aya](https://aya-rs.dev). Fingerprinting libraries are
+fingerprinting is implemented via an XDP/TC eBPF program using [Aya](https://aya-rs.dev). Fingerprinting libraries are
 provided by [Huginn Net](https://github.com/biandratti/huginn-net).
 
 Inspired by production-grade proxies like [Pingora](https://github.com/cloudflare/pingora)
