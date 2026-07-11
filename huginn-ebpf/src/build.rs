@@ -1,20 +1,24 @@
 use std::path::PathBuf;
 use std::process::Command;
 
-/// Compile the BPF kernel program (`huginn-ebpf-xdp`) using
+/// Filename of the compiled BPF ELF object written to `OUT_DIR`.
+/// Consumed in `probe.rs` via `env!("BPF_OBJECT_PATH")`.
+const BPF_OBJECT_FILENAME: &str = "huginn.bpf.o";
+
+/// Compile the BPF kernel programs (`huginn-ebpf-programs`) using
 /// `cargo +nightly build` for the `bpfel-unknown-none` target.
 ///
 /// The resulting ELF binary is embedded into the userspace binary via
 /// `aya::include_bytes_aligned!` in `probe.rs`.
 ///
 /// Requirements: Rust nightly toolchain with `rust-src` component.
-/// The `rust-toolchain.toml` in `huginn-ebpf-xdp/` pins the channel.
+/// The `rust-toolchain.toml` in `huginn-ebpf-programs/` pins the channel.
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let manifest_dir = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR")?);
     let programs_dir = manifest_dir
         .parent()
         .ok_or("could not find workspace root")?
-        .join("huginn-ebpf-xdp");
+        .join("huginn-ebpf-programs");
 
     // Watch the entire src/ directory so that adding new .rs modules (e.g.
     // constants.rs, headers.rs) triggers a rebuild of the BPF object.
@@ -30,7 +34,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     //
     // 1. RUSTC / RUSTUP_TOOLCHAIN / RUSTC_WORKSPACE_WRAPPER / RUSTC_WRAPPER
     //    override the nightly selection we need; we remove them so rustup picks
-    //    the toolchain from the rust-toolchain.toml inside huginn-ebpf-xdp/.
+    //    the toolchain from the rust-toolchain.toml inside huginn-ebpf-programs/.
     //
     // 2. RUSTFLAGS / CARGO_ENCODED_RUSTFLAGS may carry coverage-instrumentation
     //    flags (e.g. `-C instrument-coverage`) injected by tarpaulin or other
@@ -40,7 +44,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     //    monomorphizations" (rust-lang/rust#137222).  The BPF program must be
     //    compiled without any host-side instrumentation, so we strip these flags.
     let status = Command::new("cargo")
-        .args(["build", "--release", "--package", "huginn-ebpf-xdp"])
+        .args(["build", "--release", "--package", "huginn-ebpf-programs"])
         .env("CARGO_TARGET_DIR", &bpf_target_dir)
         .env_remove("RUSTC")
         .env_remove("RUSTDOC")
@@ -56,7 +60,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Ok(s) if s.success() => {}
         Ok(s) => {
             return Err(format!(
-                "cargo build of huginn-ebpf-xdp failed (exit {:?}).\n\
+                "cargo build of huginn-ebpf-programs failed (exit {:?}).\n\
                 Ensure nightly toolchain and rust-src are installed:\n\
                   rustup toolchain install nightly\n\
                   rustup component add rust-src --toolchain nightly",
@@ -70,16 +74,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // The compiled BPF ELF binary location
-    let bpf_bin = bpf_target_dir.join("bpfel-unknown-none/release/huginn-ebpf-xdp");
+    let bpf_bin = bpf_target_dir.join("bpfel-unknown-none/release/huginn-ebpf-programs");
 
     if !bpf_bin.exists() {
         return Err(format!("BPF binary not found at {}", bpf_bin.display()).into());
     }
 
-    // Copy to OUT_DIR with the name probe.rs expects via XDP_BPF_OBJ
-    let out_file = out_dir.join("xdp.bpf.o");
+    let out_file = out_dir.join(BPF_OBJECT_FILENAME);
     std::fs::copy(&bpf_bin, &out_file)?;
 
-    println!("cargo:rustc-env=XDP_BPF_OBJ={}", out_file.display());
+    println!("cargo:rustc-env=BPF_OBJECT_PATH={}", out_file.display());
     Ok(())
 }

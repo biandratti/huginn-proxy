@@ -1,20 +1,37 @@
-//! Standalone eBPF agent that loads the XDP program, pins BPF maps, and
-//! stays alive until SIGTERM. Designed to run as a DaemonSet so that
-//! the proxy (Deployment) can open the pinned maps without needing
-//! CAP_NET_ADMIN or seccomp:unconfined.
+//! eBPF agent: loads the capture program, pins maps, serves metrics.
 
-#![forbid(unsafe_code)]
-
-mod config;
-mod error;
-mod healthchecks;
-mod telemetry;
-use crate::config::from_env;
-use crate::error::Result;
-use huginn_ebpf::EbpfProbe;
+use huginn_ebpf::{EbpfLogLevel, EbpfLogPoller, EbpfProbe};
+use huginn_ebpf_agent::config::from_env;
+use huginn_ebpf_agent::error::Result;
 use std::env;
 use std::sync::Arc;
+use tokio::io::unix::AsyncFd;
+use tokio::io::Interest;
 use tokio::signal;
+
+/// Drain the eBPF log ring buffer when its fd is readable.
+fn spawn_ebpf_log_drain(poller: EbpfLogPoller) {
+    tokio::spawn(async move {
+        let mut async_fd = match AsyncFd::with_interest(poller, Interest::READABLE) {
+            Ok(fd) => fd,
+            Err(e) => {
+                tracing::warn!(error = %e, "failed to register eBPF log fd; debug logs disabled");
+                return;
+            }
+        };
+        loop {
+            let mut guard = match async_fd.readable_mut().await {
+                Ok(guard) => guard,
+                Err(e) => {
+                    tracing::warn!(error = %e, "eBPF log fd readiness error; stopping log drain");
+                    return;
+                }
+            };
+            guard.get_inner_mut().flush();
+            guard.clear_ready();
+        }
+    });
+}
 
 async fn wait_for_shutdown_signal() -> Result<()> {
     let mut sigterm = signal::unix::signal(signal::unix::SignalKind::terminate())
@@ -30,14 +47,19 @@ async fn wait_for_shutdown_signal() -> Result<()> {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let default_level = env::var("RUST_LOG").unwrap_or_else(|_| "info".to_string());
+    let get_var = |name: &str| env::var(name).ok();
+    let cfg = from_env(get_var)?;
+
+    // Default RUST_LOG to the eBPF log level when logging is enabled.
+    let fallback_level = match cfg.log_level {
+        EbpfLogLevel::Off => "info",
+        other => other.as_str(),
+    };
+    let default_level = env::var("RUST_LOG").unwrap_or_else(|_| fallback_level.to_string());
     let env_filter = tracing_subscriber::EnvFilter::try_from_default_env()
         .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new(default_level));
 
     tracing_subscriber::fmt().with_env_filter(env_filter).init();
-
-    let get_var = |name: &str| env::var(name).ok();
-    let cfg = from_env(get_var)?;
 
     let iface_path = std::path::Path::new("/sys/class/net").join(&cfg.interface);
     if !iface_path.exists() {
@@ -55,12 +77,17 @@ async fn main() -> Result<()> {
         cfg.dst_ip_v6,
         cfg.dst_port,
         cfg.syn_map_max_entries,
-        cfg.xdp_mode,
+        cfg.capture,
+        cfg.log_level,
     )?;
     probe.pin_maps(&cfg.pin_path)?;
 
+    if let Some(poller) = probe.take_debug_log_poller()? {
+        spawn_ebpf_log_drain(poller);
+    }
+
     let pin_path = Arc::new(cfg.pin_path.clone());
-    let (registry, metrics) = telemetry::init_metrics(pin_path)?;
+    let (registry, metrics) = huginn_ebpf_agent::telemetry::init_metrics(pin_path)?;
     metrics.set_ready();
 
     let registry = Arc::new(registry);
@@ -68,27 +95,31 @@ async fn main() -> Result<()> {
     let listen_addr = cfg.metrics_listen_addr.clone();
     let port = cfg.metrics_port;
     tokio::spawn(async move {
-        let _ =
-            telemetry::start_observability_server(&listen_addr, port, registry, pin_path_str).await;
+        let _ = huginn_ebpf_agent::telemetry::start_observability_server(
+            &listen_addr,
+            port,
+            registry,
+            pin_path_str,
+        )
+        .await;
     });
 
-    let xdp_mode_str = match cfg.xdp_mode {
-        config::XdpAttachMode::Native => "native",
-        config::XdpAttachMode::Skb => "skb",
-    };
+    let capture_str = cfg.capture.as_str();
     tracing::info!(
         interface = %cfg.interface,
         pin_path = %cfg.pin_path,
         dst_ip_v4 = %cfg.dst_ip_v4,
         dst_ip_v6 = %cfg.dst_ip_v6,
         dst_port = %cfg.dst_port,
-        xdp_mode = xdp_mode_str,
+        capture = capture_str,
+        log_level = cfg.log_level.as_str(),
         "eBPF agent ready, waiting for SIGTERM"
     );
 
     wait_for_shutdown_signal().await?;
 
-    tracing::info!("Shutting down, unpinning maps and detaching XDP");
+    tracing::info!("Shutting down, unpinning maps and detaching capture program");
+    metrics.set_not_ready();
     EbpfProbe::unpin_maps(&cfg.pin_path);
     drop(probe);
 

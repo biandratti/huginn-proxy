@@ -1,8 +1,8 @@
 # eBPF TCP SYN Fingerprinting - Setup Guide
 
-TCP SYN fingerprinting is implemented via an XDP eBPF program that captures TCP SYN packets
-and stores them in a BPF LRU hash map. The proxy looks up each connection's SYN data and
-injects the `x-tcp-p0f` header with the p0f-style signature.
+TCP SYN fingerprinting is implemented via an eBPF program (XDP or TC) that captures TCP SYN
+packets and stores them in BPF LRU hash maps. The proxy looks up each connection's SYN data
+and injects the `x-tcp-p0f` header with the p0f-style signature.
 
 ---
 
@@ -10,28 +10,31 @@ injects the `x-tcp-p0f` header with the p0f-style signature.
 
 TCP fingerprinting uses two separate processes:
 
-- **`huginn-ebpf-agent`** — loads the XDP program, attaches it to the network interface,
-  and pins BPF maps to `/sys/fs/bpf/huginn/`. Runs once per node (DaemonSet in K8s,
-  sidecar in Docker Compose). Requires elevated privileges but opens no ports.
+- **`huginn-ebpf-agent`** — loads the capture program (XDP or TC), attaches it to the
+  network interface, and pins BPF maps to `/sys/fs/bpf/huginn/`. Runs once per node
+  (DaemonSet in K8s, sidecar in Docker Compose). Requires elevated privileges but opens no ports.
+  No Kubernetes Ingress integration; deploys as a standard container via raw manifests.
 
 - **`huginn-proxy`** — opens the pinned BPF maps in read mode and injects the
-  `x-tcp-p0f` header. Runs as a standard Deployment with HPA.
+  `x-tcp-p0f` header.
 
 ```
   huginn-ebpf-agent                      huginn-proxy
   ┌─────────────────────────┐           ┌─────────────────────────┐
-  │ • Load XDP program       │           │ • Open pinned maps      │
+  │ • Load capture program  │           │ • Open pinned maps      │
   │ • Attach to interface   │           │   (read-only)           │
   │ • Pin maps to bpffs     │           │ • Lookup per connection  │
-  │ • Wait for SIGTERM      │           │ • Inject x-tcp-p0f│
+  │ • Wait for SIGTERM      │           │ • Inject x-tcp-p0f      │
   └────────────┬────────────┘           └────────────▲───────────┘
                │                                       │
                │    /sys/fs/bpf/huginn/                │
                └──────────────┬────────────────────────┘
                               │
-                    tcp_syn_map_v4 (LruHashMap)
-                    syn_counter (Array)
-                    syn_insert_failures (Array)
+                    tcp_syn_map_v4/v6  (LruHashMap)
+                    syn_counter        (Array)
+                    syn_insert_failures_v4/v6  (PerCpuArray)
+                    syn_captured_v4/v6         (PerCpuArray)
+                    syn_malformed_v4/v6        (PerCpuArray)
 ```
 
 ---
@@ -45,17 +48,9 @@ accounting (still supported but deprecated). Check: `uname -r`.
 
 ### One agent per node
 
-Linux allows only one XDP program attached to a network interface at a time. If two agents
-run on the same node, the second replaces the first's XDP program. Deploy the agent as a
-DaemonSet (K8s) or with `network_mode: "service:proxy"` (Docker Compose).
-
-### IPv4 listen address
-
-The XDP program captures only `ETH_P_IP` (IPv4) packets. Configuring the proxy to listen on
-an IPv6 address with `tcp_enabled = true` causes a hard startup failure.
-
-This is not a limitation in practice when a load balancer or ingress sits in front: the proxy
-only sees IPv4 connections internally regardless of the original client protocol.
+Linux allows only one XDP or TC clsact program attached to a network interface at a time.
+If two agents run on the same node, the second replaces the first's program. Deploy the
+agent as a DaemonSet (K8s) or with `network_mode: "service:proxy"` (Docker Compose).
 
 ### bpffs
 
@@ -105,13 +100,32 @@ No `seccomp:unconfined` or `apparmor:unconfined` needed.
 
 | Variable | Example | Description |
 |---|---|---|
-| `HUGINN_EBPF_INTERFACE` | `eth0` | Network interface to attach XDP to |
+| `HUGINN_EBPF_INTERFACE` | `eth0` | Network interface for the capture program (XDP or TC) |
 | `HUGINN_EBPF_DST_IP_V4` | `0.0.0.0` | IPv4 destination filter (`0.0.0.0` = no filter) |
 | `HUGINN_EBPF_DST_IP_V6` | `::` | IPv6 destination filter (`::` = no filter); quote in YAML if needed |
 | `HUGINN_EBPF_DST_PORT` | `7000` | Destination port filter (proxy listen port) |
 | `HUGINN_EBPF_PIN_PATH` | `/sys/fs/bpf/huginn` | Pin directory (default shown) |
 | `HUGINN_EBPF_SYN_MAP_MAX_ENTRIES` | `8192` | LRU map capacity (default shown) |
-| `HUGINN_EBPF_XDP_MODE` | `native` | XDP attach mode: `native` (default, driver-level) or `skb` (generic, for veth/loopback) |
+| `HUGINN_EBPF_CAPTURE` | `xdp-native` | Capture backend: `xdp-native` (driver XDP, default), `xdp-skb` (generic XDP, veth/loopback/VMs), or `tc` (clsact ingress; GRO-safe when native XDP is unavailable, e.g. VLAN/bond on generic XDP). Same BPF maps either way. |
+| `HUGINN_EBPF_LOG_LEVEL` | `off` | Verbosity of in-kernel `aya-log` datapath logging: `off` (default), `error`, `warn`, `info`, `debug`, `trace`. The kernel emits only records at/above the level (`debug` = per-capture, `warn` = map-insert failures), so the level gate runs in-kernel and `off` is zero-cost on the hot path. When non-`off` and `RUST_LOG` is unset, the agent defaults its filter to that level so records are shown. For diagnostics only. |
+
+#### Choosing a capture backend
+
+Both hooks live in the same BPF object and share identical maps, key encoding, and value layout.
+The proxy reads the same pinned maps regardless of backend. Only the kernel hook and attach
+mechanism differ.
+
+- **`xdp-native`** — driver-level XDP. Lowest overhead. Requires NIC driver XDP support.
+- **`xdp-skb`** — generic XDP in the kernel stack. Works on veth/loopback/VMs.
+- **`tc`** — TC `clsact` **ingress** classifier. Reads packet bytes via `bpf_skb_load_bytes`
+  (GRO-safe) and returns `TC_ACT_OK`, so it **never drops** packets and works on **VLAN/bond**
+  interfaces.
+
+> Use `tc` when native XDP is not available and you would otherwise fall back to generic XDP
+> (`xdp-skb`). Generic XDP does not handle GRO-aggregated (multi-buffer) packets: the program
+> only sees the first segment and non-linear skbs are dropped. TC `clsact` ingress runs after GRO
+> and reads the full skb via `bpf_skb_load_bytes`, so it is not affected. Capabilities are the
+> same (`CAP_NET_ADMIN` + `CAP_BPF`/`CAP_PERFMON`); no new privileges required.
 
 ### Proxy configuration (`config.toml`)
 
@@ -124,8 +138,8 @@ tcp_enabled = true   # false = no BPF maps opened, no capabilities needed
 |---|---|---|
 | `HUGINN_EBPF_PIN_PATH` | `/sys/fs/bpf/huginn` | Pin directory to read maps from (default shown) |
 
-The proxy retries opening pinned maps on startup (up to 60 seconds) to handle the case
-where the agent starts after the proxy.
+The proxy opens pinned maps at startup and fails immediately if they are not present. Ensure
+the agent has completed startup (and `/ready` returns 200) before starting the proxy.
 
 ---
 
@@ -133,9 +147,9 @@ where the agent starts after the proxy.
 
 See `examples/docker-compose.ebpf.yml` for the full working example.
 
-The agent shares the proxy's network namespace (`network_mode: "service:proxy"`) so XDP
-on `eth0` captures the SYN packets arriving at the proxy. Both containers share a bpffs
-Docker volume for map pinning.
+The agent shares the proxy's network namespace (`network_mode: "service:proxy"`) so the
+capture program on `eth0` sees the SYN packets arriving at the proxy. Both containers share
+a bpffs Docker volume for map pinning.
 
 ```yaml
 services:
@@ -164,8 +178,8 @@ volumes:
 
 ## Kubernetes
 
-The agent runs as a **DaemonSet** (one per node). The proxy runs as a **Deployment** with
-HPA. Both mount the host's bpffs via `hostPath`.
+Example abbreviated manifests (raw YAML, no Helm chart or CRD provided). Both mount the
+host's bpffs via `hostPath`.
 
 ```yaml
 # Agent DaemonSet (abbreviated)
@@ -206,14 +220,14 @@ See [DEPLOYMENT.md](DEPLOYMENT.md) for the full Kubernetes section.
 
 ## HTTP keep-alives
 
-XDP captures only TCP SYN packets. The fingerprint is looked up once at TCP accept time and
-reused for every request on that connection. As a result, **`x-tcp-p0f` is present on
-all requests** of a keep-alive connection — not just the first.
+The capture program intercepts only TCP SYN packets. The fingerprint is looked up once at TCP
+accept time and reused for every request on that connection. As a result, **`x-tcp-p0f` is
+present on all requests** of a keep-alive connection, not just the first.
 
 A `SynResult::Miss` (no header injected) happens when:
-- the SYN was not captured (proxy just started, stale entry, IPv6 client), or
-- the BPF map entry was evicted before the connection was accepted (very high load).
+- the SYN was not captured (proxy just started, map entry evicted), or
+- the entry is stale (more than `2 x syn_map_max_entries` SYNs arrived since capture).
 
-`force_new_connection = true` is unrelated to fingerprint availability — it controls whether
+`force_new_connection = true` is unrelated to fingerprint availability: it controls whether
 the proxy opens a new TCP connection to the **backend** per request, not whether the client
 SYN is re-captured.

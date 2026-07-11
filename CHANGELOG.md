@@ -7,7 +7,7 @@ follows [Semantic Versioning](https://semver.org/).
 
 ---
 
-## [0.0.2-beta.2]
+## [Unreleased]
 
 ### Added
 
@@ -83,6 +83,21 @@ required = { ca_cert_path = "/config/certs/ca.crt" }
 ca_cert_path = "/config/certs/ca.crt"
 # (omit the whole block to disable mTLS)
 ```
+
+**PROXY protocol support (`listen.proxy_protocol`)**
+
+New static option `listen.proxy_protocol` (`off` / `optional` / `require`). Recovers the real
+client IP/port from a PROXY v1 (text) or v2 (binary) header prepended by a trusted L4 load
+balancer. Honored only from peers listed in `security.trusted_proxies`. Affects eBPF SYN lookup,
+`X-Forwarded-For`, rate limiting, and IP filtering. See `SETTINGS.md`.
+
+**eBPF capture backend selection (`HUGINN_EBPF_CAPTURE`)**
+
+New agent env var. Values: `xdp-native` (default), `xdp-skb`, `tc`. Both XDP and TC programs
+ship in the same BPF object and share identical maps; no proxy config change required.
+See `EBPF-SETUP.md`.
+
+---
 
 ## [0.0.2-beta.1]
 

@@ -1,6 +1,7 @@
 use huginn_ebpf::{
-    syn_captured_count_from_path, syn_insert_failures_count_from_path,
-    syn_malformed_count_from_path,
+    syn_captured_count_from_path, syn_captured_v6_count_from_path,
+    syn_insert_failures_count_from_path, syn_insert_failures_v6_count_from_path,
+    syn_malformed_count_from_path, syn_malformed_v6_count_from_path,
 };
 use opentelemetry::global;
 use opentelemetry::metrics::{Gauge, Meter};
@@ -12,6 +13,10 @@ use std::sync::Arc;
 pub mod labels {
     pub const VERSION: &str = "version";
     pub const RUST_VERSION: &str = "rust_version";
+    /// Address family for the TCP SYN counters: `ipv4` or `ipv6`.
+    pub const FAMILY: &str = "family";
+    pub const FAMILY_V4: &str = "ipv4";
+    pub const FAMILY_V6: &str = "ipv6";
 }
 
 #[derive(Clone)]
@@ -36,6 +41,10 @@ impl Metrics {
 
     pub fn set_ready(&self) {
         self.agent_up.record(1, &[]);
+    }
+
+    pub fn set_not_ready(&self) {
+        self.agent_up.record(0, &[]);
     }
 
     pub fn set_build_info(&self) {
@@ -71,8 +80,10 @@ pub fn init_metrics(pin_path: Arc<String>) -> crate::error::Result<(Registry, Me
         .u64_observable_counter("tcp_syn_captured_total")
         .with_description("Number of TCP SYN signatures successfully captured")
         .with_callback(move |observer| {
-            let value = syn_captured_count_from_path(pin_path_captured.as_str()).unwrap_or(0);
-            observer.observe(value, &[]);
+            let v4 = syn_captured_count_from_path(pin_path_captured.as_str()).unwrap_or(0);
+            let v6 = syn_captured_v6_count_from_path(pin_path_captured.as_str()).unwrap_or(0);
+            observer.observe(v4, &[KeyValue::new(labels::FAMILY, labels::FAMILY_V4)]);
+            observer.observe(v6, &[KeyValue::new(labels::FAMILY, labels::FAMILY_V6)]);
         })
         .build();
 
@@ -80,9 +91,11 @@ pub fn init_metrics(pin_path: Arc<String>) -> crate::error::Result<(Registry, Me
         .u64_observable_counter("tcp_syn_insert_failures_total")
         .with_description("Number of TCP SYN map insert failures (e.g. LRU full)")
         .with_callback(move |observer| {
-            let value =
-                syn_insert_failures_count_from_path(pin_path_failures.as_str()).unwrap_or(0);
-            observer.observe(value, &[]);
+            let v4 = syn_insert_failures_count_from_path(pin_path_failures.as_str()).unwrap_or(0);
+            let v6 =
+                syn_insert_failures_v6_count_from_path(pin_path_failures.as_str()).unwrap_or(0);
+            observer.observe(v4, &[KeyValue::new(labels::FAMILY, labels::FAMILY_V4)]);
+            observer.observe(v6, &[KeyValue::new(labels::FAMILY, labels::FAMILY_V6)]);
         })
         .build();
 
@@ -92,8 +105,10 @@ pub fn init_metrics(pin_path: Arc<String>) -> crate::error::Result<(Registry, Me
             "Number of malformed TCP packets (e.g. doff too short) that matched dst filter",
         )
         .with_callback(move |observer| {
-            let value = syn_malformed_count_from_path(pin_path.as_str()).unwrap_or(0);
-            observer.observe(value, &[]);
+            let v4 = syn_malformed_count_from_path(pin_path.as_str()).unwrap_or(0);
+            let v6 = syn_malformed_v6_count_from_path(pin_path.as_str()).unwrap_or(0);
+            observer.observe(v4, &[KeyValue::new(labels::FAMILY, labels::FAMILY_V4)]);
+            observer.observe(v6, &[KeyValue::new(labels::FAMILY, labels::FAMILY_V6)]);
         })
         .build();
 

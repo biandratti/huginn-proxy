@@ -1,6 +1,6 @@
 //! Raw data extracted from an IPv6 TCP SYN packet, stored in the BPF LRU map.
 //!
-//! Layout is the single source of truth for both `huginn-ebpf-xdp` and `huginn-ebpf`.
+//! Layout is the single source of truth for both `huginn-ebpf-programs` and `huginn-ebpf`.
 //!
 //! ```text
 //! offset  0: src_addr  [u8; 16]  (network byte order, IPv6 address)

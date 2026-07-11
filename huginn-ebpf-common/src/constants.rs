@@ -1,8 +1,8 @@
-// ── Network protocol constants (network byte order on LE host) ────────────────
-//
-// All EtherType and IP flag values are pre-swapped so that direct comparison
-// against the raw u16 fields in packet headers works correctly on a
-// little-endian host without calling swap_bytes() at runtime.
+//! Network protocol constants shared between the BPF kernel programs and userspace tests.
+//!
+//! EtherType and IPv4 flag values are pre-swapped with `.swap_bytes()` so they can be
+//! compared directly against the raw `u16` fields in packet headers on a little-endian
+//! CPU without calling `swap_bytes()` at runtime.
 
 // ── EtherType ────────────────────────────────────────────────────────────────
 
@@ -18,9 +18,9 @@ pub const IP_DF: u16 = 0x4000_u16.swap_bytes(); // don't fragment
 pub const IP_MF: u16 = 0x2000_u16.swap_bytes(); // more fragments
 pub const IP_OFFSET: u16 = 0x1FFF_u16.swap_bytes(); // fragment offset mask
 
-// ── IP ToS ECN bits (RFC 3168) ─────────────────────────────────────────────────
+// ── IP ToS ECN bits (RFC 3168) ────────────────────────────────────────────────
 
-pub const IP_TOS_CE: u8 = 0x01;  // Congestion Experienced
+pub const IP_TOS_CE: u8 = 0x01; // Congestion Experienced
 pub const IP_TOS_ECT: u8 = 0x02; // ECN-Capable Transport
 
 // ── IP protocol numbers ───────────────────────────────────────────────────────
@@ -29,12 +29,17 @@ pub const IPPROTO_TCP: u8 = 6;
 
 // ── TCP option limits ─────────────────────────────────────────────────────────
 
+/// Maximum bytes of TCP options we read and store (TCP header max is 40 bytes).
 pub const TCPOPT_MAXLEN: usize = 40;
 
-// ── TCP SYN map capacity ─────────────────────────────────────────────────────
+// ── TCP SYN map capacity ──────────────────────────────────────────────────────
 //
-// Max entries for the LRU map that stores one SynRawDataV4 per (src_ip, src_port).
-//  huginn-ebpf uses 2× this for STALE_TICK_THRESHOLD when deciding if a map entry is stale (see probe.rs).
+// Default LRU map sizes. `huginn-ebpf` uses 2× this as the stale-entry threshold
+// (see `probe.rs`). The agent can override via `HUGINN_EBPF_SYN_MAP_MAX_ENTRIES`.
 
 pub const TCP_SYN_MAP_V4_MAX_ENTRIES: u32 = 8192;
 pub const TCP_SYN_MAP_V6_MAX_ENTRIES: u32 = 8192;
+
+// BPF program entry-point names. Kernel `main.rs` asserts these match the fn identifiers.
+pub const XDP_SYN_PROGRAM: &str = "huginn_xdp_syn";
+pub const TC_SYN_PROGRAM: &str = "huginn_tc_syn";

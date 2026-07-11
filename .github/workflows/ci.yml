@@ -35,12 +35,12 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-
-      - name: Setup eBPF build dependencies
-        uses: ./.github/actions/setup-ebpf-build
       - name: Install Rust ${{ env.rust_stable }}
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: ${{ env.rust_stable }}
+      - name: Setup eBPF build dependencies
+        uses: ./.github/actions/setup-ebpf-build
       - name: Build workspace
         run: cargo build --verbose --workspace
 
@@ -106,13 +106,13 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-
-      - name: Setup eBPF build dependencies
-        uses: ./.github/actions/setup-ebpf-build
       - name: Install Rust ${{ env.rust_stable }}
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: ${{ env.rust_stable }}
           components: clippy
+      - name: Setup eBPF build dependencies
+        uses: ./.github/actions/setup-ebpf-build
       - name: Check lint
         run: |
           cargo clippy --workspace --all-features --all-targets -- \
@@ -126,11 +126,11 @@ jobs:
             -D clippy::unimplemented \
             -D clippy::missing_panics_doc \
             -D clippy::redundant_field_names
-      - name: Check lint (huginn-ebpf-xdp)
-        # huginn-ebpf-xdp is intentionally outside the workspace (nightly + bpfel-unknown-none).
+      - name: Check lint (huginn-ebpf-programs)
+        # huginn-ebpf-programs is intentionally outside the workspace (nightly + bpfel-unknown-none).
         # Its rust-toolchain.toml pins nightly automatically; bpf-linker is already installed by setup-ebpf-build.
         run: |
-          cd huginn-ebpf-xdp
+          cd huginn-ebpf-programs
           cargo clippy -- \
             -D warnings \
             -D clippy::expect_used \
@@ -159,12 +159,12 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-
-      - name: Setup eBPF build dependencies
-        uses: ./.github/actions/setup-ebpf-build
       - name: Install Rust ${{ env.rust_stable }}
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: ${{ env.rust_stable }}
+      - name: Setup eBPF build dependencies
+        uses: ./.github/actions/setup-ebpf-build
       - name: Build documentation
         env:
           RUSTDOCFLAGS: -D warnings
@@ -195,12 +195,12 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-
-      - name: Setup eBPF build dependencies
-        uses: ./.github/actions/setup-ebpf-build
       - name: Install Rust ${{ env.rust_stable }}
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: ${{ env.rust_stable }}
+      - name: Setup eBPF build dependencies
+        uses: ./.github/actions/setup-ebpf-build
       - name: Test ${{ matrix.crate }}
         run: cargo test -p ${{ matrix.crate }} --all-features
       - name: Check ${{ matrix.crate }}
@@ -222,12 +222,12 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-
-      - name: Setup eBPF build dependencies
-        uses: ./.github/actions/setup-ebpf-build
       - name: Install Rust ${{ env.rust_min }}
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: ${{ env.rust_min }}
+      - name: Setup eBPF build dependencies
+        uses: ./.github/actions/setup-ebpf-build
       - name: Check MSRV
         run: cargo check --workspace --all-features
 
@@ -248,12 +248,12 @@ jobs:
           key: ${{ runner.os }}-cargo-beta-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-beta-
-      - name: Setup eBPF build dependencies
-        uses: ./.github/actions/setup-ebpf-build
       - name: Install Rust beta
         uses: dtolnay/rust-toolchain@beta
         with:
           toolchain: beta
+      - name: Setup eBPF build dependencies
+        uses: ./.github/actions/setup-ebpf-build
       - name: Test Beta
         run: cargo test --workspace --all-features --exclude tests-e2e --exclude tests-browsers
 
