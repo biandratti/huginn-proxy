@@ -11,67 +11,74 @@ follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
-**Automatic TLS certificates via ACME (TLS-ALPN-01)** — optional `acme` build feature
+**Automatic TLS via ACME (TLS-ALPN-01)** (optional `acme` build feature)
 
-A new `[acme]` block enables in-process certificate issuance and renewal through ACME
-(e.g. Let's Encrypt), using the **TLS-ALPN-01** challenge on `:443`. ACME runs in an isolated
-`huginn-acme` crate and is wired into the proxy only when built with `--features acme`.
+A new `[acme]` block issues and renews certificates in-process via ACME (e.g. Let's Encrypt),
+using the TLS-ALPN-01 challenge on `:443`. ACME lives in an isolated `huginn-acme` crate and is
+wired in only when built with `--features acme`.
 
 ```toml
 [acme]
-contacts = ["ops@example.com"]
+contacts = ["ops@example.com"]                     # one or more account contacts
 cache_dir = "/var/lib/huginn-proxy/acme"
-# staging = true            # use the staging directory while testing
-# directory_url = "https://acme-v02.api.letsencrypt.org/directory"
+# staging = true                                   # staging directory while testing
+# directory_url = "https://acme.example.com/dir"   # private/test CA (e.g. Pebble)
+# directory_ca_path = "/config/acme/ca.pem"        # trust a private CA (default: OS trust store)
 
 [[domains]]
 host = "api.example.com"
-cert = { type = "acme" }     # or omit `cert` entirely → ACME-by-default
+cert = { type = "acme" }     # omit `cert` entirely for ACME-by-default
 ```
 
-Notes / limitations: exact hosts only (no wildcards — use `cert = { type = "file" }` +
-cert-manager), single-replica (the on-disk cache is not shared across replicas), incompatible
-with global mTLS (`[tls.client_auth]`), and **no EAB** (External Account Binding — CAs that
-require it, e.g. ZeroSSL/Google Public CA, must be used via a file cert). A new
-`huginn_acme_domains` gauge reports the number of ACME-managed domains.
+- Directory TLS is validated against the **OS trust store** by default, so container images must
+  ship a CA bundle (`ca-certificates`); `directory_ca_path` overrides it to trust a private or
+  test ACME server such as [Pebble](https://github.com/letsencrypt/pebble).
+- Cache files (account key and certs) are written `0600` inside `0700` directories, and write
+  access is verified at startup (fail-fast) before any issuance begins.
+- Readiness (`/ready`) waits for the first deployed certificate; renewal and error events are
+  exported through `huginn_acme_*` metrics (see `TELEMETRY.md`), alongside a `huginn_acme_domains`
+  gauge for the number of managed domains.
+- Limitations: exact hosts only (no wildcards, use `cert = { type = "file" }` + cert-manager),
+  single-replica cache, incompatible with global mTLS (`[tls.client_auth]`), and no EAB (CAs that
+  require External Account Binding, e.g. ZeroSSL/Google Public CA, must use a file cert).
+- The published `plain` and `ebpf` images now build with `acme` (inert until `[acme]` is set);
+  `examples/docker-compose.acme.yml` is a self-contained demo that issues a real cert from Pebble.
 
-**Private/test ACME servers** — new optional `[acme].directory_ca_path`
+**PROXY protocol support** (new `listen.proxy_protocol`: `off` / `optional` / `require`)
 
-Trusts a custom PEM CA for the ACME **directory** connection instead of the platform/OS trust
-store, so the proxy can talk to a private or test ACME server (e.g.
-[Pebble](https://github.com/letsencrypt/pebble)) served with a self-signed CA. The published
-`plain` and `ebpf` images are now built with the `acme` feature (ACME stays inert until an
-`[acme]` block is configured), and `examples/docker-compose.acme.yml` is a fully self-contained
-local demo that issues a real cert from Pebble via TLS-ALPN-01.
+Recovers the real client IP/port from a PROXY v1 (text) or v2 (binary) header prepended by a
+trusted L4 load balancer, honored only from peers in `security.trusted_proxies`. Affects eBPF SYN
+lookup, `X-Forwarded-For`, rate limiting, and IP filtering. See `SETTINGS.md`.
+
+**eBPF capture backend selection** (new `HUGINN_EBPF_CAPTURE` agent env var)
+
+Values: `xdp-native` (default), `xdp-skb`, `tc`. XDP and TC programs ship in the same BPF object
+with identical maps; no proxy config change required. See `EBPF-SETUP.md`.
 
 ### Breaking changes
 
-**Domain certificate: `cert_path` / `key_path` / `acme` → a single `cert` field**
+**Domain certificate: three flat fields replaced by a single tagged `cert` field**
 
 Each `[[domains]]` entry now declares its certificate source through one tagged `cert` table
-instead of three flat fields. This makes invalid combinations (ACME together with file paths)
-unrepresentable.
+instead of the flat `cert_path` / `key_path` / `acme` fields, making invalid combinations (ACME
+together with file paths) unrepresentable.
 
 ```toml
-# Before (0.0.2-beta.0)
-[[domains]]
-host = "api.example.com"
+# Before
 cert_path = "/config/certs/api.crt"
 key_path  = "/config/certs/api.key"
 
-# After (0.0.2-beta.1)
-[[domains]]
-host = "api.example.com"
+# After
 cert = { type = "file", cert_path = "/config/certs/api.crt", key_path = "/config/certs/api.key" }
 ```
 
-Omitting `cert` means: plain HTTP (no `[tls]`), the default/catch-all certificate, or — when an
-`[acme]` block is present — ACME-managed by default.
+Omitting `cert` means plain HTTP (no `[tls]`), the default/catch-all certificate, or (when an
+`[acme]` block is present) ACME-managed by default.
 
-**`[tls.client_auth]`: enum → optional struct**
+**`[tls.client_auth]`: enum replaced by an optional struct**
 
-mTLS is now modeled as an optional block: present ⇒ required, omitted ⇒ disabled. The
-`disabled` / `required = { … }` wrapper forms are gone.
+mTLS is now an optional block: present means required, omitted means disabled. The `disabled` and
+`required = { ... }` wrapper forms are gone.
 
 ```toml
 # Before
@@ -83,19 +90,6 @@ required = { ca_cert_path = "/config/certs/ca.crt" }
 ca_cert_path = "/config/certs/ca.crt"
 # (omit the whole block to disable mTLS)
 ```
-
-**PROXY protocol support (`listen.proxy_protocol`)**
-
-New static option `listen.proxy_protocol` (`off` / `optional` / `require`). Recovers the real
-client IP/port from a PROXY v1 (text) or v2 (binary) header prepended by a trusted L4 load
-balancer. Honored only from peers listed in `security.trusted_proxies`. Affects eBPF SYN lookup,
-`X-Forwarded-For`, rate limiting, and IP filtering. See `SETTINGS.md`.
-
-**eBPF capture backend selection (`HUGINN_EBPF_CAPTURE`)**
-
-New agent env var. Values: `xdp-native` (default), `xdp-skb`, `tc`. Both XDP and TC programs
-ship in the same BPF object and share identical maps; no proxy config change required.
-See `EBPF-SETUP.md`.
 
 ---
 
