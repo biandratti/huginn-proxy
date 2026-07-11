@@ -13,7 +13,7 @@
 [![GitHub Release](https://img.shields.io/github/v/release/biandratti/huginn-proxy)](https://github.com/biandratti/huginn-proxy/releases)
 [![GHCR packages](https://img.shields.io/badge/GHCR-container%20images-blue?logo=docker)](https://github.com/biandratti?tab=packages&repo_name=huginn-proxy)
 
-**`ghcr.io/biandratti/`** — `huginn-proxy`, `huginn-proxy-plain`,
+**`ghcr.io/biandratti/`** - `huginn-proxy`, `huginn-proxy-plain`,
 `huginn-proxy-ebpf-agent` ([images & layout](#architecture))
 
 **High-performance reverse proxy with passive fingerprinting capabilities powered by Huginn Net.**
@@ -136,7 +136,7 @@ These headers always override any client-provided values to prevent spoofing.
 
 ## Performance
 
-Benchmarked under realistic conditions — TLS termination, JA4 + Akamai + TCP SYN fingerprinting all enabled —
+Benchmarked under realistic conditions - TLS termination, JA4 + Akamai + TCP SYN fingerprinting all enabled -
 huginn-proxy sustains **~25k req/s** (HTTP/1.1) and **~11k req/s** (HTTP/2) at c=512 on a **single instance**,
 with fingerprinting overhead of **~10–17 µs** per request. Most proxy benchmarks you'll find online run plain
 HTTP without TLS or fingerprinting; this is measured with the full production feature set active.

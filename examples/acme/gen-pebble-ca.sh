@@ -7,7 +7,7 @@
 #   pebble-cert.pem    Leaf cert for Pebble's own HTTPS interface (SAN: pebble, localhost, 127.0.0.1).
 #   pebble-key.pem     Private key for the leaf above. Mounted into the Pebble container.
 #
-# These are throwaway TEST credentials for local development only — never use them in production.
+# These are throwaway TEST credentials for local development only - never use them in production.
 # The CA key is intentionally not kept; rerun this script to mint a fresh PKI.
 set -euo pipefail
 

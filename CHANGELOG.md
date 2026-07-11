@@ -167,28 +167,28 @@ trusted_proxies = ["10.0.0.0/8"]   # removed from rate_limit block
 
 ### Added
 
-- **Domain-based routing** (`[[domains]]`) — groups TLS certificate, headers, security
+- **Domain-based routing** (`[[domains]]`) - groups TLS certificate, headers, security
   policy, and routes under one hostname (exact or `*.wildcard`). Host matching is
   authority-first (`:authority` / `Host` header), not SNI. Catch-all domain (no `host`)
   mirrors a Traefik router with no `Host()` rule.
-- **`sni_strict`** option in `[tls.options]` — rejects connections with no SNI or
+- **`sni_strict`** option in `[tls.options]` - rejects connections with no SNI or
   unmatched SNI (parity with Traefik's `sniStrict: true`).
 - **Automatic 421 Misdirected Request** for coalesced HTTP/2 connections where the
   request host is served by a different certificate than the SNI-selected one.
-- **`[security].trusted_proxies`** — global CIDR list for real-client-IP resolution
+- **`[security].trusted_proxies`** - global CIDR list for real-client-IP resolution
   from `X-Forwarded-For`; consumed by rate limiting (`limit_by = "ip" | "combined"`).
-- **Per-domain security overrides** — `[domains.security]` and
+- **Per-domain security overrides** - `[domains.security]` and
   `[domains.routes.security]` accept `ip_filter`, `rate_limit`, and `security.headers`
   as **whole-block replacements** (not field-level merges).
-- **`fingerprinting` on `[[domains]]`** — domain-level gate that combines with the
+- **`fingerprinting` on `[[domains]]`** - domain-level gate that combines with the
   per-route toggle: `route.or(domain).unwrap_or(true)`.
-- **Readiness probe decoupled from backends** — `/ready` now returns 200 once the proxy
+- **Readiness probe decoupled from backends** - `/ready` now returns 200 once the proxy
   listeners are accepting connections, independent of backend availability (backends down
   → 502 + metrics, not a readiness failure). Matches Traefik/Envoy semantics.
-- **`min_version` / `max_version`** keys in `[tls.options]` — parsed and validated
+- **`min_version` / `max_version`** keys in `[tls.options]` - parsed and validated
   (currently not enforced by the TLS stack; see note in SETTINGS.md).
 - **Multi-DNS / multiple listen addresses** support.
-- **Graceful shutdown** — readiness fails first on SIGTERM so orchestrators drain traffic
+- **Graceful shutdown** - readiness fails first on SIGTERM so orchestrators drain traffic
   before the process stops accepting connections.
 
 ### Changed
@@ -196,7 +196,7 @@ trusted_proxies = ["10.0.0.0/8"]   # removed from rate_limit block
 - `preserve_host` documented as **Dynamic** (hot-reloadable).
 - `http_version` default clarified: `preserve` for HTTPS clients, `http11` for plain
   HTTP (was documented as `null (preserve)`).
-- `health_check = {}` (empty table) enables a **TCP probe** with default thresholds —
+- `health_check = {}` (empty table) enables a **TCP probe** with default thresholds -
   it does *not* mean "off". Omit the key entirely to leave the backend unprobed.
 - Omitting all backends is now explicitly valid: requests return **421** (no domain
   match), **404** (domain matched, no route), or **502** (route matched, no healthy

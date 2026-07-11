@@ -1,4 +1,4 @@
-# Local ACME demo — fully self-contained, no public DNS or internet required.
+# Local ACME demo - fully self-contained, no public DNS or internet required.
 #
 # huginn-proxy obtains a REAL certificate from a local Pebble ACME server (Let's Encrypt's
 # test server) via the TLS-ALPN-01 challenge, then serves traffic with it.
@@ -17,7 +17,7 @@ services:
       context: ..
       dockerfile: docker/proxy.Dockerfile
       # The published `plain` (and `ebpf`) images are built with the `acme` feature, so this is
-      # the same artifact you'd run in production — just pointed at a local Pebble directory.
+      # the same artifact you'd run in production - just pointed at a local Pebble directory.
       target: plain
     # Drop the image's default positional config arg so HUGINN_CONFIG_PATH is used.
     command: ["/usr/local/bin/huginn-proxy"]
@@ -47,7 +47,7 @@ services:
       retries: 12
       start_period: 10s
     depends_on:
-      # Pebble's distroless image has no shell/nc/curl, so it can't expose a healthcheck — we can
+      # Pebble's distroless image has no shell/nc/curl, so it can't expose a healthcheck - we can
       # only order on `service_started`, not readiness. If the proxy's first ACME order beats
       # Pebble's directory coming up, rustls-acme just logs a benign ConnectionRefused and retries.
       - pebble

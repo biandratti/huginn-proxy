@@ -100,7 +100,7 @@ fn default_curve_preferences() -> Vec<String> {
 ///
 /// Modeled as an `Option` on [`TlsConfig::client_auth`]: **present** ⇒ clients must present a
 /// certificate signed by `ca_cert_path`'s CA; **absent** (the default) ⇒ no client
-/// authentication. There is no explicit "disabled" value — omit the block to turn mTLS off.
+/// authentication. There is no explicit "disabled" value - omit the block to turn mTLS off.
 #[derive(Debug, Deserialize, Clone, PartialEq, Eq)]
 pub struct ClientAuth {
     /// Path to client CA certificate file (PEM format).

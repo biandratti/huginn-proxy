@@ -3,7 +3,7 @@
 //
 //   k6 run --insecure-skip-tls-verify benches/load/k6/fingerprints.js
 //
-// Fingerprint checks (all ON by default — pass via --env):
+// Fingerprint checks (all ON by default - pass via --env):
 //   --env NO_CHECK_JA4=true      skip JA4 TLS fingerprint checks
 //   --env NO_CHECK_AKAMAI=true   skip Akamai HTTP/2 check (auto-skipped with K6_NO_HTTP2=true)
 //   --env NO_CHECK_TCP_SYN=true  skip TCP SYN check (use without eBPF agent)
@@ -33,7 +33,7 @@ const rampStages = [
     {duration: "30s", target: 10}, // warm-up
     {duration: "1m", target: 50}, // moderate load
     {duration: "1m", target: 150}, // high load
-    {duration: "1m", target: 300}, // stress — find the ceiling
+    {duration: "1m", target: 300}, // stress - find the ceiling
     {duration: "30s", target: 0}, // cool-down
 ];
 

@@ -21,15 +21,7 @@ runs:
 
     - name: Generate TLS certificates
       shell: bash
-      run: |
-        mkdir -p ${{ inputs.compose-dir }}/certs
-        openssl req -x509 -newkey rsa:2048 -nodes \
-          -keyout ${{ inputs.compose-dir }}/certs/server.key \
-          -out ${{ inputs.compose-dir }}/certs/server.crt \
-          -days 365 \
-          -subj "/CN=localhost"
-        chmod 644 ${{ inputs.compose-dir }}/certs/server.key
-        chmod 644 ${{ inputs.compose-dir }}/certs/server.crt
+      run: bash examples/gen-certs.sh
 
     - name: Start Docker Compose services
       shell: bash

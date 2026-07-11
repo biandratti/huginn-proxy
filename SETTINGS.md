@@ -18,7 +18,7 @@ huginn-proxy --validate config.yaml
 ```
 
 **Hot reload:** dynamic sections update on SIGHUP or file-watcher trigger without dropping connections. Static sections
-require a process restart — changes are logged as a warning and ignored. See [DEPLOYMENT.md](DEPLOYMENT.md) for the full
+require a process restart - changes are logged as a warning and ignored. See [DEPLOYMENT.md](DEPLOYMENT.md) for the full
 static/dynamic split.
 
 ---
@@ -63,11 +63,11 @@ preserve_host: false
 
 ## `[listen]`
 
-Network interfaces and socket options. **Static** — requires restart to change.
+Network interfaces and socket options. **Static** - requires restart to change.
 
 | Key              | Type             | Default | Description                                                                            |
 |------------------|------------------|---------|----------------------------------------------------------------------------------------|
-| `addrs`          | array of strings | —       | One or more `host:port` addresses to bind. IPv6 addresses must be wrapped in brackets. |
+| `addrs`          | array of strings | -       | One or more `host:port` addresses to bind. IPv6 addresses must be wrapped in brackets. |
 | `tcp_backlog`    | integer          | `4096`  | Kernel `listen(2)` backlog per socket. Increase under heavy connection bursts.         |
 | `proxy_protocol` | string           | `off`   | PROXY protocol handling (v1 and v2): `off`, `optional`, or `require`. See note below.  |
 
@@ -77,17 +77,17 @@ Network interfaces and socket options. **Static** — requires restart to change
 > The recovered address is used for `X-Forwarded-For`/`X-Forwarded-Port`
 > (`X-Forwarded-Port` is the client **source** port), rate limiting, IP filtering, and logs.
 >
-> - `off` — never read a PROXY header; the peer is always the non-forgeable TCP socket peer.
-> - `optional` — auto-detect: if a **trusted** peer sends a header, use it; otherwise serve the
+> - `off` - never read a PROXY header; the peer is always the non-forgeable TCP socket peer.
+> - `optional` - auto-detect: if a **trusted** peer sends a header, use it; otherwise serve the
 >   connection as a direct client. One config works whether or not huginn is behind a proxy.
-> - `require` — a **trusted** peer MUST send a valid header, else the connection is dropped.
+> - `require` - a **trusted** peer MUST send a valid header, else the connection is dropped.
 >
 > A header is honored **only** from peers listed in [`security.trusted_proxies`](#security)
 > (anti-spoofing). With an empty `trusted_proxies`, `optional` degrades to `off` (no peer is trusted)
 > and `require` drops every connection (fail-closed). Both the **binary (v2)** and **text (v1)**
-> encodings are supported and auto-detected — v2 is what modern proxies emit (Traefik, Envoy, AWS
+> encodings are supported and auto-detected - v2 is what modern proxies emit (Traefik, Envoy, AWS
 > NLB), v1 is the legacy HAProxy `send-proxy` line. A `LOCAL` (v2) or `UNKNOWN` (v1) header, and any
-> non-IP address family (AF_UNIX/AF_UNSPEC), fall back to the TCP socket peer. This is **static** —
+> non-IP address family (AF_UNIX/AF_UNSPEC), fall back to the TCP socket peer. This is **static** -
 > changing it requires a restart.
 
 <table>
@@ -129,13 +129,13 @@ listen:
 
 ## `[[backends]]`
 
-Backend servers for forwarding. Repeat the header for each backend. **Optional** — omitting all backends is valid; requests then return **421** (host matches no domain), **404** (domain matched but no route prefix matches), or **502** (a matching route references a backend with no healthy candidate). **Dynamic** (hot-reloadable).
+Backend servers for forwarding. Repeat the header for each backend. **Optional** - omitting all backends is valid; requests then return **421** (host matches no domain), **404** (domain matched but no route prefix matches), or **502** (a matching route references a backend with no healthy candidate). **Dynamic** (hot-reloadable).
 
 | Key            | Type   | Default           | Description                                                                                                                        |
 |----------------|--------|-------------------|------------------------------------------------------------------------------------------------------------------------------------|
-| `address`      | string | —                 | `host:port` of the backend. Used as the pool key — must match exactly what routes reference.                                       |
+| `address`      | string | -                 | `host:port` of the backend. Used as the pool key - must match exactly what routes reference.                                       |
 | `http_version` | string | `null`            | Protocol to use when connecting to this backend. `"http11"`, `"http2"`, or `"preserve"` (negotiate based on what the client used). When unset, the effective default is `preserve` for HTTPS clients and `http11` for plain-HTTP clients. |
-| `health_check` | table  | `null` (off)     | Optional active health probe. When set, the proxy tracks per-upstream health and returns **502** to clients when the backend is marked unhealthy. Omit the key entirely to leave the backend unprobed (always treated as healthy). Note: an **empty table** (`health_check = {}`) does *not* mean "off" — it enables a TCP probe with default thresholds. See [`[backends.health_check]`](#backendshealth_check) below. |
+| `health_check` | table  | `null` (off)     | Optional active health probe. When set, the proxy tracks per-upstream health and returns **502** to clients when the backend is marked unhealthy. Omit the key entirely to leave the backend unprobed (always treated as healthy). Note: an **empty table** (`health_check = {}`) does *not* mean "off" - it enables a TCP probe with default thresholds. See [`[backends.health_check]`](#backendshealth_check) below. |
 
 <table>
 <thead>
@@ -181,7 +181,7 @@ Optional. **Dynamic** (hot-reloadable). If absent, the backend is always treated
 | Key                    | Type   | Default  | Description |
 |------------------------|--------|----------|-------------|
 | `type`                 | string | `tcp`    | `tcp` (TCP 3-way handshake to `address`) or `http` (HTTP/1.1 `GET` to `http://{address}{path}`; plain HTTP only, no TLS to upstream). |
-| `path`                 | string | —        | Required when `type = "http"`: must start with `/` (e.g. `/` or `/ready`). Ignored for `tcp`. |
+| `path`                 | string | -        | Required when `type = "http"`: must start with `/` (e.g. `/` or `/ready`). Ignored for `tcp`. |
 | `expected_status`      | int    | `200`    | For `http` only: response status must match (e.g. `200`, `204`). |
 | `interval_secs`        | int    | `10`     | Time between probes. |
 | `timeout_secs`         | int    | `5`      | Per-probe budget (must be ≤ `interval_secs`). Encompasses connect, request, and body drain for `http`. |
@@ -230,21 +230,21 @@ backends:
 ## `[[domains]]`
 
 Domain entries group a TLS certificate with its path-based routes. Each entry handles one
-hostname (or wildcard), or acts as a catch-all. **Dynamic** (hot-reloadable). **Optional** —
+hostname (or wildcard), or acts as a catch-all. **Dynamic** (hot-reloadable). **Optional** -
 omitting all domains is valid; the proxy binds but returns **421 (Misdirected Request)** for all
 requests, since no host can match.
 
-The request host is resolved from the HTTP-layer authority for **all** protocol versions —
-`:authority` (HTTP/2) or absolute-form target → `Host` header (RFC 7230 §5.4) — exactly like
+The request host is resolved from the HTTP-layer authority for **all** protocol versions -
+`:authority` (HTTP/2) or absolute-form target → `Host` header (RFC 7230 §5.4) - exactly like
 nginx/Traefik. TLS SNI is **not** used for routing; it only selects the certificate at the TLS
 layer (and drives `sni_strict`). This keeps routing correct for coalesced HTTP/2 connections,
 where one TLS session is reused across origins under the same certificate and each request
 carries its own `:authority`.
 
 Host matching order, against that resolved host:
-1. Exact match — `"api.example.com"`
-2. Wildcard match — `"*.example.com"` (one level only; does not match `a.b.example.com`)
-3. **Catch-all** — the entry with no `host` key, if present. Matches any host, including IP
+1. Exact match - `"api.example.com"`
+2. Wildcard match - `"*.example.com"` (one level only; does not match `a.b.example.com`)
+3. **Catch-all** - the entry with no `host` key, if present. Matches any host, including IP
    literals (`127.0.0.1`, `::1`) and `localhost`. Mirrors a Traefik router with no `Host()`
    rule.
 4. No match → HTTP 421 (Misdirected Request).
@@ -258,11 +258,11 @@ client-supplied `X-Forwarded-Host`), so it always agrees with the backend the re
 
 Because routing follows the request authority rather than SNI, a reused (coalesced) HTTP/2
 connection can in principle carry a request for a host served by a *different* certificate.
-Huginn rejects that with **`421 Misdirected Request`**, always — the same default protection
+Huginn rejects that with **`421 Misdirected Request`**, always - the same default protection
 nginx and Apache `mod_http2` apply (RFC 9110 §15.5.20 / RFC 7540 §9.1.2). The check is on a
 TLS connection that presented an SNI: if the request's resolved host is not covered by the
 **same certificate** the SNI selected, it gets 421. It compares certificate coverage, **not**
-literal `authority == SNI`, so legitimate coalescing keeps working — a shared wildcard entry
+literal `authority == SNI`, so legitimate coalescing keeps working - a shared wildcard entry
 (`api`/`docs.example.com` under `*.example.com`) or distinct `[[domains]]` pointing at the same
 SAN cert file both resolve to the same certificate and are allowed. It is not configurable: it
 only fires on genuinely cross-certificate requests, so there is no legitimate traffic to exempt.
@@ -289,9 +289,9 @@ enforce).
 | Key         | Type   | Default | Description                                                                                      |
 |-------------|--------|---------|--------------------------------------------------------------------------------------------------|
 | `host`      | string | `null`  | Domain pattern for host matching: exact (`api.example.com`) or single-level wildcard (`*.example.com`). **Omit for a catch-all** that matches any host; under `[tls]` its cert is the TLS default certificate. |
-| `cert`      | table  | `null`  | Certificate source for this domain. `{ type = "file", cert_path = "…", key_path = "…" }` for a static PEM cert, or `{ type = "acme" }` for an ACME-managed cert (requires the global `[acme]` block — TLS-ALPN-01, exact hosts only). **Under `[tls]`, every domain must declare `cert`** (or resolve to ACME-by-default when `[acme]` is configured) — there is **no implicit default-cert fallback** for a declared domain; a TLS domain without `cert` is a configuration error. **Omit only** for plain-HTTP-only domains (no `[tls]`). |
-| `headers`   | table  | —       | Domain-level header manipulation. Merged between global and route-level headers.                 |
-| `security`  | table  | —       | Per-domain security overrides (`ip_filter`, `rate_limit`, `headers`). See [`[domains.security]`](#domainssecurity) below. |
+| `cert`      | table  | `null`  | Certificate source for this domain. `{ type = "file", cert_path = "…", key_path = "…" }` for a static PEM cert, or `{ type = "acme" }` for an ACME-managed cert (requires the global `[acme]` block - TLS-ALPN-01, exact hosts only). **Under `[tls]`, every domain must declare `cert`** (or resolve to ACME-by-default when `[acme]` is configured) - there is **no implicit default-cert fallback** for a declared domain; a TLS domain without `cert` is a configuration error. **Omit only** for plain-HTTP-only domains (no `[tls]`). |
+| `headers`   | table  | -       | Domain-level header manipulation. Merged between global and route-level headers.                 |
+| `security`  | table  | -       | Per-domain security overrides (`ip_filter`, `rate_limit`, `headers`). See [`[domains.security]`](#domainssecurity) below. |
 | `fingerprinting` | bool | `null` (inherit) | Domain-level fingerprint-header **injection** gate. Resolved per route as `route.or(domain).unwrap_or(true)`. Controls header injection only; capture is the static global `[fingerprint]`. |
 | `routes`    | array  | `[]`    | Path-based routing rules scoped to this domain. Same fields as the former `[[routes]]` entries.  |
 
@@ -361,7 +361,7 @@ domains:
 </tbody>
 </table>
 
-**Catch-all example** — one host-less entry serves any host (handy for local/IP access or a
+**Catch-all example** - one host-less entry serves any host (handy for local/IP access or a
 default site). Its cert becomes the TLS default certificate:
 
 ```yaml
@@ -383,12 +383,12 @@ Where each policy can be set (**global** `[security]`/`[headers]` → **domain**
 
 | Policy | Global | Domain | Route | How it overrides |
 |---|:---:|:---:|:---:|---|
-| `ip_filter` (ACL) | ✅ | ✅ | ✅ | **Whole-block replace** — most specific scope wins entirely. Route filter checked after route match. |
-| `rate_limit` (incl. `limit_by`) | ✅ | ✅ | ✅ | **Whole-block replace** — most specific scope wins entirely. |
-| `security.headers` (HSTS/CSP/custom) | ✅ | ✅ | ✅ | **Whole-block replace** — most specific scope wins entirely. |
-| `[headers]` (add/remove request/response) | ✅ | ✅ | ✅ | **Additive cascade** — all scopes accumulate; per header name the most specific wins. |
-| `fingerprinting` (header injection) | — | ✅ | ✅ | `route.or(domain).unwrap_or(true)`. Capture itself is the static global `[fingerprint]`. |
-| `trusted_proxies` (client-IP from XFF) | ✅ | ❌ | ❌ | Global only — network-topology property, not overridable per scope. |
+| `ip_filter` (ACL) | ✅ | ✅ | ✅ | **Whole-block replace** - most specific scope wins entirely. Route filter checked after route match. |
+| `rate_limit` (incl. `limit_by`) | ✅ | ✅ | ✅ | **Whole-block replace** - most specific scope wins entirely. |
+| `security.headers` (HSTS/CSP/custom) | ✅ | ✅ | ✅ | **Whole-block replace** - most specific scope wins entirely. |
+| `[headers]` (add/remove request/response) | ✅ | ✅ | ✅ | **Additive cascade** - all scopes accumulate; per header name the most specific wins. |
+| `fingerprinting` (header injection) | - | ✅ | ✅ | `route.or(domain).unwrap_or(true)`. Capture itself is the static global `[fingerprint]`. |
+| `trusted_proxies` (client-IP from XFF) | ✅ | ❌ | ❌ | Global only - network-topology property, not overridable per scope. |
 | `max_connections` | ✅ | ❌ | ❌ | Process-level (static); global only. |
 
 **Whole-block replace** means the block is taken as a unit: a partial override drops the parent's
@@ -405,21 +405,21 @@ order does not matter within a domain.
 
 | Key                    | Type   | Default | Description                                                                                                                                                                                    |
 |------------------------|--------|---------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `prefix`               | string | —       | URL path prefix to match. Use `"/"` as a catch-all.                                                                                                                                            |
-| `backend`              | string | —       | Backend address to forward to. Must match a `[[backends]].address` exactly.                                                                                                                    |
+| `prefix`               | string | -       | URL path prefix to match. Use `"/"` as a catch-all.                                                                                                                                            |
+| `backend`              | string | -       | Backend address to forward to. Must match a `[[backends]].address` exactly.                                                                                                                    |
 | `fingerprinting`       | bool   | inherit | Inject TLS/HTTP fingerprint headers (`x-tls-ja4*`, `x-http2-akamai`, `x-tcp-p0f`) for this route. Unset inherits the domain's `fingerprinting`, then the built-in default `true`.            |
-| `force_new_connection` | bool   | `false` | Bypass the connection pool — opens a fresh TCP+TLS connection per request.                                                                                                                     |
+| `force_new_connection` | bool   | `false` | Bypass the connection pool - opens a fresh TCP+TLS connection per request.                                                                                                                     |
 | `replace_path`         | string | `null`  | Path prefix replacement. Empty string (`""`) strips the prefix. Absent = forward as-is.                                                                                                       |
-| `security`             | table  | —       | Per-route security overrides (`ip_filter`, `rate_limit`, `headers`). Each present sub-block **fully replaces** the domain-effective policy for this route. See [`[domains.routes.security]`](#domainsroutessecurity) below. |
-| `headers`              | table  | —       | Per-route header manipulation (add/remove). Applied after global and domain-level headers (additive cascade — see [Header manipulation vs. security headers](#header-manipulation-vs-security-headers)). |
+| `security`             | table  | -       | Per-route security overrides (`ip_filter`, `rate_limit`, `headers`). Each present sub-block **fully replaces** the domain-effective policy for this route. See [`[domains.routes.security]`](#domainsroutessecurity) below. |
+| `headers`              | table  | -       | Per-route header manipulation (add/remove). Applied after global and domain-level headers (additive cascade - see [Header manipulation vs. security headers](#header-manipulation-vs-security-headers)). |
 
 ### `[domains.routes.security]`
 
 Per-route security policy. Mirrors [`[domains.security]`](#domainssecurity) one level deeper:
 each sub-block (`ip_filter`, `rate_limit`, `headers`), **when present, fully replaces** the
-domain-effective policy for this route (whole-block replace — **not** a field-level merge). A
+domain-effective policy for this route (whole-block replace - **not** a field-level merge). A
 sub-block you omit inherits the domain-effective (or global) policy. Security policy lives under
-`security` at every scope — global (`[security]`), domain (`[domains.security]`), and route — so
+`security` at every scope - global (`[security]`), domain (`[domains.security]`), and route - so
 the path is consistent.
 
 > **Footgun:** because the block is replaced wholesale, a *partial* override silently drops the
@@ -431,23 +431,23 @@ the path is consistent.
 
 | Key          | Type  | Default | Description                                                                                                      |
 |--------------|-------|---------|------------------------------------------------------------------------------------------------------------------|
-| `ip_filter`  | table | —       | IP ACL for this route. Replaces the domain/global `ip_filter`. Same fields as [`[security.ip_filter]`](#securityip_filter). Checked after route match (router-level ACL). |
-| `rate_limit` | table | —       | Rate limit policy for this route. Replaces the domain/global `rate_limit`. Same fields as [`[security.rate_limit]`](#securityrate_limit). |
-| `headers`    | table | —       | Security headers for this route. Replaces the domain/global `security.headers`. Same fields as [`[security.headers]`](#securityheaders). |
+| `ip_filter`  | table | -       | IP ACL for this route. Replaces the domain/global `ip_filter`. Same fields as [`[security.ip_filter]`](#securityip_filter). Checked after route match (router-level ACL). |
+| `rate_limit` | table | -       | Rate limit policy for this route. Replaces the domain/global `rate_limit`. Same fields as [`[security.rate_limit]`](#securityrate_limit). |
+| `headers`    | table | -       | Security headers for this route. Replaces the domain/global `security.headers`. Same fields as [`[security.headers]`](#securityheaders). |
 
 ### `[domains.security]`
 
 Per-domain security policy. Each sub-block, **when present, fully replaces** the matching
-global `[security]` policy for this domain (whole-block replace — not a field-level merge), and
+global `[security]` policy for this domain (whole-block replace - not a field-level merge), and
 can also *disable* a globally-enabled policy (e.g. `ip_filter.mode = "disabled"` or
 `rate_limit.enabled = false`). A sub-block you omit inherits the global policy. `max_connections`
 is global only (process-level) and is not part of this block.
 
 | Key          | Type  | Default | Description                                                                                                   |
 |--------------|-------|---------|---------------------------------------------------------------------------------------------------------------|
-| `ip_filter`  | table | —       | IP ACL for this domain. Replaces global [`[security.ip_filter]`](#securityip_filter) when present.            |
-| `rate_limit` | table | —       | Rate limit policy for this domain. Replaces global [`[security.rate_limit]`](#securityrate_limit) when present. A per-route `[domains.routes.security.rate_limit]` then replaces this domain-effective policy for that route (whole-block, not a merge). |
-| `headers`    | table | —       | Security headers for this domain. Replaces global [`[security.headers]`](#securityheaders) when present.      |
+| `ip_filter`  | table | -       | IP ACL for this domain. Replaces global [`[security.ip_filter]`](#securityip_filter) when present.            |
+| `rate_limit` | table | -       | Rate limit policy for this domain. Replaces global [`[security.rate_limit]`](#securityrate_limit) when present. A per-route `[domains.routes.security.rate_limit]` then replaces this domain-effective policy for that route (whole-block, not a merge). |
+| `headers`    | table | -       | Security headers for this domain. Replaces global [`[security.headers]`](#securityheaders) when present.      |
 
 Precedence is **global → domain → route** for all three policies (`ip_filter`, `rate_limit`,
 `headers`): the most specific scope that sets a block wins **entirely** (whole-block replace, no
@@ -661,11 +661,11 @@ headers:
 
 ### Header manipulation vs. security headers
 
-There are two header mechanisms with **different override semantics** — this is intentional:
+There are two header mechanisms with **different override semantics** - this is intentional:
 
 - **`[headers]` (add/remove), the additive cascade.** Global → domain → route are applied in
   order and **accumulate**; for a given header name the most specific scope wins (last-writer).
-  Nothing is "replaced wholesale" — a route adding `X-API-Version` does not wipe a global
+  Nothing is "replaced wholesale" - a route adding `X-API-Version` does not wipe a global
   `X-Proxy` header. This mirrors **chaining `headers` middlewares in Traefik**, where each
   middleware in the chain runs in turn.
 - **`security.headers` (HSTS/CSP/custom), whole-block replace.** Like the other security policies
@@ -679,7 +679,7 @@ Rule of thumb: `[headers]` is for free-form request/response header plumbing (ca
 
 ## `[tls]`
 
-TLS termination options. Omit the entire section to run as plain HTTP. **Static** — requires
+TLS termination options. Omit the entire section to run as plain HTTP. **Static** - requires
 restart to change. Certificates are configured per domain under `[[domains]]` (see below).
 
 | Key    | Type             | Default | Description                                                                                                 |
@@ -721,21 +721,21 @@ tls:
 
 | Key                 | Type             | Default          | Description                                                |
 |---------------------|------------------|------------------|------------------------------------------------------------|
-| `versions`          | array of strings | `["1.2", "1.3"]` | Allowed TLS versions. Values: `"1.2"`, `"1.3"`. **Currently parsed and validated but not enforced** — see note below. |
-| `min_version`       | string           | `null`           | Minimum TLS version (`"1.2"` or `"1.3"`). Mutually exclusive with an explicit `versions` list. **Currently parsed and validated but not enforced** — see note below. |
-| `max_version`       | string           | `null`           | Maximum TLS version (`"1.2"` or `"1.3"`). Mutually exclusive with an explicit `versions` list. **Currently parsed and validated but not enforced** — see note below. |
+| `versions`          | array of strings | `["1.2", "1.3"]` | Allowed TLS versions. Values: `"1.2"`, `"1.3"`. **Currently parsed and validated but not enforced** - see note below. |
+| `min_version`       | string           | `null`           | Minimum TLS version (`"1.2"` or `"1.3"`). Mutually exclusive with an explicit `versions` list. **Currently parsed and validated but not enforced** - see note below. |
+| `max_version`       | string           | `null`           | Maximum TLS version (`"1.2"` or `"1.3"`). Mutually exclusive with an explicit `versions` list. **Currently parsed and validated but not enforced** - see note below. |
 | `cipher_suites`     | array of strings | all supported    | Named cipher suites. Restrict to tighten security posture. Applied to the TLS stack. |
-| `curve_preferences` | array of strings | all supported    | Named elliptic curves for key exchange. **Currently parsed and validated but not enforced** — see note below. |
+| `curve_preferences` | array of strings | all supported    | Named elliptic curves for key exchange. **Currently parsed and validated but not enforced** - see note below. |
 | `sni_strict`        | bool             | `false`          | When `true`, disable the default-cert fallback entirely (full parity with Traefik's `sniStrict`): reject (`unrecognized_name`) both a TLS connection whose SNI matches no domain cert **and** a connection that sends no SNI (IP-literal clients). When `false`, both fall back to the default cert. Production hardening against unknown-hostname / no-SNI access. |
 
 > **Note:** `cipher_suites` and `sni_strict` are applied to the TLS stack. `versions`, `min_version`,
-> `max_version`, and `curve_preferences` are currently validated at load but **not** applied — the
+> `max_version`, and `curve_preferences` are currently validated at load but **not** applied - the
 > acceptor is built with rustls' safe defaults (TLS 1.2 **and** 1.3, default curve preferences). Do
 > not rely on these four keys to restrict the negotiated TLS version or curves yet.
 
 > **Misdirected requests (HTTP 421)** are handled automatically and are not configurable. On a
 > coalesced HTTP/2 connection, any request whose host is served by a different certificate than
-> the connection's SNI selected is rejected with `421 Misdirected Request` — the same default
+> the connection's SNI selected is rejected with `421 Misdirected Request` - the same default
 > behaviour as nginx and Apache `mod_http2`. Hosts sharing one certificate (wildcard or SAN)
 > still coalesce. See the `[[domains]]` section above.
 
@@ -802,7 +802,7 @@ CA; **omit the block** to disable mTLS. **Static**.
 
 | Key            | Type   | Default | Description                                                              |
 |----------------|--------|---------|--------------------------------------------------------------------------|
-| `ca_cert_path` | string | —       | Path to the client CA certificate PEM file (one or more CA certs). Required when the block is present. |
+| `ca_cert_path` | string | -       | Path to the client CA certificate PEM file (one or more CA certs). Required when the block is present. |
 
 <table>
 <thead>
@@ -880,7 +880,7 @@ tls:
 ## `[acme]`
 
 Automatic TLS certificate issuance and renewal via ACME (e.g. Let's Encrypt), using the
-**TLS-ALPN-01** challenge on the existing HTTPS listener (port 443). **Static** — the ACME account
+**TLS-ALPN-01** challenge on the existing HTTPS listener (port 443). **Static** - the ACME account
 and the background issuance/renewal tasks are wired at startup, so changes require a restart.
 
 When this block is present, any domain that does **not** declare an explicit `cert = { type = "file" }`
@@ -889,8 +889,8 @@ certificates are persisted under `cache_dir`.
 
 | Key             | Type   | Default      | Description                                                                                                   |
 |-----------------|--------|--------------|---------------------------------------------------------------------------------------------------------------|
-| `contacts`      | array of string | — | Contact emails registered with the ACME account (each sent as a `mailto:` contact). At least one non-empty entry is required. |
-| `cache_dir`     | string | —            | Filesystem directory for the ACME cache (account key + issued certificates). Must be **writable and persistent across restarts** to avoid re-issuing on every boot. Required. |
+| `contacts`      | array of string | - | Contact emails registered with the ACME account (each sent as a `mailto:` contact). At least one non-empty entry is required. |
+| `cache_dir`     | string | -            | Filesystem directory for the ACME cache (account key + issued certificates). Must be **writable and persistent across restarts** to avoid re-issuing on every boot. Required. |
 | `staging`       | bool   | `false`      | Use the Let's Encrypt **staging** directory (higher rate limits, untrusted certs) instead of production. Ignored when `directory_url` is set. |
 | `directory_url` | string | `null`       | Override the ACME directory URL (a private CA, or Pebble for tests). Takes precedence over `staging`.          |
 | `directory_ca_path` | string | `null`   | PEM bundle to trust for the **directory** TLS connection instead of the platform/OS trust store. Needed only for private/test ACME servers (e.g. Pebble) served with a self-signed CA; leave unset for public CAs like Let's Encrypt (uses the system root store, so container images must ship a CA bundle such as `ca-certificates`). See `examples/docker-compose.acme.yml` for a local Pebble demo. |
@@ -942,7 +942,7 @@ certificates with an external issuer (cert-manager, Caddy, lego, …) and serve 
 - **Challenge type:** only **TLS-ALPN-01** (over the HTTPS listener) is supported. **HTTP-01**
   (port 80) and **DNS-01** are **not** implemented.
 - **Exact hosts only:** no **wildcards** (`*.example.com`) and no **catch-all** (host-less) ACME
-  domains — TLS-ALPN-01 cannot validate them (wildcards need DNS-01). A wildcard that resolves to
+  domains - TLS-ALPN-01 cannot validate them (wildcards need DNS-01). A wildcard that resolves to
   ACME is rejected at load.
 - **mTLS incompatible:** a global `[tls.client_auth]` (mTLS) together with an ACME-managed domain
   is rejected at load (the challenge connection presents no client certificate).
@@ -953,15 +953,15 @@ certificates with an external issuer (cert-manager, Caddy, lego, …) and serve 
   issuance rate limits (Let's Encrypt) apply **per replica**.
 - **No per-certificate tuning:** key type, renewal window, and similar knobs are not exposed; the
   underlying defaults apply.
-- **No EAB (External Account Binding):** ACME CAs that require EAB — **ZeroSSL**, **Google Public
-  CA**, **Sectigo**, etc. — are **not supported** (`rustls-acme` 0.15.3 does not send an
+- **No EAB (External Account Binding):** ACME CAs that require EAB - **ZeroSSL**, **Google Public
+  CA**, **Sectigo**, etc. - are **not supported** (`rustls-acme` 0.15.3 does not send an
   `externalAccountBinding`). Use such CAs through an external issuer + `cert = { type = "file" }`.
 
 ---
 
 ## `[fingerprint]`
 
-Feature flags for passive fingerprinting. **Static** — eBPF programs are loaded at startup.
+Feature flags for passive fingerprinting. **Static** - eBPF programs are loaded at startup.
 
 | Key            | Type    | Default | Description                                                                                                                                                |
 |----------------|---------|---------|------------------------------------------------------------------------------------------------------------------------------------------------------------|
@@ -1009,7 +1009,7 @@ fingerprint:
 
 ## `[logging]`
 
-**Static** — logger is initialized once at startup.
+**Static** - logger is initialized once at startup.
 
 | Key           | Type   | Default  | Description                                                                                                           |
 |---------------|--------|----------|-----------------------------------------------------------------------------------------------------------------------|
@@ -1051,7 +1051,7 @@ logging:
 
 ## `[telemetry]`
 
-Metrics server and OpenTelemetry settings. **Static** — the metrics listener binds at startup.
+Metrics server and OpenTelemetry settings. **Static** - the metrics listener binds at startup.
 
 | Key              | Type    | Default  | Description                                                                                                                       |
 |------------------|---------|----------|-----------------------------------------------------------------------------------------------------------------------------------|
@@ -1093,7 +1093,7 @@ telemetry:
 
 ## `[timeout]`
 
-Connection timeout controls. **Static** — applied once at startup; the connection pool and acceptor are built with these
+Connection timeout controls. **Static** - applied once at startup; the connection pool and acceptor are built with these
 values.
 
 | Key                        | Type    | Default             | Description                                                                                                                           |
@@ -1236,8 +1236,8 @@ backend_pool:
 
 | Key               | Type         | Default | Description                                                                         |
 |-------------------|--------------|---------|-------------------------------------------------------------------------------------|
-| `max_connections` | integer      | `512`   | Maximum concurrent client connections. **Static** — enforced at the acceptor level. |
-| `trusted_proxies` | string array | `[]`    | Trusted reverse-proxy CIDRs used to resolve the real client IP from `X-Forwarded-For`. **Global only** — a property of the network topology, *not* overridable per domain/route. When empty (default), the non-forgeable TCP peer IP is used. When set and the peer is a trusted proxy, XFF is walked right-to-left and the first IP **not** in this list is used. Consumed by rate limiting (`limit_by = "ip" \| "combined"`). **Dynamic** (hot-reloadable). Accepts CIDR notation. |
+| `max_connections` | integer      | `512`   | Maximum concurrent client connections. **Static** - enforced at the acceptor level. |
+| `trusted_proxies` | string array | `[]`    | Trusted reverse-proxy CIDRs used to resolve the real client IP from `X-Forwarded-For`. **Global only** - a property of the network topology, *not* overridable per domain/route. When empty (default), the non-forgeable TCP peer IP is used. When set and the peer is a trusted proxy, XFF is walked right-to-left and the first IP **not** in this list is used. Consumed by rate limiting (`limit_by = "ip" \| "combined"`). **Dynamic** (hot-reloadable). Accepts CIDR notation. |
 
 <table>
 <thead>

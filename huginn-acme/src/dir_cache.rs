@@ -70,7 +70,7 @@ enum FileKind {
 ///
 /// The built-in cache writes files with `std::fs::write`, which respects the
 /// process umask. On most Linux systems the default umask is `022`, producing
-/// world-readable `0644` files — including ACME account private keys and the
+/// world-readable `0644` files - including ACME account private keys and the
 /// certificate+key PEM bundle. This implementation uses `OpenOptions::mode(0o600)`
 /// for new files and `DirBuilder::mode(0o700)` for new directories, so key
 /// material is only readable by the process owner.

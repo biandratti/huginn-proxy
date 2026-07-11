@@ -1,4 +1,4 @@
-# Minimal ACME demo config — issues a real certificate from a local Pebble ACME server
+# Minimal ACME demo config - issues a real certificate from a local Pebble ACME server
 # via the TLS-ALPN-01 challenge. Run with examples/docker-compose.acme.yml.
 #
 # The proxy terminates TLS on :8443. Pebble's validation authority connects back to

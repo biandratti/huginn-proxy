@@ -11,9 +11,9 @@ Image tags and release binaries (GHCR, musl/glibc, eBPF): see [DEPLOYMENT-MATRIX
 
 ### Overview
 
-Use a published image from GHCR (see [DEPLOYMENT-MATRIX.md](DEPLOYMENT-MATRIX.md)). The **`huginn-proxy-plain`** image needs no extra Linux capabilities on the host; the default **`huginn-proxy`** image includes eBPF support for TCP SYN fingerprinting and may need `CAP_BPF` when that feature is enabled. Both images are built with the `acme` feature, so built-in ACME / Let's Encrypt TLS is available out of the box — it stays inert unless you configure an `[acme]` block (see [Automatic TLS (ACME)](#automatic-tls-acme--lets-encrypt) below).
+Use a published image from GHCR (see [DEPLOYMENT-MATRIX.md](DEPLOYMENT-MATRIX.md)). The **`huginn-proxy-plain`** image needs no extra Linux capabilities on the host; the default **`huginn-proxy`** image includes eBPF support for TCP SYN fingerprinting and may need `CAP_BPF` when that feature is enabled. Both images are built with the `acme` feature, so built-in ACME / Let's Encrypt TLS is available out of the box - it stays inert unless you configure an `[acme]` block (see [Automatic TLS (ACME)](#automatic-tls-acme--lets-encrypt) below).
 
-From the **repository root**, mount a real config **file** on the host. If the path does not exist, Docker creates an empty **directory** with that name and the proxy fails with `Is a directory (os error 21)` — remove any mistaken `config.toml` directory (`rm -rf ./config.toml`) and point at the file under `examples/config/`.
+From the **repository root**, mount a real config **file** on the host. If the path does not exist, Docker creates an empty **directory** with that name and the proxy fails with `Is a directory (os error 21)` - remove any mistaken `config.toml` directory (`rm -rf ./config.toml`) and point at the file under `examples/config/`.
 
 The checked-in example is `examples/config/compose.toml` (same one `examples/docker-compose.ebpf.yml` uses). Backends there are `backend-a` / `backend-b` (Docker Compose DNS names); for a working stack use Compose below, or change backends to addresses reachable from the container.
 
@@ -154,7 +154,7 @@ spec:
           value: "60"
 ```
 
-`HUGINN_CONFIG_PATH` sets the config file path without changing the container `command`. Useful when the same image is shared across environments (staging, prod) and only the ConfigMap mount point differs — override the path via env var rather than patching the Deployment spec each time.
+`HUGINN_CONFIG_PATH` sets the config file path without changing the container `command`. Useful when the same image is shared across environments (staging, prod) and only the ConfigMap mount point differs - override the path via env var rather than patching the Deployment spec each time.
 
 ### Key differences vs Docker Compose
 
@@ -206,7 +206,7 @@ Adjust resource limits based on your workload (see Deployment manifest example a
 
 Settings are split into two groups. **Dynamic** settings take effect on the next
 reload (SIGHUP or file-watcher); no connections are dropped. **Static** settings
-are read once at startup — a process restart is required to apply changes.
+are read once at startup - a process restart is required to apply changes.
 If a reload detects changes in static sections, the proxy logs an error and
 continues running with the old values.
 
@@ -229,7 +229,7 @@ continues running with the old values.
 
 > **Note on security overrides:** `ip_filter`, `rate_limit`, and `headers` can be set per
 > domain (`[domains.security]`) and per route (`[domains.routes.security]`). These are
-> **whole-block replace** — the most specific scope that sets a block replaces the parent's
+> **whole-block replace** - the most specific scope that sets a block replaces the parent's
 > entirely (no field merge). A partial override that drops a parent-enabled protection is logged
 > as a non-fatal `WARN` on boot, `--validate`, and every reload. Per-route `ip_filter` is enforced
 > **after route match** (router-level ACL, like Traefik); when no route overrides it, the
@@ -240,8 +240,8 @@ continues running with the old values.
 | TOML key | Description |
 |---|---|
 | `[listen]` | Bind addresses, backlog, `reuse_port` |
-| `[tls]` | TLS termination (cert/key hot-reload is handled separately — see below) |
-| `[fingerprint]` | Fingerprinting feature flags (`tcp_enabled`, `tls_enabled`, `http_enabled`, `max_capture`) — static because they control eBPF program loading and capture buffers at startup |
+| `[tls]` | TLS termination (cert/key hot-reload is handled separately - see below) |
+| `[fingerprint]` | Fingerprinting feature flags (`tcp_enabled`, `tls_enabled`, `http_enabled`, `max_capture`) - static because they control eBPF program loading and capture buffers at startup |
 | `[logging]` | Log level and format |
 | `[telemetry]` | Metrics port and OpenTelemetry log level |
 | `[timeout]` | `upstream_connect_ms` (TCP connect to backend; absent = no timeout), `proxy_idle_ms` (inbound idle), `tls_handshake_secs`, `connection_handling_secs`, `shutdown_secs`, `keep_alive.upstream_idle_timeout` |
@@ -258,7 +258,7 @@ continues running with the old values.
 
 ### Certificate Rotation
 
-TLS certificates are re-read from disk on every **config reload** — they are **not**
+TLS certificates are re-read from disk on every **config reload** - they are **not**
 watched independently. Replacing only the cert files (e.g. a Kubernetes Secret) does
 **not** trigger a reload on its own; you must trigger a config reload so the proxy
 re-reads them from their configured paths.
@@ -267,8 +267,8 @@ To rotate a certificate:
 
 1. Replace the certificate/key files at their configured paths (Secret in Kubernetes, volume in Docker). Keep the paths unchanged.
 2. Trigger a config reload, either:
-   - **SIGHUP** — `kill -HUP <pid>` (e.g. `kubectl exec <pod> -- kill -HUP 1`), or
-   - **Config-file watch** — with `HUGINN_WATCH=true`, touch or re-write the *config
+   - **SIGHUP** - `kill -HUP <pid>` (e.g. `kubectl exec <pod> -- kill -HUP 1`), or
+   - **Config-file watch** - with `HUGINN_WATCH=true`, touch or re-write the *config
      file* (not the cert files); the reload fires after the debounce window (`HUGINN_WATCH_DELAY_SECS`, default: 60s).
 3. New connections use the new certificate; existing connections continue with the old one until they close.
 
@@ -294,9 +294,9 @@ The published `huginn-proxy` and `huginn-proxy-plain` images are built with the 
 Operational requirements specific to ACME:
 
 - **Public `:443` reachability.** TLS-ALPN-01 validates on the same TLS listener (the proxy answers the `acme-tls/1` ALPN handshake in-band). The CA must be able to reach the proxy's TLS port from the public internet on the cert's domain. There is **no `:80` listener** and **no DNS provider** involved.
-- **Persistent cert cache.** Issued certs and the ACME account key live under `[acme].cache_dir` (the images create `/var/lib/huginn-proxy/acme`, owned by UID `10001`). **Mount a persistent volume there** — Docker named volume or a Kubernetes PVC. Without persistence, every restart re-issues certificates and can hit the CA's [rate limits](https://letsencrypt.org/docs/rate-limits/).
+- **Persistent cert cache.** Issued certs and the ACME account key live under `[acme].cache_dir` (the images create `/var/lib/huginn-proxy/acme`, owned by UID `10001`). **Mount a persistent volume there** - Docker named volume or a Kubernetes PVC. Without persistence, every restart re-issues certificates and can hit the CA's [rate limits](https://letsencrypt.org/docs/rate-limits/).
 - **Single replica.** The cache is on-disk and **not shared across replicas**; each replica runs its own ACME client. Running N replicas means N independent issuances for the same domain (more rate-limit pressure) and no coordination. For ACME, run a **single replica** (`replicas: 1`, `Recreate` strategy); scale horizontally only with file certs fed by an external manager (e.g. cert-manager) instead.
-- **No global mTLS.** ACME is **incompatible with global mTLS** (`[tls.client_auth]`) and is rejected at config validation — TLS-ALPN-01 cannot complete when the listener demands a client certificate.
+- **No global mTLS.** ACME is **incompatible with global mTLS** (`[tls.client_auth]`) and is rejected at config validation - TLS-ALPN-01 cannot complete when the listener demands a client certificate.
 - **No wildcards.** TLS-ALPN-01 issues per-host certs only; wildcard domains must use `cert = { type = "file" }` (e.g. cert-manager with a DNS-01 solver).
 - **Private/test directories.** Point `[acme].directory_url` at a non-public ACME server and trust its CA with `[acme].directory_ca_path`. The local Pebble demo in [`examples/README.md`](examples/README.md) shows a full self-contained issuance.
 - **System CA bundle required.** For public CAs (Let's Encrypt), the ACME directory TLS connection is validated against the **platform/OS trust store**. Container images must ship a system CA bundle (e.g. install `ca-certificates`); otherwise the directory handshake fails. Use `[acme].directory_ca_path` to bypass this for private CAs.

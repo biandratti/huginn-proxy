@@ -1,7 +1,7 @@
 # Multi-stage Dockerfile for huginn-proxy.
 # Targets:
-#   plain  — no eBPF, stable toolchain, no Linux capabilities needed.
-#   ebpf   — TCP SYN fingerprinting via pinned BPF maps, needs CAP_BPF at runtime.
+#   plain  - no eBPF, stable toolchain, no Linux capabilities needed.
+#   ebpf   - TCP SYN fingerprinting via pinned BPF maps, needs CAP_BPF at runtime.
 #
 # Both targets are built with the `acme` cargo feature, so the published images include
 # built-in ACME (Let's Encrypt) TLS. ACME stays inert unless an `[acme]` block is configured.
@@ -35,7 +35,7 @@ RUN cargo +nightly install bpf-linker --locked
 RUN cargo build --release -p huginn-proxy --features "${CARGO_FEATURES}"
 
 # ── runtime base ────────────────────────────────────────────────
-# debian:trixie-slim — matches rust:1.94.1-slim base (Debian 13, glibc 2.38+).
+# debian:trixie-slim - matches rust:1.94.1-slim base (Debian 13, glibc 2.38+).
 FROM debian:trixie-slim@sha256:28de0877c2189802884ccd20f15ee41c203573bd87bb6b883f5f46362d24c5c2 AS runtime-base
 RUN apt-get update -q && apt-get install -y --no-install-recommends \
     ca-certificates curl \
@@ -63,7 +63,7 @@ RUN apt-get update -q && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=builder-ebpf /app/target/release/huginn-proxy /usr/local/bin/huginn-proxy
 # cap_bpf: open pinned BPF maps for reading (TCP SYN fingerprinting).
-# The proxy never loads XDP — cap_net_admin and cap_perfmon are NOT needed.
+# The proxy never loads XDP - cap_net_admin and cap_perfmon are NOT needed.
 # docker-compose.yml must declare cap_add: [CAP_BPF] for the bounding set.
 # The ACME cache must be writable by the unprivileged runtime user (see plain target).
 RUN setcap cap_bpf+eip /usr/local/bin/huginn-proxy \

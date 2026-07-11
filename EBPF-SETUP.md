@@ -10,12 +10,12 @@ and injects the `x-tcp-p0f` header with the p0f-style signature.
 
 TCP fingerprinting uses two separate processes:
 
-- **`huginn-ebpf-agent`** — loads the capture program (XDP or TC), attaches it to the
+- **`huginn-ebpf-agent`** - loads the capture program (XDP or TC), attaches it to the
   network interface, and pins BPF maps to `/sys/fs/bpf/huginn/`. Runs once per node
   (DaemonSet in K8s, sidecar in Docker Compose). Requires elevated privileges but opens no ports.
   No Kubernetes Ingress integration; deploys as a standard container via raw manifests.
 
-- **`huginn-proxy`** — opens the pinned BPF maps in read mode and injects the
+- **`huginn-proxy`** - opens the pinned BPF maps in read mode and injects the
   `x-tcp-p0f` header.
 
 ```
@@ -115,9 +115,9 @@ Both hooks live in the same BPF object and share identical maps, key encoding, a
 The proxy reads the same pinned maps regardless of backend. Only the kernel hook and attach
 mechanism differ.
 
-- **`xdp-native`** — driver-level XDP. Lowest overhead. Requires NIC driver XDP support.
-- **`xdp-skb`** — generic XDP in the kernel stack. Works on veth/loopback/VMs.
-- **`tc`** — TC `clsact` **ingress** classifier. Reads packet bytes via `bpf_skb_load_bytes`
+- **`xdp-native`** - driver-level XDP. Lowest overhead. Requires NIC driver XDP support.
+- **`xdp-skb`** - generic XDP in the kernel stack. Works on veth/loopback/VMs.
+- **`tc`** - TC `clsact` **ingress** classifier. Reads packet bytes via `bpf_skb_load_bytes`
   (GRO-safe) and returns `TC_ACT_OK`, so it **never drops** packets and works on **VLAN/bond**
   interfaces.
 

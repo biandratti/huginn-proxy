@@ -54,9 +54,9 @@ jobs:
             [ -z "$advisory" ] && continue
 
             if echo "$ACTIVE" | grep -qF "$advisory"; then
-              echo "Issue #$number ($advisory) still active — leaving open"
+              echo "Issue #$number ($advisory) still active - leaving open"
             else
-              echo "Closing issue #$number — $advisory no longer in cargo audit output"
+              echo "Closing issue #$number - $advisory no longer in cargo audit output"
               gh issue close "$number" \
                 --comment "Resolved: \`$advisory\` is no longer reported by \`cargo audit\` on this commit. Closing automatically."
             fi

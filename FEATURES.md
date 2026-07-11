@@ -54,7 +54,7 @@ cleartext on the same `host:port` you already use for backend traffic).
 **Prefix matching with path manipulation**
 
 Routes are matched by URL prefix. You can strip the prefix, replace it with a different path, or leave it unchanged. The
-**most specific (longest) prefix wins** — routes are sorted by prefix length at config load time, so declaration order
+**most specific (longest) prefix wins** - routes are sorted by prefix length at config load time, so declaration order
 does not affect which route matches.
 
 Examples: `/api/v2` beats `/api` beats `/` for a request to `/api/v2/users`. `/api` can be forwarded as-is, stripped to
@@ -79,12 +79,12 @@ IP literals and `localhost`. A request whose host matches no domain is answered 
 
 The routing host is resolved from the HTTP-layer authority, uniformly for HTTP/1.1 and HTTP/2 (like nginx, Traefik, and
 Envoy): the request URI authority first (`:authority` pseudo-header in HTTP/2, or absolute-form request target in
-HTTP/1.1), then the `Host` header as fallback. TLS SNI is **not** a routing input — it only selects the certificate at
+HTTP/1.1), then the `Host` header as fallback. TLS SNI is **not** a routing input - it only selects the certificate at
 the TLS layer and drives the optional `sni_strict` handshake rejection. Cert selection (SNI) and routing (HTTP host) are
 reconciled by the always-on **421 Misdirected Request** check on coalesced connections. Host comparison is
 case-insensitive and IPv6 brackets are stripped before matching (`[::1]` matches a domain configured as `::1`).
 
-`cert_path` and `key_path` are optional but must be supplied together — omit both for a plain-HTTP domain. Specifying
+`cert_path` and `key_path` are optional but must be supplied together - omit both for a plain-HTTP domain. Specifying
 only one is a validation error. Duplicate hosts and more than one catch-all are also rejected at config load.
 
 Limitation: Wildcard is one label deep only. Routing is host + path prefix; no header- or method-based routing.
@@ -93,11 +93,11 @@ Limitation: Wildcard is one label deep only. Routing is host + path prefix; no h
 
 **Fixed-window counter (per process)**
 
-Configurable at three scopes — **global** (`[security.rate_limit]`), **per-domain**
+Configurable at three scopes - **global** (`[security.rate_limit]`), **per-domain**
 (`[domains.security.rate_limit]`), and **per-route** (`[domains.routes.security.rate_limit]`). Security policy lives
 under `security` at every scope, so the path is consistent. You can limit by IP, custom header, route path, or a
 combination. The effective limit is **`burst` requests per `window_seconds`** window, tracked with `pingora_limits`'
-atomic rate counter. (`requests_per_second` is currently not used for enforcement — the cap is `burst` over the
+atomic rate counter. (`requests_per_second` is currently not used for enforcement - the cap is `burst` over the
 window; size `burst`/`window_seconds` to the rate you want.)
 
 For `limit_by = "ip"` / `"combined"`, the client IP is resolved from the global
@@ -107,7 +107,7 @@ non-forgeable TCP peer IP is used.
 Precedence is **global → domain → route**, **whole-block replace** at every scope: a domain's `rate_limit` block fully
 replaces the global policy for that domain, and a route's block fully replaces the domain-effective policy for that
 route
-(not a field-level merge — re-state every key you want to keep; e.g. a route block without `enabled = true` disables the
+(not a field-level merge - re-state every key you want to keep; e.g. a route block without `enabled = true` disables the
 limit for that route). Limiters are keyed per domain, so the same route prefix under two domains is tracked
 independently.
 
@@ -123,7 +123,7 @@ HSTS is configurable with max-age, includeSubdomains, and preload directives. CS
 header can be added to all responses. Security headers can be set globally (`[security.headers]`), **per-domain**
 (`[domains.security.headers]`), or **per-route** (`[domains.routes.security.headers]`); the most specific scope that
 sets
-the block replaces the parent's entirely (whole-block, not merged — a scope that sets only CSP does not inherit the
+the block replaces the parent's entirely (whole-block, not merged - a scope that sets only CSP does not inherit the
 parent's HSTS).
 
 Header manipulation (add/remove on both request and response) can be configured at three scopes: **global**,
@@ -162,7 +162,7 @@ ClientHello SNI. Each `[[domains]]` entry declares its certificate source via a 
 catch-all (host-less) domain, and it is also served to clients that send no SNI (e.g. connecting by IP). When
 `[tls.options].sni_strict = true`, the default-cert fallback is disabled entirely (full parity with Traefik's
 `sniStrict`): both an SNI hostname that matches no configured domain **and** a connection that sends no SNI are
-rejected with `unrecognized_name` — IP-literal HTTPS clients no longer get the default cert in this mode. Default is
+rejected with `unrecognized_name` - IP-literal HTTPS clients no longer get the default cert in this mode. Default is
 `sni_strict = false`, where both cases fall back to the default cert. See the **Multi-Domain Routing** section below for
 how domains tie certificates to routes.
 
@@ -170,18 +170,18 @@ how domains tie certificates to routes.
 so
 a reused (coalesced) HTTP/2 connection could carry a request for a host served by a different certificate. Huginn
 rejects
-that with `421 Misdirected Request` — the same default protection nginx and Apache `mod_http2` apply (RFC 9110
+that with `421 Misdirected Request` - the same default protection nginx and Apache `mod_http2` apply (RFC 9110
 §15.5.20 /
 RFC 7540 §9.1.2). Because huginn uses a single global TLS configuration, "authoritative" reduces to "served by the same
 certificate": a request whose host is not covered by the certificate the connection's SNI selected is rejected. The
 check
 compares certificate coverage rather than literal `authority == SNI`, so hosts sharing a single certificate (a
 `*.example.com`
-wildcard, or distinct domains pointing at the same SAN cert file) still coalesce. It is not configurable — it only fires
+wildcard, or distinct domains pointing at the same SAN cert file) still coalesce. It is not configurable - it only fires
 on
 genuinely cross-certificate requests, and plain HTTP / no-SNI connections are unaffected.
 
-Certificates are re-read as part of a **config reload** — driven by SIGHUP or by a change to the *config file* (when the
+Certificates are re-read as part of a **config reload** - driven by SIGHUP or by a change to the *config file* (when the
 `--watch` file watcher is enabled, debounced by a configurable delay), not by an independent cert-file watcher. Each
 reload re-reads the cert/key files from their configured paths. The `DynamicCertResolver` is updated in place and its
 cert map is swapped atomically (`ArcSwap`); the acceptor's `ServerConfig` itself is built once at startup, so cipher
@@ -194,23 +194,23 @@ transient file issue never drops TLS for that domain.
 
 Each successful load or rotation increments `huginn_tls_cert_reload_total{result="success", domain="…"}`, updates
 `huginn_tls_cert_last_reload_timestamp_seconds{domain="…"}`, and publishes the new certificate-chain content hash via
-`huginn_tls_cert_hash{domain="…"}` — all labeled per domain.
+`huginn_tls_cert_hash{domain="…"}` - all labeled per domain.
 Failed rebuilds bump the `result="error"` counter but leave the hash and timestamp gauges untouched, so dashboards
 always reflect the last *good* certificate actually serving traffic. See [TELEMETRY.md](TELEMETRY.md) §13 for the full
 metric reference and example alert queries.
 
 **Cipher suite selection.** Suites are read from `[tls.options].cipher_suites` in the config file and applied as the
 exact set offered to clients. Names are validated at startup against the suites supported by the underlying TLS provider
-(`aws-lc-rs`); an unknown or misspelled suite fails the boot with an explicit error listing the supported names — there
+(`aws-lc-rs`); an unknown or misspelled suite fails the boot with an explicit error listing the supported names - there
 is no silent fallback. When `cipher_suites` is empty or omitted, the proxy uses the safe defaults provided by
 `aws-lc-rs`.
 
 Limitation: Wildcard matching is single-label only (`*.example.com` matches `api.example.com` but not
-`a.b.example.com`). The cipher suite list is global — the same set is offered for every domain, since SNI selects the
+`a.b.example.com`). The cipher suite list is global - the same set is offered for every domain, since SNI selects the
 certificate but not the TLS parameters.
 
 **Automatic TLS (ACME / Let's Encrypt).** When an `[acme]` block is configured, domains that do not declare an explicit
-`cert = { type = "file" }` obtain and renew their certificate automatically via the **TLS-ALPN-01** challenge — there is
+`cert = { type = "file" }` obtain and renew their certificate automatically via the **TLS-ALPN-01** challenge - there is
 no separate `cert = { type = "acme" }` needed (omitting `cert` under a global `[acme]` is ACME-by-default). Validation
 happens on the **same TLS listener** (the proxy answers the `acme-tls/1` ALPN challenge in-band), so the public
 **`:443`** just needs to be reachable; no `:80` listener and no DNS provider credentials are required. Issued certs are
@@ -219,10 +219,10 @@ cached on disk (`[acme].cache_dir`) and survive restarts. A custom directory CA 
 published `plain` and `ebpf` images** and stays completely inert unless `[acme]` is present. See
 [SETTINGS.md](SETTINGS.md) for configuration and [DEPLOYMENT.md](DEPLOYMENT.md) for operational guidance.
 
-ACME limitations: **TLS-ALPN-01 only** (no HTTP-01, no DNS-01), so **no wildcards** — a wildcard domain must use
+ACME limitations: **TLS-ALPN-01 only** (no HTTP-01, no DNS-01), so **no wildcards** - a wildcard domain must use
 `cert = { type = "file" }` (e.g. fed by cert-manager); **single-replica** (the on-disk cache is not shared, so N
 replicas issue N certs and may hit CA rate limits); **incompatible with global mTLS** (`[tls.client_auth]`), rejected at
-config validation; and **no EAB** (External Account Binding — CAs that require it, e.g. ZeroSSL / Google Public CA, must
+config validation; and **no EAB** (External Account Binding - CAs that require it, e.g. ZeroSSL / Google Public CA, must
 be used via a file cert).
 
 ## TLS Session Resumption
@@ -303,11 +303,11 @@ Limitation: Pooling is global or per-route only. No per-backend configuration fo
 
 Automatically sets X-Forwarded-For, X-Forwarded-Host, X-Forwarded-Port, and X-Forwarded-Proto:
 
-- **X-Forwarded-For** — the TCP peer IP is **appended** to any existing value (preserving the upstream proxy chain, per
-  the standard XFF convention). Note: do not trust the leftmost entry as the client IP — use `trusted_proxies` for that.
-- **X-Forwarded-Host** — any client-supplied value is **stripped** and replaced with the host the proxy actually routed
+- **X-Forwarded-For** - the TCP peer IP is **appended** to any existing value (preserving the upstream proxy chain, per
+  the standard XFF convention). Note: do not trust the leftmost entry as the client IP - use `trusted_proxies` for that.
+- **X-Forwarded-Host** - any client-supplied value is **stripped** and replaced with the host the proxy actually routed
   on, so it always agrees with the selected backend.
-- **X-Forwarded-Port** / **X-Forwarded-Proto** — set from the connection (peer port, and `https`/`http`), replacing any
+- **X-Forwarded-Port** / **X-Forwarded-Proto** - set from the connection (peer port, and `https`/`http`), replacing any
   client value.
 
 Limitation: No configurable header names. No support for Forwarded header (RFC 7239).
@@ -330,13 +330,13 @@ Limitation: Global setting only, cannot be configured per-route.
 
 Multiple timeout controls to prevent resource exhaustion:
 
-- `upstream_connect_ms` — TCP connect timeout to backend. Optional; if absent, no connect timeout is applied.
-- `proxy_idle_ms` (default: 60s) — Inbound idle timeout: HTTP/1.1 `header_read_timeout` + HTTP/2 keep-alive interval.
-- `tls_handshake_secs` (default: 15s) — Maximum time for completing TLS handshake.
-- `connection_handling_secs` (default: 300s) — Maximum total time for entire connection lifecycle (read + process +
+- `upstream_connect_ms` - TCP connect timeout to backend. Optional; if absent, no connect timeout is applied.
+- `proxy_idle_ms` (default: 60s) - Inbound idle timeout: HTTP/1.1 `header_read_timeout` + HTTP/2 keep-alive interval.
+- `tls_handshake_secs` (default: 15s) - Maximum time for completing TLS handshake.
+- `connection_handling_secs` (default: 300s) - Maximum total time for entire connection lifecycle (read + process +
   write).
-- `shutdown_secs` (default: 30s) — Graceful shutdown window.
-- `keep_alive.upstream_idle_timeout` (default: 60s) — TCP keep-alive interval for proxy → backend connections.
+- `shutdown_secs` (default: 30s) - Graceful shutdown window.
+- `keep_alive.upstream_idle_timeout` (default: 60s) - TCP keep-alive interval for proxy → backend connections.
 
 All timeouts are independently configurable.
 
@@ -390,17 +390,17 @@ keep-alive requests) finish on their original snapshot. No connections are dropp
 
 Reload triggers and config:
 
-- **SIGHUP** — always available: `kill -SIGHUP <pid>` or `docker kill --signal=SIGHUP <container>`
-- **File watcher** — enabled with `--watch` flag (or `HUGINN_WATCH=true`). Configurable debounce via
+- **SIGHUP** - always available: `kill -SIGHUP <pid>` or `docker kill --signal=SIGHUP <container>`
+- **File watcher** - enabled with `--watch` flag (or `HUGINN_WATCH=true`). Configurable debounce via
   `--watch-delay-secs` / `HUGINN_WATCH_DELAY_SECS` (default: 60s).
-- **TOML or YAML** — both formats are supported; the parser is chosen from the file extension (`.yaml`/`.yml` vs `.toml`
+- **TOML or YAML** - both formats are supported; the parser is chosen from the file extension (`.yaml`/`.yml` vs `.toml`
   or anything else). Hot reload behaves the same. See [SETTINGS.md](SETTINGS.md).
 
 On reload, if the new config is invalid the proxy keeps the current config and logs the error. If static sections
 changed, the proxy logs an error and ignores those changes (restart required).
 
 On load, `--validate`, and every reload the proxy also emits a **non-fatal `WARN`** when a whole-block override (domain
-or route) drops a protection the parent had enabled — e.g. a partial `rate_limit`/`ip_filter`/`headers` block that
+or route) drops a protection the parent had enabled - e.g. a partial `rate_limit`/`ip_filter`/`headers` block that
 silently disables a globally-enabled policy. It never aborts, since dropping a policy may be intended.
 
 Limitation: No per-section partial reload. Dynamic config is always swapped as a whole.

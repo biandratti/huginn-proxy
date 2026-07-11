@@ -10,9 +10,9 @@ Local: [`examples/`](examples/) (Docker Compose). Published runtime images (`lin
 
 | Image | Base | User | Capabilities |
 | --- | --- | --- | --- |
-| `ghcr.io/biandratti/huginn-proxy:latest` | `debian:trixie-slim` (Debian 13) | `10001` | Proxy (eBPF build) — reads pinned maps — `CAP_BPF` |
+| `ghcr.io/biandratti/huginn-proxy:latest` | `debian:trixie-slim` (Debian 13) | `10001` | Proxy (eBPF build) - reads pinned maps - `CAP_BPF` |
 | `ghcr.io/biandratti/huginn-proxy-plain:latest` | `debian:trixie-slim` (Debian 13) | `10001` | Proxy without eBPF in the binary |
-| `ghcr.io/biandratti/huginn-proxy-ebpf-agent:latest` | `debian:trixie-slim` (Debian 13) | `root` | Agent loads XDP — `CAP_BPF` `CAP_NET_ADMIN` `CAP_PERFMON` |
+| `ghcr.io/biandratti/huginn-proxy-ebpf-agent:latest` | `debian:trixie-slim` (Debian 13) | `root` | Agent loads XDP - `CAP_BPF` `CAP_NET_ADMIN` `CAP_PERFMON` |
 
 Runtime images use the same base as [`docker/proxy.Dockerfile`](docker/proxy.Dockerfile) and [`docker/ebpf-agent.Dockerfile`](docker/ebpf-agent.Dockerfile) (`FROM debian:trixie-slim@…`).
 
@@ -28,8 +28,8 @@ Both proxy images (`huginn-proxy`, `huginn-proxy-plain`) are built with the `acm
 | `huginn-proxy` | `aarch64-unknown-linux-musl` | Linux | arm64 | musl (static) | No |
 | `huginn-proxy` | `x86_64-unknown-linux-gnu-ebpf` | Linux | amd64 | glibc | Yes (reader) |
 | `huginn-proxy` | `aarch64-unknown-linux-gnu-ebpf` | Linux | arm64 | glibc | Yes (reader) |
-| `huginn-proxy` | `x86_64-apple-darwin` | macOS | amd64 | — | No |
-| `huginn-proxy` | `aarch64-apple-darwin` | macOS | arm64 | — | No |
+| `huginn-proxy` | `x86_64-apple-darwin` | macOS | amd64 | - | No |
+| `huginn-proxy` | `aarch64-apple-darwin` | macOS | arm64 | - | No |
 | `huginn-ebpf-agent` | `x86_64-unknown-linux-gnu-ebpf-agent` | Linux | amd64 | glibc | Yes (loader) |
 | `huginn-ebpf-agent` | `aarch64-unknown-linux-gnu-ebpf-agent` | Linux | arm64 | glibc | Yes (loader) |
 
@@ -39,7 +39,7 @@ Both proxy images (`huginn-proxy`, `huginn-proxy-plain`) are built with the `acm
 
 ## Where to download
 
-- **[GitHub Releases](https://github.com/biandratti/huginn-proxy/releases)** — attached files on each tag (same binaries as below).
-- **Actions** — workflow **Release** for that tag → **Artifacts** (ZIP per platform; useful if you need the exact CI output).
+- **[GitHub Releases](https://github.com/biandratti/huginn-proxy/releases)** - attached files on each tag (same binaries as below).
+- **Actions** - workflow **Release** for that tag → **Artifacts** (ZIP per platform; useful if you need the exact CI output).
 
 Images stay on **GHCR** (`ghcr.io/...`); they are not listed on the Releases page as files.

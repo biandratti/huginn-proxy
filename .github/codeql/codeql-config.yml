@@ -1,7 +1,7 @@
 # Loaded via github/codeql-action/init `config-file` (see workflows/codeql.yml).
 #
 # tests-e2e, benches, and huginn-proxy-lib/tests use danger_accept_invalid_certs(true)
-# against local HTTPS with self-signed certs — controlled usage, not production code.
+# against local HTTPS with self-signed certs - controlled usage, not production code.
 # Exclude those paths from all CodeQL queries.
 name: huginn-proxy
 paths-ignore:
