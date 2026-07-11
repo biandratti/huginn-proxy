@@ -20,15 +20,19 @@ COPY . .
 
 # ── plain builder ───────────────────────────────────────────────
 FROM builder-base AS builder-plain
-RUN cargo build --release -p huginn-proxy --features acme
+# CARGO_FEATURES lets callers opt in/out of feature sets at build time.
+# Default includes `acme` so published images are always ACME-capable.
+ARG CARGO_FEATURES=acme
+RUN cargo build --release -p huginn-proxy --features "${CARGO_FEATURES}"
 
 # ── ebpf builder ────────────────────────────────────────────────
 FROM builder-base AS builder-ebpf
 # bpf-linker uses aya-rustc-llvm-proxy which needs LLVM shared libs from
 # the rustc distribution. glibc-based image required (Alpine/musl won't work).
+ARG CARGO_FEATURES=ebpf-tcp,acme
 RUN rustup toolchain install nightly --component rust-src
 RUN cargo +nightly install bpf-linker --locked
-RUN cargo build --release -p huginn-proxy --features ebpf-tcp,acme
+RUN cargo build --release -p huginn-proxy --features "${CARGO_FEATURES}"
 
 # ── runtime base ────────────────────────────────────────────────
 # debian:trixie-slim — matches rust:1.94.1-slim base (Debian 13, glibc 2.38+).
