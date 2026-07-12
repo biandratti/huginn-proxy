@@ -126,7 +126,8 @@ impl DynamicCertResolver {
         Self { inner: ArcSwap::new(Arc::new(CertMap::default())), sni_strict }
     }
 
-    /// Reload cert maps from `domains`. Domains without `cert_path`/`key_path` are skipped.
+    /// Reload cert maps from `domains`. Domains without a static `File` cert (ACME-managed or
+    /// default-cert only) are skipped.
     ///
     /// Best-effort, per-domain: a domain whose cert fails to load does **not** abort the
     /// reload. The atomic swap always runs with every cert that loaded successfully, and a
@@ -149,12 +150,12 @@ impl DynamicCertResolver {
         for domain in domains {
             // Label for metrics/logs; the catch-all domain has no host string.
             let host = domain.label();
-            let (cert_path, key_path) = match (&domain.cert_path, &domain.key_path) {
-                (Some(c), Some(k)) => (c.as_str(), k.as_str()),
-                _ => {
+            let (cert_path, key_path) = match domain.cert_file() {
+                Some((c, k)) => (c, k),
+                None => {
                     info!(
                         host,
-                        "Domain has no cert_path/key_path; it will serve TLS only if a default certificate exists"
+                        "Domain has no static cert (ACME-managed or default-cert only); skipped by the static resolver"
                     );
                     continue;
                 }

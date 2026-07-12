@@ -39,8 +39,7 @@ fn minimal_config(backend_addr: std::net::SocketAddr, listen_port: u16) -> Confi
         }],
         domains: vec![Domain {
             host: Some("127.0.0.1".to_string()),
-            cert_path: None,
-            key_path: None,
+            cert: None,
             headers: None,
             security: None,
             fingerprinting: None,
@@ -55,6 +54,7 @@ fn minimal_config(backend_addr: std::net::SocketAddr, listen_port: u16) -> Confi
             }],
         }],
         tls: None,
+        acme: None,
         fingerprint: FingerprintConfig {
             tls_enabled: false,
             http_enabled: false,
@@ -120,6 +120,7 @@ async fn reload_invalid_toml_keeps_current_config() -> TestResult {
         &metrics,
         &health_supervisor,
         None,
+        false,
     )
     .await;
 
@@ -167,6 +168,7 @@ async fn drain_removed_backend_replaces_pool() -> TestResult {
         &metrics,
         &health_supervisor,
         None,
+        false,
     )
     .await;
 
@@ -213,6 +215,7 @@ async fn reload_static_change_proceeds_without_crash() -> TestResult {
         &metrics,
         &health_supervisor,
         None,
+        false,
     )
     .await;
 
@@ -263,6 +266,7 @@ async fn concurrent_reloads_are_serialized() -> TestResult {
                 &metrics,
                 health_supervisor.as_ref(),
                 None,
+                false,
             )
             .await;
         }));
@@ -311,6 +315,7 @@ async fn reload_toggles_rate_limiter() -> TestResult {
         &metrics,
         &health_supervisor,
         None,
+        false,
     )
     .await;
 
@@ -331,6 +336,7 @@ async fn reload_toggles_rate_limiter() -> TestResult {
         &metrics,
         &health_supervisor,
         None,
+        false,
     )
     .await;
 

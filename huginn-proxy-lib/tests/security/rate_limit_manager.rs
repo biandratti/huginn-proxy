@@ -31,8 +31,7 @@ fn domain(
 ) -> Domain {
     Domain {
         host: host.map(str::to_string),
-        cert_path: None,
-        key_path: None,
+        cert: None,
         headers: None,
         security,
         fingerprinting: None,
@@ -110,7 +109,7 @@ fn route_override_beats_domain() {
 
 /// Whole-block replace: a route block fully replaces the domain config, it does not merge fields.
 /// A route block left at the `RateLimitConfig` default (`enabled = false`) therefore DISABLES the
-/// limit for that route even when the domain limit is enabled — it does not inherit `burst`/`rps`.
+/// limit for that route even when the domain limit is enabled - it does not inherit `burst`/`rps`.
 #[test]
 fn route_block_default_disabled_replaces_enabled_domain() {
     let global = rl(false, 1000, 1000);

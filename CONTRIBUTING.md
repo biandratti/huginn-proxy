@@ -1,6 +1,6 @@
 # Contributing to huginn-proxy
 
-huginn-proxy is a reverse proxy built around passive fingerprinting. Contributions that fit that goal are welcome — if you're unsure whether something belongs here, open an issue first.
+huginn-proxy is a reverse proxy built around passive fingerprinting. Contributions that fit that goal are welcome - if you're unsure whether something belongs here, open an issue first.
 
 ## Getting started
 
@@ -28,7 +28,7 @@ Requires Rust stable. Install from [rustup.rs](https://rustup.rs/).
 
 ## eBPF
 
-The kernel programs crate (`huginn-ebpf-programs`) is Linux-only and needs `bpf-linker` + Rust nightly with `rust-src`. For most changes — proxy logic, config, fingerprinting, docs — the standard workspace build is enough. The CI action `.github/actions/setup-ebpf-build` handles the full setup automatically.
+The kernel programs crate (`huginn-ebpf-programs`) is Linux-only and needs `bpf-linker` + Rust nightly with `rust-src`. For most changes - proxy logic, config, fingerprinting, docs - the standard workspace build is enough. The CI action `.github/actions/setup-ebpf-build` handles the full setup automatically.
 
 ```bash
 # standard
@@ -81,10 +81,10 @@ If you add or change config keys, update `SETTINGS.md` and the relevant page und
 
 ## Issues
 
-- **Security vulnerabilities** — contact the maintainers directly, don't open a public issue.
-- **Performance** — include a profile or benchmark showing the regression. Flamegraphs are helpful.
-- **Fingerprinting accuracy** — describe the client/OS, the expected signature, and what the proxy produced. Packet captures are very useful.
-- **Bugs** — include `rustc --version`, OS + kernel version, build features (`ebpf-tcp` or not), and `RUST_LOG=debug` output.
+- **Security vulnerabilities** - contact the maintainers directly, don't open a public issue.
+- **Performance** - include a profile or benchmark showing the regression. Flamegraphs are helpful.
+- **Fingerprinting accuracy** - describe the client/OS, the expected signature, and what the proxy produced. Packet captures are very useful.
+- **Bugs** - include `rustc --version`, OS + kernel version, build features (`ebpf-tcp` or not), and `RUST_LOG=debug` output.
 
 ## Documentation site
 

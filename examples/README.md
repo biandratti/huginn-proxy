@@ -4,10 +4,10 @@ This directory contains Docker Compose examples and configuration files to help 
 
 > [!IMPORTANT]
 > **macOS (Docker Desktop) limitations:** The compose files bind ports on both IPv4 (`0.0.0.0`) and
-> IPv6 (`[::]`). Docker Desktop may fail to bind the `[::]` entries — if you get port binding errors
+> IPv6 (`[::]`). Docker Desktop may fail to bind the `[::]` entries - if you get port binding errors
 > on startup, remove the `[::]:*` lines from the `ports` section of the compose file you are using.
 > Additionally, all traffic from the macOS host is NATed through Docker Desktop's gateway
-> (`192.168.65.1`), so the proxy always sees an IPv4 source address — even when using `curl -6`.
+> (`192.168.65.1`), so the proxy always sees an IPv4 source address - even when using `curl -6`.
 > See [Enable IPv6 locally](#2-enable-ipv6-locally) for the workaround.
 
 ---
@@ -43,28 +43,15 @@ cargo build --release -p huginn-proxy --features ebpf-tcp
 
 ### 1. Generate TLS Certificates (first time only)
 
-**Create the certificates directory:**
+**Option A: Script (quickest)**
 
 ```bash
-mkdir -p examples/certs
-sudo chown -R $USER:$USER examples/certs/
+./examples/gen-certs.sh
 ```
 
-**Option A: Self-signed certificate (default, works with `curl -k` but browsers will show warnings)**
-
-Include **SAN** (`subjectAltName`) so `https://localhost`, `https://127.0.0.1`, and IPv6 loopback match the
-certificate — CN-only certs are rejected by many TLS stacks. Requires OpenSSL 1.1.1 or newer (`openssl version`).
-
-```bash
-openssl req -x509 -newkey rsa:2048 -nodes \
-  -keyout examples/certs/server.key \
-  -out examples/certs/server.crt \
-  -days 365 \
-  -subj "/CN=localhost" \
-  -addext "subjectAltName=DNS:localhost,IP:127.0.0.1,IP:0:0:0:0:0:0:0:1"
-
-chmod 644 examples/certs/server.key examples/certs/server.crt
-```
+Generates `examples/certs/server.key` and `examples/certs/server.crt` - a self-signed certificate
+with `subjectAltName` for `localhost`, `127.0.0.1` and `::1`. Works with `curl -k`; browsers will
+show a warning (use Option B to avoid it).
 
 **Option B: Trusted local certificate (recommended for browser testing)**
 
@@ -80,7 +67,7 @@ For browser testing without security warnings, use `mkcert` to generate locally-
 mkcert -install
 
 # Names/IPs listed become Subject Alternative Names (SAN). The browser checks the URL against
-# them — include every form you will type: hostname, IPv4 loopback, IPv6 loopback.
+# them - include every form you will type: hostname, IPv4 loopback, IPv6 loopback.
 mkcert -key-file examples/certs/server.key -cert-file examples/certs/server.crt localhost 127.0.0.1 ::1
 
 chmod 644 examples/certs/server.key examples/certs/server.crt
@@ -111,7 +98,7 @@ sudo systemctl restart docker
 
 **macOS (Docker Desktop):**
 
-Docker Desktop runs a Linux VM — all `curl` from the macOS host goes through Docker Desktop's NAT
+Docker Desktop runs a Linux VM - all `curl` from the macOS host goes through Docker Desktop's NAT
 gateway (`192.168.65.1`), so the proxy always sees an IPv4 source regardless of `-6` or `[::1]`.
 To get a real IPv6 fingerprint, run a container **inside** the Docker network:
 
@@ -146,16 +133,16 @@ from the proxy. The only fork is whether you also run **TCP SYN** capture via **
 |---------------------------------|----------------------------------------------------------------------|------------------------------------------------------------|
 | **Fingerprints**                | JA4 + Akamai + **TCP SYN** (kernel)                                  | JA4 + Akamai **only** (no TCP SYN)                         |
 | **Images built from this repo** | **Two:** `proxy` (Dockerfile target `ebpf`) + `ebpf-agent`           | **One:** `proxy` (Dockerfile target `plain`)               |
-| **Extra volume**                | **`bpffs`** — shared BPF filesystem for maps between proxy and agent | None                                                       |
+| **Extra volume**                | **`bpffs`** - shared BPF filesystem for maps between proxy and agent | None                                                       |
 | **Host requirements**           | Linux kernel ≥ 5.11, Docker grants `cap_add` (see compose)           | Any recent Linux kernel, no BPF caps                       |
 
-Both files also start the same **demo backends** (`traefik/whoami`) — that is unrelated to the choice above.
+Both files also start the same **demo backends** (`traefik/whoami`) - that is unrelated to the choice above.
 
 ```bash
-# JA4 + Akamai + TCP SYN — two images + bpffs volume (kernel ≥ 5.11)
+# JA4 + Akamai + TCP SYN - two images + bpffs volume (kernel ≥ 5.11)
 docker compose -f examples/docker-compose.ebpf.yml up --build
 
-# JA4 + Akamai — single proxy image, no eBPF agent or bpffs volume
+# JA4 + Akamai - single proxy image, no eBPF agent or bpffs volume
 docker compose -f examples/docker-compose.without-ebpf.yml up --build
 ```
 
@@ -163,9 +150,9 @@ Alternatively, pull a pre-built image from the registry:
 
 | Image                                            | Description                                                          |
 |--------------------------------------------------|----------------------------------------------------------------------|
-| `ghcr.io/<owner>/huginn-proxy:latest`            | Proxy with eBPF/XDP — requires Linux kernel ≥ 5.11 and `cap_add`     |
-| `ghcr.io/<owner>/huginn-proxy-plain:latest`      | Proxy without eBPF — runs on any Linux kernel, no extra capabilities |
-| `ghcr.io/<owner>/huginn-proxy-ebpf-agent:latest` | XDP agent — pairs with the proxy image above                         |
+| `ghcr.io/<owner>/huginn-proxy:latest`            | Proxy with eBPF/XDP - requires Linux kernel ≥ 5.11 and `cap_add`     |
+| `ghcr.io/<owner>/huginn-proxy-plain:latest`      | Proxy without eBPF - runs on any Linux kernel, no extra capabilities |
+| `ghcr.io/<owner>/huginn-proxy-ebpf-agent:latest` | XDP agent - pairs with the proxy image above                         |
 
 ### 4. Test the Proxy
 
@@ -187,7 +174,7 @@ curl -4 http://localhost:9090/metrics | grep huginn_proxy
 curl -6 http://localhost:9090/metrics | grep huginn_proxy
 ```
 
-**Browser:** Open `https://localhost:7000/` (or `https://127.0.0.1:7000/` if your cert includes that name in SAN —
+**Browser:** Open `https://localhost:7000/` (or `https://127.0.0.1:7000/` if your cert includes that name in SAN -
 `mkcert` Option B lists both). The self-signed **Option A** cert uses `CN=localhost`, so the hostname `localhost`
 matches; you may still need to accept the browser warning unless you use `mkcert`.
 
@@ -216,8 +203,53 @@ eBPF compose examples map agent HTTP on the proxy service (`9091:9091`).
 The `config/` directory contains example configurations:
 
 - **`compose.toml`** - Basic proxy setup (default for Docker Compose)
+- **`compose-acme.toml`** - Minimal automatic-TLS setup for the local ACME demo below
 
 To switch configurations, edit `docker-compose.ebpf.yml` and change the `command` and `volumes` sections.
+
+---
+
+## Automatic TLS with ACME (local Pebble demo)
+
+`docker-compose.acme.yml` is a **fully self-contained** demo where huginn-proxy obtains a **real
+certificate** from a local [Pebble](https://github.com/letsencrypt/pebble) ACME server (Let's
+Encrypt's test server) using the **TLS-ALPN-01** challenge - no public DNS or internet required.
+
+First generate the local test PKI (one time; the `.pem` files are git-ignored and never committed):
+
+```bash
+./examples/acme/gen-pebble-ca.sh
+```
+
+Then build and start the stack:
+
+```bash
+docker compose -f examples/docker-compose.acme.yml up --build
+```
+
+Watch the proxy logs for `ACME event … DeployedNewCert`, then exercise it (the issued cert chains
+to Pebble's throwaway root, so use `-k`):
+
+```bash
+curl -k --resolve proxy.huginn.local:8443:127.0.0.1 https://proxy.huginn.local:8443/
+```
+
+How it fits together:
+
+- The proxy listens on `:8443` and Pebble's validation authority connects back to
+  `proxy.huginn.local:8443` (ALPN `acme-tls/1`) to verify the challenge before issuing.
+- `config/compose-acme.toml` points the proxy at Pebble via `[acme].directory_url` and trusts
+  Pebble's self-signed directory CA via `[acme].directory_ca_path`.
+- The test PKI under `acme/` (`pebble-ca.pem`, `pebble-cert.pem`, `pebble-key.pem`) is **for local
+  testing only**. Regenerate it with `acme/gen-pebble-ca.sh`.
+- This same stack backs the automated ACME end-to-end test. With the stack up, run
+  `cargo test -p tests-e2e --test acme` - it verifies the served leaf is issued by Pebble for
+  `proxy.huginn.local` and that traffic is proxied over it. CI runs this as the `test-e2e-acme` job.
+
+The demo builds the `plain` target, which (like the published `plain`/`ebpf` images) is compiled
+with the `acme` cargo feature - so this is the same artifact you'd run in production. For real
+deployments, drop `directory_url` / `directory_ca_path` and set `staging`/production against Let's
+Encrypt with a publicly resolvable domain and the validation port reachable on `:443`.
 
 ---
 
@@ -228,7 +260,7 @@ Compose project alongside the main proxy stack. Prometheus scrape config lives i
 provisioning and dashboards live under `grafana/`. Prometheus scrapes metrics from the proxy (`port 9090`) and the eBPF
 agent (`port 9091`) via `host.docker.internal`, and scrapes **cAdvisor** on the compose network for per-container CPU
 and memory. Grafana is pre-provisioned with a data source and a dashboard (including a **Docker resources (cAdvisor)**
-row) — no manual setup needed. Optional cAdvisor UI: `http://localhost:8099/`.
+row) - no manual setup needed. Optional cAdvisor UI: `http://localhost:8099/`.
 
 ### Prerequisites
 

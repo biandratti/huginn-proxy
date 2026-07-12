@@ -1,9 +1,11 @@
+pub mod acme;
 pub mod fingerprinting;
 pub mod listen;
 pub mod telemetry;
 pub mod timeout;
 pub mod tls;
 
+pub use acme::AcmeConfig;
 pub use fingerprinting::FingerprintConfig;
 pub use listen::{ListenConfig, ProxyProtocolMode};
 pub use telemetry::{LoggingConfig, TelemetryConfig};
@@ -21,6 +23,9 @@ pub struct StaticConfig {
     pub listen: ListenConfig,
     /// TLS termination (None = plain HTTP mode)
     pub tls: Option<TlsConfig>,
+    /// ACME automatic certificate configuration (None = no ACME).
+    /// Required when any domain sets `acme = true`.
+    pub acme: Option<AcmeConfig>,
     /// Fingerprinting feature flags
     pub fingerprint: FingerprintConfig,
     /// Logging level and format

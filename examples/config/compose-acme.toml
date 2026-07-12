@@ -1,0 +1,42 @@
+# Minimal ACME demo config - issues a real certificate from a local Pebble ACME server
+# via the TLS-ALPN-01 challenge. Run with examples/docker-compose.acme.yml.
+#
+# The proxy terminates TLS on :8443. Pebble's validation authority connects back to
+# proxy.huginn.local:8443 (ALPN `acme-tls/1`) to verify the challenge, then issues the cert.
+
+[listen]
+addrs = ["0.0.0.0:8443", "[::]:8443"]
+
+[[backends]]
+address = "backend:9000"
+http_version = "http11"
+
+# ACME-managed domain. `cert` is omitted → ACME-by-default because the [acme] block is present.
+[[domains]]
+host = "proxy.huginn.local"
+
+  [[domains.routes]]
+  prefix = "/"
+  backend = "backend:9000"
+
+[tls]
+alpn = ["h2", "http/1.1"]
+
+[acme]
+contacts = ["ops@example.com"]
+cache_dir = "/var/lib/huginn-proxy/acme"
+# Local Pebble directory instead of Let's Encrypt.
+directory_url = "https://pebble:14000/dir"
+# Trust Pebble's self-signed directory CA (Pebble is not in the public webpki roots).
+directory_ca_path = "/config/acme/pebble-ca.pem"
+
+[fingerprint]
+tls_enabled = true
+http_enabled = true
+tcp_enabled = false
+
+[logging]
+level = "info"
+
+[telemetry]
+metrics_port = 9090

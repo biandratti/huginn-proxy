@@ -30,7 +30,7 @@ use tokio_rustls::TlsConnector;
 
 use huginn_proxy_lib::config::load_from_path;
 use huginn_proxy_lib::config::{
-    Backend, Domain, FingerprintConfig, KeepAliveConfig, ListenConfig, LoggingConfig,
+    Backend, CertSource, Domain, FingerprintConfig, KeepAliveConfig, ListenConfig, LoggingConfig,
     ProxyProtocolMode, Route, SecurityConfig, TelemetryConfig, TimeoutConfig,
 };
 use huginn_proxy_lib::{Config, Metrics, TlsConfig, WatchOptions};
@@ -120,6 +120,7 @@ async fn spawn_proxy(
             static_cfg,
             dynamic_cfg,
             Metrics::new_noop(),
+            None,
             None,
             WatchOptions::default(),
             shutdown_tx,
@@ -302,8 +303,10 @@ async fn spawn_proxy_tls(
         }],
         domains: vec![Domain {
             host: Some("localhost".to_string()),
-            cert_path: Some(cert_file.path().to_string_lossy().into_owned()),
-            key_path: Some(key_file.path().to_string_lossy().into_owned()),
+            cert: Some(CertSource::File {
+                cert_path: cert_file.path().to_string_lossy().into_owned(),
+                key_path: key_file.path().to_string_lossy().into_owned(),
+            }),
             headers: None,
             security: None,
             fingerprinting: None,
@@ -323,6 +326,7 @@ async fn spawn_proxy_tls(
             client_auth: Default::default(),
             session_resumption: Default::default(),
         }),
+        acme: None,
         fingerprint: FingerprintConfig {
             tls_enabled: false,
             http_enabled: false,
@@ -355,6 +359,7 @@ async fn spawn_proxy_tls(
             static_cfg,
             dynamic_cfg,
             Metrics::new_noop(),
+            None,
             None,
             WatchOptions::default(),
             shutdown_tx,

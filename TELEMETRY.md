@@ -92,7 +92,7 @@ scrape_configs:
 - `protocol`: Connection protocol (`http/1.1`, `h2`, `https`)
 - `backend_address`: Backend server address (e.g., `backend-1:9000`)
 - `route`: Matched route prefix (e.g., `/api`, `/`)
-- `domain`: Matched domain — configured `host`, or `_default_` for the catch-all (see §3)
+- `domain`: Matched domain - configured `host`, or `_default_` for the catch-all (see §3)
 
 **Example queries**:
 
@@ -131,7 +131,7 @@ sum by (backend_address) (rate(huginn_backend_bytes_received_total[5m]))
 **Labels**:
 
 - `protocol`: Connection protocol (`http/1.1`, `h2`, `https`)
-- `reason`: Rejection reason — `limit_exceeded` (active connections hit the configured maximum)
+- `reason`: Rejection reason - `limit_exceeded` (active connections hit the configured maximum)
 
 **Example queries**:
 
@@ -163,9 +163,9 @@ Emitted when `listen.proxy_protocol` is `optional` or `require`. All counters ar
 **Labels**:
 
 - `reason` (on `huginn_proxy_protocol_dropped_total`):
-  - `untrusted_require` — `proxy_protocol=require` and the peer is not in `trusted_proxies`
-  - `bad_header` — signature mismatch, truncated header, or unsupported command/address family
-  - `timeout` — peek or header read exceeded `timeout.tls_handshake_secs`
+  - `untrusted_require` - `proxy_protocol=require` and the peer is not in `trusted_proxies`
+  - `bad_header` - signature mismatch, truncated header, or unsupported command/address family
+  - `timeout` - peek or header read exceeded `timeout.tls_handshake_secs`
 
 **Example queries**:
 
@@ -189,7 +189,7 @@ rate(huginn_proxy_protocol_no_client_addr_total[5m])
 > not sending headers (misconfigured edge, or wrong `trusted_proxies` CIDR). If
 > `huginn_proxy_protocol_dropped_total{reason="untrusted_require"}` climbs, a peer outside the
 > trusted range is reaching huginn directly. Any non-zero `huginn_proxy_protocol_no_client_addr_total`
-> means a trusted proxy is sending PROXY headers without a usable client IP (non-IP address family) —
+> means a trusted proxy is sending PROXY headers without a usable client IP (non-IP address family) -
 > the connection is still served on the socket peer, but the eBPF SYN fingerprint and `X-Forwarded-*`
 > will not reflect the real client, so backend signature validation is degraded for those requests.
 
@@ -205,10 +205,10 @@ rate(huginn_proxy_protocol_no_client_addr_total[5m])
 
 The two request counters model the same two layers as Traefik's `entrypoint` / `router` metrics:
 
-- **`huginn_entrypoint_requests_total`** — incremented for every HTTP request the proxy receives, including those
+- **`huginn_entrypoint_requests_total`** - incremented for every HTTP request the proxy receives, including those
   rejected before routing (IP block → 403, no matching route → 404). Use this for total load and overall status-code
   distribution visible to clients.
-- **`huginn_requests_total`** — incremented only when a route matched. Carries the `route` and `domain` labels so you
+- **`huginn_requests_total`** - incremented only when a route matched. Carries the `route` and `domain` labels so you
   can break down traffic, latency, and error rates per route *and* per domain. Unrouted requests (403, 404) are not
   counted here.
 
@@ -217,8 +217,8 @@ The two request counters model the same two layers as Traefik's `entrypoint` / `
 - `method`: HTTP method (`GET`, `POST`, `PUT`, etc.)
 - `status_code`: HTTP status code (`200`, `404`, `500`, etc.)
 - `protocol`: HTTP version (`HTTP/1.1`, `HTTP/2.0`)
-- `route`: Matched route prefix — only on `huginn_requests_total` (e.g., `/api`, `/`)
-- `domain`: Matched domain identity — only on `huginn_requests_total`. The domain's configured `host`
+- `route`: Matched route prefix - only on `huginn_requests_total` (e.g., `/api`, `/`)
+- `domain`: Matched domain identity - only on `huginn_requests_total`. The domain's configured `host`
   (e.g. `api.example.com`, `*.example.com`), or `_default_` for the catch-all (host-less) domain. This is the
   *configured* identity, never the client's real `Host`, so cardinality stays bounded by the number of configured
   domains; a wildcard domain collapses all its subdomains into one series. Without it, the same route prefix under two
@@ -325,8 +325,8 @@ histogram_quantile(0.95, rate(huginn_tls_handshake_duration_seconds_bucket[5m]))
 
 **Labels**:
 
-- `reason`: Failure kind — `extraction_failed` (HTTP/2 connection where fingerprint could not be extracted, e.g.
-  malformed frames or connection closed before SETTINGS), `not_http2` (HTTP/1.1 connection — Akamai fingerprinting does
+- `reason`: Failure kind - `extraction_failed` (HTTP/2 connection where fingerprint could not be extracted, e.g.
+  malformed frames or connection closed before SETTINGS), `not_http2` (HTTP/1.1 connection - Akamai fingerprinting does
   not apply)
 
 #### TCP SYN Fingerprinting (p0f via eBPF)
@@ -339,7 +339,7 @@ histogram_quantile(0.95, rate(huginn_tls_handshake_duration_seconds_bucket[5m]))
 
 **Labels**:
 
-- `reason`: Lookup result — `hit` (fingerprint found and injected), `miss` (no BPF map entry — keep-alive reuse, IPv6
+- `reason`: Lookup result - `hit` (fingerprint found and injected), `miss` (no BPF map entry - keep-alive reuse, IPv6
   peer, or stale entry), `malformed` (entry present but TCP options undecodable)
 
 **Note**: TCP SYN fingerprinting requires the eBPF agent to be running and pinning BPF maps. The proxy reads from those
@@ -357,7 +357,7 @@ counters).
 - `header`: The header name the client attempted to supply (e.g. `x-http2-akamai`, `x-tcp-p0f`, `x-tls-ja4`)
 
 **Note**: All eight proxy-authoritative fingerprint headers are stripped unconditionally on every request. This counter
-is incremented only when the client actually sent one of those headers — i.e., when there was an active spoofing
+is incremented only when the client actually sent one of those headers - i.e., when there was an active spoofing
 attempt. A zero value means no clients have tried to forge fingerprints. The companion request header
 `x-fingerprint-spoofing-detected` (forwarded to the backend) lists the spoofed names per-request; this metric
 aggregates the same signal across requests for alerting.
@@ -415,7 +415,7 @@ histogram_quantile(0.95, rate(huginn_tls_fingerprint_extraction_duration_seconds
 - `error_type`: Error type (`connection_refused`, `timeout`, `dns_error`, etc.)
 - `protocol`: HTTP version used for backend request
 - `route`: Route that triggered the backend request
-- `domain`: Matched domain identity (configured `host`, or `_default_` for the catch-all — see §3)
+- `domain`: Matched domain identity (configured `host`, or `_default_` for the catch-all - see §3)
 
 **Example queries**:
 
@@ -486,7 +486,7 @@ sum by (backend) (rate(huginn_health_check_probes_total{result="fail"}[5m]))
 
 - `strategy`: Rate limiting strategy (`ip`, `header`, `route`, `combined`)
 - `route`: Route prefix (e.g., `/api`, `/`)
-- `domain`: Matched domain identity (configured `host`, or `_default_` for the catch-all — see §3)
+- `domain`: Matched domain identity (configured `host`, or `_default_` for the catch-all - see §3)
 
 **Example queries**:
 
@@ -635,7 +635,7 @@ sum by (protocol) (rate(huginn_mtls_connections_total[5m]))
 
 **Labels**:
 
-- `result`: Outcome of the reload attempt — `success` or `error`
+- `result`: Outcome of the reload attempt - `success` or `error`
 
 **Notes**:
 
@@ -661,13 +661,13 @@ sum by (protocol) (rate(huginn_mtls_connections_total[5m]))
 
 **Labels**:
 
-- `result`: Outcome of the reload attempt — `success` or `error`
+- `result`: Outcome of the reload attempt - `success` or `error`
 - `domain`: The domain host pattern the certificate belongs to (e.g. `api.example.com`, `*.example.com`).
   The catch-all (host-less) domain reports its certs under `domain="_default_"`.
 
 **Notes**:
 
-- Cert loading is driven by config hot-reload (`DynamicCertResolver::update`) — each SIGHUP or config file change
+- Cert loading is driven by config hot-reload (`DynamicCertResolver::update`) - each SIGHUP or config file change
   reloads all domain certs. This replaces the former per-file watcher model.
 - All three metrics are **per-domain** so you can track cert rotation independently for each domain.
 - Only domains that declare a certificate emit these metrics. Plain-HTTP domains and a cert-less catch-all
@@ -682,7 +682,7 @@ sum by (protocol) (rate(huginn_mtls_connections_total[5m]))
   certificate actually serving traffic.
 - Cert reload is **best-effort, per-domain**: one domain's failure does not abort the others. A failing domain
   keeps its *previously serving* cert (carried over from the last-good map), so its `huginn_tls_cert_hash` and
-  timestamp gauges stay at their last-good value — no spurious success is emitted for a carried-over cert.
+  timestamp gauges stay at their last-good value - no spurious success is emitted for a carried-over cert.
 - A **cert** reload failure does *not* flip `huginn_config_reload_total` to `error` (that counter tracks config
   parse/validation only); the config reload still counts as `success` (Traefik-style best-effort, see §12).
   Alert on `huginn_tls_cert_reload_total{result="error"}` to catch cert failures.
@@ -693,6 +693,67 @@ sum by (protocol) (rate(huginn_mtls_connections_total[5m]))
 - Alert on failed reload for any domain: `rate(huginn_tls_cert_reload_total{result="error"}[5m]) > 0`
 - Cert age by domain: `time() - huginn_tls_cert_last_reload_timestamp_seconds`
 - Domains with a cert loaded: `count by (domain)(huginn_tls_cert_hash)`
+
+---
+
+### 14. ACME Metrics
+
+| Metric                                         | Type    | Description                                                                                   | Labels                    |
+|------------------------------------------------|---------|-----------------------------------------------------------------------------------------------|---------------------------|
+| `huginn_acme_domains`                          | Gauge   | Number of domains served by in-process ACME (TLS-ALPN-01); set once at startup               | -                         |
+| `huginn_acme_cert_renewals_total`              | Counter | Total ACME certificate issuance/renewal attempts (startup cache loads excluded)               | `domain`, `result`        |
+| `huginn_acme_events_total`                     | Counter | Granular ACME state-machine event counter                                                     | `domain`, `event`         |
+| `huginn_acme_last_event_timestamp_seconds`     | Gauge   | Unix timestamp of the most recent ACME event per domain and outcome                           | `domain`, `result`        |
+| `huginn_acme_cert_ready`                       | Gauge   | 1 once the first certificate for this domain is deployed; 0 before that                      | `domain`                  |
+
+**Label values**:
+
+- `result`: `success` · `error`
+- `event`: `deployed_new` · `deployed_cached` · `cache_stored` · `error`
+
+**Notes**:
+
+- All ACME metrics are only emitted when the binary is built with `--features acme` **and** the
+  config has an `[acme]` block with at least one ACME-managed domain.
+- `huginn_acme_domains` is set **once at startup** and does not change at runtime (adding/removing
+  an ACME domain requires a restart).
+- `huginn_acme_cert_renewals_total{result="success"}` counts `DeployedNewCert` events only:
+  actual issuances and renewals. Startup cache loads (`deployed_cached`) are NOT counted here.
+- `huginn_acme_cert_renewals_total{result="error"}` counts any `EventError` variant (order
+  failure, cache I/O error, cert parse error, etc.).
+- A stale `huginn_acme_last_event_timestamp_seconds{result="success"}` (no update in several days)
+  indicates the renewal state machine may be stuck.
+- `huginn_acme_cert_ready` is set to 1 on the first `DeployedNewCert` or `DeployedCachedCert`
+  event for a domain. It drives readiness gating: `run()` defers `mark_ready()` until this
+  fires for at least one domain, preventing the load-balancer from routing traffic before a
+  certificate exists on the listener. Startup timeout: 300 s.
+
+**Example queries**:
+
+```promql
+# Is ACME active and for how many domains?
+huginn_acme_domains
+
+# Is at least one ACME domain ready (has a deployed cert)?
+min(huginn_acme_cert_ready) == 1
+
+# Alert: any domain still has no cert 5 minutes after startup
+huginn_acme_cert_ready == 0
+
+# Alert: any renewal failure in the last hour
+rate(huginn_acme_cert_renewals_total{result="error"}[1h]) > 0
+
+# Alert: no successful renewal event for a domain in the last 60 days
+# (Let's Encrypt renews ~30 days before expiry; 60d without a success event is abnormal)
+(time() - huginn_acme_last_event_timestamp_seconds{result="success"}) > 5184000
+
+# Renewal success rate by domain
+rate(huginn_acme_cert_renewals_total{result="success"}[7d])
+  / rate(huginn_acme_cert_renewals_total[7d])
+
+# Latest event type per domain (for dashboards)
+huginn_acme_events_total
+```
 
 ---
 

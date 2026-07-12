@@ -2,7 +2,7 @@ use huginn_ebpf::is_stale;
 
 #[test]
 fn fresh_entry_is_not_stale() {
-    // stored and current are the same tick — age = 0
+    // stored and current are the same tick - age = 0
     assert!(!is_stale(100, 100, 8192));
 }
 

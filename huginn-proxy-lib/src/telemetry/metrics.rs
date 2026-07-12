@@ -25,6 +25,7 @@ pub mod labels {
     pub const BACKEND: &str = "backend";
     pub const RESULT: &str = "result";
     pub const DOMAIN: &str = "domain";
+    pub const EVENT: &str = "event";
 }
 
 pub mod values {
@@ -46,6 +47,10 @@ pub mod values {
     pub const PROXY_PROTOCOL_DROP_UNTRUSTED_REQUIRE: &str = "untrusted_require";
     pub const PROXY_PROTOCOL_DROP_BAD_HEADER: &str = "bad_header";
     pub const PROXY_PROTOCOL_DROP_TIMEOUT: &str = "timeout";
+    pub const ACME_EVENT_DEPLOYED_NEW: &str = "deployed_new";
+    pub const ACME_EVENT_DEPLOYED_CACHED: &str = "deployed_cached";
+    pub const ACME_EVENT_CACHE_STORED: &str = "cache_stored";
+    pub const ACME_EVENT_ERROR: &str = "error";
 }
 
 #[derive(Clone)]
@@ -156,6 +161,27 @@ pub struct Metrics {
     pub tls_cert_last_reload_timestamp_seconds: Gauge<f64>,
     /// FNV-1a hash of the currently active certificate chain; changes on every rotation.
     pub tls_cert_hash: Gauge<u64>,
+
+    // ACME (automatic certificate management) metrics
+    /// Number of domains served by in-process ACME (TLS-ALPN-01). Set once at startup; `0`
+    /// (the default) means ACME is inactive.
+    pub acme_domains: Gauge<u64>,
+    /// `huginn_acme_cert_renewals_total{domain, result="success|error"}`: total certificate
+    /// issuance/renewal attempts. `success` = `DeployedNewCert`; `error` = any `EventError`.
+    /// Startup cache loads (`DeployedCachedCert`) are NOT counted here.
+    pub acme_cert_renewals_total: Counter<u64>,
+    /// `huginn_acme_events_total{domain, event}`: granular event counter for dashboards/debug.
+    /// `event` is one of `deployed_new | deployed_cached | cache_stored | error`.
+    pub acme_events_total: Counter<u64>,
+    /// `huginn_acme_last_event_timestamp_seconds{domain, result="success|error"}`: Unix
+    /// timestamp of the most recent event in each outcome bucket. A stale `success` timestamp
+    /// (no renewal in N days) can signal a stuck state machine.
+    pub acme_last_event_timestamp_seconds: Gauge<f64>,
+    /// `huginn_acme_cert_ready{domain}`: 1 once the first certificate for this domain has been
+    /// deployed (either a new issuance or a cached cert loaded from disk); 0 before that and
+    /// after shutdown. Used to drive readiness gating: `/ready` returns 503 until this gauge
+    /// is 1 for at least one domain.
+    pub acme_cert_ready: Gauge<u64>,
 }
 
 impl Metrics {
@@ -397,6 +423,28 @@ impl Metrics {
             tls_cert_hash: meter
                 .u64_gauge("huginn_tls_cert_hash")
                 .with_description("FNV-1a hash of the currently active certificate chain DER bytes; changes on every rotation.")
+                .build(),
+
+            acme_domains: meter
+                .u64_gauge("huginn_acme_domains")
+                .with_description("Number of domains served by in-process ACME (TLS-ALPN-01); set once at startup, 0 when ACME is inactive")
+                .build(),
+
+            acme_cert_renewals_total: meter
+                .u64_counter("huginn_acme_cert_renewals_total")
+                .with_description("Total ACME certificate issuance/renewal attempts, labelled result=success|error (startup cache loads excluded)")
+                .build(),
+            acme_events_total: meter
+                .u64_counter("huginn_acme_events_total")
+                .with_description("Granular ACME state-machine event counter, labelled event=deployed_new|deployed_cached|cache_stored|error")
+                .build(),
+            acme_last_event_timestamp_seconds: meter
+                .f64_gauge("huginn_acme_last_event_timestamp_seconds")
+                .with_description("Unix timestamp of the most recent ACME event per domain and outcome (result=success|error)")
+                .build(),
+            acme_cert_ready: meter
+                .u64_gauge("huginn_acme_cert_ready")
+                .with_description("1 once the first certificate for the domain is deployed (new issuance or cached); 0 otherwise")
                 .build(),
         }
     }
@@ -700,10 +748,7 @@ impl Metrics {
     /// Note: a hot reload that applied routes/backends but failed to load one or more
     /// domain certificates still counts as `success` here (Traefik-style best-effort).
     pub fn record_reload_success(&self, config_hash: u64) {
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs_f64();
+        let now = now_unix_secs();
         self.config_reload_total
             .add(1, &[KeyValue::new(labels::RESULT, values::RELOAD_SUCCESS)]);
         self.config_last_reload_timestamp_seconds.record(now, &[]);
@@ -719,10 +764,7 @@ impl Metrics {
     /// Record a successful TLS certificate load or hot reload for a specific domain.
     /// `cert_hash` is the FNV-1a hash of the certificate chain DER bytes.
     pub fn record_tls_cert_reload_success(&self, domain: &str, cert_hash: u64) {
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs_f64();
+        let now = now_unix_secs();
         let attrs = [
             KeyValue::new(labels::RESULT, values::RELOAD_SUCCESS),
             KeyValue::new(labels::DOMAIN, domain.to_string()),
@@ -742,6 +784,81 @@ impl Metrics {
                 KeyValue::new(labels::DOMAIN, domain.to_string()),
             ],
         );
+    }
+
+    /// Record the number of ACME-managed domains. Called once at startup when ACME is active;
+    /// the ACME domain set is fixed at boot, so this gauge does not change at runtime.
+    pub fn set_acme_domains(&self, count: u64) {
+        self.acme_domains.record(count, &[]);
+    }
+
+    /// Record a successful ACME certificate issuance or renewal (`DeployedNewCert`).
+    ///
+    /// Increments `huginn_acme_cert_renewals_total{result="success"}` and
+    /// `huginn_acme_events_total{event="deployed_new"}`, and updates the last-success timestamp.
+    pub fn record_acme_renewal_success(&self, domain: &str) {
+        let now = now_unix_secs();
+        let domain_kv = KeyValue::new(labels::DOMAIN, domain.to_string());
+        self.acme_cert_renewals_total
+            .add(1, &[domain_kv.clone(), KeyValue::new(labels::RESULT, values::RELOAD_SUCCESS)]);
+        self.acme_events_total.add(
+            1,
+            &[domain_kv.clone(), KeyValue::new(labels::EVENT, values::ACME_EVENT_DEPLOYED_NEW)],
+        );
+        self.acme_last_event_timestamp_seconds
+            .record(now, &[domain_kv, KeyValue::new(labels::RESULT, values::RELOAD_SUCCESS)]);
+    }
+
+    /// Record an ACME certificate loaded from the on-disk cache at startup
+    /// (`DeployedCachedCert`). Not counted as a renewal.
+    pub fn record_acme_cached_cert(&self, domain: &str) {
+        let now = now_unix_secs();
+        let domain_kv = KeyValue::new(labels::DOMAIN, domain.to_string());
+        self.acme_events_total.add(
+            1,
+            &[
+                domain_kv.clone(),
+                KeyValue::new(labels::EVENT, values::ACME_EVENT_DEPLOYED_CACHED),
+            ],
+        );
+        self.acme_last_event_timestamp_seconds
+            .record(now, &[domain_kv, KeyValue::new(labels::RESULT, values::RELOAD_SUCCESS)]);
+    }
+
+    /// Record an ACME cache persistence event (`CertCacheStore` / `AccountCacheStore`).
+    pub fn record_acme_cache_stored(&self, domain: &str) {
+        self.acme_events_total.add(
+            1,
+            &[
+                KeyValue::new(labels::DOMAIN, domain.to_string()),
+                KeyValue::new(labels::EVENT, values::ACME_EVENT_CACHE_STORED),
+            ],
+        );
+    }
+
+    /// Record an ACME error event (any `EventError` variant).
+    ///
+    /// Increments `huginn_acme_cert_renewals_total{result="error"}` and
+    /// `huginn_acme_events_total{event="error"}`, and updates the last-error timestamp.
+    pub fn record_acme_error(&self, domain: &str) {
+        let now = now_unix_secs();
+        let domain_kv = KeyValue::new(labels::DOMAIN, domain.to_string());
+        self.acme_cert_renewals_total
+            .add(1, &[domain_kv.clone(), KeyValue::new(labels::RESULT, values::RELOAD_ERROR)]);
+        self.acme_events_total
+            .add(1, &[domain_kv.clone(), KeyValue::new(labels::EVENT, values::ACME_EVENT_ERROR)]);
+        self.acme_last_event_timestamp_seconds
+            .record(now, &[domain_kv, KeyValue::new(labels::RESULT, values::RELOAD_ERROR)]);
+    }
+
+    /// Set the per-domain cert-ready gauge (`huginn_acme_cert_ready{domain}`).
+    ///
+    /// Call with `ready = true` on the first `DeployedNewCert` or `DeployedCachedCert` event
+    /// for a domain. The gauge drives readiness gating: the proxy defers `/ready` until at
+    /// least one ACME domain has this set to 1.
+    pub fn set_acme_cert_ready(&self, domain: &str, ready: bool) {
+        self.acme_cert_ready
+            .record(u64::from(ready), &[KeyValue::new(labels::DOMAIN, domain.to_string())]);
     }
 
     /// Record a rejected incoming connection.
@@ -812,6 +929,14 @@ impl Metrics {
         self.proxy_protocol_dropped_total
             .add(1, &[KeyValue::new(labels::REASON, reason)]);
     }
+}
+
+/// Current Unix timestamp as fractional seconds. Used for timestamp gauges.
+fn now_unix_secs() -> f64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs_f64()
 }
 
 pub fn init_metrics() -> Result<(Arc<Metrics>, Registry), Box<dyn std::error::Error + Send + Sync>>

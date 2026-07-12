@@ -1,0 +1,49 @@
+name: 'Setup ACME Docker Compose services'
+description: 'Generate Pebble test PKI, build images, start the ACME demo stack, and wait for the proxy to obtain its first certificate'
+inputs:
+  compose-file:
+    description: 'Path to the ACME compose file'
+    required: false
+    default: 'examples/docker-compose.acme.yml'
+  cargo-features:
+    description: 'Cargo features passed to the plain target build (CARGO_FEATURES build arg). Default matches the published image.'
+    required: false
+    default: 'acme'
+  health-timeout:
+    description: 'Timeout in seconds to wait for the proxy healthcheck (ACME issuance against Pebble can take up to ~60s)'
+    required: false
+    default: '180'
+runs:
+  using: 'composite'
+  steps:
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Generate Pebble test PKI
+      shell: bash
+      run: bash examples/acme/gen-pebble-ca.sh
+
+    - name: Build proxy image (plain target)
+      shell: bash
+      run: |
+        docker buildx build \
+          --cache-from type=gha \
+          --cache-to   type=gha,mode=max \
+          -f docker/proxy.Dockerfile \
+          --target plain \
+          --build-arg CARGO_FEATURES=${{ inputs.cargo-features }} \
+          -t examples_proxy:latest \
+          --load \
+          .
+
+    - name: Start ACME demo stack
+      shell: bash
+      env:
+        DOCKER_BUILDKIT: 1
+        COMPOSE_DOCKER_CLI_BUILD: 1
+      run: |
+        docker compose -f ${{ inputs.compose-file }} up -d
+        echo "Waiting for proxy to become healthy (ACME issuance against Pebble)..."
+        timeout ${{ inputs.health-timeout }} bash -c \
+          'until docker compose -f ${{ inputs.compose-file }} ps proxy | grep -q "(healthy)"; do sleep 2; done'
+        docker compose -f ${{ inputs.compose-file }} ps

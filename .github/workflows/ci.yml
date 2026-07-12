@@ -176,6 +176,7 @@ jobs:
     strategy:
       matrix:
         crate:
+          - huginn-acme
           - huginn-proxy
           - huginn-ebpf
           - huginn-ebpf-agent
@@ -301,3 +302,32 @@ jobs:
         uses: ./.github/actions/setup-docker-compose
       - name: Run E2E tests
         run: cargo test --package tests-e2e --test e2e --verbose
+
+  test-e2e-acme:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+      - name: Install Rust ${{ env.rust_stable }}
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.rust_stable }}
+      - name: Setup ACME Docker Compose services
+        uses: ./.github/actions/setup-docker-compose-acme
+      - name: Run ACME E2E tests
+        run: cargo test --package tests-e2e --test acme --verbose
+      - name: Run ACME E2E renewal tests
+        run: cargo test --package tests-e2e --test acme_renewal --verbose
+      - name: Dump compose logs on failure
+        if: failure()
+        run: docker compose -f examples/docker-compose.acme.yml logs --no-color

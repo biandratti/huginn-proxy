@@ -135,6 +135,7 @@ pub async fn spawn_proxy(
             dynamic_cfg,
             Metrics::new_noop(),
             None,
+            None,
             WatchOptions { config_path: Some(config_path_buf), watch, watch_delay_secs },
             shutdown_tx,
             huginn_proxy_lib::Readiness::new(),

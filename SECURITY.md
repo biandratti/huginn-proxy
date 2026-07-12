@@ -21,10 +21,10 @@ If the report is confirmed, a patch will be released and you will be credited in
 
 Areas particularly relevant for security reports:
 
-- **TLS termination** — certificate handling, session resumption, cipher negotiation
-- **mTLS** — client certificate validation bypasses
-- **IP filtering** — ACL bypass or spoofing via forwarded headers
-- **Rate limiting** — bypass via header manipulation or distributed requests
-- **Fingerprint injection** — header spoofing that reaches backends despite proxy overrides
-- **eBPF/XDP** — privilege escalation or memory safety issues in the kernel path
-- **Config hot reload** — unsafe config swap or race conditions
+- **TLS termination** - certificate handling, session resumption, cipher negotiation
+- **mTLS** - client certificate validation bypasses
+- **IP filtering** - ACL bypass or spoofing via forwarded headers
+- **Rate limiting** - bypass via header manipulation or distributed requests
+- **Fingerprint injection** - header spoofing that reaches backends despite proxy overrides
+- **eBPF/XDP** - privilege escalation or memory safety issues in the kernel path
+- **Config hot reload** - unsafe config swap or race conditions

@@ -53,8 +53,7 @@ alpn = ["h2"]
 
 [[domains]]
 host = "api.example.com"
-cert_path = "{}"
-key_path  = "{}"
+cert = {{ type = "file", cert_path = "{}", key_path = "{}" }}
 routes = [
   {{ prefix = "/api", backend = "backend-a:9000" }},
   {{ prefix = "/", backend = "backend-b:9000" }}
@@ -70,7 +69,7 @@ routes = [
     assert_eq!(cfg.domains.len(), 1);
     assert_eq!(cfg.domains[0].routes.len(), 2);
     assert_eq!(
-        cfg.domains[0].cert_path.as_deref(),
+        cfg.domains[0].cert_file().map(|(c, _)| c),
         Some(cert_path.display().to_string().as_str())
     );
     let tls = cfg.tls.ok_or("tls missing")?;
@@ -383,6 +382,348 @@ requests_per_second = 5
 
     assert!(security_override_warnings(&cfg).is_empty());
 
+    let _ = fs::remove_file(&path);
+    Ok(())
+}
+
+#[test]
+fn loads_acme_domain() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let path = tmp_path("acme-ok");
+    let toml = r#"
+listen = { addrs = ["127.0.0.1:0"] }
+backends = [{ address = "backend:9000" }]
+
+[tls]
+alpn = ["h2"]
+
+[acme]
+contacts = ["ops@example.com"]
+cache_dir = "/var/lib/huginn-proxy/acme"
+
+[[domains]]
+host = "api.example.com"
+cert = { type = "acme" }
+routes = [{ prefix = "/", backend = "backend:9000" }]
+"#;
+    fs::write(&path, toml)?;
+
+    let cfg = load_from_path(&path)?;
+    assert!(cfg.domains[0].is_acme(true));
+    assert!(cfg.domains[0].cert_file().is_none());
+    let acme = cfg.acme.ok_or("acme block missing")?;
+    assert_eq!(acme.contacts, vec!["ops@example.com".to_string()]);
+    assert!(!acme.staging);
+
+    let _ = fs::remove_file(&path);
+    Ok(())
+}
+
+#[test]
+fn acme_by_default_when_cert_omitted() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    // A domain that omits `cert` while `[acme]` is configured is ACME-managed by default
+    // (no per-domain flag needed). It must validate like an explicit `cert = { type = "acme" }`.
+    let path = tmp_path("acme-default");
+    let toml = r#"
+listen = { addrs = ["127.0.0.1:0"] }
+backends = [{ address = "backend:9000" }]
+
+[tls]
+alpn = ["h2"]
+
+[acme]
+contacts = ["ops@example.com"]
+cache_dir = "/var/lib/huginn-proxy/acme"
+
+[[domains]]
+host = "api.example.com"
+routes = [{ prefix = "/", backend = "backend:9000" }]
+"#;
+    fs::write(&path, toml)?;
+
+    let cfg = load_from_path(&path)?;
+    // `cert` is absent on the wire …
+    assert!(cfg.domains[0].cert.is_none());
+    // … but resolves to ACME because `[acme]` is present (ACME-by-default).
+    assert!(cfg.domains[0].is_acme(true));
+    assert!(cfg.domains[0].cert_file().is_none());
+
+    let _ = fs::remove_file(&path);
+    Ok(())
+}
+
+#[test]
+fn rejects_acme_without_acme_block() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let path = tmp_path("acme-no-block");
+    let toml = r#"
+listen = { addrs = ["127.0.0.1:0"] }
+backends = [{ address = "backend:9000" }]
+
+[tls]
+alpn = ["h2"]
+
+[[domains]]
+host = "api.example.com"
+cert = { type = "acme" }
+"#;
+    fs::write(&path, toml)?;
+    let err = match load_from_path(&path) {
+        Ok(_) => panic!("should reject acme=true without [acme] block"),
+        Err(e) => e.to_string(),
+    };
+    assert!(err.contains("requires a static [acme] block"), "got: {err}");
+    let _ = fs::remove_file(&path);
+    Ok(())
+}
+
+#[test]
+fn rejects_acme_without_tls() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let path = tmp_path("acme-no-tls");
+    let toml = r#"
+listen = { addrs = ["127.0.0.1:0"] }
+backends = [{ address = "backend:9000" }]
+
+[acme]
+contacts = ["ops@example.com"]
+cache_dir = "/tmp/acme"
+
+[[domains]]
+host = "api.example.com"
+cert = { type = "acme" }
+"#;
+    fs::write(&path, toml)?;
+    let err = match load_from_path(&path) {
+        Ok(_) => panic!("should reject acme=true without [tls]"),
+        Err(e) => e.to_string(),
+    };
+    assert!(err.contains("requires a [tls] block"), "got: {err}");
+    let _ = fs::remove_file(&path);
+    Ok(())
+}
+
+#[test]
+fn rejects_acme_with_empty_contacts() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let path = tmp_path("acme-empty-contacts");
+    let toml = r#"
+listen = { addrs = ["127.0.0.1:0"] }
+backends = [{ address = "backend:9000" }]
+
+[tls]
+alpn = ["h2"]
+
+[acme]
+contacts = []
+cache_dir = "/tmp/acme"
+
+[[domains]]
+host = "api.example.com"
+cert = { type = "acme" }
+"#;
+    fs::write(&path, toml)?;
+    let err = match load_from_path(&path) {
+        Ok(_) => panic!("should reject [acme] with empty contacts"),
+        Err(e) => e.to_string(),
+    };
+    assert!(err.contains("`contacts` must contain at least one"), "got: {err}");
+    let _ = fs::remove_file(&path);
+    Ok(())
+}
+
+#[test]
+fn rejects_acme_on_catch_all() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let path = tmp_path("acme-catchall");
+    let toml = r#"
+listen = { addrs = ["127.0.0.1:0"] }
+backends = [{ address = "backend:9000" }]
+
+[tls]
+alpn = ["h2"]
+
+[acme]
+contacts = ["ops@example.com"]
+cache_dir = "/tmp/acme"
+
+[[domains]]
+# no host → catch-all
+cert = { type = "acme" }
+"#;
+    fs::write(&path, toml)?;
+    let err = match load_from_path(&path) {
+        Ok(_) => panic!("should reject acme=true on catch-all domain"),
+        Err(e) => e.to_string(),
+    };
+    assert!(err.contains("catch-all"), "got: {err}");
+    let _ = fs::remove_file(&path);
+    Ok(())
+}
+
+#[test]
+fn rejects_acme_wildcard() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let path = tmp_path("acme-wildcard");
+    let toml = r#"
+listen = { addrs = ["127.0.0.1:0"] }
+backends = [{ address = "backend:9000" }]
+
+[tls]
+alpn = ["h2"]
+
+[acme]
+contacts = ["ops@example.com"]
+cache_dir = "/tmp/acme"
+
+[[domains]]
+host = "*.example.com"
+cert = { type = "acme" }
+"#;
+    fs::write(&path, toml)?;
+    let err = match load_from_path(&path) {
+        Ok(_) => panic!("should reject acme=true on wildcard host"),
+        Err(e) => e.to_string(),
+    };
+    assert!(err.contains("wildcard"), "got: {err}");
+    let _ = fs::remove_file(&path);
+    Ok(())
+}
+
+#[test]
+fn rejects_wildcard_under_global_acme() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let path = tmp_path("acme-global-wildcard");
+    let toml = r#"
+listen = { addrs = ["127.0.0.1:0"] }
+backends = [{ address = "backend:9000" }]
+
+[tls]
+alpn = ["h2"]
+
+[acme]
+contacts = ["ops@example.com"]
+cache_dir = "/tmp/acme"
+
+[[domains]]
+host = "*.example.com"
+routes = [{ prefix = "/", backend = "backend:9000" }]
+"#;
+    fs::write(&path, toml)?;
+    let err = match load_from_path(&path) {
+        Ok(_) => panic!("should reject a wildcard host under global ACME"),
+        Err(e) => e.to_string(),
+    };
+    assert!(err.contains("wildcard"), "got: {err}");
+    let _ = fs::remove_file(&path);
+    Ok(())
+}
+
+#[test]
+fn allows_wildcard_file_cert_under_global_acme(
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let path = tmp_path("acme-global-wildcard-file");
+    let cert_path = tmp_path("wildcard.crt");
+    let key_path = tmp_path("wildcard.key");
+    fs::write(&cert_path, "dummy cert")?;
+    fs::write(&key_path, "dummy key")?;
+    let toml = format!(
+        r#"
+listen = {{ addrs = ["127.0.0.1:0"] }}
+backends = [{{ address = "backend:9000" }}]
+
+[tls]
+alpn = ["h2"]
+
+[acme]
+contacts = ["ops@example.com"]
+cache_dir = "/tmp/acme"
+
+[[domains]]
+host = "*.example.com"
+cert = {{ type = "file", cert_path = "{}", key_path = "{}" }}
+routes = [{{ prefix = "/", backend = "backend:9000" }}]
+"#,
+        cert_path.display(),
+        key_path.display()
+    );
+    fs::write(&path, toml)?;
+    let cfg = load_from_path(&path)?;
+    assert!(cfg.domains[0].cert_file().is_some());
+    assert!(!cfg.domains[0].is_acme(true));
+    let _ = fs::remove_file(&path);
+    let _ = fs::remove_file(&cert_path);
+    let _ = fs::remove_file(&key_path);
+    Ok(())
+}
+
+#[test]
+fn rejects_acme_with_mtls_required() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let path = tmp_path("acme-mtls");
+    let ca_path = tmp_path("ca.crt");
+    fs::write(&ca_path, "dummy ca")?;
+    let toml = format!(
+        r#"
+listen = {{ addrs = ["127.0.0.1:0"] }}
+backends = [{{ address = "backend:9000" }}]
+
+[tls]
+alpn = ["h2"]
+client_auth = {{ ca_cert_path = "{}" }}
+
+[acme]
+contacts = ["ops@example.com"]
+cache_dir = "/tmp/acme"
+
+[[domains]]
+host = "api.example.com"
+cert = {{ type = "acme" }}
+"#,
+        ca_path.display()
+    );
+    fs::write(&path, toml)?;
+    let err = match load_from_path(&path) {
+        Ok(_) => panic!("should reject acme=true with client_auth = required"),
+        Err(e) => e.to_string(),
+    };
+    assert!(err.contains("client_auth"), "got: {err}");
+    let _ = fs::remove_file(&path);
+    let _ = fs::remove_file(&ca_path);
+    Ok(())
+}
+
+#[test]
+fn rejects_tls_domain_without_cert() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let path = tmp_path("tls-no-cert");
+    let toml = r#"
+listen = { addrs = ["127.0.0.1:0"] }
+backends = [{ address = "backend:9000" }]
+
+[tls]
+alpn = ["h2"]
+
+[[domains]]
+host = "api.example.com"
+routes = [{ prefix = "/", backend = "backend:9000" }]
+"#;
+    fs::write(&path, toml)?;
+    let err = match load_from_path(&path) {
+        Ok(_) => panic!("should reject a [tls] domain without `cert`"),
+        Err(e) => e.to_string(),
+    };
+    assert!(err.contains("must declare `cert`"), "got: {err}");
+    let _ = fs::remove_file(&path);
+    Ok(())
+}
+
+#[test]
+fn allows_cert_less_domain_without_tls() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let path = tmp_path("plain-no-cert");
+    let toml = r#"
+listen = { addrs = ["127.0.0.1:0"] }
+backends = [{ address = "backend:9000" }]
+
+[[domains]]
+host = "api.example.com"
+routes = [{ prefix = "/", backend = "backend:9000" }]
+"#;
+    fs::write(&path, toml)?;
+    let cfg = load_from_path(&path)?;
+    assert!(cfg.tls.is_none());
+    assert!(cfg.domains[0].cert.is_none());
     let _ = fs::remove_file(&path);
     Ok(())
 }

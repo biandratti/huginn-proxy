@@ -12,8 +12,18 @@ tokio = { workspace = true, features = ["rt-multi-thread", "macros", "net"] }
 
 [dev-dependencies]
 serial_test.workspace = true
+tokio-rustls.workspace = true
+x509-parser.workspace = true
 
 [[test]]
 name = "e2e"
 path = "tests/e2e.rs"
+
+[[test]]
+name = "acme"
+path = "tests/acme.rs"
+
+[[test]]
+name = "acme_renewal"
+path = "tests/acme_renewal.rs"
 

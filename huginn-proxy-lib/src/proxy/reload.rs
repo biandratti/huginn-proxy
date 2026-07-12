@@ -51,6 +51,7 @@ pub async fn try_reload(
     metrics: &Arc<Metrics>,
     health_supervisor: &HealthCheckSupervisor,
     cert_resolver: Option<&Arc<DynamicCertResolver>>,
+    acme_active: bool,
 ) {
     let _guard = reload_mutex.lock().await;
 
@@ -97,7 +98,9 @@ pub async fn try_reload(
     let cert_report = match cert_resolver {
         Some(resolver) => {
             let report = resolver.update(&new_dynamic.domains, metrics).await;
-            if !resolver.has_serviceable_cert() && !new_dynamic.domains.is_empty() {
+            // Composite-aware: ACME hosts (fixed at startup) also make TLS serviceable, so an
+            // ACME-only deploy must not log the spurious warning on every reload.
+            if !resolver.has_serviceable_cert() && !acme_active && !new_dynamic.domains.is_empty() {
                 info!(
                     "TLS is configured but no certificate is serviceable after reload; all TLS \
                      handshakes will be rejected until a cert is provided"

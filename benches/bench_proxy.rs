@@ -35,8 +35,8 @@ use bytes::Bytes;
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use http_body_util::Full;
 use huginn_proxy_lib::config::{
-    Backend, Domain, FingerprintConfig, KeepAliveConfig, ListenConfig, LoggingConfig, Route,
-    SecurityConfig, TelemetryConfig, TimeoutConfig,
+    Backend, CertSource, Domain, FingerprintConfig, KeepAliveConfig, ListenConfig, LoggingConfig,
+    Route, SecurityConfig, TelemetryConfig, TimeoutConfig,
 };
 use huginn_proxy_lib::fingerprinting::names;
 use huginn_proxy_lib::{Config, TlsConfig};
@@ -109,8 +109,10 @@ impl BenchFixture {
             }],
             domains: vec![Domain {
                 host: None,
-                cert_path: Some(cert_file.path().to_string_lossy().into_owned()),
-                key_path: Some(key_file.path().to_string_lossy().into_owned()),
+                cert: Some(CertSource::File {
+                    cert_path: cert_file.path().to_string_lossy().into_owned(),
+                    key_path: key_file.path().to_string_lossy().into_owned(),
+                }),
                 headers: None,
                 security: None,
                 fingerprinting: None,
@@ -150,6 +152,7 @@ impl BenchFixture {
                 client_auth: Default::default(),
                 session_resumption: Default::default(),
             }),
+            acme: None,
             fingerprint: FingerprintConfig {
                 tls_enabled: true,
                 http_enabled: true,
@@ -183,6 +186,7 @@ impl BenchFixture {
                 static_cfg,
                 dynamic_cfg,
                 huginn_proxy_lib::Metrics::new_noop(),
+                None,
                 None,
                 huginn_proxy_lib::WatchOptions::default(),
                 shutdown_tx,

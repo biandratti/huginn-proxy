@@ -7,6 +7,7 @@ use super::dynamic::backend::{Backend, BackendPoolConfig, Domain};
 use super::dynamic::headers::HeaderManipulation;
 use super::dynamic::security::{SecurityConfig, SecurityDynamicConfig};
 use super::dynamic::DynamicConfig;
+use super::startup::acme::AcmeConfig;
 use super::startup::fingerprinting::FingerprintConfig;
 use super::startup::listen::ListenConfig;
 use super::startup::telemetry::{LoggingConfig, TelemetryConfig};
@@ -36,6 +37,11 @@ pub struct Config {
     /// Default: None
     #[serde(default)]
     pub tls: Option<TlsConfig>,
+    /// ACME automatic certificate configuration (optional)
+    /// Required when any domain sets `acme = true`
+    /// Default: None
+    #[serde(default)]
+    pub acme: Option<AcmeConfig>,
     /// Fingerprinting configuration
     /// Controls which fingerprinting features are enabled
     #[serde(default)]
@@ -111,6 +117,7 @@ impl Config {
             static_cfg: StaticConfig {
                 listen: self.listen,
                 tls: self.tls,
+                acme: self.acme,
                 fingerprint: self.fingerprint,
                 logging: self.logging,
                 timeout: self.timeout,

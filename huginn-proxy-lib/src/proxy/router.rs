@@ -1,4 +1,4 @@
-use crate::config::{Domain, Route};
+use crate::config::{CertSource, Domain, Route};
 
 #[derive(Debug, Clone)]
 pub struct RouteMatch<'a> {
@@ -69,11 +69,29 @@ pub fn pick_domain<'a>(domains: &'a [Domain], host: &str) -> Option<&'a Domain> 
     domains.iter().find(|d| d.host.is_none())
 }
 
-/// The certificate a domain is effectively served with: its own `cert_path`, or the
-/// default certificate (the catch-all/host-less domain's `cert_path`) when it declares
-/// none. Mirrors `DynamicCertResolver`'s exact → wildcard → default resolution.
-fn effective_cert_path<'a>(domain: &'a Domain, default_cert: Option<&'a str>) -> Option<&'a str> {
-    domain.cert_path.as_deref().or(default_cert)
+/// Identity of the certificate a connection is served with, for authority comparison.
+///
+/// `File` certs are identified by their PEM path (distinct `[[domains]]` pointing at the same
+/// SAN cert file share one identity, so coalescing is allowed). ACME certs are issued per host,
+/// so each ACME domain has a unique identity (its host) and never coalesces with another entry.
+#[derive(PartialEq, Eq)]
+enum CertKey<'a> {
+    File(&'a str),
+    Acme(&'a str),
+}
+
+/// The certificate a domain is effectively served with: its own `File` cert, an ACME cert keyed
+/// by host, or the default certificate (the catch-all/host-less domain's `File` cert) when it
+/// declares none. Mirrors `DynamicCertResolver`'s exact → wildcard → default resolution.
+fn effective_cert_key<'a>(
+    domain: &'a Domain,
+    default_cert: Option<&'a str>,
+) -> Option<CertKey<'a>> {
+    match &domain.cert {
+        Some(CertSource::File { cert_path, .. }) => Some(CertKey::File(cert_path)),
+        Some(CertSource::Acme) => domain.host.as_deref().map(CertKey::Acme),
+        None => default_cert.map(CertKey::File),
+    }
 }
 
 /// Whether a request `host` is authoritative for a TLS connection whose SNI was `sni`,
@@ -105,9 +123,9 @@ pub fn authority_matches_sni(domains: &[Domain], sni: &str, host: &str) -> bool 
             let default_cert = domains
                 .iter()
                 .find(|d| d.host.is_none())
-                .and_then(|d| d.cert_path.as_deref());
-            let sni_cert = effective_cert_path(sni_domain, default_cert);
-            let host_cert = effective_cert_path(host_domain, default_cert);
+                .and_then(|d| d.cert_file().map(|(cert, _)| cert));
+            let sni_cert = effective_cert_key(sni_domain, default_cert);
+            let host_cert = effective_cert_key(host_domain, default_cert);
             sni_cert.is_some() && sni_cert == host_cert
         }
         (None, None) => true,

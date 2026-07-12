@@ -14,7 +14,7 @@ health_check = { type = "http", path = "/", expected_status = 200, interval_secs
 address = "backend-b:9000"
 http_version = "http11"
 
-# No Docker service with this name — TCP probes fail immediately.
+# No Docker service with this name - TCP probes fail immediately.
 # Used by E2E to verify the proxy returns 502 when all candidates are unhealthy.
 [[backends]]
 address = "unreachable-backend:9000"
@@ -22,8 +22,7 @@ http_version = "http11"
 health_check = { type = "tcp", interval_secs = 1, timeout_secs = 1, unhealthy_threshold = 2, healthy_threshold = 2 }
 
 [[domains]]
-cert_path = "/config/certs/server.crt"
-key_path = "/config/certs/server.key"
+cert = { type = "file", cert_path = "/config/certs/server.crt", key_path = "/config/certs/server.key" }
 
 [domains.headers.response]
 remove = ["Server", "X-Powered-By", "X-AspNet-Version"]
@@ -117,7 +116,7 @@ window_seconds = 1
 limit_by = "ip"
 
 # Per-route IP ACL (whole-block). Allowlist a TEST-NET-1 range (RFC 5737) that no real client
-# uses, so every request to this route is rejected with 403 — proving route-level ACL while the
+# uses, so every request to this route is rejected with 403 - proving route-level ACL while the
 # global ip_filter stays disabled. Exercised by the route_ip_filter E2E test.
 [[domains.routes]]
 prefix = "/acl-denied"

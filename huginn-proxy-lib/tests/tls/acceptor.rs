@@ -7,39 +7,37 @@ use std::fs;
 /// ALPN and client-auth wiring. Cert resolution itself is covered by `cert_resolver`.
 fn build_with(
     alpn: Vec<String>,
-    client_auth: ClientAuth,
+    client_auth: Option<ClientAuth>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    build_acceptor(&alpn, &TlsOptions::default(), &client_auth)?;
+    build_acceptor(&alpn, &TlsOptions::default(), client_auth.as_ref(), false)?;
     Ok(())
 }
 
 #[test]
 fn test_build_tls_acceptor_success() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let result = build_with(vec!["h2".to_string()], ClientAuth::Disabled);
+    let result = build_with(vec!["h2".to_string()], None);
     assert!(result.is_ok(), "should succeed with valid TLS options");
     Ok(())
 }
 
 #[test]
 fn test_build_tls_acceptor_empty_alpn() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let result = build_with(vec![], ClientAuth::Disabled);
+    let result = build_with(vec![], None);
     assert!(result.is_ok(), "should succeed with empty ALPN");
     Ok(())
 }
 
 #[test]
 fn test_build_tls_acceptor_custom_alpn() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let result = build_with(vec!["h2".to_string()], ClientAuth::Disabled);
+    let result = build_with(vec!["h2".to_string()], None);
     assert!(result.is_ok(), "should succeed with custom ALPN");
     Ok(())
 }
 
 #[test]
 fn test_mtls_missing_client_ca() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let result = build_with(
-        vec![],
-        ClientAuth::Required { ca_cert_path: "/nonexistent/ca.pem".to_string() },
-    );
+    let result =
+        build_with(vec![], Some(ClientAuth { ca_cert_path: "/nonexistent/ca.pem".to_string() }));
     assert!(result.is_err());
     if let Err(err) = result {
         let msg = format!("{err}");
@@ -53,7 +51,7 @@ fn test_mtls_invalid_client_ca_pem() -> Result<(), Box<dyn std::error::Error + S
     let ca_path = tmp_path("invalid_ca.pem");
     fs::write(&ca_path, b"not a valid PEM file")?;
     let result =
-        build_with(vec![], ClientAuth::Required { ca_cert_path: ca_path.display().to_string() });
+        build_with(vec![], Some(ClientAuth { ca_cert_path: ca_path.display().to_string() }));
     let _ = fs::remove_file(&ca_path);
     assert!(result.is_err());
     if let Err(err) = result {
@@ -73,7 +71,7 @@ fn test_mtls_valid_client_ca_format() -> Result<(), Box<dyn std::error::Error + 
     let ca_cert = rcgen::generate_simple_self_signed(vec!["ca.example.com".to_string()])?;
     fs::write(&ca_path, ca_cert.cert.pem())?;
     let result =
-        build_with(vec![], ClientAuth::Required { ca_cert_path: ca_path.display().to_string() });
+        build_with(vec![], Some(ClientAuth { ca_cert_path: ca_path.display().to_string() }));
     let _ = fs::remove_file(&ca_path);
     assert!(result.is_ok(), "should succeed with valid CA format");
     Ok(())
@@ -90,14 +88,8 @@ fn test_mtls_multiple_ca_certificates() -> Result<(), Box<dyn std::error::Error 
     ca_pem.push_str(&ca3.cert.pem());
     fs::write(&ca_path, ca_pem)?;
     let result =
-        build_with(vec![], ClientAuth::Required { ca_cert_path: ca_path.display().to_string() });
+        build_with(vec![], Some(ClientAuth { ca_cert_path: ca_path.display().to_string() }));
     let _ = fs::remove_file(&ca_path);
     assert!(result.is_ok(), "should succeed with multiple CA certificates");
     Ok(())
-}
-
-#[test]
-fn test_client_auth_enum_default() {
-    let default_auth = ClientAuth::default();
-    assert!(matches!(default_auth, ClientAuth::Disabled));
 }
