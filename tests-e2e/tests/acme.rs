@@ -134,6 +134,28 @@ async fn acme_metrics_cert_ready_and_renewals() -> TestResult {
     Ok(())
 }
 
+/// Pebble is configured with a short `certificateValidityPeriod`. This test asserts that
+/// the issued cert actually has a short validity so that renewal tests can observe a serial
+/// change within their timeout. If this test fails, check `examples/acme/pebble-config.json`
+/// and confirm the Pebble image supports `certificateValidityPeriod`.
+#[tokio::test]
+async fn acme_cert_has_short_validity() -> TestResult {
+    let leaf = fetch_leaf_certificate().await?;
+    let (_, cert) = x509_parser::parse_x509_certificate(leaf.as_ref())
+        .map_err(|e| format!("failed to parse certificate: {e}"))?;
+
+    let not_before = cert.validity().not_before.timestamp();
+    let not_after = cert.validity().not_after.timestamp();
+    let validity_secs = not_after - not_before;
+
+    assert!(
+        validity_secs <= 300,
+        "Pebble must issue short-lived certs (<=300 s) for renewal tests; got {validity_secs} s. \
+         Ensure 'certificateValidityPeriod' is set in examples/acme/pebble-config.json."
+    );
+    Ok(())
+}
+
 /// The resolver serves a valid Pebble-issued cert on every consecutive connection.
 /// Verifies `CompositeResolver` stability: no random cert flapping between connections.
 #[tokio::test]

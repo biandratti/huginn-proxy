@@ -8,6 +8,6 @@
     "tlsPort": 8443,
     "ocspResponderURL": "",
     "externalAccountBindingRequired": false,
-    "certificateValidityPeriod": 45
+    "certificateValidityPeriod": 90
   }
 }

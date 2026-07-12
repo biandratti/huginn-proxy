@@ -1,8 +1,8 @@
 //! ACME end-to-end tests: certificate renewal and DirCache persistence.
 //!
-//! Requires `examples/docker-compose.acme.yml` with `"certificateValidityPeriod": 45` set in
-//! `examples/acme/pebble-config.json`. With 45 s validity, `rustls-acme` triggers renewal at
-//! ~30 s (at `not_after - validity/3`), making the full renewal cycle observable in CI.
+//! Requires `examples/docker-compose.acme.yml` with `"certificateValidityPeriod": 90` set in
+//! `examples/acme/pebble-config.json`. With 90 s validity, `rustls-acme` triggers renewal at
+//! ~60 s (at `not_after - validity/3`), giving a 30 s window for the ACME order cycle.
 //!
 //! Run with:
 //!
@@ -32,13 +32,22 @@ use serial_test::serial;
 type TestResult = Result<(), Box<dyn std::error::Error + Send + Sync>>;
 
 /// Pebble `certificateValidityPeriod` value (seconds). rustls-acme renews at 2/3 of this:
-/// trigger at ~30 s, giving a ~20 s window to capture serial1 before renewal fires.
-const CERT_VALIDITY_SECS: u64 = 45;
+/// trigger at ~60 s, giving a 30 s window for the ACME order cycle before expiry.
+const CERT_VALIDITY_SECS: u64 = 90;
 
 /// Poll timeout for each renewal test. Two full cert lifetimes gives ample margin.
-const RENEWAL_TIMEOUT_SECS: u64 = CERT_VALIDITY_SECS * 3;
+const RENEWAL_TIMEOUT_SECS: u64 = CERT_VALIDITY_SECS * 2;
 
-const COMPOSE_FILE: &str = "examples/docker-compose.acme.yml";
+/// Absolute path to the ACME compose file, resolved from the package manifest directory so
+/// it works regardless of where `cargo test` sets the working directory (which is the package
+/// root, not the workspace root).
+fn compose_file() -> Result<std::path::PathBuf, Box<dyn std::error::Error + Send + Sync>> {
+    let manifest = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let workspace = manifest
+        .parent()
+        .ok_or("CARGO_MANIFEST_DIR has no parent - cannot locate workspace root")?;
+    Ok(workspace.join("examples/docker-compose.acme.yml"))
+}
 
 /// Poll until the leaf certificate's serial differs from `known`, or until
 /// `RENEWAL_TIMEOUT_SECS` elapses. Returns the new serial on success.
@@ -205,9 +214,12 @@ async fn acme_cache_survives_restart() -> TestResult {
     let leaf_before = fetch_leaf_certificate().await?;
     let serial_before = cert_serial(&leaf_before)?;
 
-    let status = tokio::task::spawn_blocking(|| {
+    let compose = compose_file()?;
+    let status = tokio::task::spawn_blocking(move || {
         std::process::Command::new("docker")
-            .args(["compose", "-f", COMPOSE_FILE, "restart", "proxy"])
+            .args(["compose", "-f"])
+            .arg(compose)
+            .args(["restart", "proxy"])
             .status()
     })
     .await
