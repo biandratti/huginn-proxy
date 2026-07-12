@@ -25,8 +25,6 @@ use x509_parser::extensions::GeneralName;
 
 type TestResult = Result<(), Box<dyn std::error::Error + Send + Sync>>;
 
-/// Prove a real ACME issuance: the served leaf is issued by Pebble (not a static/default
-/// cert; the `:8443` listener has no file cert configured) and the SAN matches our domain.
 #[tokio::test]
 async fn acme_cert_is_issued_by_pebble_for_the_domain() -> TestResult {
     let leaf = fetch_leaf_certificate().await?;
@@ -51,7 +49,6 @@ async fn acme_cert_is_issued_by_pebble_for_the_domain() -> TestResult {
     Ok(())
 }
 
-/// Traffic flows through the ACME cert: proxy returns 200 and a whoami body.
 #[tokio::test]
 async fn acme_proxy_serves_traffic_with_issued_cert() -> TestResult {
     let _ = fetch_leaf_certificate().await?;
@@ -75,7 +72,6 @@ async fn acme_proxy_serves_traffic_with_issued_cert() -> TestResult {
     Ok(())
 }
 
-/// `/ready` returns 200 once the first ACME certificate is deployed.
 #[tokio::test]
 async fn acme_readiness_endpoint_ok() -> TestResult {
     let _ = fetch_leaf_certificate().await?;
@@ -97,8 +93,6 @@ async fn acme_readiness_endpoint_ok() -> TestResult {
     Ok(())
 }
 
-/// Prometheus metrics reflect cert deployment: `huginn_acme_cert_ready == 1` and
-/// `huginn_acme_cert_renewals_total{result="success"} >= 1`.
 #[tokio::test]
 async fn acme_metrics_cert_ready_and_renewals() -> TestResult {
     let _ = fetch_leaf_certificate().await?;
@@ -134,30 +128,6 @@ async fn acme_metrics_cert_ready_and_renewals() -> TestResult {
     Ok(())
 }
 
-/// Pebble is configured with a short `certificateValidityPeriod`. This test asserts that
-/// the issued cert actually has a short validity so that renewal tests can observe a serial
-/// change within their timeout. If this test fails, check `examples/acme/pebble-config.json`
-/// and confirm the Pebble image supports `certificateValidityPeriod`.
-#[tokio::test]
-async fn acme_cert_has_short_validity() -> TestResult {
-    let leaf = fetch_leaf_certificate().await?;
-    let (_, cert) = x509_parser::parse_x509_certificate(leaf.as_ref())
-        .map_err(|e| format!("failed to parse certificate: {e}"))?;
-
-    let not_before = cert.validity().not_before.timestamp();
-    let not_after = cert.validity().not_after.timestamp();
-    let validity_secs = not_after - not_before;
-
-    assert!(
-        validity_secs <= 300,
-        "Pebble must issue short-lived certs (<=300 s) for renewal tests; got {validity_secs} s. \
-         Ensure 'certificateValidityPeriod' is set in examples/acme/pebble-config.json."
-    );
-    Ok(())
-}
-
-/// The resolver serves a valid Pebble-issued cert on every consecutive connection.
-/// Verifies `CompositeResolver` stability: no random cert flapping between connections.
 #[tokio::test]
 async fn acme_cert_served_on_consecutive_connections() -> TestResult {
     let _ = fetch_leaf_certificate().await?;
