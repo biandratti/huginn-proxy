@@ -7,6 +7,7 @@
     "httpPort": 80,
     "tlsPort": 8443,
     "ocspResponderURL": "",
-    "externalAccountBindingRequired": false
+    "externalAccountBindingRequired": false,
+    "certificateValidityPeriod": 45
   }
 }

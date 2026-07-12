@@ -326,6 +326,8 @@ jobs:
         uses: ./.github/actions/setup-docker-compose-acme
       - name: Run ACME E2E tests
         run: cargo test --package tests-e2e --test acme --verbose
+      - name: Run ACME E2E renewal tests
+        run: cargo test --package tests-e2e --test acme_renewal --verbose
       - name: Dump compose logs on failure
         if: failure()
         run: docker compose -f examples/docker-compose.acme.yml logs --no-color

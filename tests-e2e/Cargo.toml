@@ -23,3 +23,7 @@ path = "tests/e2e.rs"
 name = "acme"
 path = "tests/acme.rs"
 
+[[test]]
+name = "acme_renewal"
+path = "tests/acme_renewal.rs"
+
