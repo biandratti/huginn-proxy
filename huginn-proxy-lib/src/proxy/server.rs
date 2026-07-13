@@ -174,6 +174,7 @@ pub async fn run(
             addr,
             listener,
             Arc::clone(&shutdown_signal),
+            shutdown_rx.clone(),
             Arc::clone(&connection_manager),
             Arc::clone(&ctx),
         ));

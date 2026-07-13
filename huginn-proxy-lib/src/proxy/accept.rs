@@ -6,6 +6,7 @@ use crate::proxy::connection::{ConnectionError, ConnectionManager};
 use crate::proxy::peer_resolution::{resolve_peer, ResolvedProxyProtocol};
 use crate::proxy::reload::{SharedClientPool, SharedDynamicConfig, SharedRateLimiter};
 use crate::proxy::security_context::SecurityContext;
+use crate::proxy::shutdown::ShutdownWatch;
 use crate::proxy::transport::{
     handle_plain_connection, handle_tls_connection, PlainConnectionConfig, TlsConnectionConfig,
 };
@@ -48,6 +49,7 @@ pub async fn accept_loop(
     addr: SocketAddr,
     listener: TcpListener,
     shutdown_signal: Arc<AtomicUsize>,
+    mut shutdown_rx: ShutdownWatch,
     connection_manager: Arc<ConnectionManager>,
     ctx: Arc<AcceptContext>,
 ) {
@@ -56,15 +58,21 @@ pub async fn accept_loop(
             break;
         }
 
-        // TODO: potential hang at shutdown, if the shutdown signal is set after the check above
-        // but before this await, the loop blocks until a new client connects. Fix: use
-        // tokio::select! to race listener.accept() against a shutdown notification.
-        let (stream, socket_peer) = match listener.accept().await {
-            Ok(pair) => pair,
-            Err(e) => {
-                warn!(error = %e, ?addr, "accept error");
-                continue;
-            }
+        // Raced against `shutdown_rx` so a shutdown signalled while this await is pending is
+        // observed immediately, instead of only being checked before the next `accept()` call
+        // (which could block indefinitely under low traffic). `shutdown_signal` and `shutdown_rx`
+        // fire together (see `server::run`'s SIGTERM/SIGINT handlers), so this closes the gap
+        // without replacing `shutdown_signal`, still needed by `ConnectionManager`'s synchronous
+        // `is_shutdown()` check below.
+        let (stream, socket_peer) = tokio::select! {
+            accepted = listener.accept() => match accepted {
+                Ok(pair) => pair,
+                Err(e) => {
+                    warn!(error = %e, ?addr, "accept error");
+                    continue;
+                }
+            },
+            _ = shutdown_rx.changed() => break,
         };
 
         // Connection accounting is keyed on the real TCP peer, never the PROXY-declared client.
