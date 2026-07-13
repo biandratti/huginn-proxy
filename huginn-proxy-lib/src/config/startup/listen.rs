@@ -19,6 +19,36 @@ pub enum ProxyProtocolMode {
     Require,
 }
 
+/// PROXY protocol configuration for a listener: whether/how to honor it, and how long to wait
+/// for the header. Both settings are static (restart to apply) - `mode` alters the socket
+/// handshake, and `header_timeout_ms` is derived once at startup (see
+/// `proxy::accept::resolve_proxy_protocol_header_timeout`).
+#[derive(Debug, Deserialize, Clone, Copy, PartialEq, Eq)]
+pub struct ProxyProtocolConfig {
+    /// PROXY protocol handling. Only honored from peers in `security.trusted_proxies`.
+    /// Default: off.
+    #[serde(default)]
+    pub mode: ProxyProtocolMode,
+    /// Timeout to read a PROXY header (v1 or v2) after a trusted peer is detected, in
+    /// milliseconds. Covers both the version-sniff peek loop and the full header read.
+    /// A tiny header (v1 ≤107 bytes, v2 16+≤2048 bytes) from a legitimate L4 proxy arrives in
+    /// the very first write, so this stays well below a TLS handshake timeout.
+    /// `0` falls back to an internal 1 s timeout (not recommended: a slow/hostile trusted peer
+    /// could park a connection slot for that long). Only relevant when `mode` is `optional` or
+    /// `require`. Default: 100.
+    #[serde(default = "default_proxy_protocol_header_timeout_ms")]
+    pub header_timeout_ms: u64,
+}
+
+impl Default for ProxyProtocolConfig {
+    fn default() -> Self {
+        Self {
+            mode: ProxyProtocolMode::Off,
+            header_timeout_ms: default_proxy_protocol_header_timeout_ms(),
+        }
+    }
+}
+
 /// Listener configuration, addresses and kernel socket options.
 #[derive(Debug, Deserialize, Clone, PartialEq)]
 pub struct ListenConfig {
@@ -42,10 +72,10 @@ pub struct ListenConfig {
     /// Passed directly to `listen(2)`. Default: 4096 (matches modern Linux SOMAXCONN)
     #[serde(default = "default_tcp_backlog")]
     pub tcp_backlog: i32,
-    /// PROXY protocol handling (v1 and v2). Only honored from peers in `security.trusted_proxies`.
-    /// Default: off. Changing it alters the socket handshake, so it is static (restart to apply).
+    /// PROXY protocol (v1 and v2) handling: mode and header read timeout. See
+    /// [`ProxyProtocolConfig`].
     #[serde(default)]
-    pub proxy_protocol: ProxyProtocolMode,
+    pub proxy_protocol: ProxyProtocolConfig,
 }
 
 impl Default for ListenConfig {
@@ -53,11 +83,15 @@ impl Default for ListenConfig {
         Self {
             addrs: vec![],
             tcp_backlog: default_tcp_backlog(),
-            proxy_protocol: ProxyProtocolMode::Off,
+            proxy_protocol: ProxyProtocolConfig::default(),
         }
     }
 }
 
 fn default_tcp_backlog() -> i32 {
     4096
+}
+
+fn default_proxy_protocol_header_timeout_ms() -> u64 {
+    100
 }

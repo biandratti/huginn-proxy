@@ -4,7 +4,7 @@ use crate::config::watcher::spawn_config_watcher;
 use crate::config::StaticConfig;
 use crate::error::Result;
 pub use crate::proxy::accept::SynProbe;
-use crate::proxy::accept::{accept_loop, AcceptContext};
+use crate::proxy::accept::{accept_loop, AcceptContext, ResolvedProxyProtocol};
 use crate::proxy::connection::ConnectionManager;
 use crate::proxy::listener::{bind_listener, register_signal};
 use crate::proxy::protocol::warn_proxy_protocol_trust_gap;
@@ -161,7 +161,7 @@ pub async fn run(
         connection_handling_timeout: Duration::from_secs(
             static_cfg.timeout.connection_handling_secs,
         ),
-        proxy_protocol: static_cfg.listen.proxy_protocol,
+        proxy_protocol: ResolvedProxyProtocol::resolve(static_cfg.listen.proxy_protocol),
     });
 
     // Spawn one accept task per listener.
@@ -179,7 +179,7 @@ pub async fn run(
     }
 
     warn_proxy_protocol_trust_gap(
-        static_cfg.listen.proxy_protocol,
+        static_cfg.listen.proxy_protocol.mode,
         &dynamic_cfg.load().security.trusted_proxies,
     );
 

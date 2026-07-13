@@ -1,11 +1,11 @@
 use crate::backend::health_check::HealthRegistry;
 use crate::backend::{BackendSelector, UpstreamGateway};
-use crate::config::{FingerprintConfig, KeepAliveConfig, ProxyProtocolMode};
+use crate::config::{FingerprintConfig, KeepAliveConfig, ProxyProtocolConfig, ProxyProtocolMode};
 use crate::fingerprinting::{SynResult, TcpObservation};
 use crate::proxy::connection::{ConnectionError, ConnectionManager};
 use crate::proxy::protocol::{
     detect_proxy_protocol, normalize_mapped_ipv4, read_proxy_header_v1, read_proxy_header_v2,
-    ProxyProtocolDetection, ProxySource,
+    ProxyProtocolDetection, ProxyProtocolError, ProxySource,
 };
 use crate::proxy::reload::{SharedClientPool, SharedDynamicConfig, SharedRateLimiter};
 use crate::proxy::security_context::SecurityContext;
@@ -18,10 +18,11 @@ use crate::tls::setup::SharedTlsAcceptor;
 use hyper_util::rt::TokioExecutor;
 use hyper_util::server::conn::auto::Builder as ConnBuilder;
 use ipnet::IpNet;
-use std::net::SocketAddr;
+use std::net::{IpAddr, SocketAddr};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use tokio::net::{TcpListener, TcpStream};
+use tokio::time::error::Elapsed;
 use tokio::time::{timeout, Duration, Instant};
 use tracing::{debug, trace, warn};
 
@@ -30,6 +31,26 @@ use tracing::{debug, trace, warn};
 /// Returns a [`SynResult`] so the server can record a precise metric label.
 /// Implemented by `huginn-proxy` when the `ebpf-tcp` feature is enabled.
 pub type SynProbe = Arc<dyn Fn(SocketAddr) -> SynResult + Send + Sync>;
+
+/// Runtime form of `listen.proxy_protocol`: the mode plus the effective header-read timeout,
+/// resolved once in `server::run` (`header_timeout_ms == 0` mapped to
+/// [`PROXY_HEADER_FALLBACK_TIMEOUT`]) rather than on every accepted connection.
+#[derive(Debug, Clone, Copy)]
+pub struct ResolvedProxyProtocol {
+    pub mode: ProxyProtocolMode,
+    pub header_timeout: Duration,
+}
+
+impl ResolvedProxyProtocol {
+    /// Resolve a listener's static [`ProxyProtocolConfig`] into this runtime form. See
+    /// [`resolve_proxy_protocol_header_timeout`].
+    pub fn resolve(config: ProxyProtocolConfig) -> Self {
+        Self {
+            mode: config.mode,
+            header_timeout: resolve_proxy_protocol_header_timeout(config.header_timeout_ms),
+        }
+    }
+}
 
 /// Shared state for accept loops, built once in `run()` and cloned per listener.
 pub struct AcceptContext {
@@ -46,7 +67,7 @@ pub struct AcceptContext {
     pub backend_selector: Arc<BackendSelector>,
     pub tls_handshake_timeout: Duration,
     pub connection_handling_timeout: Duration,
-    pub proxy_protocol: ProxyProtocolMode,
+    pub proxy_protocol: ResolvedProxyProtocol,
 }
 
 pub async fn accept_loop(
@@ -98,15 +119,15 @@ pub async fn accept_loop(
 
             // Resolve the effective client peer. Runs inside the spawned task so that slow or
             // malicious peers cannot delay acceptance of subsequent connections: a peer
-            // deliberately withholding the PROXY header up to the timeout (default 15 s) would
+            // deliberately withholding the PROXY header up to the timeout (default 100 ms) would
             // otherwise serialize accepts on this listener.
             //
             // Behind an L4 passthrough proxy this recovers the original client `(src_ip, src_port)`
             // from the PROXY protocol header (v1 or v2) so the eBPF SYN lookup, `X-Forwarded-*`,
             // rate-limiting, IP filtering and logs all see the real client.
             let peer = match resolve_peer(
-                ctx_task.proxy_protocol,
-                ctx_task.tls_handshake_timeout,
+                ctx_task.proxy_protocol.mode,
+                ctx_task.proxy_protocol.header_timeout,
                 &ctx_task.metrics,
                 &dynamic.security.trusted_proxies,
                 &mut stream,
@@ -191,6 +212,135 @@ pub async fn accept_loop(
     }
 }
 
+/// Fallback timeout applied when `listen.proxy_protocol.header_timeout_ms` is configured as `0`.
+///
+/// Covers the entire PROXY header resolution (the version-sniff peek loop plus the full header
+/// read) so a trusted-but-slow-or-hostile peer cannot park a connection slot indefinitely. A
+/// timeout here drops the connection **regardless of `proxy_protocol` mode** (including
+/// `optional`; see `resolve_peer`'s detect-phase timeout arm), so this value is the worst-case
+/// hold time per connection for every mode, not just `require`.
+///
+/// 1 s, not the 5 s used by the rust-rpxy reference: a legitimate PROXY-speaking peer writes the
+/// header synchronously right after `connect()` (typically <5 ms), so even 1 s is a generous
+/// margin over the honest case while keeping the worst case an order of magnitude tighter.
+const PROXY_HEADER_FALLBACK_TIMEOUT: Duration = Duration::from_secs(1);
+
+/// Resolve `listen.proxy_protocol.header_timeout_ms` into the effective [`Duration`] passed to
+/// [`resolve_peer`], mapping `0` to [`PROXY_HEADER_FALLBACK_TIMEOUT`].
+///
+/// Called once in [`ResolvedProxyProtocol::resolve`] (in turn called once in `server::run`)
+/// rather than per-connection: the configured value is static (`proxy_protocol` itself requires a
+/// restart to change), so there is no need to re-derive it on every accepted connection.
+fn resolve_proxy_protocol_header_timeout(configured_ms: u64) -> Duration {
+    if configured_ms == 0 {
+        warn!(
+            "listen.proxy_protocol.header_timeout_ms=0: falling back to {}s. This is not \
+             recommended - a slow or hostile trusted peer can hold a connection slot for that \
+             long while withholding the PROXY header.",
+            PROXY_HEADER_FALLBACK_TIMEOUT.as_secs()
+        );
+        PROXY_HEADER_FALLBACK_TIMEOUT
+    } else {
+        Duration::from_millis(configured_ms)
+    }
+}
+
+/// Whether `peer_ip` matches any CIDR in `trusted_proxies`.
+///
+/// The caller normalizes IPv4-mapped IPv6 first (a dual-stack listener bound to `[::]` reports an
+/// incoming IPv4 connection as `::ffff:a.b.c.d`, which an `IpNet::V4` entry would never match).
+fn is_trusted(peer_ip: IpAddr, trusted_proxies: &[IpNet]) -> bool {
+    !trusted_proxies.is_empty() && trusted_proxies.iter().any(|n| n.contains(&peer_ip))
+}
+
+/// Whether a passthrough outcome (non-`Require` mode, no PROXY source available) is worth
+/// recording. An untrusted peer passing through is the common, unremarkable case when
+/// `proxy_protocol=optional` serves both proxied and direct clients, so it stays silent; a
+/// *trusted* peer that omitted the header is comparatively unusual (it is expected to always
+/// speak the protocol), so that case is logged.
+enum PassthroughNote {
+    Silent,
+    Logged,
+}
+
+/// `Require` drops the connection when no valid PROXY source is available; every other mode
+/// falls back to `socket_peer`. Shared by the "untrusted peer" and "trusted peer, no header"
+/// branches of [`resolve_peer`], which follow this same mode split but differ in drop
+/// reason/message and in whether the passthrough itself is worth recording.
+fn require_drops(
+    mode: ProxyProtocolMode,
+    metrics: &Metrics,
+    socket_peer: SocketAddr,
+    drop_reason: &'static str,
+    drop_msg: &'static str,
+    passthrough_note: PassthroughNote,
+) -> Option<SocketAddr> {
+    match mode {
+        ProxyProtocolMode::Require => {
+            metrics.record_proxy_protocol_dropped(drop_reason);
+            warn!(?socket_peer, "{drop_msg}");
+            None
+        }
+        _ => {
+            if matches!(passthrough_note, PassthroughNote::Logged) {
+                metrics.record_proxy_protocol_passthrough();
+                trace!(
+                    socket_peer = %socket_peer,
+                    "PROXY optional: no header, serving as direct client"
+                );
+            }
+            Some(socket_peer)
+        }
+    }
+}
+
+/// Maps a `read_proxy_header_v1`/`v2` outcome (already raced against `timeout_dur`) to the
+/// effective peer, recording the metric and log line that matches each case.
+fn peer_from_read_result(
+    read_result: Result<Result<ProxySource, ProxyProtocolError>, Elapsed>,
+    metrics: &Metrics,
+    socket_peer: SocketAddr,
+) -> Option<SocketAddr> {
+    match read_result {
+        Ok(Ok(ProxySource::Client(src))) => {
+            metrics.record_proxy_protocol_accepted();
+            debug!(
+                socket_peer = %socket_peer,
+                real_client = %src,
+                "PROXY header: real client recovered"
+            );
+            Some(src)
+        }
+        Ok(Ok(ProxySource::Local)) => {
+            metrics.record_proxy_protocol_passthrough();
+            trace!(
+                socket_peer = %socket_peer,
+                "PROXY LOCAL/UNKNOWN command: keeping socket peer"
+            );
+            Some(socket_peer)
+        }
+        Ok(Ok(ProxySource::NoClientAddr)) => {
+            metrics.record_proxy_protocol_no_client_addr();
+            warn!(
+                socket_peer = %socket_peer,
+                "PROXY header carried a non-IP address family (AF_UNSPEC/AF_UNIX): no client \
+                 address recovered, correlation degraded; keeping socket peer"
+            );
+            Some(socket_peer)
+        }
+        Ok(Err(e)) => {
+            metrics.record_proxy_protocol_dropped(metric_values::PROXY_PROTOCOL_DROP_BAD_HEADER);
+            warn!(?socket_peer, error = %e, "bad PROXY header");
+            None
+        }
+        Err(_) => {
+            metrics.record_proxy_protocol_dropped(metric_values::PROXY_PROTOCOL_DROP_TIMEOUT);
+            warn!(?socket_peer, "PROXY header read timeout");
+            None
+        }
+    }
+}
+
 /// Resolve the effective client peer, honoring `proxy_mode`.
 ///
 /// Returns `Some(peer)` to proceed (`peer` is the PROXY-declared client when a trusted peer sent
@@ -211,113 +361,51 @@ pub async fn resolve_peer(
     stream: &mut TcpStream,
     socket_peer: SocketAddr,
 ) -> Option<SocketAddr> {
-    match proxy_mode {
-        ProxyProtocolMode::Off => Some(socket_peer),
+    let mode = match proxy_mode {
+        ProxyProtocolMode::Off => return Some(socket_peer),
+        mode => mode,
+    };
 
-        mode => {
-            let peer_ip = normalize_mapped_ipv4(socket_peer.ip());
-            let trusted =
-                !trusted_proxies.is_empty() && trusted_proxies.iter().any(|n| n.contains(&peer_ip));
-
-            if !trusted {
-                return match mode {
-                    ProxyProtocolMode::Require => {
-                        metrics.record_proxy_protocol_dropped(
-                            metric_values::PROXY_PROTOCOL_DROP_UNTRUSTED_REQUIRE,
-                        );
-                        warn!(?socket_peer, "drop: proxy_protocol=require + untrusted peer");
-                        None
-                    }
-                    _ => Some(socket_peer),
-                };
-            }
-
-            let detection = match timeout(timeout_dur, detect_proxy_protocol(stream)).await {
-                Ok(Ok(d)) => d,
-                Ok(Err(e)) => {
-                    metrics.record_proxy_protocol_dropped(
-                        metric_values::PROXY_PROTOCOL_DROP_BAD_HEADER,
-                    );
-                    warn!(?socket_peer, error = %e, "PROXY detect read error");
-                    return None;
-                }
-                Err(_) => {
-                    metrics
-                        .record_proxy_protocol_dropped(metric_values::PROXY_PROTOCOL_DROP_TIMEOUT);
-                    warn!(?socket_peer, "PROXY detect timeout");
-                    return None;
-                }
-            };
-
-            let read_result = match detection {
-                ProxyProtocolDetection::None => {
-                    return match mode {
-                        ProxyProtocolMode::Require => {
-                            metrics.record_proxy_protocol_dropped(
-                                metric_values::PROXY_PROTOCOL_DROP_BAD_HEADER,
-                            );
-                            warn!(?socket_peer, "drop: proxy_protocol=require + no PROXY header");
-                            None
-                        }
-                        _ => {
-                            metrics.record_proxy_protocol_passthrough();
-                            trace!(
-                                socket_peer = %socket_peer,
-                                "PROXY optional: no header, serving as direct client"
-                            );
-                            Some(socket_peer)
-                        }
-                    };
-                }
-                ProxyProtocolDetection::V1 => {
-                    timeout(timeout_dur, read_proxy_header_v1(stream)).await
-                }
-                ProxyProtocolDetection::V2 => {
-                    timeout(timeout_dur, read_proxy_header_v2(stream)).await
-                }
-            };
-
-            match read_result {
-                Ok(Ok(ProxySource::Client(src))) => {
-                    metrics.record_proxy_protocol_accepted();
-                    debug!(
-                        socket_peer = %socket_peer,
-                        real_client = %src,
-                        "PROXY header: real client recovered"
-                    );
-                    Some(src)
-                }
-                Ok(Ok(ProxySource::Local)) => {
-                    metrics.record_proxy_protocol_passthrough();
-                    trace!(
-                        socket_peer = %socket_peer,
-                        "PROXY LOCAL/UNKNOWN command: keeping socket peer"
-                    );
-                    Some(socket_peer)
-                }
-                Ok(Ok(ProxySource::NoClientAddr)) => {
-                    metrics.record_proxy_protocol_no_client_addr();
-                    warn!(
-                        socket_peer = %socket_peer,
-                        "PROXY header carried a non-IP address family (AF_UNSPEC/AF_UNIX): no client \
-                         address recovered, correlation degraded; keeping socket peer"
-                    );
-                    Some(socket_peer)
-                }
-                Ok(Err(e)) => {
-                    metrics.record_proxy_protocol_dropped(
-                        metric_values::PROXY_PROTOCOL_DROP_BAD_HEADER,
-                    );
-                    warn!(?socket_peer, error = %e, "bad PROXY header");
-                    None
-                }
-                Err(_) => {
-                    metrics
-                        .record_proxy_protocol_dropped(metric_values::PROXY_PROTOCOL_DROP_TIMEOUT);
-                    warn!(?socket_peer, "PROXY header read timeout");
-                    None
-                }
-            }
-        }
+    let peer_ip = normalize_mapped_ipv4(socket_peer.ip());
+    if !is_trusted(peer_ip, trusted_proxies) {
+        return require_drops(
+            mode,
+            metrics,
+            socket_peer,
+            metric_values::PROXY_PROTOCOL_DROP_UNTRUSTED_REQUIRE,
+            "drop: proxy_protocol=require + untrusted peer",
+            PassthroughNote::Silent,
+        );
     }
+
+    let detection = match timeout(timeout_dur, detect_proxy_protocol(stream)).await {
+        Ok(Ok(d)) => d,
+        Ok(Err(e)) => {
+            metrics.record_proxy_protocol_dropped(metric_values::PROXY_PROTOCOL_DROP_BAD_HEADER);
+            warn!(?socket_peer, error = %e, "PROXY detect read error");
+            return None;
+        }
+        Err(_) => {
+            metrics.record_proxy_protocol_dropped(metric_values::PROXY_PROTOCOL_DROP_TIMEOUT);
+            warn!(?socket_peer, "PROXY detect timeout");
+            return None;
+        }
+    };
+
+    let read_result = match detection {
+        ProxyProtocolDetection::None => {
+            return require_drops(
+                mode,
+                metrics,
+                socket_peer,
+                metric_values::PROXY_PROTOCOL_DROP_BAD_HEADER,
+                "drop: proxy_protocol=require + no PROXY header",
+                PassthroughNote::Logged,
+            );
+        }
+        ProxyProtocolDetection::V1 => timeout(timeout_dur, read_proxy_header_v1(stream)).await,
+        ProxyProtocolDetection::V2 => timeout(timeout_dur, read_proxy_header_v2(stream)).await,
+    };
+
+    peer_from_read_result(read_result, metrics, socket_peer)
 }

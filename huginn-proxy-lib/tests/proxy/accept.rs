@@ -1,12 +1,6 @@
-//! Unit-level tests for `resolve_peer`.
-//!
-//! Each test establishes a real loopback TCP connection (so `TcpStream::peek` works correctly)
-//! and verifies the peer-resolution logic across the three `ProxyProtocolMode` variants and
-//! the trusted / untrusted split.
-
 use std::net::{IpAddr, SocketAddr};
 use std::str::FromStr;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use huginn_proxy_lib::config::ProxyProtocolMode;
 use huginn_proxy_lib::proxy::accept::resolve_peer;
@@ -148,5 +142,36 @@ async fn resolve_peer_optional_trusted_v1_header_recovers_client() -> TestResult
 
     let expected: SocketAddr = SocketAddr::new(IpAddr::from_str("192.168.1.1")?, 12345);
     assert_eq!(result, Some(expected));
+    Ok(())
+}
+
+/// Require mode, trusted peer, no bytes sent before a short timeout: the connection is dropped
+/// and `resolve_peer` returns well within the configured timeout, not after waiting out the test
+/// client's 200 ms hold or a longer internal fallback. Exercises the dedicated, short
+/// `proxy_protocol.header_timeout_ms` path (as opposed to a timeout borrowed from elsewhere).
+#[tokio::test]
+async fn resolve_peer_require_trusted_no_header_short_timeout_drops() -> TestResult {
+    let (mut stream, socket_peer) = accept_one(b"").await?;
+    let metrics = Metrics::new_noop();
+    let trusted = [localhost_net()?];
+
+    let start = Instant::now();
+    let result = resolve_peer(
+        ProxyProtocolMode::Require,
+        Duration::from_millis(50),
+        &metrics,
+        &trusted,
+        &mut stream,
+        socket_peer,
+    )
+    .await;
+    let elapsed = start.elapsed();
+
+    assert_eq!(result, None);
+    assert!(
+        elapsed < Duration::from_millis(500),
+        "resolve_peer must honor the short configured timeout rather than waiting on a longer \
+         fallback; took {elapsed:?}"
+    );
     Ok(())
 }

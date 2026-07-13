@@ -87,7 +87,7 @@ pub async fn try_reload(
     audit_config_changes(&old_dynamic, &new_dynamic);
 
     warn_proxy_protocol_trust_gap(
-        static_cfg.listen.proxy_protocol,
+        static_cfg.listen.proxy_protocol.mode,
         &new_dynamic.security.trusted_proxies,
     );
 
