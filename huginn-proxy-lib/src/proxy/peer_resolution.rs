@@ -16,8 +16,8 @@ use crate::telemetry::values as metric_values;
 use crate::telemetry::Metrics;
 
 /// Runtime form of `listen.proxy_protocol`: the mode plus the effective header-read timeout,
-/// resolved once in `server::run` (`header_timeout_ms == 0` mapped to
-/// [`PROXY_HEADER_FALLBACK_TIMEOUT`]) rather than on every accepted connection.
+/// resolved once in `server::run` (`header_timeout_ms == 0` mapped to a 1 s internal fallback)
+/// rather than on every accepted connection.
 #[derive(Debug, Clone, Copy)]
 pub struct ResolvedProxyProtocol {
     pub mode: ProxyProtocolMode,
@@ -25,8 +25,8 @@ pub struct ResolvedProxyProtocol {
 }
 
 impl ResolvedProxyProtocol {
-    /// Resolve a listener's static [`ProxyProtocolConfig`] into this runtime form. See
-    /// [`resolve_proxy_protocol_header_timeout`].
+    /// Resolve a listener's static [`ProxyProtocolConfig`] into this runtime form.
+    /// When `header_timeout_ms == 0`, the effective timeout is the 1 s internal fallback.
     pub fn resolve(config: ProxyProtocolConfig) -> Self {
         Self {
             mode: config.mode,
