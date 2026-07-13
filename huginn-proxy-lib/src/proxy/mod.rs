@@ -5,6 +5,7 @@ pub mod forwarding;
 pub mod handler;
 pub mod http_result;
 pub mod listener;
+pub mod peer_resolution;
 pub mod protocol;
 pub mod reload;
 pub mod router;

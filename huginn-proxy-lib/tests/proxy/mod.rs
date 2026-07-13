@@ -1,4 +1,3 @@
-mod accept;
 mod client_pool;
 mod connection;
 mod edge_cases;
@@ -7,6 +6,7 @@ mod h2c_forwarding;
 mod handler;
 mod http_result;
 mod path_manipulation;
+mod peer_resolution;
 mod protocol;
 mod reload;
 mod resolve;

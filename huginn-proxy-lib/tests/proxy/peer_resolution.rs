@@ -3,7 +3,7 @@ use std::str::FromStr;
 use std::time::{Duration, Instant};
 
 use huginn_proxy_lib::config::ProxyProtocolMode;
-use huginn_proxy_lib::proxy::accept::resolve_peer;
+use huginn_proxy_lib::proxy::peer_resolution::resolve_peer;
 use huginn_proxy_lib::telemetry::Metrics;
 use ipnet::IpNet;
 use tokio::io::AsyncWriteExt;
@@ -68,7 +68,7 @@ async fn resolve_peer_optional_untrusted_passthrough() -> TestResult {
         ProxyProtocolMode::Optional,
         Duration::from_secs(5),
         &metrics,
-        &[], // no trusted proxies → untrusted
+        &[],
         &mut stream,
         socket_peer,
     )
@@ -88,7 +88,7 @@ async fn resolve_peer_require_untrusted_drops() -> TestResult {
         ProxyProtocolMode::Require,
         Duration::from_secs(5),
         &metrics,
-        &[], // no trusted proxies → untrusted
+        &[],
         &mut stream,
         socket_peer,
     )
