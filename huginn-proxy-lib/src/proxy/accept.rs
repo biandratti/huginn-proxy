@@ -64,7 +64,7 @@ pub async fn accept_loop(
         // TODO: potential hang at shutdown, if the shutdown signal is set after the check above
         // but before this await, the loop blocks until a new client connects. Fix: use
         // tokio::select! to race listener.accept() against a shutdown notification.
-        let (mut stream, socket_peer) = match listener.accept().await {
+        let (stream, socket_peer) = match listener.accept().await {
             Ok(pair) => pair,
             Err(e) => {
                 warn!(error = %e, ?addr, "accept error");
@@ -73,6 +73,8 @@ pub async fn accept_loop(
         };
 
         // Connection accounting is keyed on the real TCP peer, never the PROXY-declared client.
+        // Checked here (before spawning) so a full connection table never spawns tasks that
+        // immediately drop.
         let guard = match connection_manager.try_accept(socket_peer, &ctx.metrics) {
             Ok(g) => g,
             Err(ConnectionError::Shutdown) => {
@@ -85,47 +87,63 @@ pub async fn accept_loop(
             }
         };
 
-        let dynamic = ctx.dynamic_cfg.load();
-
-        // Resolve the effective client peer. Behind an L4 passthrough proxy this recovers the
-        // original client `(src_ip, src_port)` from the PROXY protocol header (v1 or v2) so the
-        // eBPF SYN lookup, `X-Forwarded-*`, rate-limiting, IP filtering and logs all see the real
-        // client.
-        let peer =
-            match resolve_peer(&ctx, &dynamic.security.trusted_proxies, &mut stream, socket_peer)
-                .await
-            {
-                Some(p) => p,
-                None => continue, // dropped (require + untrusted, bad header, or timeout)
-            };
-
-        let syn_start = Instant::now();
-        let syn_result = ctx.syn_probe.as_ref().map(|probe| probe(peer));
-        let syn_duration = syn_start.elapsed().as_secs_f64();
-        let syn_fingerprint: Option<TcpObservation> = syn_result.as_ref().and_then(|r| {
-            ctx.metrics
-                .record_tcp_syn_fingerprint(r.label(), syn_duration);
-            r.observation().cloned()
-        });
-
-        let rate_mgr = (**ctx.rate_limiter.load()).clone();
-        let security = SecurityContext::new(
-            dynamic.security.headers.clone(),
-            dynamic.security.ip_filter.clone(),
-            dynamic.security.rate_limit.clone(),
-            rate_mgr,
-            dynamic.headers.clone(),
-            dynamic.security.trusted_proxies.clone(),
-        );
-        let backends = Arc::clone(&dynamic.backends);
-        let domains = Arc::clone(&dynamic.domains);
-        let preserve_host = dynamic.preserve_host;
-        let upstream =
-            UpstreamGateway::new(ctx.health_registry.clone(), ctx.backend_selector.clone());
         let ctx_task = Arc::clone(&ctx);
-
         tokio::spawn(async move {
             let _guard = guard;
+            let mut stream = stream;
+
+            // Load the latest config snapshot inside the task: the accept loop never blocks on
+            // config access, and each connection sees the config current at the time it runs.
+            let dynamic = ctx_task.dynamic_cfg.load();
+
+            // Resolve the effective client peer. Runs inside the spawned task so that slow or
+            // malicious peers cannot delay acceptance of subsequent connections: a peer
+            // deliberately withholding the PROXY header up to the timeout (default 15 s) would
+            // otherwise serialize accepts on this listener.
+            //
+            // Behind an L4 passthrough proxy this recovers the original client `(src_ip, src_port)`
+            // from the PROXY protocol header (v1 or v2) so the eBPF SYN lookup, `X-Forwarded-*`,
+            // rate-limiting, IP filtering and logs all see the real client.
+            let peer = match resolve_peer(
+                ctx_task.proxy_protocol,
+                ctx_task.tls_handshake_timeout,
+                &ctx_task.metrics,
+                &dynamic.security.trusted_proxies,
+                &mut stream,
+                socket_peer,
+            )
+            .await
+            {
+                Some(p) => p,
+                None => return, // dropped (require + untrusted, bad header, or timeout)
+            };
+
+            let syn_start = Instant::now();
+            let syn_result = ctx_task.syn_probe.as_ref().map(|probe| probe(peer));
+            let syn_duration = syn_start.elapsed().as_secs_f64();
+            let syn_fingerprint: Option<TcpObservation> = syn_result.as_ref().and_then(|r| {
+                ctx_task
+                    .metrics
+                    .record_tcp_syn_fingerprint(r.label(), syn_duration);
+                r.observation().cloned()
+            });
+
+            let rate_mgr = (**ctx_task.rate_limiter.load()).clone();
+            let security = SecurityContext::new(
+                dynamic.security.headers.clone(),
+                dynamic.security.ip_filter.clone(),
+                dynamic.security.rate_limit.clone(),
+                rate_mgr,
+                dynamic.headers.clone(),
+                dynamic.security.trusted_proxies.clone(),
+            );
+            let backends = Arc::clone(&dynamic.backends);
+            let domains = Arc::clone(&dynamic.domains);
+            let preserve_host = dynamic.preserve_host;
+            let upstream = UpstreamGateway::new(
+                ctx_task.health_registry.clone(),
+                ctx_task.backend_selector.clone(),
+            );
 
             if let Some(ref tls_acceptor) = ctx_task.tls_acceptor {
                 handle_tls_connection(
@@ -173,24 +191,27 @@ pub async fn accept_loop(
     }
 }
 
-/// Resolve the effective client peer, honoring `listen.proxy_protocol`.
+/// Resolve the effective client peer, honoring `proxy_mode`.
 ///
 /// Returns `Some(peer)` to proceed (`peer` is the PROXY-declared client when a trusted peer sent
-/// a valid header, otherwise the socket peer) or `None` when the connection must be dropped
+/// a valid header, otherwise `socket_peer`) or `None` when the connection must be dropped
 /// (`require` + untrusted peer, malformed header, or a read timeout).
 ///
 /// Security boundary: a PROXY header is parsed **only** when the immediate socket peer is in
 /// `trusted_proxies`. Untrusted peers are never parsed, so a direct attacker cannot forge a
 /// header to spoof its source (classic PROXY-protocol spoofing).
-async fn resolve_peer(
-    ctx: &AcceptContext,
+///
+/// Receives individual fields rather than `&AcceptContext` so it can be unit-tested without
+/// constructing the full context.
+pub async fn resolve_peer(
+    proxy_mode: ProxyProtocolMode,
+    timeout_dur: Duration,
+    metrics: &Metrics,
     trusted_proxies: &[IpNet],
     stream: &mut TcpStream,
     socket_peer: SocketAddr,
 ) -> Option<SocketAddr> {
-    let timeout_dur = ctx.tls_handshake_timeout;
-
-    match ctx.proxy_protocol {
+    match proxy_mode {
         ProxyProtocolMode::Off => Some(socket_peer),
 
         mode => {
@@ -201,7 +222,7 @@ async fn resolve_peer(
             if !trusted {
                 return match mode {
                     ProxyProtocolMode::Require => {
-                        ctx.metrics.record_proxy_protocol_dropped(
+                        metrics.record_proxy_protocol_dropped(
                             metric_values::PROXY_PROTOCOL_DROP_UNTRUSTED_REQUIRE,
                         );
                         warn!(?socket_peer, "drop: proxy_protocol=require + untrusted peer");
@@ -214,14 +235,14 @@ async fn resolve_peer(
             let detection = match timeout(timeout_dur, detect_proxy_protocol(stream)).await {
                 Ok(Ok(d)) => d,
                 Ok(Err(e)) => {
-                    ctx.metrics.record_proxy_protocol_dropped(
+                    metrics.record_proxy_protocol_dropped(
                         metric_values::PROXY_PROTOCOL_DROP_BAD_HEADER,
                     );
                     warn!(?socket_peer, error = %e, "PROXY detect read error");
                     return None;
                 }
                 Err(_) => {
-                    ctx.metrics
+                    metrics
                         .record_proxy_protocol_dropped(metric_values::PROXY_PROTOCOL_DROP_TIMEOUT);
                     warn!(?socket_peer, "PROXY detect timeout");
                     return None;
@@ -232,14 +253,14 @@ async fn resolve_peer(
                 ProxyProtocolDetection::None => {
                     return match mode {
                         ProxyProtocolMode::Require => {
-                            ctx.metrics.record_proxy_protocol_dropped(
+                            metrics.record_proxy_protocol_dropped(
                                 metric_values::PROXY_PROTOCOL_DROP_BAD_HEADER,
                             );
                             warn!(?socket_peer, "drop: proxy_protocol=require + no PROXY header");
                             None
                         }
                         _ => {
-                            ctx.metrics.record_proxy_protocol_passthrough();
+                            metrics.record_proxy_protocol_passthrough();
                             trace!(
                                 socket_peer = %socket_peer,
                                 "PROXY optional: no header, serving as direct client"
@@ -258,7 +279,7 @@ async fn resolve_peer(
 
             match read_result {
                 Ok(Ok(ProxySource::Client(src))) => {
-                    ctx.metrics.record_proxy_protocol_accepted();
+                    metrics.record_proxy_protocol_accepted();
                     debug!(
                         socket_peer = %socket_peer,
                         real_client = %src,
@@ -267,7 +288,7 @@ async fn resolve_peer(
                     Some(src)
                 }
                 Ok(Ok(ProxySource::Local)) => {
-                    ctx.metrics.record_proxy_protocol_passthrough();
+                    metrics.record_proxy_protocol_passthrough();
                     trace!(
                         socket_peer = %socket_peer,
                         "PROXY LOCAL/UNKNOWN command: keeping socket peer"
@@ -275,7 +296,7 @@ async fn resolve_peer(
                     Some(socket_peer)
                 }
                 Ok(Ok(ProxySource::NoClientAddr)) => {
-                    ctx.metrics.record_proxy_protocol_no_client_addr();
+                    metrics.record_proxy_protocol_no_client_addr();
                     warn!(
                         socket_peer = %socket_peer,
                         "PROXY header carried a non-IP address family (AF_UNSPEC/AF_UNIX): no client \
@@ -284,14 +305,14 @@ async fn resolve_peer(
                     Some(socket_peer)
                 }
                 Ok(Err(e)) => {
-                    ctx.metrics.record_proxy_protocol_dropped(
+                    metrics.record_proxy_protocol_dropped(
                         metric_values::PROXY_PROTOCOL_DROP_BAD_HEADER,
                     );
                     warn!(?socket_peer, error = %e, "bad PROXY header");
                     None
                 }
                 Err(_) => {
-                    ctx.metrics
+                    metrics
                         .record_proxy_protocol_dropped(metric_values::PROXY_PROTOCOL_DROP_TIMEOUT);
                     warn!(?socket_peer, "PROXY header read timeout");
                     None
