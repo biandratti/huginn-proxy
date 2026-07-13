@@ -16,8 +16,7 @@ use crate::telemetry::values as metric_values;
 use crate::telemetry::Metrics;
 
 /// Runtime form of `listen.proxy_protocol`: the mode plus the effective header-read timeout,
-/// resolved once in `server::run` (`header_timeout_ms == 0` mapped to a 1 s internal fallback)
-/// rather than on every accepted connection.
+/// resolved once in `server::run` rather than on every accepted connection.
 #[derive(Debug, Clone, Copy)]
 pub struct ResolvedProxyProtocol {
     pub mode: ProxyProtocolMode,
@@ -26,45 +25,11 @@ pub struct ResolvedProxyProtocol {
 
 impl ResolvedProxyProtocol {
     /// Resolve a listener's static [`ProxyProtocolConfig`] into this runtime form.
-    /// When `header_timeout_ms == 0`, the effective timeout is the 1 s internal fallback.
     pub fn resolve(config: ProxyProtocolConfig) -> Self {
         Self {
             mode: config.mode,
-            header_timeout: resolve_proxy_protocol_header_timeout(config.header_timeout_ms),
+            header_timeout: Duration::from_millis(config.header_timeout_ms),
         }
-    }
-}
-
-/// Fallback timeout applied when `listen.proxy_protocol.header_timeout_ms` is configured as `0`.
-///
-/// Covers the entire PROXY header resolution (the version-sniff peek loop plus the full header
-/// read) so a trusted-but-slow-or-hostile peer cannot park a connection slot indefinitely. A
-/// timeout here drops the connection **regardless of `proxy_protocol` mode** (including
-/// `optional`; see `resolve_peer`'s detect-phase timeout arm), so this value is the worst-case
-/// hold time per connection for every mode, not just `require`.
-///
-/// 1 s, not the 5 s used by the rust-rpxy reference: a legitimate PROXY-speaking peer writes the
-/// header synchronously right after `connect()` (typically <5 ms), so even 1 s is a generous
-/// margin over the honest case while keeping the worst case an order of magnitude tighter.
-const PROXY_HEADER_FALLBACK_TIMEOUT: Duration = Duration::from_secs(1);
-
-/// Resolve `listen.proxy_protocol.header_timeout_ms` into the effective [`Duration`] passed to
-/// [`resolve_peer`], mapping `0` to [`PROXY_HEADER_FALLBACK_TIMEOUT`].
-///
-/// Called once in [`ResolvedProxyProtocol::resolve`] (in turn called once in `server::run`)
-/// rather than per-connection: the configured value is static (`proxy_protocol` itself requires a
-/// restart to change), so there is no need to re-derive it on every accepted connection.
-fn resolve_proxy_protocol_header_timeout(configured_ms: u64) -> Duration {
-    if configured_ms == 0 {
-        warn!(
-            "listen.proxy_protocol.header_timeout_ms=0: falling back to {}s. This is not \
-             recommended - a slow or hostile trusted peer can hold a connection slot for that \
-             long while withholding the PROXY header.",
-            PROXY_HEADER_FALLBACK_TIMEOUT.as_secs()
-        );
-        PROXY_HEADER_FALLBACK_TIMEOUT
-    } else {
-        Duration::from_millis(configured_ms)
     }
 }
 
