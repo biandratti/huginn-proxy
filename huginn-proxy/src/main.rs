@@ -1,16 +1,18 @@
 #![forbid(unsafe_code)]
 
 use std::env;
+use std::io::{self, Write};
 use std::path::PathBuf;
 use std::sync::Arc;
 
 use arc_swap::ArcSwap;
 use clap::Parser;
-use huginn_proxy_lib::config::load_from_path;
+use huginn_proxy_lib::config::{load_from_path, EffectiveConfigView};
 use huginn_proxy_lib::proxy::shutdown::{shutdown_channel, ServiceHandle, ServiceName};
 use huginn_proxy_lib::run;
 use huginn_proxy_lib::telemetry::{
-    init_metrics, init_tracing_with_otel, shutdown_tracing, start_observability_server, Readiness,
+    init_metrics, init_tracing_with_otel, init_validation_tracing, shutdown_tracing,
+    start_observability_server, Readiness,
 };
 use huginn_proxy_lib::WatchOptions;
 use tokio::time::Duration;
@@ -29,6 +31,10 @@ struct Cli {
     #[arg(long)]
     validate: bool,
 
+    /// Validate and print the effective, secret-redacted config as JSON, then exit
+    #[arg(long)]
+    print_effective_config: bool,
+
     /// Enable filesystem watching for config and TLS certificate hot reload
     #[arg(long, env = "HUGINN_WATCH")]
     watch: bool,
@@ -41,12 +47,29 @@ struct Cli {
 #[tokio::main]
 async fn main() -> Result<(), BoxError> {
     let cli = Cli::parse();
+    let validation_mode = cli.validate || cli.print_effective_config;
 
+    if validation_mode {
+        init_validation_tracing()?;
+    }
     let config = load_from_path(&cli.config_path)?;
     config.validate_cross_refs()?;
 
-    if cli.validate {
-        println!("Config OK: {}", cli.config_path.display());
+    if validation_mode {
+        let stdout = io::stdout();
+        let mut stdout = stdout.lock();
+        if cli.print_effective_config {
+            let huginn_proxy_lib::config::ConfigParts { static_cfg, dynamic_cfg } =
+                config.into_parts();
+            writeln!(
+                stdout,
+                "{}",
+                EffectiveConfigView::new(&static_cfg, &dynamic_cfg).to_pretty_json()?
+            )?;
+        } else {
+            writeln!(stdout, "Config OK: {}", cli.config_path.display())?;
+        }
+        shutdown_tracing();
         return Ok(());
     }
 

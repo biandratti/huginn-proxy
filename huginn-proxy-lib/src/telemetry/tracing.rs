@@ -1,6 +1,23 @@
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::Registry;
 
+/// Initialize warning-level tracing for one-shot CLI validation.
+///
+/// Diagnostics go to stderr so stdout remains valid machine-readable output when printing the
+/// effective configuration.
+pub fn init_validation_tracing() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let env_filter = tracing_subscriber::EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("warn"));
+    let fmt_layer = tracing_subscriber::fmt::layer()
+        .with_target(false)
+        .with_writer(std::io::stderr);
+    let subscriber = Registry::default().with(env_filter).with(fmt_layer);
+
+    tracing::subscriber::set_global_default(subscriber)
+        .map_err(|e| format!("Failed to set validation tracing subscriber: {e}"))?;
+    Ok(())
+}
+
 /// Initialize tracing with OpenTelemetry integration
 pub fn init_tracing_with_otel(
     log_level: String,

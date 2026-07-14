@@ -340,6 +340,10 @@ restart.
 
 Config validation is available via `--validate` (like `nginx -t`) for CI/CD pipelines. Unknown or
 misplaced keys are rejected at every nesting level during startup, validation, and hot reload.
+`--print-effective-config` validates and prints deterministic, secret-redacted JSON with applied
+defaults and normalizations, then exits without starting the proxy.
+At runtime, startup logs include a safe aggregate config summary at `info`; `debug` includes the
+same complete redacted view as compact JSON.
 
 Limitation: No API for dynamic config changes.
 

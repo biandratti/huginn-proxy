@@ -1,7 +1,7 @@
 use crate::backend::health_check::{HealthCheckSupervisor, HealthRegistry};
 use crate::backend::BackendSelector;
 use crate::config::watcher::spawn_config_watcher;
-use crate::config::StaticConfig;
+use crate::config::{EffectiveConfigSummary, EffectiveConfigView, StaticConfig};
 use crate::error::Result;
 pub use crate::proxy::accept::SynProbe;
 use crate::proxy::accept::{accept_loop, AcceptContext};
@@ -26,7 +26,7 @@ use tokio::runtime::Handle;
 use tokio::signal;
 use tokio::sync::watch;
 use tokio::time::Duration;
-use tracing::{info, warn};
+use tracing::{debug, info, warn};
 
 pub async fn run(
     static_cfg: Arc<StaticConfig>,
@@ -186,6 +186,27 @@ pub async fn run(
     );
 
     readiness.mark_ready();
+    let effective_dynamic = dynamic_cfg.load();
+    let summary = EffectiveConfigSummary::new(&static_cfg, &effective_dynamic);
+    info!(
+        listeners = summary.listener_count,
+        tls = summary.tls_enabled,
+        proxy_protocol = summary.proxy_protocol_mode,
+        domains = summary.domain_count,
+        routes = summary.route_count,
+        backends = summary.backend_count,
+        rate_limit = summary.rate_limit_enabled,
+        trusted_proxies = summary.trusted_proxy_count,
+        preserve_host = summary.preserve_host,
+        max_connections = summary.max_connections,
+        "Effective config loaded"
+    );
+    if tracing::enabled!(tracing::Level::DEBUG) {
+        match EffectiveConfigView::new(&static_cfg, &effective_dynamic).to_json() {
+            Ok(config) => debug!(config, "Effective config details"),
+            Err(error) => warn!(%error, "Failed to serialize effective config details"),
+        }
+    }
     info!("Proxy ready: accepting connections");
 
     // Signal loop: SIGHUP forwards to the reload channel; SIGTERM/SIGINT trigger shutdown.

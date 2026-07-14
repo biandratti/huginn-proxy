@@ -1,4 +1,6 @@
-use huginn_proxy_lib::config::{ConfigParser, EffectiveConfigView, TomlParser};
+use huginn_proxy_lib::config::{
+    ConfigParser, EffectiveConfigSummary, EffectiveConfigView, TomlParser,
+};
 use serde_json::Value;
 
 type TestResult = Result<(), Box<dyn std::error::Error + Send + Sync>>;
@@ -20,6 +22,7 @@ headers = { request = { add = [
 routes = [{
   prefix = "/api",
   backend = "backend:9000",
+  security = { rate_limit = { enabled = true } },
   headers = { response = { add = [
     { name = "X-Route-Token", value = "route-secret" }
   ] } }
@@ -98,5 +101,34 @@ fn effective_config_json_is_deterministic() -> TestResult {
         EffectiveConfigView::new(&second.static_cfg, &second.dynamic_cfg).to_pretty_json()?;
 
     assert_eq!(first_json, second_json);
+    Ok(())
+}
+
+#[test]
+fn effective_config_summary_reports_runtime_aggregates() -> TestResult {
+    let parts = TomlParser.parse(CONFIG)?.into_parts();
+    let summary = EffectiveConfigSummary::new(&parts.static_cfg, &parts.dynamic_cfg);
+
+    assert_eq!(summary.listener_count, 1);
+    assert!(summary.tls_enabled);
+    assert_eq!(summary.proxy_protocol_mode, "optional");
+    assert_eq!(summary.domain_count, 1);
+    assert_eq!(summary.route_count, 1);
+    assert_eq!(summary.backend_count, 1);
+    assert!(summary.rate_limit_enabled, "route-level limiter must enable summary flag");
+    assert_eq!(summary.trusted_proxy_count, 0);
+    assert!(!summary.preserve_host);
+    assert_eq!(summary.max_connections, 512);
+    Ok(())
+}
+
+#[test]
+fn effective_config_compact_json_is_single_line_and_redacted() -> TestResult {
+    let parts = TomlParser.parse(CONFIG)?.into_parts();
+    let output = EffectiveConfigView::new(&parts.static_cfg, &parts.dynamic_cfg).to_json()?;
+
+    assert!(!output.contains('\n'));
+    assert!(!output.contains("global-secret"));
+    assert!(output.contains("<redacted>"));
     Ok(())
 }

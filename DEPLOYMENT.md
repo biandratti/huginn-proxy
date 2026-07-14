@@ -156,6 +156,19 @@ spec:
 
 `HUGINN_CONFIG_PATH` sets the config file path without changing the container `command`. Useful when the same image is shared across environments (staging, prod) and only the ConfigMap mount point differs — override the path via env var rather than patching the Deployment spec each time.
 
+### Validate a mounted Kubernetes config
+
+Validate the ConfigMap mounted in a running pod without interrupting the proxy:
+
+```bash
+kubectl exec <pod> -- \
+  /usr/local/bin/huginn-proxy --print-effective-config /config/config.toml
+```
+
+The command starts a separate one-shot process, prints secret-redacted effective JSON, and exits.
+For fail-fast deployments, use the same command with `--validate` in an `initContainer` that
+mounts the same ConfigMap; a parse, unknown-field, or cross-reference error prevents pod startup.
+
 ### Key differences vs Docker Compose
 
 | | Docker Compose | Kubernetes |

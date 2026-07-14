@@ -1098,6 +1098,7 @@ dependencies = [
  "clap",
  "huginn-ebpf",
  "huginn-proxy-lib",
+ "serde_json",
  "tokio",
  "tracing",
 ]

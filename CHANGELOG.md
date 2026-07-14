@@ -25,6 +25,12 @@ New agent env var. Values: `xdp-native` (default), `xdp-skb`, `tc`. Both XDP and
 ship in the same BPF object and share identical maps; no proxy config change required.
 See `EBPF-SETUP.md`.
 
+**Effective configuration output**
+
+New `--print-effective-config` CLI flag validates the config and prints deterministic,
+secret-redacted JSON with applied defaults, normalizations, and fallbacks, then exits. Proxy
+startup now logs a safe aggregate summary at `info` and the complete redacted view at `debug`.
+
 ### Changed
 
 - Configuration loading now rejects unknown or misplaced keys at every nesting level during
