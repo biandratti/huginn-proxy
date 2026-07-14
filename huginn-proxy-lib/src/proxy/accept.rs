@@ -58,12 +58,7 @@ pub async fn accept_loop(
             break;
         }
 
-        // Raced against `shutdown_rx` so a shutdown signalled while this await is pending is
-        // observed immediately, instead of only being checked before the next `accept()` call
-        // (which could block indefinitely under low traffic). `shutdown_signal` and `shutdown_rx`
-        // fire together (see `server::run`'s SIGTERM/SIGINT handlers), so this closes the gap
-        // without replacing `shutdown_signal`, still needed by `ConnectionManager`'s synchronous
-        // `is_shutdown()` check below.
+        // Exit promptly on shutdown even when no new connections arrive.
         let (stream, socket_peer) = tokio::select! {
             accepted = listener.accept() => match accepted {
                 Ok(pair) => pair,
@@ -75,9 +70,7 @@ pub async fn accept_loop(
             _ = shutdown_rx.changed() => break,
         };
 
-        // Connection accounting is keyed on the real TCP peer, never the PROXY-declared client.
-        // Checked here (before spawning) so a full connection table never spawns tasks that
-        // immediately drop.
+        // Count against the socket peer, before spawning, so a full table never spawns doomed tasks.
         let guard = match connection_manager.try_accept(socket_peer, &ctx.metrics) {
             Ok(g) => g,
             Err(ConnectionError::Shutdown) => {
@@ -101,7 +94,7 @@ pub async fn accept_loop(
 
             // Resolve the effective client peer. Runs inside the spawned task so that slow or
             // malicious peers cannot delay acceptance of subsequent connections: a peer
-            // deliberately withholding the PROXY header up to the timeout (default 100 ms) would
+            // deliberately withholding the PROXY header up to the timeout would
             // otherwise serialize accepts on this listener.
             //
             // Behind an L4 passthrough proxy this recovers the original client `(src_ip, src_port)`

@@ -70,7 +70,7 @@ Network interfaces and socket options. **Static** — requires restart to change
 | `addrs`                             | array of strings | —       | One or more `host:port` addresses to bind. IPv6 addresses must be wrapped in brackets.                                                                         |
 | `tcp_backlog`                       | integer          | `4096`  | Kernel `listen(2)` backlog per socket. Increase under heavy connection bursts.                                                                                 |
 | `proxy_protocol.mode`               | string           | `off`   | PROXY protocol handling (v1 and v2): `off`, `optional`, or `require`. See note below.                                                                          |
-| `proxy_protocol.header_timeout_ms`  | integer          | `100`   | Milliseconds to wait for a PROXY header from a trusted peer (covers detection + full read). Only relevant when `proxy_protocol.mode` is `optional`/`require`. `0` falls back to an internal 1 s timeout (not recommended). |
+| `proxy_protocol.header_timeout_ms`  | integer          | `100`   | Milliseconds to wait for a PROXY header from a trusted peer (covers detection + full read). Only relevant when `proxy_protocol.mode` is `optional`/`require`. `<= 0` falls back to an internal 1 s timeout (not recommended). |
 
 > **`proxy_protocol.mode`** lets huginn recover the real client `(src_ip, src_port)` when it sits behind
 > any L4 load balancer or ingress that prepends a [PROXY protocol](https://www.haproxy.org/download/2.0/doc/proxy-protocol.txt)

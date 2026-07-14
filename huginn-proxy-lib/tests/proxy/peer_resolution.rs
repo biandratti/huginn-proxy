@@ -37,7 +37,6 @@ fn localhost_net() -> Result<IpNet, <IpNet as FromStr>::Err> {
     IpNet::from_str("127.0.0.1/32")
 }
 
-/// Off mode: returns `socket_peer` immediately, no stream I/O.
 #[tokio::test]
 async fn resolve_peer_off_passthrough() -> TestResult {
     let (mut stream, socket_peer) = accept_one(b"").await?;
@@ -57,8 +56,6 @@ async fn resolve_peer_off_passthrough() -> TestResult {
     Ok(())
 }
 
-/// Optional mode, untrusted peer (no trusted_proxies): passes the socket peer through
-/// without parsing any PROXY header.
 #[tokio::test]
 async fn resolve_peer_optional_untrusted_passthrough() -> TestResult {
     let (mut stream, socket_peer) = accept_one(b"").await?;
@@ -78,7 +75,6 @@ async fn resolve_peer_optional_untrusted_passthrough() -> TestResult {
     Ok(())
 }
 
-/// Require mode, untrusted peer: connection must be dropped.
 #[tokio::test]
 async fn resolve_peer_require_untrusted_drops() -> TestResult {
     let (mut stream, socket_peer) = accept_one(b"").await?;
@@ -98,8 +94,6 @@ async fn resolve_peer_require_untrusted_drops() -> TestResult {
     Ok(())
 }
 
-/// Optional mode, trusted peer, bytes that are not a PROXY header (TLS record type byte):
-/// `detect_proxy_protocol` resolves to `None` and the peer passes through as-is.
 #[tokio::test]
 async fn resolve_peer_optional_trusted_no_header_passthrough() -> TestResult {
     // 0x16 = TLS record type; neither v1 prefix ('P') nor v2 signature (0x0D).
@@ -121,8 +115,6 @@ async fn resolve_peer_optional_trusted_no_header_passthrough() -> TestResult {
     Ok(())
 }
 
-/// Optional mode, trusted peer, valid PROXY v1 header: the declared client address is
-/// recovered from the header and returned instead of the socket peer.
 #[tokio::test]
 async fn resolve_peer_optional_trusted_v1_header_recovers_client() -> TestResult {
     let header = b"PROXY TCP4 192.168.1.1 10.0.0.2 12345 80\r\n";
@@ -145,10 +137,6 @@ async fn resolve_peer_optional_trusted_v1_header_recovers_client() -> TestResult
     Ok(())
 }
 
-/// Require mode, trusted peer, no bytes sent before a short timeout: the connection is dropped
-/// and `resolve_peer` returns well within the configured timeout, not after waiting out the test
-/// client's 200 ms hold or a longer internal fallback. Exercises the dedicated, short
-/// `proxy_protocol.header_timeout_ms` path (as opposed to a timeout borrowed from elsewhere).
 #[tokio::test]
 async fn resolve_peer_require_trusted_no_header_short_timeout_drops() -> TestResult {
     let (mut stream, socket_peer) = accept_one(b"").await?;

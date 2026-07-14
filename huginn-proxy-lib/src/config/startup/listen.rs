@@ -22,7 +22,7 @@ pub enum ProxyProtocolMode {
 
 /// PROXY protocol configuration for a listener: whether/how to honor it, and how long to wait
 /// for the header. Both settings are static (restart to apply) - `mode` alters the socket
-/// handshake, and `header_timeout_ms` is resolved at config parse time (`0` maps to 1 s).
+/// handshake, and `header_timeout_ms` is resolved at config parse time (`<= 0` maps to 1 s).
 #[derive(Debug, Deserialize, Clone, Copy, PartialEq, Eq)]
 pub struct ProxyProtocolConfig {
     /// PROXY protocol handling. Only honored from peers in `security.trusted_proxies`.
@@ -31,9 +31,9 @@ pub struct ProxyProtocolConfig {
     pub mode: ProxyProtocolMode,
     /// Timeout to read a PROXY header (v1 or v2) after a trusted peer is detected, in
     /// milliseconds. Covers both the version-sniff peek loop and the full header read.
-    /// A tiny header (v1 ≤107 bytes, v2 16+≤2048 bytes) from a legitimate L4 proxy arrives in
-    /// the very first write, so this stays well below a TLS handshake timeout.
-    /// `0` is resolved at config parse time to a 1 s internal fallback (not recommended: a
+    /// Legitimate L4 proxies send a small header (v1 ≤107 B, v2 typically ~28 B) at connection
+    /// start, so the default 100 ms timeout is well below the TLS handshake timeout.
+    /// `<= 0` is resolved at config parse time to a 1 s internal fallback (not recommended: a
     /// slow/hostile trusted peer could park a connection slot for that long). Only relevant when
     /// `mode` is `optional` or `require`. Default: 100.
     #[serde(default = "default_proxy_protocol_header_timeout_ms")]
@@ -97,22 +97,22 @@ fn default_proxy_protocol_header_timeout_ms() -> u64 {
     100
 }
 
-/// Fallback when `listen.proxy_protocol.header_timeout_ms` is configured as `0` (1 s).
+/// Fallback when `listen.proxy_protocol.header_timeout_ms` is configured as `<= 0` (1 s).
 const PROXY_PROTOCOL_HEADER_TIMEOUT_FALLBACK_MS: u64 = 1000;
 
-/// Resolve `listen.proxy_protocol.header_timeout_ms`, mapping `0` to
+/// Resolve `listen.proxy_protocol.header_timeout_ms`, mapping `<= 0` to
 /// [`PROXY_PROTOCOL_HEADER_TIMEOUT_FALLBACK_MS`]. Called from config deserialization.
-fn resolve_proxy_protocol_header_timeout_ms(configured_ms: u64) -> u64 {
-    if configured_ms == 0 {
+fn resolve_proxy_protocol_header_timeout_ms(configured_ms: i64) -> u64 {
+    if configured_ms <= 0 {
         warn!(
-            "listen.proxy_protocol.header_timeout_ms=0: falling back to {} ms. This is not \
-             recommended - a slow or hostile trusted peer can hold a connection slot for that \
-             long while withholding the PROXY header.",
+            "listen.proxy_protocol.header_timeout_ms={configured_ms}: falling back to {} ms. This \
+             is not recommended - a slow or hostile trusted peer can hold a connection slot for \
+             that long while withholding the PROXY header.",
             PROXY_PROTOCOL_HEADER_TIMEOUT_FALLBACK_MS
         );
         PROXY_PROTOCOL_HEADER_TIMEOUT_FALLBACK_MS
     } else {
-        configured_ms
+        configured_ms as u64
     }
 }
 
@@ -120,6 +120,6 @@ fn deserialize_proxy_protocol_header_timeout_ms<'de, D>(deserializer: D) -> Resu
 where
     D: serde::Deserializer<'de>,
 {
-    let ms = u64::deserialize(deserializer)?;
+    let ms = i64::deserialize(deserializer)?;
     Ok(resolve_proxy_protocol_header_timeout_ms(ms))
 }
