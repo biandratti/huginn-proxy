@@ -2,6 +2,7 @@ use ipnet::IpNet;
 use serde::Deserialize;
 
 use super::headers::CustomHeader;
+use crate::config::Secret;
 
 /// Security configuration (used for TOML deserialization via Config)
 #[derive(Debug, Deserialize, Clone)]
@@ -155,9 +156,10 @@ pub struct CspConfig {
     /// Enable CSP
     #[serde(default)]
     pub enabled: bool,
-    /// CSP policy string
+    /// CSP policy string. Redacted on serialization: policies can reveal internal endpoints
+    /// (e.g. `connect-src` hosts), so they are never exposed in the effective-config view or logs.
     #[serde(default = "default_csp_policy")]
-    pub policy: String,
+    pub policy: Secret<String>,
 }
 
 impl Default for CspConfig {
@@ -166,8 +168,8 @@ impl Default for CspConfig {
     }
 }
 
-fn default_csp_policy() -> String {
-    "default-src 'self'".to_string()
+fn default_csp_policy() -> Secret<String> {
+    Secret::new("default-src 'self'".to_string())
 }
 
 /// IP filtering mode

@@ -1,13 +1,17 @@
 use serde::{Deserialize, Serialize};
 
+use crate::config::Secret;
+
 /// Custom header configuration
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct CustomHeader {
     /// Header name (e.g., "X-Frame-Options")
     pub name: String,
-    /// Header value (e.g., "DENY")
-    pub value: String,
+    /// Header value (e.g., "DENY"). Redacted on serialization: header values frequently carry
+    /// credentials (e.g. `Authorization`), so they are never exposed in the effective-config view
+    /// or structured logs.
+    pub value: Secret<String>,
 }
 
 /// Header manipulation for requests or responses

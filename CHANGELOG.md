@@ -30,6 +30,9 @@ See `EBPF-SETUP.md`.
 New `--print-effective-config` CLI flag validates the config and prints deterministic,
 secret-redacted JSON with applied defaults, normalizations, and fallbacks, then exits. Proxy
 startup now logs a safe aggregate summary at `info` and the complete redacted view at `debug`.
+Sensitive values (custom header values, CSP policy) are wrapped in an internal secret type that
+serializes as `<redacted>` by construction, so they can never leak through the effective-config
+view or logs regardless of how the config grows.
 
 ### Changed
 

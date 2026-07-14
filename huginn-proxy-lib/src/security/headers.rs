@@ -25,7 +25,7 @@ pub fn apply_security_headers<T>(
     for header in &config.custom {
         if let (Ok(name), Ok(value)) = (
             HeaderName::from_bytes(header.name.as_bytes()),
-            HeaderValue::from_str(&header.value),
+            HeaderValue::from_str(header.value.expose()),
         ) {
             response.headers_mut().insert(name, value);
         }
@@ -40,7 +40,7 @@ pub fn apply_security_headers<T>(
     }
 
     if config.csp.enabled {
-        if let Ok(csp_value) = HeaderValue::from_str(&config.csp.policy) {
+        if let Ok(csp_value) = HeaderValue::from_str(config.csp.policy.expose()) {
             response
                 .headers_mut()
                 .insert(HeaderName::from_static("content-security-policy"), csp_value);
