@@ -5,7 +5,7 @@ pub mod timeout;
 pub mod tls;
 
 pub use fingerprinting::FingerprintConfig;
-pub use listen::{ListenConfig, ProxyProtocolMode};
+pub use listen::{ListenConfig, ProxyProtocolConfig, ProxyProtocolMode};
 pub use telemetry::{LoggingConfig, TelemetryConfig};
 pub use timeout::{KeepAliveConfig, TimeoutConfig};
 pub use tls::{ClientAuth, SessionResumptionConfig, TlsConfig, TlsOptions, TlsVersion};

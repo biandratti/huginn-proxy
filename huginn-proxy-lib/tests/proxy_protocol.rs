@@ -31,7 +31,7 @@ use tokio_rustls::TlsConnector;
 use huginn_proxy_lib::config::load_from_path;
 use huginn_proxy_lib::config::{
     Backend, Domain, FingerprintConfig, KeepAliveConfig, ListenConfig, LoggingConfig,
-    ProxyProtocolMode, Route, SecurityConfig, TelemetryConfig, TimeoutConfig,
+    ProxyProtocolConfig, ProxyProtocolMode, Route, SecurityConfig, TelemetryConfig, TimeoutConfig,
 };
 use huginn_proxy_lib::{Config, Metrics, TlsConfig, WatchOptions};
 
@@ -167,7 +167,7 @@ async fn raw_request(proxy: SocketAddr, header_prefix: &[u8]) -> String {
 
 fn config_toml(listen_port: u16, backend: SocketAddr, mode: &str, trusted: &str) -> String {
     format!(
-        r#"listen = {{ addrs = ["127.0.0.1:{listen_port}"], proxy_protocol = "{mode}" }}
+        r#"listen = {{ addrs = ["127.0.0.1:{listen_port}"], proxy_protocol = {{ mode = "{mode}" }} }}
 backends = [{{ address = "{backend}" }}]
 
 [security]
@@ -292,7 +292,7 @@ async fn spawn_proxy_tls(
     let config = Config {
         listen: ListenConfig {
             addrs: vec![listen_addr],
-            proxy_protocol: proxy_protocol_mode,
+            proxy_protocol: ProxyProtocolConfig { mode: proxy_protocol_mode, ..Default::default() },
             ..Default::default()
         },
         backends: vec![Backend {

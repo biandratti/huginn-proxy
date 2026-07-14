@@ -150,8 +150,8 @@ rate(huginn_connections_rejected_total[5m])
 
 ### 3. PROXY Protocol Metrics
 
-Emitted when `listen.proxy_protocol` is `optional` or `require`. All counters are zero when
-`proxy_protocol = "off"`. Both PROXY protocol v1 (text) and v2 (binary) are parsed.
+Emitted when `listen.proxy_protocol.mode` is `optional` or `require`. All counters are zero when
+`proxy_protocol.mode = "off"`. Both PROXY protocol v1 (text) and v2 (binary) are parsed.
 
 | Metric                                       | Type    | Description                                                                                      | Labels   |
 |----------------------------------------------|---------|--------------------------------------------------------------------------------------------------|----------|
@@ -163,9 +163,9 @@ Emitted when `listen.proxy_protocol` is `optional` or `require`. All counters ar
 **Labels**:
 
 - `reason` (on `huginn_proxy_protocol_dropped_total`):
-  - `untrusted_require` — `proxy_protocol=require` and the peer is not in `trusted_proxies`
+  - `untrusted_require` — `proxy_protocol.mode=require` and the peer is not in `trusted_proxies`
   - `bad_header` — signature mismatch, truncated header, or unsupported command/address family
-  - `timeout` — peek or header read exceeded `timeout.tls_handshake_secs`
+  - `timeout` — peek or header read exceeded `listen.proxy_protocol.header_timeout_ms`
 
 **Example queries**:
 

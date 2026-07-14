@@ -15,10 +15,8 @@ mod xdp;
 
 #[xdp]
 pub fn huginn_xdp_syn(ctx: XdpContext) -> u32 {
-    match xdp::try_xdp_syn(&ctx) {
-        Ok(()) => XDP_PASS,
-        Err(()) => XDP_PASS,
-    }
+    let _ = xdp::try_xdp_syn(&ctx);
+    XDP_PASS
 }
 
 #[classifier]

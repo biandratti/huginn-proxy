@@ -7,6 +7,7 @@ pub use crate::proxy::accept::SynProbe;
 use crate::proxy::accept::{accept_loop, AcceptContext};
 use crate::proxy::connection::ConnectionManager;
 use crate::proxy::listener::{bind_listener, register_signal};
+use crate::proxy::peer_resolution::ResolvedProxyProtocol;
 use crate::proxy::protocol::warn_proxy_protocol_trust_gap;
 use crate::proxy::reload::{
     initial_client_pool, initial_rate_limiter, try_reload, SharedDynamicConfig,
@@ -161,7 +162,7 @@ pub async fn run(
         connection_handling_timeout: Duration::from_secs(
             static_cfg.timeout.connection_handling_secs,
         ),
-        proxy_protocol: static_cfg.listen.proxy_protocol,
+        proxy_protocol: ResolvedProxyProtocol::resolve(static_cfg.listen.proxy_protocol),
     });
 
     // Spawn one accept task per listener.
@@ -173,13 +174,14 @@ pub async fn run(
             addr,
             listener,
             Arc::clone(&shutdown_signal),
+            shutdown_rx.clone(),
             Arc::clone(&connection_manager),
             Arc::clone(&ctx),
         ));
     }
 
     warn_proxy_protocol_trust_gap(
-        static_cfg.listen.proxy_protocol,
+        static_cfg.listen.proxy_protocol.mode,
         &dynamic_cfg.load().security.trusted_proxies,
     );
 
