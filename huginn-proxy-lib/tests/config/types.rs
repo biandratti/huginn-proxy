@@ -57,8 +57,6 @@ http_version = "HTTP11""#;
 #[test]
 fn test_mtls_config_required() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let toml = r#"
-cert_path = "/config/certs/server.crt"
-key_path = "/config/certs/server.key"
 alpn = ["h2", "http/1.1"]
 
 [client_auth]
@@ -78,8 +76,6 @@ required = { ca_cert_path = "/config/certs/client-ca.crt" }
 #[test]
 fn test_mtls_config_default_is_disabled() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let toml = r#"
-cert_path = "/config/certs/server.crt"
-key_path = "/config/certs/server.key"
 alpn = ["h2", "http/1.1"]
 "#;
 
@@ -97,13 +93,15 @@ backends = [
   { address = "backend-a:9000" }
 ]
 
+[[domains]]
+host = "api.example.com"
+cert_path = "/config/certs/server.crt"
+key_path = "/config/certs/server.key"
 routes = [
   { prefix = "/api", backend = "backend-a:9000" }
 ]
 
 [tls]
-cert_path = "/config/certs/server.crt"
-key_path = "/config/certs/server.key"
 alpn = ["h2", "http/1.1"]
 
 [tls.client_auth]

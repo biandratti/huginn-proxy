@@ -2,6 +2,7 @@ use serde::Deserialize;
 
 /// Timeout configuration
 #[derive(Debug, Deserialize, Clone, PartialEq)]
+#[serde(deny_unknown_fields)]
 pub struct TimeoutConfig {
     /// TCP connect timeout to upstream backends in milliseconds.
     /// If absent, no connect timeout is applied.
@@ -62,6 +63,7 @@ impl Default for TimeoutConfig {
 /// Multiple streams can share the same connection, so keep-alive headers are not needed
 /// (and are prohibited by the HTTP/2 specification).
 #[derive(Debug, Deserialize, Clone, PartialEq)]
+#[serde(deny_unknown_fields)]
 pub struct KeepAliveConfig {
     /// Enable HTTP/1.1 keep-alive (persistent connections)
     /// Allows reusing the same TCP connection for multiple HTTP requests

@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 
 /// Custom header configuration
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
+#[serde(deny_unknown_fields)]
 pub struct CustomHeader {
     /// Header name (e.g., "X-Frame-Options")
     pub name: String,
@@ -11,6 +12,7 @@ pub struct CustomHeader {
 
 /// Header manipulation for requests or responses
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Default)]
+#[serde(deny_unknown_fields)]
 pub struct HeaderManipulationGroup {
     /// Headers to add (overwrite if exist)
     #[serde(default)]
@@ -22,6 +24,7 @@ pub struct HeaderManipulationGroup {
 
 /// Header manipulation configuration
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Default)]
+#[serde(deny_unknown_fields)]
 pub struct HeaderManipulation {
     /// Request header manipulation
     #[serde(default)]

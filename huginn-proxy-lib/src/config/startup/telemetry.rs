@@ -3,6 +3,7 @@ use serde::Deserialize;
 /// Telemetry configuration
 /// Controls observability features: metrics, tracing, and OpenTelemetry integration
 #[derive(Debug, Deserialize, Clone, Default, PartialEq)]
+#[serde(deny_unknown_fields)]
 pub struct TelemetryConfig {
     /// Metrics server port (optional)
     /// If provided, starts a separate HTTP server on this port for Prometheus metrics
@@ -26,6 +27,7 @@ fn default_otel_log_level() -> String {
 /// Logging configuration
 /// Controls application-level structured logging (stdout/stderr)
 #[derive(Debug, Deserialize, Clone, Default, PartialEq)]
+#[serde(deny_unknown_fields)]
 pub struct LoggingConfig {
     /// Log level: "trace", "debug", "info", "warn", "error"
     /// Default: "info"

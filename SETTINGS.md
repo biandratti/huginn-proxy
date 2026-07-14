@@ -17,6 +17,10 @@ huginn-proxy --validate config.toml
 huginn-proxy --validate config.yaml
 ```
 
+Configuration keys are strict at every nesting level. Unknown or misplaced keys are rejected
+during startup, `--validate`, and hot reload instead of being silently ignored. This catches
+common typos and YAML indentation mistakes; a failed reload keeps the currently active config.
+
 **Hot reload:** dynamic sections update on SIGHUP or file-watcher trigger without dropping connections. Static sections
 require a process restart — changes are logged as a warning and ignored. See [DEPLOYMENT.md](DEPLOYMENT.md) for the full
 static/dynamic split.

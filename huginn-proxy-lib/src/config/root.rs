@@ -16,6 +16,7 @@ use super::startup::StaticConfig;
 
 /// Main configuration structure, the TOML deserialization target.
 #[derive(Debug, Deserialize, Clone)]
+#[serde(deny_unknown_fields)]
 pub struct Config {
     /// Listener configuration (addresses and socket options)
     pub listen: ListenConfig,

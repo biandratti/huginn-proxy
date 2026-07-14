@@ -14,6 +14,7 @@ pub enum TlsVersion {
 
 /// Advanced TLS configuration options
 #[derive(Debug, Deserialize, Clone, PartialEq)]
+#[serde(deny_unknown_fields)]
 pub struct TlsOptions {
     /// Allowed TLS versions
     /// Options: ["1.2"], ["1.3"], or ["1.2", "1.3"]
@@ -116,6 +117,7 @@ pub enum ClientAuth {
 /// Session resumption configuration for TLS
 #[derive(Debug, Deserialize, Clone, PartialEq)]
 #[cfg_attr(test, derive(serde::Serialize))]
+#[serde(deny_unknown_fields)]
 pub struct SessionResumptionConfig {
     /// Enable session resumption (default: true)
     /// When enabled, clients can reuse previous TLS sessions to reduce handshake overhead
@@ -143,6 +145,7 @@ fn default_session_cache_size() -> usize {
 }
 
 #[derive(Debug, Deserialize, Clone, PartialEq)]
+#[serde(deny_unknown_fields)]
 pub struct TlsConfig {
     /// Application-Layer Protocol Negotiation (ALPN) protocols
     /// Common values: ["h2", "http/1.1"]

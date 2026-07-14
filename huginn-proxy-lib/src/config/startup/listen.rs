@@ -24,6 +24,7 @@ pub enum ProxyProtocolMode {
 /// for the header. Both settings are static (restart to apply) - `mode` alters the socket
 /// handshake, and `header_timeout_ms` is resolved at config parse time (`<= 0` maps to 1 s).
 #[derive(Debug, Deserialize, Clone, Copy, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
 pub struct ProxyProtocolConfig {
     /// PROXY protocol handling. Only honored from peers in `security.trusted_proxies`.
     /// Default: off.
@@ -52,6 +53,7 @@ impl Default for ProxyProtocolConfig {
 
 /// Listener configuration, addresses and kernel socket options.
 #[derive(Debug, Deserialize, Clone, PartialEq)]
+#[serde(deny_unknown_fields)]
 pub struct ListenConfig {
     /// Addresses and ports to listen on. One or more entries, one per IP family.
     /// Example IPv4 only:

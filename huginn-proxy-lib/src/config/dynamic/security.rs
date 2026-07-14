@@ -5,6 +5,7 @@ use super::headers::CustomHeader;
 
 /// Security configuration (used for TOML deserialization via Config)
 #[derive(Debug, Deserialize, Clone)]
+#[serde(deny_unknown_fields)]
 pub struct SecurityConfig {
     /// Maximum number of concurrent connections allowed (static requires restart to change)
     #[serde(default = "default_max_connections")]
@@ -56,6 +57,7 @@ pub(crate) fn default_max_connections() -> usize {
 /// Fields left unset inherit the global `[security]` policy. `max_connections` is global only
 /// (process-level, static) and is intentionally not part of this block.
 #[derive(Debug, Deserialize, Clone, PartialEq, Default)]
+#[serde(deny_unknown_fields)]
 pub struct DomainSecurityConfig {
     /// Security headers for this domain. Replaces global `[security.headers]` when present.
     #[serde(default)]
@@ -87,6 +89,7 @@ pub struct SecurityDynamicConfig {
 
 /// Security headers configuration
 #[derive(Debug, Deserialize, Clone, PartialEq, Default)]
+#[serde(deny_unknown_fields)]
 pub struct SecurityHeaders {
     /// Custom headers to add to all responses
     #[serde(default)]
@@ -103,6 +106,7 @@ pub struct SecurityHeaders {
 ///
 /// Reference: RFC 6797 - <https://tools.ietf.org/html/rfc6797>
 #[derive(Debug, Deserialize, Clone, PartialEq)]
+#[serde(deny_unknown_fields)]
 pub struct HstsConfig {
     /// Enable HSTS (only applies to HTTPS connections)
     #[serde(default)]
@@ -146,6 +150,7 @@ fn default_hsts_max_age() -> u64 {
 
 /// CSP (Content Security Policy) configuration
 #[derive(Debug, Deserialize, Clone, PartialEq)]
+#[serde(deny_unknown_fields)]
 pub struct CspConfig {
     /// Enable CSP
     #[serde(default)]
@@ -180,6 +185,7 @@ pub enum IpFilterMode {
 
 /// IP filtering (ACL) configuration
 #[derive(Debug, Deserialize, Clone, PartialEq)]
+#[serde(deny_unknown_fields)]
 pub struct IpFilterConfig {
     /// Filtering mode
     #[serde(default)]
@@ -224,6 +230,7 @@ where
 
 /// Rate limiting configuration
 #[derive(Debug, Deserialize, Clone, PartialEq)]
+#[serde(deny_unknown_fields)]
 pub struct RateLimitConfig {
     /// Enable rate limiting
     /// Default: false
@@ -269,6 +276,7 @@ impl Default for RateLimitConfig {
 /// present, **fully replaces** (whole-block) the domain-effective policy for that route; a
 /// field left unset inherits the domain-effective (or global) policy.
 #[derive(Debug, Deserialize, Clone, PartialEq, Default)]
+#[serde(deny_unknown_fields)]
 pub struct RouteSecurityConfig {
     /// Security headers for this route. Replaces the domain/global `[security.headers]` when present.
     #[serde(default)]

@@ -25,6 +25,11 @@ New agent env var. Values: `xdp-native` (default), `xdp-skb`, `tc`. Both XDP and
 ship in the same BPF object and share identical maps; no proxy config change required.
 See `EBPF-SETUP.md`.
 
+### Changed
+
+- Configuration loading now rejects unknown or misplaced keys at every nesting level during
+  startup, `--validate`, and hot reload.
+
 ---
 
 ## [0.0.2-beta.1]

@@ -30,6 +30,7 @@ pub enum HealthCheckType {
 /// Wire shape for a `[backends.health_check]` / `backends.*.health_check` table. Every field
 /// is optional: missing keys merge with defaults; an empty table `{}` yields TCP and the default
 #[derive(Deserialize, Default, Clone)]
+#[serde(deny_unknown_fields)]
 struct HealthCheckDe {
     r#type: Option<String>,
     path: Option<String>,
@@ -165,6 +166,7 @@ impl HealthCheckConfig {
 
 /// Backend server configuration
 #[derive(Debug, Deserialize, Clone, PartialEq)]
+#[serde(deny_unknown_fields)]
 pub struct Backend {
     /// Backend server address (host:port format)
     /// Example: "backend-1:9000" or "192.168.1.10:8080"
@@ -182,6 +184,7 @@ pub struct Backend {
 
 /// Route configuration for path-based routing
 #[derive(Debug, Deserialize, Clone, PartialEq)]
+#[serde(deny_unknown_fields)]
 pub struct Route {
     /// URL path prefix to match (e.g., "/api", "/static")
     /// The most specific (longest) matching prefix wins; declaration order does not matter
@@ -241,6 +244,7 @@ pub const DEFAULT_DOMAIN_LABEL: &str = "_default_";
 /// `cert_path` / `key_path` are optional, omit both for plain-HTTP domains.
 /// Both must be present together; specifying only one is a validation error.
 #[derive(Debug, Deserialize, Clone, PartialEq)]
+#[serde(deny_unknown_fields)]
 pub struct Domain {
     /// Domain pattern used for SNI matching and routing.
     ///
@@ -295,6 +299,7 @@ pub fn sort_domain_routes(domains: &mut [Domain]) {
 /// Connection pooling reuses TCP connections to reduce latency by avoiding
 /// repeated TCP and TLS handshakes.
 #[derive(Clone, Debug, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
 pub struct BackendPoolConfig {
     /// Enable connection pooling globally
     /// Default: true

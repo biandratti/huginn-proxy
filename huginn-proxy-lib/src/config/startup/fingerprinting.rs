@@ -2,6 +2,7 @@ use serde::Deserialize;
 
 /// Fingerprinting configuration
 #[derive(Debug, Deserialize, Clone, PartialEq)]
+#[serde(deny_unknown_fields)]
 pub struct FingerprintConfig {
     /// Enable TLS fingerprinting (JA4)
     /// Default: true
