@@ -1,4 +1,5 @@
 pub mod dynamic;
+mod effective;
 pub mod parser;
 pub mod startup;
 pub mod watcher;
@@ -15,6 +16,7 @@ pub use dynamic::{
     Domain, DynamicConfig, HeaderManipulation, HeaderManipulationGroup, HealthCheckConfig,
     HealthCheckType, Route, DEFAULT_DOMAIN_LABEL, DEFAULT_FINGERPRINTING,
 };
+pub use effective::EffectiveConfigView;
 pub use loader::{load_from_path, security_override_warnings, SecurityOverrideWarning};
 pub use parser::{ConfigFormat, ConfigParser, TomlParser, YamlParser};
 pub use root::{Config, ConfigParts};
