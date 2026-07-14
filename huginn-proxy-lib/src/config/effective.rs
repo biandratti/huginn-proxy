@@ -1,30 +1,24 @@
-mod dynamic_view;
-mod static_view;
-
 use serde::Serialize;
-use serde_json::Value;
 
-use super::startup::StaticConfig;
+use super::dynamic::DynamicView;
+use super::startup::{StaticConfig, StaticView};
 use super::DynamicConfig;
-use dynamic_view::dynamic_config_view;
-use static_view::{proxy_protocol_mode, static_config_view};
 
 /// Serializable, secret-safe representation of the effective runtime configuration.
 ///
 /// This type is intentionally built from an allowlist of fields instead of serializing
-/// [`StaticConfig`] or [`DynamicConfig`] directly. Certificate/key paths and mTLS CA paths are
-/// reduced to booleans; header values and CSP policy contents are wrapped in
-/// [`Secret`](super::Secret) and therefore serialize as `<redacted>` by construction.
-///
-/// The allowlist is split across the `static_view` and `dynamic_view` submodules so each half
-/// stays auditable on its own, but both remain a single, greppable place to answer "what does this
-/// expose?".
-#[derive(Debug, Serialize)]
-pub struct EffectiveConfigView {
+/// [`StaticConfig`] or [`DynamicConfig`] directly. The exposed surface is the set of fields
+/// declared on the `*View` structs, each defined next to the config type it mirrors (e.g.
+/// `ListenView` in `startup::listen`, `SecurityView` in `dynamic::security`), so adding a field to
+/// the output is a deliberate, compiler-checked edit rather than a stringly-typed key.
+/// Certificate/key paths and mTLS CA paths are reduced to booleans; header values and CSP policy
+/// contents keep their [`Secret`](super::Secret) type and serialize as `<redacted>` by construction.
+#[derive(Serialize)]
+pub struct EffectiveConfigView<'a> {
     #[serde(rename = "static")]
-    static_config: Value,
+    static_config: StaticView<'a>,
     #[serde(rename = "dynamic")]
-    dynamic_config: Value,
+    dynamic_config: DynamicView<'a>,
 }
 
 /// Safe aggregate values logged once when the proxy becomes ready.
@@ -42,11 +36,11 @@ pub struct EffectiveConfigSummary {
     pub max_connections: usize,
 }
 
-impl EffectiveConfigView {
-    pub fn new(static_cfg: &StaticConfig, dynamic_cfg: &DynamicConfig) -> Self {
+impl<'a> EffectiveConfigView<'a> {
+    pub fn new(static_cfg: &'a StaticConfig, dynamic_cfg: &'a DynamicConfig) -> Self {
         Self {
-            static_config: static_config_view(static_cfg),
-            dynamic_config: dynamic_config_view(dynamic_cfg),
+            static_config: static_cfg.effective_view(),
+            dynamic_config: dynamic_cfg.effective_view(),
         }
     }
 
@@ -84,7 +78,7 @@ impl EffectiveConfigSummary {
         Self {
             listener_count: static_cfg.listen.addrs.len(),
             tls_enabled: static_cfg.tls.is_some(),
-            proxy_protocol_mode: proxy_protocol_mode(static_cfg.listen.proxy_protocol.mode),
+            proxy_protocol_mode: static_cfg.listen.proxy_protocol.mode.as_str(),
             domain_count: dynamic_cfg.domains.len(),
             route_count,
             backend_count: dynamic_cfg.backends.len(),

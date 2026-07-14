@@ -1,4 +1,4 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 /// Fingerprinting configuration
 #[derive(Debug, Deserialize, Clone, PartialEq)]
@@ -44,4 +44,24 @@ fn default_true() -> bool {
 
 fn default_max_capture() -> usize {
     64 * 1024 // 64 KB
+}
+
+/// Allowlisted effective-config view of [`FingerprintConfig`]. Field names are the JSON keys.
+#[derive(Serialize)]
+pub(crate) struct FingerprintView {
+    tls_enabled: bool,
+    http_enabled: bool,
+    tcp_enabled: bool,
+    max_capture: usize,
+}
+
+impl FingerprintConfig {
+    pub(crate) fn effective_view(&self) -> FingerprintView {
+        FingerprintView {
+            tls_enabled: self.tls_enabled,
+            http_enabled: self.http_enabled,
+            tcp_enabled: self.tcp_enabled,
+            max_capture: self.max_capture,
+        }
+    }
 }

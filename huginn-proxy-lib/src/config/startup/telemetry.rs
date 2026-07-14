@@ -1,4 +1,4 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 /// Telemetry configuration
 /// Controls observability features: metrics, tracing, and OpenTelemetry integration
@@ -46,4 +46,33 @@ fn default_log_level() -> String {
 
 fn default_false() -> bool {
     false
+}
+
+/// Allowlisted effective-config view of [`TelemetryConfig`]. Field names are the JSON keys.
+#[derive(Serialize)]
+pub(crate) struct TelemetryView<'a> {
+    metrics_port: Option<u16>,
+    otel_log_level: &'a str,
+}
+
+/// Allowlisted effective-config view of [`LoggingConfig`]. Field names are the JSON keys.
+#[derive(Serialize)]
+pub(crate) struct LoggingView<'a> {
+    level: &'a str,
+    show_target: bool,
+}
+
+impl TelemetryConfig {
+    pub(crate) fn effective_view(&self) -> TelemetryView<'_> {
+        TelemetryView {
+            metrics_port: self.metrics_port,
+            otel_log_level: self.otel_log_level.as_str(),
+        }
+    }
+}
+
+impl LoggingConfig {
+    pub(crate) fn effective_view(&self) -> LoggingView<'_> {
+        LoggingView { level: self.level.as_str(), show_target: self.show_target }
+    }
 }

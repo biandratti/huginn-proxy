@@ -37,3 +37,32 @@ pub struct HeaderManipulation {
     #[serde(default)]
     pub response: HeaderManipulationGroup,
 }
+
+/// Allowlisted effective-config view of [`HeaderManipulation`]. Header values keep their
+/// [`Secret`](crate::config::Secret) type via `CustomHeader`, so they serialize as `<redacted>`.
+#[derive(Serialize)]
+pub(crate) struct HeaderManipulationView<'a> {
+    request: HeaderGroupView<'a>,
+    response: HeaderGroupView<'a>,
+}
+
+#[derive(Serialize)]
+struct HeaderGroupView<'a> {
+    add: &'a [CustomHeader],
+    remove: &'a [String],
+}
+
+impl HeaderManipulation {
+    pub(crate) fn effective_view(&self) -> HeaderManipulationView<'_> {
+        HeaderManipulationView {
+            request: self.request.effective_view(),
+            response: self.response.effective_view(),
+        }
+    }
+}
+
+impl HeaderManipulationGroup {
+    fn effective_view(&self) -> HeaderGroupView<'_> {
+        HeaderGroupView { add: self.add.as_slice(), remove: self.remove.as_slice() }
+    }
+}

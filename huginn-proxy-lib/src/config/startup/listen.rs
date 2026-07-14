@@ -1,4 +1,4 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 use tracing::warn;
 
@@ -124,4 +124,41 @@ where
 {
     let ms = i64::deserialize(deserializer)?;
     Ok(resolve_proxy_protocol_header_timeout_ms(ms))
+}
+
+/// Allowlisted effective-config view of [`ListenConfig`]. Field names are the JSON keys.
+#[derive(Serialize)]
+pub(crate) struct ListenView {
+    addrs: Vec<String>,
+    tcp_backlog: i32,
+    proxy_protocol: ProxyProtocolView,
+}
+
+#[derive(Serialize)]
+struct ProxyProtocolView {
+    mode: &'static str,
+    header_timeout_ms: u64,
+}
+
+impl ListenConfig {
+    pub(crate) fn effective_view(&self) -> ListenView {
+        ListenView {
+            addrs: self.addrs.iter().map(ToString::to_string).collect(),
+            tcp_backlog: self.tcp_backlog,
+            proxy_protocol: ProxyProtocolView {
+                mode: self.proxy_protocol.mode.as_str(),
+                header_timeout_ms: self.proxy_protocol.header_timeout_ms,
+            },
+        }
+    }
+}
+
+impl ProxyProtocolMode {
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            ProxyProtocolMode::Off => "off",
+            ProxyProtocolMode::Optional => "optional",
+            ProxyProtocolMode::Require => "require",
+        }
+    }
 }
