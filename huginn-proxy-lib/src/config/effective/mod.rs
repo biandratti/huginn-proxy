@@ -16,8 +16,9 @@ use static_view::{proxy_protocol_mode, static_config_view};
 /// reduced to booleans; header values and CSP policy contents are wrapped in
 /// [`Secret`](super::Secret) and therefore serialize as `<redacted>` by construction.
 ///
-/// The allowlist is split across [`static_view`] and [`dynamic_view`] so each half stays auditable
-/// on its own, but both remain a single, greppable place to answer "what does this expose?".
+/// The allowlist is split across the `static_view` and `dynamic_view` submodules so each half
+/// stays auditable on its own, but both remain a single, greppable place to answer "what does this
+/// expose?".
 #[derive(Debug, Serialize)]
 pub struct EffectiveConfigView {
     #[serde(rename = "static")]

@@ -8,9 +8,9 @@ pub const REDACTED: &str = "<redacted>";
 /// A configuration value that must never appear in serialized output.
 ///
 /// `Secret<T>` deserializes and compares transparently, but its [`Serialize`] implementation
-/// always emits [`REDACTED`] instead of the wrapped value. This makes redaction a property of the
-/// type: any value that flows into a serialized surface (the effective-config view, structured
-/// logs) is masked by construction, and reading the real value requires an explicit
+/// always emits the `<redacted>` placeholder instead of the wrapped value. This makes redaction a
+/// property of the type: any value that flows into a serialized surface (the effective-config view,
+/// structured logs) is masked by construction, and reading the real value requires an explicit
 /// [`expose`](Self::expose) call at the use site.
 ///
 /// `Debug` is intentionally *transparent* (delegates to the inner value). Debug output is only used
