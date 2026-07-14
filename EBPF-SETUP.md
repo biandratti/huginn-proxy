@@ -138,8 +138,10 @@ tcp_enabled = true   # false = no BPF maps opened, no capabilities needed
 |---|---|---|
 | `HUGINN_EBPF_PIN_PATH` | `/sys/fs/bpf/huginn` | Pin directory to read maps from (default shown) |
 
-The proxy opens pinned maps at startup and fails immediately if they are not present. Ensure
-the agent has completed startup (and `/ready` returns 200) before starting the proxy.
+At startup the proxy retries opening the pinned maps with a fixed backoff until the agent has
+pinned them, so the two containers can start in any order. See
+[Runtime lifecycle and agent restarts](#runtime-lifecycle-and-agent-restarts) for how the proxy
+behaves once connected.
 
 ---
 
@@ -215,6 +217,44 @@ volumes:
 ```
 
 See [DEPLOYMENT.md](DEPLOYMENT.md) for the full Kubernetes section.
+
+---
+
+## Runtime lifecycle and agent restarts
+
+The proxy only reads maps when TCP fingerprinting is active — that is, built with the `ebpf-tcp`
+feature **and** `fingerprint.tcp_enabled = true`. Otherwise no maps are opened and none of the
+behavior below applies.
+
+### Startup
+
+The proxy retries `from_pinned` with a fixed backoff until the agent's pins appear. This wait
+only affects the proxy's own readiness (it does not mark `/ready` until listeners are accepting);
+the observability server is already up and answering `/health` and `/metrics` during the wait.
+
+### Agent crash while the proxy is connected
+
+The proxy **does not crash** if the agent dies after the maps are connected:
+
+- The proxy holds its own file descriptors to the map objects. The kernel keeps a map alive while
+  any reference exists, so it survives the agent process exiting and even the pin files being
+  removed.
+- Every lookup degrades gracefully: any read error returns `SynResult::Miss`, so the
+  `x-tcp-p0f` header is simply not injected. Request forwarding is never blocked or dropped.
+
+The trade-off is a loss of **fresh** captures: the agent owns the attached XDP/TC program, so when
+it exits the program is detached and no new SYNs are written. Existing traffic keeps flowing;
+new connections just stop getting a fingerprint until a healthy agent is capturing again.
+
+### Agent restart is not auto-reconnected
+
+When the agent restarts it removes the old pins and pins **new** map objects. The proxy is still
+holding descriptors to the **previous** maps, which are now orphaned and no longer written to.
+The proxy does not currently re-open the new pins on its own. TODO: WIP...
+
+Operational guidance: after an agent restart (or an agent upgrade that recreates the maps),
+**restart the proxy** so it reconnects via `from_pinned` to the fresh pins. In Kubernetes this is
+typically a rolling restart of the proxy Deployment following a DaemonSet roll.
 
 ---
 

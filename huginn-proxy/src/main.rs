@@ -1,18 +1,19 @@
 #![forbid(unsafe_code)]
 
+mod ebpf;
+mod validation;
+
 use std::env;
-use std::io::{self, Write};
 use std::path::PathBuf;
 use std::sync::Arc;
 
 use arc_swap::ArcSwap;
 use clap::Parser;
-use huginn_proxy_lib::config::{load_from_path, EffectiveConfigView};
+use huginn_proxy_lib::config::load_from_path;
 use huginn_proxy_lib::proxy::shutdown::{shutdown_channel, ServiceHandle, ServiceName};
 use huginn_proxy_lib::run;
 use huginn_proxy_lib::telemetry::{
-    init_metrics, init_tracing_with_otel, init_validation_tracing, shutdown_tracing,
-    start_observability_server, Readiness,
+    init_metrics, init_tracing_with_otel, shutdown_tracing, start_observability_server, Readiness,
 };
 use huginn_proxy_lib::WatchOptions;
 use tokio::time::Duration;
@@ -50,28 +51,11 @@ async fn main() -> Result<(), BoxError> {
     let validation_mode = cli.validate || cli.print_effective_config;
 
     if validation_mode {
-        init_validation_tracing()?;
+        return validation::run(&cli.config_path, cli.print_effective_config);
     }
+
     let config = load_from_path(&cli.config_path)?;
     config.validate_cross_refs()?;
-
-    if validation_mode {
-        let stdout = io::stdout();
-        let mut stdout = stdout.lock();
-        if cli.print_effective_config {
-            let huginn_proxy_lib::config::ConfigParts { static_cfg, dynamic_cfg } =
-                config.into_parts();
-            writeln!(
-                stdout,
-                "{}",
-                EffectiveConfigView::new(&static_cfg, &dynamic_cfg).to_pretty_json()?
-            )?;
-        } else {
-            writeln!(stdout, "Config OK: {}", cli.config_path.display())?;
-        }
-        shutdown_tracing();
-        return Ok(());
-    }
 
     // RUST_LOG environment variable can override at runtime (e.g., docker run -e RUST_LOG=debug)
     let log_level = env::var("RUST_LOG").unwrap_or_else(|_| config.logging.level.clone());
@@ -126,70 +110,7 @@ async fn main() -> Result<(), BoxError> {
             None
         };
 
-    // TCP SYN fingerprinting via eBPF/XDP.
-    // When tcp_enabled = true the proxy opens BPF maps pinned by huginn-ebpf-agent.
-    // The agent may start after the proxy, so we retry with backoff until the maps appear.
-    #[cfg(feature = "ebpf-tcp")]
-    let syn_probe: Option<huginn_proxy_lib::SynProbe> = {
-        use huginn_ebpf::{parse_syn_v4, parse_syn_v6, EbpfProbe};
-        use huginn_proxy_lib::fingerprinting::SynResult;
-        use std::net::SocketAddr;
-
-        if !static_cfg.fingerprint.tcp_enabled {
-            tracing::info!("TCP SYN fingerprinting disabled (`fingerprint.tcp_enabled = false`)");
-            None
-        } else {
-            let pin_path = env::var("HUGINN_EBPF_PIN_PATH")
-                .unwrap_or_else(|_| huginn_ebpf::pin::DEFAULT_PIN_BASE.to_string());
-            let syn_map_max_entries = env::var("HUGINN_EBPF_SYN_MAP_MAX_ENTRIES")
-                .ok()
-                .and_then(|s| s.parse().ok())
-                .unwrap_or(huginn_ebpf::DEFAULT_SYN_MAP_MAX_ENTRIES);
-
-            const RETRY_INTERVAL: std::time::Duration = std::time::Duration::from_secs(2);
-
-            let probe = loop {
-                match EbpfProbe::from_pinned(&pin_path, syn_map_max_entries) {
-                    Ok(p) => break p,
-                    Err(_) => {
-                        tracing::warn!(
-                            pin_path,
-                            "eBPF agent maps not available yet, retrying in {}s...",
-                            RETRY_INTERVAL.as_secs()
-                        );
-                        tokio::time::sleep(RETRY_INTERVAL).await;
-                    }
-                }
-            };
-
-            let probe = Arc::new(probe);
-            Some(Arc::new(move |peer: SocketAddr| -> SynResult {
-                match peer {
-                    SocketAddr::V4(a) => {
-                        let Some(raw) = probe.lookup(*a.ip(), a.port()) else {
-                            return SynResult::Miss;
-                        };
-                        match parse_syn_v4(&raw) {
-                            Some(obs) => SynResult::Hit(obs),
-                            None => SynResult::Malformed,
-                        }
-                    }
-                    SocketAddr::V6(a) => {
-                        let Some(raw) = probe.lookup_v6(*a.ip(), a.port()) else {
-                            return SynResult::Miss;
-                        };
-                        match parse_syn_v6(&raw) {
-                            Some(obs) => SynResult::Hit(obs),
-                            None => SynResult::Malformed,
-                        }
-                    }
-                }
-            }))
-        }
-    };
-
-    #[cfg(not(feature = "ebpf-tcp"))]
-    let syn_probe: Option<huginn_proxy_lib::SynProbe> = None;
+    let syn_probe = ebpf::connect_syn_probe(&static_cfg).await;
 
     info!("huginn-proxy starting");
 
