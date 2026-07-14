@@ -6,10 +6,10 @@ use huginn_proxy_lib::security::apply_security_headers;
 fn test_apply_custom_headers() {
     let config = SecurityHeaders {
         custom: vec![
-            CustomHeader { name: "X-Frame-Options".to_string(), value: "DENY".to_string() },
+            CustomHeader { name: "X-Frame-Options".to_string(), value: "DENY".to_string().into() },
             CustomHeader {
                 name: "X-Content-Type-Options".to_string(),
-                value: "nosniff".to_string(),
+                value: "nosniff".to_string().into(),
             },
         ],
         hsts: HstsConfig::default(),
@@ -106,7 +106,9 @@ fn test_csp_header() {
         hsts: HstsConfig::default(),
         csp: CspConfig {
             enabled: true,
-            policy: "default-src 'self'; script-src 'self' 'unsafe-inline'".to_string(),
+            policy: "default-src 'self'; script-src 'self' 'unsafe-inline'"
+                .to_string()
+                .into(),
         },
     };
 
@@ -143,7 +145,7 @@ fn test_disabled_features() {
             include_subdomains: true,
             preload: false,
         },
-        csp: CspConfig { enabled: false, policy: "default-src 'self'".to_string() },
+        csp: CspConfig { enabled: false, policy: "default-src 'self'".to_string().into() },
     };
 
     let mut response = Response::new("body");

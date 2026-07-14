@@ -17,6 +17,22 @@ huginn-proxy --validate config.toml
 huginn-proxy --validate config.yaml
 ```
 
+Print the validated, effective configuration as deterministic JSON:
+
+```bash
+huginn-proxy --print-effective-config config.toml
+huginn-proxy --validate --print-effective-config config.yaml
+```
+
+`--print-effective-config` implies `--validate` and exits without starting the proxy. It includes
+defaults, normalizations, and fallbacks, but replaces header values and CSP policy with
+`<redacted>` and exposes certificate/key/CA paths only as configured/not-configured booleans.
+Diagnostics go to stderr, leaving stdout as valid JSON suitable for `jq` or CI artifacts.
+
+Configuration keys are strict at every nesting level. Unknown or misplaced keys are rejected
+during startup, `--validate`, and hot reload instead of being silently ignored. This catches
+common typos and YAML indentation mistakes; a failed reload keeps the currently active config.
+
 **Hot reload:** dynamic sections update on SIGHUP or file-watcher trigger without dropping connections. Static sections
 require a process restart — changes are logged as a warning and ignored. See [DEPLOYMENT.md](DEPLOYMENT.md) for the full
 static/dynamic split.
@@ -926,6 +942,12 @@ fingerprint:
 |---------------|--------|----------|-----------------------------------------------------------------------------------------------------------------------|
 | `level`       | string | `"info"` | Log level: `"trace"`, `"debug"`, `"info"`, `"warn"`, `"error"`. Overridable with the `RUST_LOG` environment variable. |
 | `show_target` | bool   | `false`  | Include the Rust module path in log lines (useful for debugging).                                                     |
+
+When the proxy becomes ready, `info` logs one safe effective-config summary containing listener,
+domain, route, backend, trusted-proxy and max-connection counts plus key feature flags. At `debug`,
+it also logs the complete `EffectiveConfigView` as compact JSON. The debug view uses the same
+redaction rules as `--print-effective-config`; it can expose routing/network topology but never
+header values, CSP policy contents, or certificate/key/CA paths.
 
 <table>
 <thead>

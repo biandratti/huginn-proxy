@@ -1,4 +1,4 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 use tracing::warn;
 
@@ -24,6 +24,7 @@ pub enum ProxyProtocolMode {
 /// for the header. Both settings are static (restart to apply) - `mode` alters the socket
 /// handshake, and `header_timeout_ms` is resolved at config parse time (`<= 0` maps to 1 s).
 #[derive(Debug, Deserialize, Clone, Copy, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
 pub struct ProxyProtocolConfig {
     /// PROXY protocol handling. Only honored from peers in `security.trusted_proxies`.
     /// Default: off.
@@ -52,6 +53,7 @@ impl Default for ProxyProtocolConfig {
 
 /// Listener configuration, addresses and kernel socket options.
 #[derive(Debug, Deserialize, Clone, PartialEq)]
+#[serde(deny_unknown_fields)]
 pub struct ListenConfig {
     /// Addresses and ports to listen on. One or more entries, one per IP family.
     /// Example IPv4 only:
@@ -122,4 +124,41 @@ where
 {
     let ms = i64::deserialize(deserializer)?;
     Ok(resolve_proxy_protocol_header_timeout_ms(ms))
+}
+
+/// Allowlisted effective-config view of [`ListenConfig`]. Field names are the JSON keys.
+#[derive(Serialize)]
+pub(crate) struct ListenView {
+    addrs: Vec<String>,
+    tcp_backlog: i32,
+    proxy_protocol: ProxyProtocolView,
+}
+
+#[derive(Serialize)]
+struct ProxyProtocolView {
+    mode: &'static str,
+    header_timeout_ms: u64,
+}
+
+impl ListenConfig {
+    pub(crate) fn effective_view(&self) -> ListenView {
+        ListenView {
+            addrs: self.addrs.iter().map(ToString::to_string).collect(),
+            tcp_backlog: self.tcp_backlog,
+            proxy_protocol: ProxyProtocolView {
+                mode: self.proxy_protocol.mode.as_str(),
+                header_timeout_ms: self.proxy_protocol.header_timeout_ms,
+            },
+        }
+    }
+}
+
+impl ProxyProtocolMode {
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            ProxyProtocolMode::Off => "off",
+            ProxyProtocolMode::Optional => "optional",
+            ProxyProtocolMode::Require => "require",
+        }
+    }
 }

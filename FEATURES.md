@@ -338,7 +338,12 @@ filtering, headers, security headers, connection pool) are hot-reloaded via SIGH
 dropped. Static sections (listen addresses, TLS options, fingerprinting flags, logging, telemetry, timeouts) require a
 restart.
 
-Config validation available via `--validate` flag (like `nginx -t`) for use in CI/CD pipelines.
+Config validation is available via `--validate` (like `nginx -t`) for CI/CD pipelines. Unknown or
+misplaced keys are rejected at every nesting level during startup, validation, and hot reload.
+`--print-effective-config` validates and prints deterministic, secret-redacted JSON with applied
+defaults and normalizations, then exits without starting the proxy.
+At runtime, startup logs include a safe aggregate config summary at `info`; `debug` includes the
+same complete redacted view as compact JSON.
 
 Limitation: No API for dynamic config changes.
 

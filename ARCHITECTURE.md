@@ -2,9 +2,11 @@
 
 ## Modules
 
-**`huginn-proxy`** - Binary. Entry point. Reads config and env vars, initializes the eBPF probe, builds the `SynProbe` closure, and calls `run()`.
+**`huginn-proxy`** - Binary. Its entry point owns process lifecycle, observability, and shutdown.
+Validation output is isolated from runtime startup, while the eBPF integration owns pinned-map
+connection retries and construction of the `SynProbe` callback before the binary calls `run()`.
 
-**`huginn-proxy-lib`** - Core proxy logic. Platform-agnostic. Handles TCP accept, TLS, HTTP routing, fingerprint header injection, backend forwarding, rate limiting, telemetry, and connection management. Its proxy layer separates listener orchestration and per-connection dispatch from PROXY protocol trust, timeout, and effective-client resolution.
+**`huginn-proxy-lib`** - Core proxy logic. Platform-agnostic. Handles TCP accept, TLS, HTTP routing, fingerprint header injection, backend forwarding, rate limiting, telemetry, and connection management. Its config layer provides strict TOML/YAML deserialization and a deterministic, secret-redacted effective configuration view. Its proxy layer separates listener orchestration and per-connection dispatch from PROXY protocol trust, timeout, and effective-client resolution.
 
 **`huginn-ebpf-common`** - Shared `no_std` crate for TCP SYN fingerprinting. Defines `SynRawDataV4` / `SynRawDataV6` layout, `quirk_bits` constants, and `make_key(src_ip, src_port)` encoding. Used by both `huginn-ebpf-programs` (kernel) and `huginn-ebpf` (userspace) so map layout and key encoding stay in sync. Optional feature `aya` enables `aya::Pod` for those types in userspace only.
 
@@ -40,3 +42,7 @@ pub type SynProbe = Arc<dyn Fn(SocketAddr) -> SynResult + Send + Sync>;
 `huginn-proxy` provides the implementation; `huginn-proxy-lib` only calls it.
 
 The capture hook is selectable via `HUGINN_EBPF_CAPTURE` (`xdp-native` | `xdp-skb` | `tc`). The single BPF object embeds both programs sharing the same maps, key encoding, and value layout. `tc` reads via `bpf_skb_load_bytes` (GRO-safe) and returns `TC_ACT_OK`; the proxy reads the same pinned maps regardless of backend. See `EBPF-SETUP.md` for backend selection guidance.
+
+### Process lifecycle and failure isolation
+
+The agent and the proxy are decoupled processes. At startup the proxy retries opening the agent's pinned maps with a fixed backoff, so the two can start in any order. Once connected, the proxy holds its own map file descriptors: an agent crash never crashes the proxy, and lookups degrade to `SynResult::Miss` (the `x-tcp-p0f` header is skipped) rather than blocking or dropping traffic. Because a restarting agent re-pins new map objects while the proxy keeps reading the previous ones, reconnecting to fresh pins requires a proxy restart. See `EBPF-SETUP.md` for the full lifecycle and operational guidance.

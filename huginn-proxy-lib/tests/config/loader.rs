@@ -283,7 +283,7 @@ policy = "default-src 'none'"
         .as_ref()
         .ok_or("route headers should be present")?;
     assert!(headers.csp.enabled);
-    assert_eq!(headers.csp.policy, "default-src 'none'");
+    assert_eq!(headers.csp.policy.expose(), "default-src 'none'");
 
     let _ = fs::remove_file(&path);
     Ok(())

@@ -9,7 +9,7 @@ use huginn_proxy_lib::telemetry::Metrics;
 /// Build a `HeaderManipulation` whose request+response both add `name: value`.
 fn add_both(name: &str, value: &str) -> HeaderManipulation {
     let group = HeaderManipulationGroup {
-        add: vec![CustomHeader { name: name.to_string(), value: value.to_string() }],
+        add: vec![CustomHeader { name: name.to_string(), value: value.to_string().into() }],
         remove: vec![],
     };
     HeaderManipulation { request: group.clone(), response: group }

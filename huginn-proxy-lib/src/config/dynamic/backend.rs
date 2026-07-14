@@ -1,9 +1,9 @@
 use std::convert::TryFrom;
 
-use super::headers::HeaderManipulation;
-use super::security::{DomainSecurityConfig, RouteSecurityConfig};
+use super::headers::{HeaderManipulation, HeaderManipulationView};
+use super::security::{DomainSecurityConfig, RouteSecurityConfig, ScopedSecurityView};
 use crate::error::{ProxyError, Result};
-use serde::{Deserialize, Deserializer};
+use serde::{Deserialize, Deserializer, Serialize};
 
 /// HTTP version preference for backend connections
 #[derive(Debug, Deserialize, Clone, Copy, PartialEq, Eq)]
@@ -30,6 +30,7 @@ pub enum HealthCheckType {
 /// Wire shape for a `[backends.health_check]` / `backends.*.health_check` table. Every field
 /// is optional: missing keys merge with defaults; an empty table `{}` yields TCP and the default
 #[derive(Deserialize, Default, Clone)]
+#[serde(deny_unknown_fields)]
 struct HealthCheckDe {
     r#type: Option<String>,
     path: Option<String>,
@@ -165,6 +166,7 @@ impl HealthCheckConfig {
 
 /// Backend server configuration
 #[derive(Debug, Deserialize, Clone, PartialEq)]
+#[serde(deny_unknown_fields)]
 pub struct Backend {
     /// Backend server address (host:port format)
     /// Example: "backend-1:9000" or "192.168.1.10:8080"
@@ -182,6 +184,7 @@ pub struct Backend {
 
 /// Route configuration for path-based routing
 #[derive(Debug, Deserialize, Clone, PartialEq)]
+#[serde(deny_unknown_fields)]
 pub struct Route {
     /// URL path prefix to match (e.g., "/api", "/static")
     /// The most specific (longest) matching prefix wins; declaration order does not matter
@@ -241,6 +244,7 @@ pub const DEFAULT_DOMAIN_LABEL: &str = "_default_";
 /// `cert_path` / `key_path` are optional, omit both for plain-HTTP domains.
 /// Both must be present together; specifying only one is a validation error.
 #[derive(Debug, Deserialize, Clone, PartialEq)]
+#[serde(deny_unknown_fields)]
 pub struct Domain {
     /// Domain pattern used for SNI matching and routing.
     ///
@@ -295,6 +299,7 @@ pub fn sort_domain_routes(domains: &mut [Domain]) {
 /// Connection pooling reuses TCP connections to reduce latency by avoiding
 /// repeated TCP and TLS handshakes.
 #[derive(Clone, Debug, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
 pub struct BackendPoolConfig {
     /// Enable connection pooling globally
     /// Default: true
@@ -333,4 +338,151 @@ fn default_true() -> bool {
 
 fn default_backend_pool_idle_timeout() -> u64 {
     90
+}
+
+/// Allowlisted effective-config view of [`Backend`]. Field names are the JSON keys.
+#[derive(Serialize)]
+pub(crate) struct BackendView<'a> {
+    address: &'a str,
+    http_version: Option<&'static str>,
+    health_check: Option<HealthCheckView<'a>>,
+}
+
+#[derive(Serialize)]
+struct HealthCheckView<'a> {
+    check: CheckTypeView<'a>,
+    interval_secs: u64,
+    timeout_secs: u64,
+    unhealthy_threshold: u32,
+    healthy_threshold: u32,
+}
+
+#[derive(Serialize)]
+#[serde(tag = "type", rename_all = "lowercase")]
+enum CheckTypeView<'a> {
+    Tcp,
+    Http { path: &'a str, expected_status: u16 },
+}
+
+/// Allowlisted effective-config view of [`Domain`]. Certificate/key paths are reduced to presence
+/// booleans; they are never exposed as strings.
+#[derive(Serialize)]
+pub(crate) struct DomainView<'a> {
+    host: Option<&'a str>,
+    cert_configured: bool,
+    private_key_configured: bool,
+    headers: Option<HeaderManipulationView<'a>>,
+    security: Option<ScopedSecurityView<'a>>,
+    fingerprinting: Option<bool>,
+    routes: Vec<RouteView<'a>>,
+}
+
+#[derive(Serialize)]
+struct RouteView<'a> {
+    prefix: &'a str,
+    backend: &'a str,
+    fingerprinting: Option<bool>,
+    force_new_connection: bool,
+    replace_path: Option<&'a str>,
+    security: Option<ScopedSecurityView<'a>>,
+    headers: Option<HeaderManipulationView<'a>>,
+}
+
+/// Allowlisted effective-config view of [`BackendPoolConfig`]. Field names are the JSON keys.
+#[derive(Serialize)]
+pub(crate) struct BackendPoolView {
+    enabled: bool,
+    idle_timeout: u64,
+    pool_max_idle_per_host: usize,
+}
+
+impl Backend {
+    pub(crate) fn effective_view(&self) -> BackendView<'_> {
+        BackendView {
+            address: self.address.as_str(),
+            http_version: self.http_version.map(BackendHttpVersion::as_str),
+            health_check: self
+                .health_check
+                .as_ref()
+                .map(HealthCheckConfig::effective_view),
+        }
+    }
+}
+
+impl HealthCheckConfig {
+    fn effective_view(&self) -> HealthCheckView<'_> {
+        let check = match &self.check_type {
+            HealthCheckType::Tcp => CheckTypeView::Tcp,
+            HealthCheckType::Http { path, expected_status } => {
+                CheckTypeView::Http { path: path.as_str(), expected_status: *expected_status }
+            }
+        };
+        HealthCheckView {
+            check,
+            interval_secs: self.interval_secs,
+            timeout_secs: self.timeout_secs,
+            unhealthy_threshold: self.unhealthy_threshold,
+            healthy_threshold: self.healthy_threshold,
+        }
+    }
+}
+
+impl Domain {
+    pub(crate) fn effective_view(&self) -> DomainView<'_> {
+        DomainView {
+            host: self.host.as_deref(),
+            cert_configured: self.cert_path.is_some(),
+            private_key_configured: self.key_path.is_some(),
+            headers: self
+                .headers
+                .as_ref()
+                .map(HeaderManipulation::effective_view),
+            security: self
+                .security
+                .as_ref()
+                .map(DomainSecurityConfig::effective_view),
+            fingerprinting: self.fingerprinting,
+            routes: self.routes.iter().map(Route::effective_view).collect(),
+        }
+    }
+}
+
+impl Route {
+    fn effective_view(&self) -> RouteView<'_> {
+        RouteView {
+            prefix: self.prefix.as_str(),
+            backend: self.backend.as_str(),
+            fingerprinting: self.fingerprinting,
+            force_new_connection: self.force_new_connection,
+            replace_path: self.replace_path.as_deref(),
+            security: self
+                .security
+                .as_ref()
+                .map(RouteSecurityConfig::effective_view),
+            headers: self
+                .headers
+                .as_ref()
+                .map(HeaderManipulation::effective_view),
+        }
+    }
+}
+
+impl BackendPoolConfig {
+    pub(crate) fn effective_view(&self) -> BackendPoolView {
+        BackendPoolView {
+            enabled: self.enabled,
+            idle_timeout: self.idle_timeout,
+            pool_max_idle_per_host: self.pool_max_idle_per_host,
+        }
+    }
+}
+
+impl BackendHttpVersion {
+    fn as_str(self) -> &'static str {
+        match self {
+            BackendHttpVersion::Http11 => "http11",
+            BackendHttpVersion::Http2 => "http2",
+            BackendHttpVersion::Preserve => "preserve",
+        }
+    }
 }

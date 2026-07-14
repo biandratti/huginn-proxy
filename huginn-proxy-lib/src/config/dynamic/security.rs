@@ -1,10 +1,12 @@
 use ipnet::IpNet;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use super::headers::CustomHeader;
+use crate::config::Secret;
 
 /// Security configuration (used for TOML deserialization via Config)
 #[derive(Debug, Deserialize, Clone)]
+#[serde(deny_unknown_fields)]
 pub struct SecurityConfig {
     /// Maximum number of concurrent connections allowed (static requires restart to change)
     #[serde(default = "default_max_connections")]
@@ -56,6 +58,7 @@ pub(crate) fn default_max_connections() -> usize {
 /// Fields left unset inherit the global `[security]` policy. `max_connections` is global only
 /// (process-level, static) and is intentionally not part of this block.
 #[derive(Debug, Deserialize, Clone, PartialEq, Default)]
+#[serde(deny_unknown_fields)]
 pub struct DomainSecurityConfig {
     /// Security headers for this domain. Replaces global `[security.headers]` when present.
     #[serde(default)]
@@ -87,6 +90,7 @@ pub struct SecurityDynamicConfig {
 
 /// Security headers configuration
 #[derive(Debug, Deserialize, Clone, PartialEq, Default)]
+#[serde(deny_unknown_fields)]
 pub struct SecurityHeaders {
     /// Custom headers to add to all responses
     #[serde(default)]
@@ -103,6 +107,7 @@ pub struct SecurityHeaders {
 ///
 /// Reference: RFC 6797 - <https://tools.ietf.org/html/rfc6797>
 #[derive(Debug, Deserialize, Clone, PartialEq)]
+#[serde(deny_unknown_fields)]
 pub struct HstsConfig {
     /// Enable HSTS (only applies to HTTPS connections)
     #[serde(default)]
@@ -146,13 +151,15 @@ fn default_hsts_max_age() -> u64 {
 
 /// CSP (Content Security Policy) configuration
 #[derive(Debug, Deserialize, Clone, PartialEq)]
+#[serde(deny_unknown_fields)]
 pub struct CspConfig {
     /// Enable CSP
     #[serde(default)]
     pub enabled: bool,
-    /// CSP policy string
+    /// CSP policy string. Redacted on serialization: policies can reveal internal endpoints
+    /// (e.g. `connect-src` hosts), so they are never exposed in the effective-config view or logs.
     #[serde(default = "default_csp_policy")]
-    pub policy: String,
+    pub policy: Secret<String>,
 }
 
 impl Default for CspConfig {
@@ -161,8 +168,8 @@ impl Default for CspConfig {
     }
 }
 
-fn default_csp_policy() -> String {
-    "default-src 'self'".to_string()
+fn default_csp_policy() -> Secret<String> {
+    Secret::new("default-src 'self'".to_string())
 }
 
 /// IP filtering mode
@@ -180,6 +187,7 @@ pub enum IpFilterMode {
 
 /// IP filtering (ACL) configuration
 #[derive(Debug, Deserialize, Clone, PartialEq)]
+#[serde(deny_unknown_fields)]
 pub struct IpFilterConfig {
     /// Filtering mode
     #[serde(default)]
@@ -224,6 +232,7 @@ where
 
 /// Rate limiting configuration
 #[derive(Debug, Deserialize, Clone, PartialEq)]
+#[serde(deny_unknown_fields)]
 pub struct RateLimitConfig {
     /// Enable rate limiting
     /// Default: false
@@ -269,6 +278,7 @@ impl Default for RateLimitConfig {
 /// present, **fully replaces** (whole-block) the domain-effective policy for that route; a
 /// field left unset inherits the domain-effective (or global) policy.
 #[derive(Debug, Deserialize, Clone, PartialEq, Default)]
+#[serde(deny_unknown_fields)]
 pub struct RouteSecurityConfig {
     /// Security headers for this route. Replaces the domain/global `[security.headers]` when present.
     #[serde(default)]
@@ -314,4 +324,160 @@ fn default_window_seconds() -> u64 {
 
 fn default_limit_by() -> LimitBy {
     LimitBy::Ip
+}
+
+/// Allowlisted effective-config view of the global [`SecurityDynamicConfig`].
+#[derive(Serialize)]
+pub(crate) struct SecurityView<'a> {
+    headers: SecurityHeadersView<'a>,
+    ip_filter: IpFilterView,
+    rate_limit: RateLimitView<'a>,
+    trusted_proxies: Vec<String>,
+}
+
+/// Shared effective-config view for the per-domain and per-route `security` override blocks
+/// ([`DomainSecurityConfig`] and [`RouteSecurityConfig`] have identical shapes).
+#[derive(Serialize)]
+pub(crate) struct ScopedSecurityView<'a> {
+    headers: Option<SecurityHeadersView<'a>>,
+    ip_filter: Option<IpFilterView>,
+    rate_limit: Option<RateLimitView<'a>>,
+}
+
+#[derive(Serialize)]
+struct SecurityHeadersView<'a> {
+    custom: &'a [CustomHeader],
+    hsts: HstsView,
+    csp: CspView<'a>,
+}
+
+#[derive(Serialize)]
+struct HstsView {
+    enabled: bool,
+    max_age: u64,
+    include_subdomains: bool,
+    preload: bool,
+}
+
+#[derive(Serialize)]
+struct CspView<'a> {
+    enabled: bool,
+    policy: &'a Secret<String>,
+}
+
+#[derive(Serialize)]
+struct IpFilterView {
+    mode: &'static str,
+    allowlist: Vec<String>,
+    denylist: Vec<String>,
+}
+
+#[derive(Serialize)]
+struct RateLimitView<'a> {
+    enabled: bool,
+    requests_per_second: u32,
+    burst: u32,
+    window_seconds: u64,
+    limit_by: &'static str,
+    limit_by_header: Option<&'a str>,
+}
+
+impl SecurityDynamicConfig {
+    pub(crate) fn effective_view(&self) -> SecurityView<'_> {
+        SecurityView {
+            headers: self.headers.effective_view(),
+            ip_filter: self.ip_filter.effective_view(),
+            rate_limit: self.rate_limit.effective_view(),
+            trusted_proxies: self
+                .trusted_proxies
+                .iter()
+                .map(ToString::to_string)
+                .collect(),
+        }
+    }
+}
+
+impl DomainSecurityConfig {
+    pub(crate) fn effective_view(&self) -> ScopedSecurityView<'_> {
+        ScopedSecurityView {
+            headers: self.headers.as_ref().map(SecurityHeaders::effective_view),
+            ip_filter: self.ip_filter.as_ref().map(IpFilterConfig::effective_view),
+            rate_limit: self
+                .rate_limit
+                .as_ref()
+                .map(RateLimitConfig::effective_view),
+        }
+    }
+}
+
+impl RouteSecurityConfig {
+    pub(crate) fn effective_view(&self) -> ScopedSecurityView<'_> {
+        ScopedSecurityView {
+            headers: self.headers.as_ref().map(SecurityHeaders::effective_view),
+            ip_filter: self.ip_filter.as_ref().map(IpFilterConfig::effective_view),
+            rate_limit: self
+                .rate_limit
+                .as_ref()
+                .map(RateLimitConfig::effective_view),
+        }
+    }
+}
+
+impl SecurityHeaders {
+    fn effective_view(&self) -> SecurityHeadersView<'_> {
+        SecurityHeadersView {
+            custom: self.custom.as_slice(),
+            hsts: HstsView {
+                enabled: self.hsts.enabled,
+                max_age: self.hsts.max_age,
+                include_subdomains: self.hsts.include_subdomains,
+                preload: self.hsts.preload,
+            },
+            csp: CspView { enabled: self.csp.enabled, policy: &self.csp.policy },
+        }
+    }
+}
+
+impl IpFilterConfig {
+    fn effective_view(&self) -> IpFilterView {
+        IpFilterView {
+            mode: self.mode.as_str(),
+            allowlist: self.allowlist.iter().map(ToString::to_string).collect(),
+            denylist: self.denylist.iter().map(ToString::to_string).collect(),
+        }
+    }
+}
+
+impl RateLimitConfig {
+    fn effective_view(&self) -> RateLimitView<'_> {
+        RateLimitView {
+            enabled: self.enabled,
+            requests_per_second: self.requests_per_second,
+            burst: self.burst,
+            window_seconds: self.window_seconds,
+            limit_by: self.limit_by.as_str(),
+            limit_by_header: self.limit_by_header.as_deref(),
+        }
+    }
+}
+
+impl IpFilterMode {
+    fn as_str(self) -> &'static str {
+        match self {
+            IpFilterMode::Disabled => "disabled",
+            IpFilterMode::Allowlist => "allowlist",
+            IpFilterMode::Denylist => "denylist",
+        }
+    }
+}
+
+impl LimitBy {
+    fn as_str(self) -> &'static str {
+        match self {
+            LimitBy::Ip => "ip",
+            LimitBy::Header => "header",
+            LimitBy::Route => "route",
+            LimitBy::Combined => "combined",
+        }
+    }
 }

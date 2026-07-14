@@ -90,6 +90,50 @@ fn yaml_parser_returns_error_on_invalid_syntax() -> TestResult {
 }
 
 #[test]
+fn toml_parser_rejects_unknown_nested_field() -> TestResult {
+    let input = r#"
+        backends = [{ address = "localhost:3000" }]
+
+        [listen]
+        addrs = ["127.0.0.1:0"]
+
+        [listen.proxy_protocol]
+        mode = "optional"
+        header_timeoutms = 100
+    "#;
+
+    let Err(err) = TomlParser.parse(input) else {
+        return Err("expected unknown proxy_protocol field to be rejected".into());
+    };
+    let message = err.to_string();
+    assert!(message.contains("TOML parse error"), "unexpected error: {message}");
+    assert!(message.contains("header_timeoutms"), "error should identify typo: {message}");
+    Ok(())
+}
+
+#[test]
+fn yaml_parser_rejects_misindented_field() -> TestResult {
+    let input = r#"
+listen:
+  addrs:
+    - "127.0.0.1:0"
+  proxy_protocol:
+    mode: optional
+  header_timeout_ms: 100
+backends:
+  - address: "localhost:3000"
+"#;
+
+    let Err(err) = YamlParser.parse(input) else {
+        return Err("expected misindented proxy_protocol field to be rejected".into());
+    };
+    let message = err.to_string();
+    assert!(message.contains("YAML parse error"), "unexpected error: {message}");
+    assert!(message.contains("header_timeout_ms"), "error should identify field: {message}");
+    Ok(())
+}
+
+#[test]
 fn toml_and_yaml_produce_equivalent_backends() -> TestResult {
     let toml_input = r#"
         listen = { addrs = ["0.0.0.0:7000"] }

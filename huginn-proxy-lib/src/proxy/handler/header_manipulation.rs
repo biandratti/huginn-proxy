@@ -41,7 +41,7 @@ pub fn apply_header_manipulation_group(
         let to_add: Vec<(String, String)> = manipulation
             .add
             .iter()
-            .map(|h| (h.name.clone(), h.value.clone()))
+            .map(|h| (h.name.clone(), h.value.expose().clone()))
             .collect();
         let added_count = add_headers(headers, &to_add);
         metrics.record_headers_added(added_count, context);

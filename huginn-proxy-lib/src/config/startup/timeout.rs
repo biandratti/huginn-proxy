@@ -1,7 +1,8 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 /// Timeout configuration
 #[derive(Debug, Deserialize, Clone, PartialEq)]
+#[serde(deny_unknown_fields)]
 pub struct TimeoutConfig {
     /// TCP connect timeout to upstream backends in milliseconds.
     /// If absent, no connect timeout is applied.
@@ -62,6 +63,7 @@ impl Default for TimeoutConfig {
 /// Multiple streams can share the same connection, so keep-alive headers are not needed
 /// (and are prohibited by the HTTP/2 specification).
 #[derive(Debug, Deserialize, Clone, PartialEq)]
+#[serde(deny_unknown_fields)]
 pub struct KeepAliveConfig {
     /// Enable HTTP/1.1 keep-alive (persistent connections)
     /// Allows reusing the same TCP connection for multiple HTTP requests
@@ -107,4 +109,37 @@ fn default_true() -> bool {
 
 fn default_upstream_idle_timeout() -> u64 {
     60
+}
+
+/// Allowlisted effective-config view of [`TimeoutConfig`]. Field names are the JSON keys.
+#[derive(Serialize)]
+pub(crate) struct TimeoutView {
+    upstream_connect_ms: Option<u64>,
+    proxy_idle_ms: u64,
+    shutdown_secs: u64,
+    tls_handshake_secs: u64,
+    connection_handling_secs: u64,
+    keep_alive: KeepAliveView,
+}
+
+#[derive(Serialize)]
+struct KeepAliveView {
+    enabled: bool,
+    upstream_idle_timeout: u64,
+}
+
+impl TimeoutConfig {
+    pub(crate) fn effective_view(&self) -> TimeoutView {
+        TimeoutView {
+            upstream_connect_ms: self.upstream_connect_ms,
+            proxy_idle_ms: self.proxy_idle_ms,
+            shutdown_secs: self.shutdown_secs,
+            tls_handshake_secs: self.tls_handshake_secs,
+            connection_handling_secs: self.connection_handling_secs,
+            keep_alive: KeepAliveView {
+                enabled: self.keep_alive.enabled,
+                upstream_idle_timeout: self.keep_alive.upstream_idle_timeout,
+            },
+        }
+    }
 }

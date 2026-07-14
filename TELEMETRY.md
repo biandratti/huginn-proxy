@@ -13,8 +13,12 @@ Huginn Proxy provides comprehensive telemetry through:
   checks, throughput, rate limiting, IP filtering, header manipulation, mTLS, config hot reload, TLS certificate
   hot reload, and fingerprint spoofing detection
 - **Health Check Endpoints** - Kubernetes-ready: `/health`, `/ready`, `/live`, `/metrics`
+- **Structured Logs** - one secret-safe effective-config summary at startup (`info`), with the
+  complete redacted effective config available at `debug`
 
 All proxy telemetry is exposed on a separate observability server (configurable via `telemetry.metrics_port`).
+One-shot `--validate` / `--print-effective-config` commands initialize warning-level diagnostics
+on stderr; stdout remains either `Config OK` or valid effective-config JSON.
 
 ### eBPF Agent
 

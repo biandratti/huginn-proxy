@@ -12,4 +12,4 @@ pub use metrics::{init_metrics, values, Metrics};
 pub use metrics_handler::handle_metrics;
 pub use readiness::Readiness;
 pub use server::start_observability_server;
-pub use tracing::{init_tracing_with_otel, shutdown_tracing};
+pub use tracing::{init_tracing_with_otel, init_validation_tracing, shutdown_tracing};

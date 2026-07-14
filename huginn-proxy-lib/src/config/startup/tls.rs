@@ -1,4 +1,4 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 /// TLS version configuration
 #[derive(Debug, Deserialize, Clone, Copy, PartialEq, Eq)]
@@ -14,6 +14,7 @@ pub enum TlsVersion {
 
 /// Advanced TLS configuration options
 #[derive(Debug, Deserialize, Clone, PartialEq)]
+#[serde(deny_unknown_fields)]
 pub struct TlsOptions {
     /// Allowed TLS versions
     /// Options: ["1.2"], ["1.3"], or ["1.2", "1.3"]
@@ -116,6 +117,7 @@ pub enum ClientAuth {
 /// Session resumption configuration for TLS
 #[derive(Debug, Deserialize, Clone, PartialEq)]
 #[cfg_attr(test, derive(serde::Serialize))]
+#[serde(deny_unknown_fields)]
 pub struct SessionResumptionConfig {
     /// Enable session resumption (default: true)
     /// When enabled, clients can reuse previous TLS sessions to reduce handshake overhead
@@ -143,6 +145,7 @@ fn default_session_cache_size() -> usize {
 }
 
 #[derive(Debug, Deserialize, Clone, PartialEq)]
+#[serde(deny_unknown_fields)]
 pub struct TlsConfig {
     /// Application-Layer Protocol Negotiation (ALPN) protocols
     /// Common values: ["h2", "http/1.1"]
@@ -159,4 +162,93 @@ pub struct TlsConfig {
     /// Session resumption configuration
     #[serde(default)]
     pub session_resumption: SessionResumptionConfig,
+}
+
+/// Allowlisted effective-config view of TLS: `{"enabled": false}` when TLS is off, otherwise the
+/// full view. Certificate/key material and mTLS CA paths are never included (only presence flags).
+#[derive(Serialize)]
+#[serde(untagged)]
+pub(crate) enum TlsView<'a> {
+    Disabled { enabled: bool },
+    Enabled(TlsEnabledView<'a>),
+}
+
+#[derive(Serialize)]
+pub(crate) struct TlsEnabledView<'a> {
+    enabled: bool,
+    alpn: &'a [String],
+    options: TlsOptionsView<'a>,
+    client_auth: ClientAuthView,
+    session_resumption: SessionResumptionView,
+}
+
+#[derive(Serialize)]
+struct TlsOptionsView<'a> {
+    versions: Vec<&'static str>,
+    min_version: Option<&'static str>,
+    max_version: Option<&'static str>,
+    cipher_suites: &'a [String],
+    curve_preferences: &'a [String],
+    sni_strict: bool,
+}
+
+#[derive(Serialize)]
+struct ClientAuthView {
+    mode: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    ca_certificate_configured: Option<bool>,
+}
+
+#[derive(Serialize)]
+struct SessionResumptionView {
+    enabled: bool,
+    max_sessions: usize,
+}
+
+/// Build the effective-config view for the optional TLS section.
+pub(crate) fn effective_tls_view(config: Option<&TlsConfig>) -> TlsView<'_> {
+    let Some(config) = config else {
+        return TlsView::Disabled { enabled: false };
+    };
+
+    let client_auth = match &config.client_auth {
+        ClientAuth::Disabled => {
+            ClientAuthView { mode: "disabled", ca_certificate_configured: None }
+        }
+        ClientAuth::Required { .. } => {
+            ClientAuthView { mode: "required", ca_certificate_configured: Some(true) }
+        }
+    };
+
+    TlsView::Enabled(TlsEnabledView {
+        enabled: true,
+        alpn: config.alpn.as_slice(),
+        options: TlsOptionsView {
+            versions: config
+                .options
+                .versions
+                .iter()
+                .map(|version| version.as_str())
+                .collect(),
+            min_version: config.options.min_version.map(TlsVersion::as_str),
+            max_version: config.options.max_version.map(TlsVersion::as_str),
+            cipher_suites: config.options.cipher_suites.as_slice(),
+            curve_preferences: config.options.curve_preferences.as_slice(),
+            sni_strict: config.options.sni_strict,
+        },
+        client_auth,
+        session_resumption: SessionResumptionView {
+            enabled: config.session_resumption.enabled,
+            max_sessions: config.session_resumption.max_sessions,
+        },
+    })
+}
+
+impl TlsVersion {
+    fn as_str(self) -> &'static str {
+        match self {
+            TlsVersion::V1_2 => "1.2",
+            TlsVersion::V1_3 => "1.3",
+        }
+    }
 }
