@@ -13,6 +13,19 @@ pub const SYN_INSERT_FAILURES_V6_NAME: &str = "syn_insert_failures_v6";
 pub const SYN_CAPTURED_V6_NAME: &str = "syn_captured_v6";
 pub const SYN_MALFORMED_V6_NAME: &str = "syn_malformed_v6";
 
+/// Every map the agent pins and the proxy opens, in no particular order.
+pub const ALL_NAMES: [&str; 9] = [
+    SYN_MAP_V4_NAME,
+    SYN_MAP_V6_NAME,
+    COUNTER_NAME,
+    SYN_INSERT_FAILURES_V4_NAME,
+    SYN_CAPTURED_V4_NAME,
+    SYN_MALFORMED_V4_NAME,
+    SYN_INSERT_FAILURES_V6_NAME,
+    SYN_CAPTURED_V6_NAME,
+    SYN_MALFORMED_V6_NAME,
+];
+
 pub fn syn_map_v4_path(base: &str) -> PathBuf {
     Path::new(base).join(SYN_MAP_V4_NAME)
 }

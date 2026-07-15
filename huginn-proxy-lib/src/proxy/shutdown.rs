@@ -13,6 +13,9 @@
 //!         ├─▶ metrics-server task       (main.rs)
 //!         │     shutdown_rx.wait_for(true) → break
 //!         │
+//!         ├─▶ ebpf-reconnect task       (ebpf.rs)
+//!         │     shutdown_rx.wait_for(true) → break
+//!         │
 //!         └─▶ wait_for_drain            (server.rs)
 //!               waits for all active HTTP connections to finish,
 //!               then ServiceHandle::shutdown() awaits each background task
@@ -53,6 +56,7 @@ pub fn shutdown_channel() -> (ShutdownSender, ShutdownWatch) {
 pub enum ServiceName {
     CertReload,
     ConfigWatcher,
+    EbpfReconnect,
     MetricsServer,
 }
 
@@ -61,6 +65,7 @@ impl fmt::Display for ServiceName {
         f.write_str(match self {
             Self::CertReload => "cert-reload",
             Self::ConfigWatcher => "config-watcher",
+            Self::EbpfReconnect => "ebpf-reconnect",
             Self::MetricsServer => "metrics-server",
         })
     }

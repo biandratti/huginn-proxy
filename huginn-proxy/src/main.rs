@@ -1,6 +1,5 @@
 #![forbid(unsafe_code)]
 
-mod ebpf;
 mod validation;
 
 use std::env;
@@ -9,6 +8,7 @@ use std::sync::Arc;
 
 use arc_swap::ArcSwap;
 use clap::Parser;
+use huginn_proxy::ebpf;
 use huginn_proxy_lib::config::load_from_path;
 use huginn_proxy_lib::proxy::shutdown::{shutdown_channel, ServiceHandle, ServiceName};
 use huginn_proxy_lib::run;
@@ -110,7 +110,8 @@ async fn main() -> Result<(), BoxError> {
             None
         };
 
-    let syn_probe = ebpf::connect_syn_probe(&static_cfg).await;
+    let (syn_probe, ebpf_reconnect_service) =
+        ebpf::connect_syn_probe(&static_cfg, Arc::clone(&metrics), shutdown_rx.clone()).await;
 
     info!("huginn-proxy starting");
 
@@ -135,6 +136,9 @@ async fn main() -> Result<(), BoxError> {
 
     // Metrics server already received the shutdown signal (via shutdown_rx clone).
     if let Some(svc) = metrics_service {
+        svc.shutdown(Duration::from_secs(2)).await;
+    }
+    if let Some(svc) = ebpf_reconnect_service {
         svc.shutdown(Duration::from_secs(2)).await;
     }
 
