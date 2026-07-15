@@ -2208,7 +2208,7 @@
         "w": 24,
         "h": 1
       },
-      "description": "Two independent hot-reload subsystems. Top row: TOML config reload (rate limits, routes, headers, security). Populated only after the first reload event triggered by SIGHUP or filesystem watcher. Bottom row: TLS certificate reload. Populated immediately at boot with the initial cert, then on every successful or failed rotation."
+      "description": "Two rows: config and TLS reload (top), cert stats plus eBPF pinned-map reconnect backstop (bottom). eBPF reconnects should stay at zero during normal agent restarts (maps are reused)."
     },
     {
       "id": 41,
@@ -2217,8 +2217,8 @@
       "gridPos": {
         "x": 0,
         "y": 155,
-        "w": 4,
-        "h": 8
+        "w": 3,
+        "h": 6
       },
       "targets": [
         {
@@ -2249,10 +2249,10 @@
       "type": "stat",
       "title": "Time Since Last Successful Reload",
       "gridPos": {
-        "x": 4,
+        "x": 3,
         "y": 155,
-        "w": 4,
-        "h": 8
+        "w": 3,
+        "h": 6
       },
       "targets": [
         {
@@ -2281,10 +2281,10 @@
       "type": "stat",
       "title": "Total Reloads",
       "gridPos": {
-        "x": 8,
+        "x": 6,
         "y": 155,
-        "w": 4,
-        "h": 8
+        "w": 3,
+        "h": 6
       },
       "targets": [
         {
@@ -2314,10 +2314,10 @@
       "type": "timeseries",
       "title": "Config Reload Attempts",
       "gridPos": {
-        "x": 12,
+        "x": 9,
         "y": 155,
-        "w": 12,
-        "h": 8
+        "w": 7,
+        "h": 6
       },
       "targets": [
         {
@@ -2353,7 +2353,7 @@
       "collapsed": false,
       "gridPos": {
         "x": 0,
-        "y": 171,
+        "y": 167,
         "w": 24,
         "h": 1
       }
@@ -2365,7 +2365,7 @@
       "description": "CPU usage from cAdvisor. Series are summed by Compose project and service (expects services named `proxy` and `ebpf-agent`, e.g. examples/docker-compose.ebpf.yml). Values are approximate cores (rate of cgroup CPU seconds). Requires docker-compose.observability.yml with cAdvisor.",
       "gridPos": {
         "x": 0,
-        "y": 172,
+        "y": 168,
         "w": 12,
         "h": 8
       },
@@ -2399,7 +2399,7 @@
       "description": "container_memory_working_set_bytes for the same Compose services as the CPU panel.",
       "gridPos": {
         "x": 12,
-        "y": 172,
+        "y": 168,
         "w": 12,
         "h": 8
       },
@@ -2431,9 +2431,9 @@
       "title": "Active Cert Hash",
       "gridPos": {
         "x": 0,
-        "y": 163,
-        "w": 4,
-        "h": 8
+        "y": 161,
+        "w": 3,
+        "h": 6
       },
       "targets": [
         {
@@ -2465,10 +2465,10 @@
       "type": "stat",
       "title": "Time Since Last Cert Reload",
       "gridPos": {
-        "x": 4,
-        "y": 163,
-        "w": 4,
-        "h": 8
+        "x": 3,
+        "y": 161,
+        "w": 3,
+        "h": 6
       },
       "targets": [
         {
@@ -2498,10 +2498,10 @@
       "type": "stat",
       "title": "Total Cert Reloads",
       "gridPos": {
-        "x": 8,
-        "y": 163,
-        "w": 4,
-        "h": 8
+        "x": 6,
+        "y": 161,
+        "w": 3,
+        "h": 6
       },
       "targets": [
         {
@@ -2533,10 +2533,10 @@
       "type": "timeseries",
       "title": "TLS Cert Reload Attempts",
       "gridPos": {
-        "x": 12,
-        "y": 163,
-        "w": 12,
-        "h": 8
+        "x": 16,
+        "y": 155,
+        "w": 8,
+        "h": 6
       },
       "targets": [
         {
@@ -2548,6 +2548,73 @@
           "expr": "rate(huginn_tls_cert_reload_total_total{result=\"error\", domain=~\"$domain\"}[$__rate_interval]) or on() vector(0)",
           "legendFormat": "{{domain}} error",
           "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        }
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 305,
+      "type": "stat",
+      "title": "Total eBPF Map Reconnects",
+      "description": "Cumulative automatic reconnects after the agent recreated pinned BPF maps (new kernel object id). Normal agent restarts reuse the same maps and should not increment this counter.",
+      "gridPos": {
+        "x": 9,
+        "y": 161,
+        "w": 3,
+        "h": 6
+      },
+      "targets": [
+        {
+          "expr": "sum(huginn_ebpf_map_reconnects_total_total) or on() vector(0)",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "none",
+        "noValue": "0"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 0,
+          "noValue": "0"
+        }
+      }
+    },
+    {
+      "id": 306,
+      "type": "timeseries",
+      "title": "eBPF Map Reconnect Attempts",
+      "description": "Rate of automatic pinned-map reconnections in the proxy, by IP family. Requires `ebpf-tcp` and `fingerprint.tcp_enabled`.",
+      "gridPos": {
+        "x": 12,
+        "y": 161,
+        "w": 12,
+        "h": 6
+      },
+      "targets": [
+        {
+          "expr": "sum by (family) (rate(huginn_ebpf_map_reconnects_total_total[$__rate_interval])) or on() vector(0)",
+          "legendFormat": "{{family}}",
+          "refId": "A"
         }
       ],
       "fieldConfig": {

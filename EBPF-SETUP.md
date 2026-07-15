@@ -253,7 +253,7 @@ new connections just stop getting a fingerprint until a healthy agent is capturi
 The agent pins its maps via `map_pin_path` and **leaves the pins in place on shutdown**. When it
 restarts it reuses the existing pinned maps instead of creating new ones, so the kernel IDs stay
 the same and the maps keep their contents. A proxy that already holds those maps therefore needs to
-do nothing — there is no reconnection window, and captures written just before and after the
+do nothing, there is no reconnection window, and captures written just before and after the
 restart share one continuous map.
 
 The only case that recreates the maps is a **capacity change**: if `HUGINN_EBPF_SYN_MAP_MAX_ENTRIES`

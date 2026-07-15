@@ -22,13 +22,10 @@ impl EbpfProbe {
 }
 
 /// Ensure the pin directory exists with permissions the proxy can traverse, and
-/// drop any stale pins whose SYN map capacity no longer matches the requested
-/// `syn_map_max_entries`.
+/// drop any stale pins whose SYN map capacity no longer matches the requested `syn_map_max_entries`.
 ///
 /// Because `aya` reuses an existing pin as-is (without validating its
-/// attributes), a capacity change would otherwise be silently ignored. Wiping
-/// the pins forces the loader to recreate the maps with fresh kernel ids, which
-/// the proxy's reconnect watcher then picks up.
+/// attributes), a capacity change would otherwise be silently ignored.
 pub(super) fn prepare_pins(base_path: &str, syn_map_max_entries: u32) -> Result<(), EbpfError> {
     let base = Path::new(base_path);
     std::fs::create_dir_all(base)

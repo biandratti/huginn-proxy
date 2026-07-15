@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 #[cfg(feature = "ebpf-tcp")]
 use {
-    self::config::reconnect_poll_secs,
+    self::config::{reconnect_poll_secs_from_env, syn_map_max_entries_from_env},
     arc_swap::ArcSwap,
     huginn_ebpf::{parse_syn_v4, parse_syn_v6, EbpfProbe},
     huginn_proxy_lib::fingerprinting::SynResult,
@@ -33,12 +33,24 @@ pub async fn connect_syn_probe(
 
     let pin_path = env::var("HUGINN_EBPF_PIN_PATH")
         .unwrap_or_else(|_| huginn_ebpf::pin::DEFAULT_PIN_BASE.to_string());
-    let syn_map_max_entries = env::var("HUGINN_EBPF_SYN_MAP_MAX_ENTRIES")
-        .ok()
-        .and_then(|value| value.parse().ok())
-        .unwrap_or(huginn_ebpf::DEFAULT_SYN_MAP_MAX_ENTRIES);
+    let syn_map_max_entries = match syn_map_max_entries_from_env(
+        env::var("HUGINN_EBPF_SYN_MAP_MAX_ENTRIES").ok(),
+        huginn_ebpf::DEFAULT_SYN_MAP_MAX_ENTRIES,
+    ) {
+        Ok(value) => value,
+        Err(error) => {
+            tracing::error!(%error, "invalid eBPF configuration");
+            return (None, None);
+        }
+    };
     let reconnect_poll_secs =
-        reconnect_poll_secs(env::var("HUGINN_EBPF_RECONNECT_POLL_SECS").ok().as_deref());
+        match reconnect_poll_secs_from_env(env::var("HUGINN_EBPF_RECONNECT_POLL_SECS").ok()) {
+            Ok(value) => value,
+            Err(error) => {
+                tracing::error!(%error, "invalid eBPF configuration");
+                return (None, None);
+            }
+        };
 
     let probe = loop {
         match EbpfProbe::from_pinned(&pin_path, syn_map_max_entries) {

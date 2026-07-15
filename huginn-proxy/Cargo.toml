@@ -13,6 +13,7 @@ arc-swap.workspace = true
 clap.workspace = true
 huginn-ebpf = { path = "../huginn-ebpf", version = "0.0.2-beta.1", optional = true }
 huginn-proxy-lib = { path = "../huginn-proxy-lib", version = "0.0.2-beta.1" }
+thiserror.workspace = true
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "signal"] }
 tracing.workspace = true
 

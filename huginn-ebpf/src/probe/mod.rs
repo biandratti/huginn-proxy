@@ -115,19 +115,8 @@ impl EbpfProbe {
     ///   on capture, `warn!` on map-insert failure). [`EbpfLogLevel::Off`] (the default) means the
     ///   logging code is compiled in but never executed, so the production hot path pays nothing.
     ///   When non-off, drain the records via [`take_debug_log_poller`](Self::take_debug_log_poller).
-    ///
-    /// All dst values are patched into the program's `.rodata` via `EbpfLoader::override_global`
-    /// before the kernel loads the program. Both hooks share the same `.rodata` globals and maps
-    /// in the single embedded ELF.
-    ///
-    /// # Pinning and reuse
-    /// The data and telemetry maps are pinned under `pin_base` via
-    /// `EbpfLoader::map_pin_path`. On restart the loader **reuses** any pin that
-    /// is already present, so the maps keep the same kernel ids and a proxy that
-    /// already holds them never needs to reconnect. Pins whose SYN capacity no
-    /// longer matches `syn_map_max_entries` are dropped first so the change actually
-    /// takes effect; the recreated maps get new ids and the proxy's reconnect watcher
-    /// adopts them. Pins are intentionally left in place on shutdown to enable reuse.
+    /// - `pin_base`: bpffs directory where maps are pinned (e.g. `/sys/fs/bpf/huginn`). Reuses
+    ///   existing pins on restart; drops them first when `syn_map_max_entries` changed.
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         interface: &str,
