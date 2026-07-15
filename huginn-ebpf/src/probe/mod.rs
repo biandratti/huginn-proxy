@@ -125,10 +125,9 @@ impl EbpfProbe {
     /// `EbpfLoader::map_pin_path`. On restart the loader **reuses** any pin that
     /// is already present, so the maps keep the same kernel ids and a proxy that
     /// already holds them never needs to reconnect. Pins whose SYN capacity no
-    /// longer matches `syn_map_max_entries` are dropped first (see
-    /// [`prepare_pins`](maps::prepare_pins)) so the change actually takes effect;
-    /// the recreated maps get new ids and the proxy's reconnect watcher adopts
-    /// them. Pins are intentionally left in place on shutdown to enable reuse.
+    /// longer matches `syn_map_max_entries` are dropped first so the change actually
+    /// takes effect; the recreated maps get new ids and the proxy's reconnect watcher
+    /// adopts them. Pins are intentionally left in place on shutdown to enable reuse.
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         interface: &str,
