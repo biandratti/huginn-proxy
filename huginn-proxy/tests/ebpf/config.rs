@@ -1,6 +1,4 @@
-#![cfg(feature = "ebpf-tcp")]
-
-use huginn_proxy::ebpf_config::{reconnect_poll_secs, DEFAULT_RECONNECT_POLL_SECS};
+use huginn_proxy::ebpf::config::{reconnect_poll_secs, DEFAULT_RECONNECT_POLL_SECS};
 
 #[test]
 fn reconnect_poll_uses_default_when_unset_or_invalid() {

@@ -1,6 +1,5 @@
 #![forbid(unsafe_code)]
 
-mod ebpf;
 mod validation;
 
 use std::env;
@@ -9,6 +8,7 @@ use std::sync::Arc;
 
 use arc_swap::ArcSwap;
 use clap::Parser;
+use huginn_proxy::ebpf;
 use huginn_proxy_lib::config::load_from_path;
 use huginn_proxy_lib::proxy::shutdown::{shutdown_channel, ServiceHandle, ServiceName};
 use huginn_proxy_lib::run;

@@ -1,3 +1,5 @@
+pub mod config;
+
 use huginn_proxy_lib::config::StaticConfig;
 use huginn_proxy_lib::proxy::shutdown::{ServiceHandle, ShutdownWatch};
 use huginn_proxy_lib::telemetry::Metrics;
@@ -6,9 +8,9 @@ use std::sync::Arc;
 
 #[cfg(feature = "ebpf-tcp")]
 use {
+    self::config::reconnect_poll_secs,
     arc_swap::ArcSwap,
     huginn_ebpf::{parse_syn_v4, parse_syn_v6, EbpfProbe},
-    huginn_proxy::ebpf_config::reconnect_poll_secs,
     huginn_proxy_lib::fingerprinting::SynResult,
     huginn_proxy_lib::proxy::shutdown::ServiceName,
     std::{env, net::SocketAddr, time::Duration},
@@ -19,7 +21,7 @@ use {
 const RETRY_INTERVAL: Duration = Duration::from_secs(2);
 
 #[cfg(feature = "ebpf-tcp")]
-pub(crate) async fn connect_syn_probe(
+pub async fn connect_syn_probe(
     static_cfg: &StaticConfig,
     metrics: Arc<Metrics>,
     shutdown_rx: ShutdownWatch,
@@ -185,7 +187,7 @@ fn reconnect_if_changed(
 }
 
 #[cfg(not(feature = "ebpf-tcp"))]
-pub(crate) async fn connect_syn_probe(
+pub async fn connect_syn_probe(
     _static_cfg: &StaticConfig,
     _metrics: Arc<Metrics>,
     _shutdown_rx: ShutdownWatch,
