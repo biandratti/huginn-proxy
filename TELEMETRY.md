@@ -9,7 +9,7 @@ agent**.
 
 Huginn Proxy provides comprehensive telemetry through:
 
-- **Prometheus Metrics** - 51 metrics covering connections, PROXY protocol, requests, TLS, fingerprinting, backends, active health
+- **Prometheus Metrics** - 52 metrics covering connections, PROXY protocol, requests, TLS, fingerprinting, backends, active health
   checks, throughput, rate limiting, IP filtering, header manipulation, mTLS, config hot reload, TLS certificate
   hot reload, and fingerprint spoofing detection
 - **Health Check Endpoints** - Kubernetes-ready: `/health`, `/ready`, `/live`, `/metrics`
@@ -340,11 +340,14 @@ histogram_quantile(0.95, rate(huginn_tls_handshake_duration_seconds_bucket[5m]))
 | `huginn_tcp_syn_fingerprints_total`           | Counter   | TCP SYN fingerprint lookups (`result=hit\|miss\|malformed`) | `reason` |
 | `huginn_tcp_syn_fingerprint_duration_seconds` | Histogram | BPF map lookup and parse duration                           | `reason` |
 | `huginn_tcp_syn_fingerprint_failures_total`   | Counter   | Malformed BPF map entries (undecodable TCP options)         | -        |
+| `huginn_ebpf_map_reconnects_total`             | Counter   | Automatic reconnects after the agent replaced a pinned map  | `family` |
 
 **Labels**:
 
 - `reason`: Lookup result — `hit` (fingerprint found and injected), `miss` (no BPF map entry — keep-alive reuse, IPv6
   peer, or stale entry), `malformed` (entry present but TCP options undecodable)
+- `family`: Replaced SYN map that triggered the reconnect — `ipv4` or `ipv6`. A normal agent
+  restart replaces both maps and increments both series.
 
 **Note**: TCP SYN fingerprinting requires the eBPF agent to be running and pinning BPF maps. The proxy reads from those
 maps; this metric covers the proxy-side lookup, not the agent-side capture (see eBPF Agent Metrics for capture

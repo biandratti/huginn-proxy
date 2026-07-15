@@ -25,6 +25,7 @@ pub mod labels {
     pub const BACKEND: &str = "backend";
     pub const RESULT: &str = "result";
     pub const DOMAIN: &str = "domain";
+    pub const FAMILY: &str = "family";
 }
 
 pub mod values {
@@ -77,6 +78,8 @@ pub struct Metrics {
     pub tcp_syn_fingerprints_total: Counter<u64>,
     pub tcp_syn_fingerprint_duration_seconds: Histogram<f64>,
     pub tcp_syn_fingerprint_failures_total: Counter<u64>,
+    /// Automatic reconnections after an agent replaces a pinned SYN map.
+    pub ebpf_map_reconnects_total: Counter<u64>,
 
     // Fingerprint spoofing detection metrics
     // header label: the proxy-authoritative header name the client attempted to supply
@@ -236,6 +239,10 @@ impl Metrics {
             tcp_syn_fingerprint_failures_total: meter
                 .u64_counter("huginn_tcp_syn_fingerprint_failures_total")
                 .with_description("Total number of TCP SYN fingerprint extraction failures (malformed BPF map entries)")
+                .build(),
+            ebpf_map_reconnects_total: meter
+                .u64_counter("huginn_ebpf_map_reconnects_total")
+                .with_description("Automatic eBPF pinned-map reconnections, labelled family=ipv4|ipv6")
                 .build(),
 
             fingerprint_spoofing_attempts_total: meter
@@ -788,6 +795,12 @@ impl Metrics {
         if result == "malformed" {
             self.tcp_syn_fingerprint_failures_total.add(1, &[]);
         }
+    }
+
+    /// Record that the proxy reconnected after the agent replaced a pinned map.
+    pub fn record_ebpf_map_reconnect(&self, family: &'static str) {
+        self.ebpf_map_reconnects_total
+            .add(1, &[KeyValue::new(labels::FAMILY, family)]);
     }
 
     /// Real client address recovered from a PROXY header sent by a trusted peer.

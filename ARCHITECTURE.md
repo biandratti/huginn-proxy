@@ -4,7 +4,8 @@
 
 **`huginn-proxy`** - Binary. Its entry point owns process lifecycle, observability, and shutdown.
 Validation output is isolated from runtime startup, while the eBPF integration owns pinned-map
-connection retries and construction of the `SynProbe` callback before the binary calls `run()`.
+connection retries, construction of the `SynProbe` callback, and automatic pinned-map reconnection
+before the binary calls `run()`.
 
 **`huginn-proxy-lib`** - Core proxy logic. Platform-agnostic. Handles TCP accept, TLS, HTTP routing, fingerprint header injection, backend forwarding, rate limiting, telemetry, and connection management. Its config layer provides strict TOML/YAML deserialization and a deterministic, secret-redacted effective configuration view. Its proxy layer separates listener orchestration and per-connection dispatch from PROXY protocol trust, timeout, and effective-client resolution.
 
@@ -45,4 +46,4 @@ The capture hook is selectable via `HUGINN_EBPF_CAPTURE` (`xdp-native` | `xdp-sk
 
 ### Process lifecycle and failure isolation
 
-The agent and the proxy are decoupled processes. At startup the proxy retries opening the agent's pinned maps with a fixed backoff, so the two can start in any order. Once connected, the proxy holds its own map file descriptors: an agent crash never crashes the proxy, and lookups degrade to `SynResult::Miss` (the `x-tcp-p0f` header is skipped) rather than blocking or dropping traffic. Because a restarting agent re-pins new map objects while the proxy keeps reading the previous ones, reconnecting to fresh pins requires a proxy restart. See `EBPF-SETUP.md` for the full lifecycle and operational guidance.
+The agent and the proxy are decoupled processes. At startup the proxy retries opening the agent's pinned maps with a fixed backoff, so the two can start in any order. Once connected, the proxy holds its own map file descriptors: an agent crash never crashes the proxy, and lookups degrade to `SynResult::Miss` (the `x-tcp-p0f` header is skipped) rather than blocking or dropping traffic. A shutdown-aware background task compares the kernel IDs of the published IPv4/IPv6 pins with the active IDs. When a restarting agent replaces either map, the proxy opens a complete new map set and publishes it through `ArcSwap`; in-flight lookups finish on the previous set and new lookups use the replacement without dropping connections. See `EBPF-SETUP.md` for the polling interval and full lifecycle guidance.

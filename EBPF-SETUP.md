@@ -137,6 +137,8 @@ tcp_enabled = true   # false = no BPF maps opened, no capabilities needed
 | Variable | Example | Description |
 |---|---|---|
 | `HUGINN_EBPF_PIN_PATH` | `/sys/fs/bpf/huginn` | Pin directory to read maps from (default shown) |
+| `HUGINN_EBPF_SYN_MAP_MAX_ENTRIES` | `8192` | LRU map capacity used by the agent; the proxy uses the same value for stale-entry detection |
+| `HUGINN_EBPF_RECONNECT_POLL_SECS` | `5` | Interval for detecting maps replaced by an agent restart; `0` disables automatic reconnection |
 
 At startup the proxy retries opening the pinned maps with a fixed backoff until the agent has
 pinned them, so the two containers can start in any order. See
@@ -246,15 +248,17 @@ The trade-off is a loss of **fresh** captures: the agent owns the attached XDP/T
 it exits the program is detached and no new SYNs are written. Existing traffic keeps flowing;
 new connections just stop getting a fingerprint until a healthy agent is capturing again.
 
-### Agent restart is not auto-reconnected
+### Automatic reconnection after an agent restart
 
-When the agent restarts it removes the old pins and pins **new** map objects. The proxy is still
-holding descriptors to the **previous** maps, which are now orphaned and no longer written to.
-The proxy does not currently re-open the new pins on its own. TODO: WIP...
+When the agent restarts it removes the old pins and pins **new** map objects. The proxy periodically
+compares the kernel IDs of the pinned IPv4 and IPv6 SYN maps with the IDs of its open maps. If
+either ID changes, it opens a complete fresh map set and swaps it atomically without dropping
+connections.
 
-Operational guidance: after an agent restart (or an agent upgrade that recreates the maps),
-**restart the proxy** so it reconnects via `from_pinned` to the fresh pins. In Kubernetes this is
-typically a rolling restart of the proxy Deployment following a DaemonSet roll.
+The recovery window is bounded by `HUGINN_EBPF_RECONNECT_POLL_SECS` (5 seconds by default). A pin
+that is temporarily absent during the agent's remove-and-repin sequence is treated as transient:
+the proxy retains its previous maps and retries on the next poll. Set the interval to `0` to disable
+automatic reconnection; in that mode an agent restart again requires restarting the proxy.
 
 ---
 

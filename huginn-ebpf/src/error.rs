@@ -29,6 +29,13 @@ pub enum EbpfError {
         source: aya::maps::MapError,
     },
 
+    #[error("failed to read BPF map information at '{path}': {source}")]
+    MapInfo {
+        path: String,
+        #[source]
+        source: aya::maps::MapError,
+    },
+
     #[error("failed to create pin directory '{path}': {source}")]
     PinDir {
         path: String,

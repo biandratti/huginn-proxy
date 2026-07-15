@@ -1,7 +1,7 @@
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 
-use aya::maps::MapData;
+use aya::maps::{MapData, MapInfo};
 use tracing::info;
 
 use crate::pin;
@@ -167,4 +167,18 @@ impl EbpfProbe {
 pub(super) fn open_pinned_map(path: PathBuf) -> Result<MapData, EbpfError> {
     MapData::from_pin(&path)
         .map_err(|e| EbpfError::FromPin { path: path.display().to_string(), source: e })
+}
+
+/// Return the kernel ID of the BPF map currently pinned at `path`.
+pub(super) fn pinned_map_id(path: PathBuf) -> Result<u32, EbpfError> {
+    MapInfo::from_pin(&path)
+        .map(|info| info.id())
+        .map_err(|e| EbpfError::MapInfo { path: path.display().to_string(), source: e })
+}
+
+/// Return the kernel ID of an already-open BPF map.
+pub(super) fn open_map_id(map: &MapData, path: PathBuf) -> Result<u32, EbpfError> {
+    map.info()
+        .map(|info| info.id())
+        .map_err(|e| EbpfError::MapInfo { path: path.display().to_string(), source: e })
 }
