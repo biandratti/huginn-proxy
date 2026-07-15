@@ -1,5 +1,6 @@
 use std::net::{Ipv4Addr, Ipv6Addr};
 use std::os::fd::{AsFd, AsRawFd, BorrowedFd, RawFd};
+use std::path::{Path, PathBuf};
 
 use aya::maps::Map;
 use aya::{Ebpf, EbpfLoader};
@@ -118,6 +119,17 @@ impl EbpfProbe {
     /// All dst values are patched into the program's `.rodata` via `EbpfLoader::override_global`
     /// before the kernel loads the program. Both hooks share the same `.rodata` globals and maps
     /// in the single embedded ELF.
+    ///
+    /// # Pinning and reuse
+    /// The data and telemetry maps are pinned under `pin_base` via
+    /// `EbpfLoader::map_pin_path`. On restart the loader **reuses** any pin that
+    /// is already present, so the maps keep the same kernel ids and a proxy that
+    /// already holds them never needs to reconnect. Pins whose SYN capacity no
+    /// longer matches `syn_map_max_entries` are dropped first (see
+    /// [`prepare_pins`](maps::prepare_pins)) so the change actually takes effect;
+    /// the recreated maps get new ids and the proxy's reconnect watcher adopts
+    /// them. Pins are intentionally left in place on shutdown to enable reuse.
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         interface: &str,
         dst_ip_v4: Ipv4Addr,
@@ -126,6 +138,7 @@ impl EbpfProbe {
         syn_map_max_entries: u32,
         capture: CaptureBackend,
         log_level: EbpfLogLevel,
+        pin_base: &str,
     ) -> Result<Self, EbpfError> {
         // The BPF program compares ip->daddr and tcp->dest (both network-byte-order fields)
         // against these globals. On a little-endian CPU, network-order bytes [a,b,c,d] in the
@@ -148,15 +161,32 @@ impl EbpfProbe {
         // 0 = logging off (default); higher = more verbose (log::LevelFilter encoding).
         let bpf_log_level: u8 = log_level.as_u8();
 
-        let mut ebpf = EbpfLoader::new()
+        // Create the pin directory and drop any pins left over from an
+        // incompatible capacity before the loader touches them.
+        maps::prepare_pins(pin_base, syn_map_max_entries)?;
+
+        // Reuse existing pins when present so the maps survive agent restarts
+        // with the same kernel ids; the loader creates and pins them otherwise.
+        let pin_paths: Vec<(&'static str, PathBuf)> = pin::ALL_NAMES
+            .iter()
+            .map(|&name| (name, Path::new(pin_base).join(name)))
+            .collect();
+
+        let mut loader = EbpfLoader::new();
+        loader
             .override_global("dst_ip_v4", &bpf_dst_ip, false)
             .override_global("dst_ip_v6", &bpf_dst_ip_v6, false)
             .override_global("dst_port", &bpf_dst_port, false)
             .override_global("log_level", &bpf_log_level, false)
             .map_max_entries(pin::SYN_MAP_V4_NAME, syn_map_max_entries)
-            .map_max_entries(pin::SYN_MAP_V6_NAME, syn_map_max_entries)
-            .load(BPF_OBJECT_BYTES)
-            .map_err(EbpfError::Load)?;
+            .map_max_entries(pin::SYN_MAP_V6_NAME, syn_map_max_entries);
+        for (name, path) in &pin_paths {
+            loader.map_pin_path(name, path.as_path());
+        }
+        let mut ebpf = loader.load(BPF_OBJECT_BYTES).map_err(EbpfError::Load)?;
+
+        // aya creates pins as 0600 root:root; relax them for the proxy process.
+        maps::chmod_pins(pin_base);
 
         let mode_str = match capture {
             CaptureBackend::Xdp(xdp_mode) => attach::attach_xdp(&mut ebpf, interface, xdp_mode)?,

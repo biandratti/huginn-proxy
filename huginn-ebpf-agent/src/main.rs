@@ -71,6 +71,8 @@ async fn main() -> Result<()> {
         .into());
     }
 
+    // Loading pins the maps under `pin_path`, reusing them if the previous
+    // agent instance left them behind.
     let mut probe = EbpfProbe::new(
         &cfg.interface,
         cfg.dst_ip_v4,
@@ -79,8 +81,8 @@ async fn main() -> Result<()> {
         cfg.syn_map_max_entries,
         cfg.capture,
         cfg.log_level,
+        &cfg.pin_path,
     )?;
-    probe.pin_maps(&cfg.pin_path)?;
 
     if let Some(poller) = probe.take_debug_log_poller()? {
         spawn_ebpf_log_drain(poller);
@@ -118,9 +120,11 @@ async fn main() -> Result<()> {
 
     wait_for_shutdown_signal().await?;
 
-    tracing::info!("Shutting down, unpinning maps and detaching capture program");
+    // Pins are intentionally left in place: the next agent instance reuses the
+    // same maps, so a proxy holding them never sees a reconnection gap. Dropping
+    // the probe detaches the capture program; the pins keep the maps alive.
+    tracing::info!("Shutting down, detaching capture program (pins left for reuse)");
     metrics.set_not_ready();
-    EbpfProbe::unpin_maps(&cfg.pin_path);
     drop(probe);
 
     Ok(())
