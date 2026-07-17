@@ -612,6 +612,12 @@ domains:
 
 Global header manipulation applied to every request/response. **Dynamic** (hot-reloadable).
 
+> **Validation:** header names are case-insensitive and `add` uses last-wins semantics, so listing
+> the same name twice in one `add` list (per scope, per request/response), or adding and removing the
+> same name in one block, emits a non-fatal warning during `--validate`, startup, and reload. The
+> same duplicate check applies to `[security.headers].custom`. Overriding the same header across
+> scopes (global → domain → route) is intentional and is not warned.
+
 ### `[headers.request]`
 
 | Key      | Type                     | Default | Description                                                            |

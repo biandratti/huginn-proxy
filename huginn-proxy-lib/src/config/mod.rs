@@ -7,6 +7,7 @@ pub mod watcher;
 
 mod loader;
 mod root;
+mod validation;
 
 pub use dynamic::security::{
     CspConfig, DomainSecurityConfig, HstsConfig, IpFilterConfig, IpFilterMode, LimitBy,
@@ -18,7 +19,7 @@ pub use dynamic::{
     HealthCheckType, Route, DEFAULT_DOMAIN_LABEL, DEFAULT_FINGERPRINTING,
 };
 pub use effective::{EffectiveConfigSummary, EffectiveConfigView};
-pub use loader::{load_from_path, security_override_warnings, SecurityOverrideWarning};
+pub use loader::load_from_path;
 pub use parser::{ConfigFormat, ConfigParser, TomlParser, YamlParser};
 pub use root::{Config, ConfigParts};
 pub use secret::Secret;
@@ -26,4 +27,7 @@ pub use startup::{
     ClientAuth, FingerprintConfig, KeepAliveConfig, ListenConfig, LoggingConfig,
     ProxyProtocolConfig, ProxyProtocolMode, SessionResumptionConfig, StaticConfig, TelemetryConfig,
     TimeoutConfig, TlsConfig, TlsOptions, TlsVersion,
+};
+pub use validation::{
+    header_config_warnings, security_override_warnings, ConfigWarning, SecurityOverrideWarning,
 };
