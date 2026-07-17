@@ -5,10 +5,14 @@ mod secret;
 pub mod startup;
 pub mod watcher;
 
+mod audit;
 mod loader;
 mod root;
-mod validation;
 
+pub use audit::{
+    header_config_warnings, security_override_warnings, trusted_proxies_warnings, ConfigWarning,
+    SecurityOverrideWarning,
+};
 pub use dynamic::security::{
     CspConfig, DomainSecurityConfig, HstsConfig, IpFilterConfig, IpFilterMode, LimitBy,
     RateLimitConfig, RouteSecurityConfig, SecurityConfig, SecurityDynamicConfig, SecurityHeaders,
@@ -27,7 +31,4 @@ pub use startup::{
     ClientAuth, FingerprintConfig, KeepAliveConfig, ListenConfig, LoggingConfig,
     ProxyProtocolConfig, ProxyProtocolMode, SessionResumptionConfig, StaticConfig, TelemetryConfig,
     TimeoutConfig, TlsConfig, TlsOptions, TlsVersion,
-};
-pub use validation::{
-    header_config_warnings, security_override_warnings, ConfigWarning, SecurityOverrideWarning,
 };

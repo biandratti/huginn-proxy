@@ -2,8 +2,8 @@ use std::collections::HashSet;
 use std::fs;
 use std::path::Path;
 
+use crate::config::audit;
 use crate::config::parser::ConfigFormat;
-use crate::config::validation::{audit_header_config, audit_security_overrides};
 use crate::config::Config;
 use crate::error::{ProxyError, Result};
 
@@ -18,8 +18,7 @@ pub fn load_from_path<P: AsRef<Path>>(p: P) -> Result<Config> {
 
     normalize_domain_hosts(&mut cfg);
     validate_config(&cfg)?;
-    audit_security_overrides(&cfg);
-    audit_header_config(&cfg);
+    audit::run(&cfg);
 
     Ok(cfg)
 }
