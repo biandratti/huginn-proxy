@@ -173,6 +173,10 @@ impl EbpfProbe {
         }
         let mut ebpf = loader.load(BPF_OBJECT_BYTES).map_err(EbpfError::Load)?;
 
+        // Publish the LRU capacity to the family-agnostic `syn_meta` map so the proxy can
+        // derive its staleness threshold without opening a per-family SYN map.
+        maps::write_syn_capacity(&mut ebpf, syn_map_max_entries)?;
+
         // aya creates pins as 0600 root:root; relax them for the proxy process.
         maps::chmod_pins(pin_base);
 
@@ -213,16 +217,25 @@ impl EbpfProbe {
     /// The agent must have already pinned `tcp_syn_map_v4`, `tcp_syn_map_v6`, `syn_counter`,
     /// and `syn_insert_failures` under `base_path` (default: `/sys/fs/bpf/huginn/`).
     ///
-    /// `syn_map_max_entries` must match the value the agent used when loading the program
-    /// (e.g. `HUGINN_EBPF_SYN_MAP_MAX_ENTRIES`); it is used for stale entry detection.
-    /// This constructor does not load or attach any XDP program, the agent owns that lifecycle.
-    pub fn from_pinned(base_path: &str, syn_map_max_entries: u32) -> Result<Self, EbpfError> {
+    /// The LRU capacity used for stale-entry detection is read from the family-agnostic
+    /// `syn_meta` map (populated by the agent with the same value it created the SYN maps with),
+    /// so it never drifts and does not depend on which IP family is enabled. This constructor
+    /// does not load or attach any XDP program, the agent owns that lifecycle.
+    ///
+    /// Returns [`EbpfError::MapNotReady`] if the agent has pinned the maps but not yet published
+    /// the capacity; callers are expected to retry.
+    pub fn from_pinned(base_path: &str) -> Result<Self, EbpfError> {
         let syn_path_v4 = pin::syn_map_v4_path(base_path);
         let syn_path_v6 = pin::syn_map_v6_path(base_path);
-        let syn_data = maps::open_pinned_map(syn_path_v4.clone())?;
+        let syn_data_v4 = maps::open_pinned_map(syn_path_v4.clone())?;
         let syn_data_v6 = maps::open_pinned_map(syn_path_v6.clone())?;
-        let syn_id_v4 = maps::open_map_id(&syn_data, syn_path_v4)?;
+        let syn_id_v4 = maps::open_map_id(&syn_data_v4, syn_path_v4)?;
         let syn_id_v6 = maps::open_map_id(&syn_data_v6, syn_path_v6)?;
+        // Zero = agent pinned the map but has not written the capacity yet; not ready.
+        let syn_map_max_entries = match maps::read_syn_capacity(base_path)? {
+            0 => return Err(EbpfError::MapNotReady { name: pin::SYN_META_NAME.to_string() }),
+            capacity => capacity,
+        };
         let counter_data = maps::open_pinned_map(pin::counter_path(base_path))?;
         let insert_failures_v4 = maps::open_pinned_map(pin::insert_failures_v4_path(base_path))?;
         let insert_failures_v6 = maps::open_pinned_map(pin::insert_failures_v6_path(base_path))?;
@@ -236,7 +249,7 @@ impl EbpfProbe {
         Ok(Self {
             inner: ProbeInner::Pinned(Box::new(PinnedMaps {
                 ipv4: PinnedFamilyMaps {
-                    syn: Map::LruHashMap(syn_data),
+                    syn: Map::LruHashMap(syn_data_v4),
                     id: syn_id_v4,
                     insert_failures: Map::PerCpuArray(insert_failures_v4),
                     captured: Map::PerCpuArray(captured_v4),

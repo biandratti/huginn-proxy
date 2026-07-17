@@ -1,8 +1,9 @@
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 
-use aya::maps::{MapData, MapInfo};
-use tracing::info;
+use aya::maps::{Array, Map, MapData, MapInfo};
+use aya::Ebpf;
+use tracing::{info, warn};
 
 use crate::pin;
 use crate::EbpfError;
@@ -17,7 +18,7 @@ impl EbpfProbe {
     /// [`EbpfProbe::new`]). Exposed for manual cleanup / tests.
     pub fn unpin_maps(base_path: &str) {
         remove_all_pins(base_path);
-        info!(base_path, "BPF map pins removed");
+        warn!(base_path, "BPF map pins removed");
     }
 }
 
@@ -95,4 +96,38 @@ pub(super) fn open_map_id(map: &MapData, path: PathBuf) -> Result<u32, EbpfError
     map.info()
         .map(|info| info.id())
         .map_err(|e| EbpfError::MapInfo { path: path.display().to_string(), source: e })
+}
+
+/// Publish the shared LRU capacity into slot 0 of the family-agnostic `syn_meta` map.
+///
+/// Called by the agent right after loading so the proxy can read the staleness threshold
+/// without opening any per-family (v4/v6) SYN map. The value is the same one used to create
+/// the LRU maps, so it cannot drift from their actual `max_entries`.
+pub(super) fn write_syn_capacity(
+    ebpf: &mut Ebpf,
+    syn_map_max_entries: u32,
+) -> Result<(), EbpfError> {
+    let map = ebpf
+        .map_mut(pin::SYN_META_NAME)
+        .ok_or_else(|| EbpfError::MapNotFound { name: pin::SYN_META_NAME.to_string() })?;
+    let mut meta = Array::<_, u64>::try_from(map)
+        .map_err(|source| EbpfError::FromPin { path: pin::SYN_META_NAME.to_string(), source })?;
+    meta.set(0, u64::from(syn_map_max_entries), 0)
+        .map_err(|source| EbpfError::MapInfo { path: pin::SYN_META_NAME.to_string(), source })
+}
+
+/// Read the shared LRU capacity the agent published to slot 0 of the pinned `syn_meta` map.
+///
+/// Returns `0` when the slot has not been written yet (a fresh map before the agent's first
+/// write); the caller treats that as "not populated" and falls back to a default.
+pub(super) fn read_syn_capacity(base_path: &str) -> Result<u32, EbpfError> {
+    let path = pin::syn_meta_path(base_path);
+    let data = open_pinned_map(path.clone())?;
+    let map = Map::Array(data);
+    let array = Array::<_, u64>::try_from(&map)
+        .map_err(|source| EbpfError::FromPin { path: path.display().to_string(), source })?;
+    let value = array
+        .get(&0, 0)
+        .map_err(|source| EbpfError::MapInfo { path: path.display().to_string(), source })?;
+    Ok(u32::try_from(value).unwrap_or(u32::MAX))
 }

@@ -32,6 +32,7 @@ TCP fingerprinting uses two separate processes:
                               │
                     tcp_syn_map_v4/v6  (LruHashMap)
                     syn_counter        (Array)
+                    syn_meta           (Array)
                     syn_insert_failures_v4/v6  (PerCpuArray)
                     syn_captured_v4/v6         (PerCpuArray)
                     syn_malformed_v4/v6        (PerCpuArray)
@@ -105,7 +106,7 @@ No `seccomp:unconfined` or `apparmor:unconfined` needed.
 | `HUGINN_EBPF_DST_IP_V6` | `::` | IPv6 destination filter (`::` = no filter); quote in YAML if needed |
 | `HUGINN_EBPF_DST_PORT` | `7000` | Destination port filter (proxy listen port) |
 | `HUGINN_EBPF_PIN_PATH` | `/sys/fs/bpf/huginn` | Pin directory (default shown) |
-| `HUGINN_EBPF_SYN_MAP_MAX_ENTRIES` | `8192` | LRU map capacity (default shown) |
+| `HUGINN_EBPF_SYN_MAP_MAX_ENTRIES` | `8192` | LRU map capacity (default shown). Agent-only: the agent publishes this value into the family-agnostic `syn_meta` map, and the proxy reads it from there for its staleness threshold — so it must not be set on the proxy. |
 | `HUGINN_EBPF_CAPTURE` | `xdp-native` | Capture backend: `xdp-native` (driver XDP, default), `xdp-skb` (generic XDP, veth/loopback/VMs), or `tc` (clsact ingress; GRO-safe when native XDP is unavailable, e.g. VLAN/bond on generic XDP). Same BPF maps either way. |
 | `HUGINN_EBPF_LOG_LEVEL` | `off` | Verbosity of in-kernel `aya-log` datapath logging: `off` (default), `error`, `warn`, `info`, `debug`, `trace`. The kernel emits only records at/above the level (`debug` = per-capture, `warn` = map-insert failures), so the level gate runs in-kernel and `off` is zero-cost on the hot path. When non-`off` and `RUST_LOG` is unset, the agent defaults its filter to that level so records are shown. For diagnostics only. |
 
@@ -137,7 +138,6 @@ tcp_enabled = true   # false = no BPF maps opened, no capabilities needed
 | Variable | Example | Description |
 |---|---|---|
 | `HUGINN_EBPF_PIN_PATH` | `/sys/fs/bpf/huginn` | Pin directory to read maps from (default shown) |
-| `HUGINN_EBPF_SYN_MAP_MAX_ENTRIES` | `8192` | LRU map capacity used by the agent; the proxy uses the same value for stale-entry detection |
 | `HUGINN_EBPF_RECONNECT_POLL_SECS` | `5` | Backstop poll interval for detecting recreated maps (e.g. a capacity change or a wiped bpffs); `0` disables automatic reconnection. Normal agent restarts reuse the same maps and need no reconnection |
 
 At startup the proxy retries opening the pinned maps with a fixed backoff until the agent has
@@ -282,7 +282,9 @@ present on all requests** of a keep-alive connection, not just the first.
 
 A `SynResult::Miss` (no header injected) happens when:
 - the SYN was not captured (proxy just started, map entry evicted), or
-- the entry is stale (more than `2 x syn_map_max_entries` SYNs arrived since capture).
+- the entry is stale (more than `2 x syn_map_max_entries` SYNs arrived since capture). The proxy
+  reads `syn_map_max_entries` from the family-agnostic `syn_meta` map the agent publishes, so the
+  threshold always matches the agent's capacity and does not depend on which IP family is enabled.
 
 `force_new_connection = true` is unrelated to fingerprint availability: it controls whether
 the proxy opens a new TCP connection to the **backend** per request, not whether the client
