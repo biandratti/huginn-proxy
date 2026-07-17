@@ -16,6 +16,17 @@ pub static tcp_syn_map_v4: LruHashMap<u64, SynRawDataV4> =
 #[allow(non_upper_case_globals)]
 pub static syn_counter: Array<u64> = Array::with_max_entries(1, 0);
 
+// Family-agnostic metadata: slot 0 holds the shared LRU capacity (max_entries) the agent
+// created the SYN maps with. Written by the userspace agent (not the datapath) so the proxy
+// can read the staleness threshold without opening any per-family (v4/v6) map.
+//
+// `#[used]` is required because no BPF program references this map: without it the BPF linker
+// dead-strips the global (export_name alone does not keep it), and aya would never create it.
+#[used]
+#[map]
+#[allow(non_upper_case_globals)]
+pub static syn_meta: Array<u64> = Array::with_max_entries(1, 0);
+
 #[map]
 #[allow(non_upper_case_globals)]
 pub static syn_insert_failures_v4: PerCpuArray<u64> = PerCpuArray::with_max_entries(1, 0);

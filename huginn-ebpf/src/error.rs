@@ -36,6 +36,9 @@ pub enum EbpfError {
         source: aya::maps::MapError,
     },
 
+    #[error("BPF map '{name}' not found in loaded object")]
+    MapNotFound { name: String },
+
     #[error("failed to create pin directory '{path}': {source}")]
     PinDir {
         path: String,
