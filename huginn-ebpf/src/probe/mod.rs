@@ -221,6 +221,9 @@ impl EbpfProbe {
     /// `syn_meta` map (populated by the agent with the same value it created the SYN maps with),
     /// so it never drifts and does not depend on which IP family is enabled. This constructor
     /// does not load or attach any XDP program, the agent owns that lifecycle.
+    ///
+    /// Returns [`EbpfError::MapNotReady`] if the agent has pinned the maps but not yet published
+    /// the capacity; callers are expected to retry.
     pub fn from_pinned(base_path: &str) -> Result<Self, EbpfError> {
         let syn_path_v4 = pin::syn_map_v4_path(base_path);
         let syn_path_v6 = pin::syn_map_v6_path(base_path);
@@ -228,11 +231,9 @@ impl EbpfProbe {
         let syn_data_v6 = maps::open_pinned_map(syn_path_v6.clone())?;
         let syn_id_v4 = maps::open_map_id(&syn_data_v4, syn_path_v4)?;
         let syn_id_v6 = maps::open_map_id(&syn_data_v6, syn_path_v6)?;
-        // Shared LRU capacity for staleness detection, read from the global `syn_meta` map
-        // (decoupled from v4/v6). A zero means the agent has not written it yet (fresh map);
-        // fall back to the default until the value is published.
+        // Zero = agent pinned the map but has not written the capacity yet; not ready.
         let syn_map_max_entries = match maps::read_syn_capacity(base_path)? {
-            0 => DEFAULT_SYN_MAP_MAX_ENTRIES,
+            0 => return Err(EbpfError::MapNotReady { name: pin::SYN_META_NAME.to_string() }),
             capacity => capacity,
         };
         let counter_data = maps::open_pinned_map(pin::counter_path(base_path))?;
