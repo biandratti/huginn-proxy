@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 #[cfg(feature = "ebpf-tcp")]
 use {
-    self::config::{reconnect_poll_secs_from_env, syn_map_max_entries_from_env},
+    self::config::reconnect_poll_secs_from_env,
     arc_swap::ArcSwap,
     huginn_ebpf::{parse_syn_v4, parse_syn_v6, EbpfProbe},
     huginn_proxy_lib::fingerprinting::SynResult,
@@ -33,16 +33,6 @@ pub async fn connect_syn_probe(
 
     let pin_path = env::var("HUGINN_EBPF_PIN_PATH")
         .unwrap_or_else(|_| huginn_ebpf::pin::DEFAULT_PIN_BASE.to_string());
-    let syn_map_max_entries = match syn_map_max_entries_from_env(
-        env::var("HUGINN_EBPF_SYN_MAP_MAX_ENTRIES").ok(),
-        huginn_ebpf::DEFAULT_SYN_MAP_MAX_ENTRIES,
-    ) {
-        Ok(value) => value,
-        Err(error) => {
-            tracing::error!(%error, "invalid eBPF configuration");
-            return (None, None);
-        }
-    };
     let reconnect_poll_secs =
         match reconnect_poll_secs_from_env(env::var("HUGINN_EBPF_RECONNECT_POLL_SECS").ok()) {
             Ok(value) => value,
@@ -53,7 +43,7 @@ pub async fn connect_syn_probe(
         };
 
     let probe = loop {
-        match EbpfProbe::from_pinned(&pin_path, syn_map_max_entries) {
+        match EbpfProbe::from_pinned(&pin_path) {
             Ok(probe) => break probe,
             Err(_) => {
                 tracing::warn!(
@@ -79,14 +69,8 @@ pub async fn connect_syn_probe(
     }
 
     let poll_interval = Duration::from_secs(reconnect_poll_secs);
-    let handle = tokio::spawn(watch_pinned_maps(
-        probe,
-        pin_path,
-        syn_map_max_entries,
-        poll_interval,
-        metrics,
-        shutdown_rx,
-    ));
+    let handle =
+        tokio::spawn(watch_pinned_maps(probe, pin_path, poll_interval, metrics, shutdown_rx));
     let watcher = ServiceHandle { handle, name: ServiceName::EbpfReconnect };
     (Some(syn_probe), Some(watcher))
 }
@@ -119,7 +103,6 @@ fn lookup_syn(probe: &EbpfProbe, peer: SocketAddr) -> SynResult {
 async fn watch_pinned_maps(
     probe: Arc<ArcSwap<EbpfProbe>>,
     pin_path: String,
-    syn_map_max_entries: u32,
     poll_interval: Duration,
     metrics: Arc<Metrics>,
     mut shutdown_rx: ShutdownWatch,
@@ -139,7 +122,6 @@ async fn watch_pinned_maps(
                 if let Err(error) = reconnect_if_changed(
                     &probe,
                     &pin_path,
-                    syn_map_max_entries,
                     &metrics,
                 ) {
                     tracing::debug!(
@@ -157,7 +139,6 @@ async fn watch_pinned_maps(
 fn reconnect_if_changed(
     probe: &ArcSwap<EbpfProbe>,
     pin_path: &str,
-    syn_map_max_entries: u32,
     metrics: &Metrics,
 ) -> Result<(), huginn_ebpf::EbpfError> {
     let current = probe.load();
@@ -170,7 +151,7 @@ fn reconnect_if_changed(
     }
     drop(current);
 
-    let replacement = EbpfProbe::from_pinned(pin_path, syn_map_max_entries)?;
+    let replacement = EbpfProbe::from_pinned(pin_path)?;
     let Some(new_ids) = replacement.pinned_map_ids() else {
         return Ok(());
     };

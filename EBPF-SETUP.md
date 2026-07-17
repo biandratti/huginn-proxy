@@ -137,7 +137,6 @@ tcp_enabled = true   # false = no BPF maps opened, no capabilities needed
 | Variable | Example | Description |
 |---|---|---|
 | `HUGINN_EBPF_PIN_PATH` | `/sys/fs/bpf/huginn` | Pin directory to read maps from (default shown) |
-| `HUGINN_EBPF_SYN_MAP_MAX_ENTRIES` | `8192` | LRU map capacity used by the agent; the proxy uses the same value for stale-entry detection |
 | `HUGINN_EBPF_RECONNECT_POLL_SECS` | `5` | Backstop poll interval for detecting recreated maps (e.g. a capacity change or a wiped bpffs); `0` disables automatic reconnection. Normal agent restarts reuse the same maps and need no reconnection |
 
 At startup the proxy retries opening the pinned maps with a fixed backoff until the agent has

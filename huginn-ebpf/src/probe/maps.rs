@@ -2,7 +2,7 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 
 use aya::maps::{MapData, MapInfo};
-use tracing::info;
+use tracing::{info, warn};
 
 use crate::pin;
 use crate::EbpfError;
@@ -17,7 +17,7 @@ impl EbpfProbe {
     /// [`EbpfProbe::new`]). Exposed for manual cleanup / tests.
     pub fn unpin_maps(base_path: &str) {
         remove_all_pins(base_path);
-        info!(base_path, "BPF map pins removed");
+        warn!(base_path, "BPF map pins removed");
     }
 }
 
@@ -94,5 +94,12 @@ pub(super) fn pinned_map_id(path: PathBuf) -> Result<u32, EbpfError> {
 pub(super) fn open_map_id(map: &MapData, path: PathBuf) -> Result<u32, EbpfError> {
     map.info()
         .map(|info| info.id())
+        .map_err(|e| EbpfError::MapInfo { path: path.display().to_string(), source: e })
+}
+
+/// Return the capacity (`max_entries`) of an already-open BPF map.
+pub(super) fn open_map_max_entries(map: &MapData, path: PathBuf) -> Result<u32, EbpfError> {
+    map.info()
+        .map(|info| info.max_entries())
         .map_err(|e| EbpfError::MapInfo { path: path.display().to_string(), source: e })
 }

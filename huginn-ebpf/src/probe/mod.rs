@@ -213,16 +213,22 @@ impl EbpfProbe {
     /// The agent must have already pinned `tcp_syn_map_v4`, `tcp_syn_map_v6`, `syn_counter`,
     /// and `syn_insert_failures` under `base_path` (default: `/sys/fs/bpf/huginn/`).
     ///
-    /// `syn_map_max_entries` must match the value the agent used when loading the program
-    /// (e.g. `HUGINN_EBPF_SYN_MAP_MAX_ENTRIES`); it is used for stale entry detection.
-    /// This constructor does not load or attach any XDP program, the agent owns that lifecycle.
-    pub fn from_pinned(base_path: &str, syn_map_max_entries: u32) -> Result<Self, EbpfError> {
+    /// The LRU capacity used for stale-entry detection is read from the pinned SYN map itself
+    /// (`max_entries`), so it always matches the value the agent created the map with, with no
+    /// separate configuration that could drift. This constructor does not load or attach any XDP
+    /// program, the agent owns that lifecycle.
+    pub fn from_pinned(base_path: &str) -> Result<Self, EbpfError> {
         let syn_path_v4 = pin::syn_map_v4_path(base_path);
         let syn_path_v6 = pin::syn_map_v6_path(base_path);
-        let syn_data = maps::open_pinned_map(syn_path_v4.clone())?;
+        let syn_data_v4 = maps::open_pinned_map(syn_path_v4.clone())?;
         let syn_data_v6 = maps::open_pinned_map(syn_path_v6.clone())?;
-        let syn_id_v4 = maps::open_map_id(&syn_data, syn_path_v4)?;
+        let syn_id_v4 = maps::open_map_id(&syn_data_v4, syn_path_v4.clone())?;
         let syn_id_v6 = maps::open_map_id(&syn_data_v6, syn_path_v6)?;
+        // Shared LRU capacity: a single value that pairs with the global `syn_counter`
+        // for staleness (both families are created equal by the agent, so it is read
+        // from either SYN map). Sourced from the kernel rather than a proxy-side env
+        // var that could drift from the agent's value. TODO: ....
+        let syn_map_max_entries = maps::open_map_max_entries(&syn_data_v4, syn_path_v4)?;
         let counter_data = maps::open_pinned_map(pin::counter_path(base_path))?;
         let insert_failures_v4 = maps::open_pinned_map(pin::insert_failures_v4_path(base_path))?;
         let insert_failures_v6 = maps::open_pinned_map(pin::insert_failures_v6_path(base_path))?;
@@ -236,7 +242,7 @@ impl EbpfProbe {
         Ok(Self {
             inner: ProbeInner::Pinned(Box::new(PinnedMaps {
                 ipv4: PinnedFamilyMaps {
-                    syn: Map::LruHashMap(syn_data),
+                    syn: Map::LruHashMap(syn_data_v4),
                     id: syn_id_v4,
                     insert_failures: Map::PerCpuArray(insert_failures_v4),
                     captured: Map::PerCpuArray(captured_v4),
