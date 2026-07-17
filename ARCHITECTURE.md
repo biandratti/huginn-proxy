@@ -47,3 +47,31 @@ The capture hook is selectable via `HUGINN_EBPF_CAPTURE` (`xdp-native` | `xdp-sk
 ### Process lifecycle and failure isolation
 
 The agent and the proxy are decoupled processes. At startup the proxy retries opening the agent's pinned maps with a fixed backoff, so the two can start in any order. Once connected, the proxy holds its own map file descriptors: an agent crash never crashes the proxy, and lookups degrade to `SynResult::Miss` (the `x-tcp-p0f` header is skipped) rather than blocking or dropping traffic. Because the agent reuses its pinned maps across restarts, a normal restart keeps the same kernel IDs and the proxy needs no reconnection at all. As a backstop, a shutdown-aware background task compares the kernel IDs of the published IPv4/IPv6 pins with the active IDs; when the maps are actually recreated (a capacity change, or a wiped bpffs) the proxy opens a complete new map set and publishes it through `ArcSwap`, so in-flight lookups finish on the previous set and new lookups use the replacement without dropping connections. See `EBPF-SETUP.md` for the polling interval and full lifecycle guidance.
+
+The stale-entry threshold needs the LRU capacity. The agent publishes it once into a family-agnostic `syn_meta` map (a sibling of `syn_counter`); the proxy reads it back rather than being configured with it, so it never drifts and does not depend on which IP family is enabled. The value is pinned, so it survives agent restarts/crashes; a freshly recreated map reads `0` until the agent writes it, which the proxy treats as *not ready* and retries.
+
+### Lifecycle scenarios
+
+Maps live in bpffs independently of both processes. The proxy connects via a startup retry loop and stays current via the backstop watcher, both funnelling through a single `ArcSwap<EbpfProbe>`:
+
+```
+startup:   from_pinned() ──Err (pins absent │ MapNotReady)──▶ wait 2s ──┐
+               │ Ok                                            ▲         │
+               ▼                                               └─────────┘
+         ArcSwap<EbpfProbe> ◀── proxy holds its own map FDs (outlive the agent)
+               ▲
+watcher   every HUGINN_EBPF_RECONNECT_POLL_SECS:
+(backstop)   published IDs == active IDs ? ── yes ─▶ keep current maps
+                                           └─ no ──▶ from_pinned() ─▶ ArcSwap.store()
+```
+
+Only the TCP SYN fingerprint (`x-tcp-p0f`) depends on eBPF. TLS JA4 and HTTP/2 Akamai are extracted in-process from the ClientHello and HTTP/2 frames, so they are unaffected by any agent/eBPF state below.
+
+| Event | Maps in bpffs | Proxy reaction | `x-tcp-p0f` header |
+|---|---|---|---|
+| Startup, pins absent | — | retry `from_pinned` every 2s | skipped until connected |
+| `syn_meta` pinned but unwritten | fresh, capacity `0` | `MapNotReady` → retry | skipped (transient) |
+| Agent graceful restart | reused, same IDs | none (IDs unchanged) | uninterrupted |
+| Agent crash (SIGKILL) | survive (pinned) + proxy FDs | none; captures continue (program stays attached) | uninterrupted |
+| Capacity change / bpffs wipe | recreated, new IDs | watcher reopens, atomic `ArcSwap` swap | in-flight on old set, new lookups on new set |
+| Reconnect poll disabled (`=0`) | recreated, new IDs | none until proxy restart | skipped until restart |
