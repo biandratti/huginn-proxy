@@ -1,12 +1,12 @@
 [package]
 name = "tests-e2e"
-version = "0.0.2-beta.1"
+version = "0.0.3-beta.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 publish = false
 
 [dependencies]
-huginn-proxy-lib = { path = "../huginn-proxy-lib", version = "0.0.2-beta.1" }
+huginn-proxy-lib = { path = "../huginn-proxy-lib", version = "0.0.3-beta.0" }
 reqwest.workspace = true
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "net"] }
 
