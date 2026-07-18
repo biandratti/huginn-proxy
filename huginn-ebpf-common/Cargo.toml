@@ -4,7 +4,7 @@
 
 [package]
 name = "huginn-ebpf-common"
-version = "0.0.2-beta.1"
+version = "0.0.3-beta.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 publish = false
