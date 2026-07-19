@@ -38,7 +38,7 @@ export default defineConfig({
 			titleDelimiter: '·',
 			tagline: releaseTag,
 			logo: {
-				src: './src/assets/huginn-proxy.png',
+				src: './public/apple-touch-icon.png',
 				alt: 'Huginn Proxy',
 				replacesTitle: false,
 			},
@@ -71,6 +71,21 @@ export default defineConfig({
 					attrs: {
 						rel: 'stylesheet',
 						href: 'https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,400;0,600;1,400&display=swap',
+					},
+				},
+				{
+					tag: 'link',
+					attrs: {
+						rel: 'apple-touch-icon',
+						sizes: '180x180',
+						href: `${base}/apple-touch-icon.png`,
+					},
+				},
+				{
+					tag: 'link',
+					attrs: {
+						rel: 'manifest',
+						href: `${base}/site.webmanifest`,
 					},
 				},
 			],
