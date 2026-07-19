@@ -20,5 +20,7 @@ Huginn Proxy focuses on **passive fingerprinting** and a small set of hardening 
 
 - **No built-in ACME:** certificates are files on disk (`cert_path` / `key_path` per domain). Another process issues and renews them (cert-manager, acme.sh, Vault, etc.). PEMs reload on **config reload**, not by watching cert files alone. See [TLS](/huginn-proxy/docs/tls/).
 - **Load balancing:** round-robin across backend addresses on a route. Optional active [`health_check`](/huginn-proxy/docs/backends/#health-checks). No least-connections or weights; many setups still leave replicas and failover to an orchestrator (see [Routes](/huginn-proxy/docs/routes/)).
+- **Rate limiting** is per process only (not distributed across proxy replicas).
+- **HTTP/3** is not supported yet.
 
 If you **need an additional feature**, open an [**issue on GitHub**](https://github.com/biandratti/huginn-proxy/issues/new) with requirements and constraints.

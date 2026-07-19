@@ -18,7 +18,7 @@ Images and capabilities: [Artifacts](/huginn-proxy/docs/artifacts/). Capture bac
 | **Proxy** | Deployment or DaemonSet | Serves HTTP/TLS traffic; scale with replicas / HPA, or one instance per node |
 | **eBPF agent** | DaemonSet, **one per node** | Linux allows only one XDP/TC program per interface; two agents on the same node fight over the NIC |
 
-TCP SYN fingerprinting needs both on the same node when the proxy reads pinned maps from that node's bpffs. Without TCP SYN (`tcp_enabled = false` / plain image), skip the agent entirely.
+TCP SYN fingerprinting needs both on the same node when the proxy reads pinned maps from that node's bpffs. Without TCP SYN (`tcp_enabled = false` / plain image), skip the agent entirely. On virtual networks / CNI overlays, you will likely need `HUGINN_EBPF_CAPTURE=tc` (see [eBPF TCP setup](/huginn-proxy/docs/ebpf-setup/#choosing-a-capture-backend)).
 
 ## Client IP and port must match the wire
 
