@@ -7,7 +7,8 @@ const releasePath = join(process.cwd(), 'src/data/release-version.json');
 const { tag: releaseTag } = JSON.parse(readFileSync(releasePath, 'utf8'));
 
 const base = import.meta.env.BASE_URL;
-const docs = `${base}docs/getting-started/`;
+const docs = `${base}docs/`;
+const quickStart = `${base}docs/quick-example/`;
 const github = 'https://github.com/biandratti/huginn-proxy';
 ---
 
@@ -47,12 +48,13 @@ const github = 'https://github.com/biandratti/huginn-proxy';
 							MIT/Apache. No proprietary fingerprint stack, no extra license for commercial use.
 						</p>
 						<div class="hp-actions">
-							<a class="hp-btn hp-btn--ghost" href={github}>View on GitHub</a>
-							<a class="hp-btn hp-btn--ghost" href={`${base}docs/`}>Documentation</a>
+							<a class="hp-btn hp-btn--primary" href={docs}>Documentation</a>
+							<a class="hp-btn hp-btn--ghost" href={quickStart}>Quick start</a>
+							<a class="hp-btn hp-btn--ghost" href={github}>GitHub</a>
 						</div>
 					</div>
 					<div class="hp-hero-img">
-						<img src={`${base}huginn-proxy.png`} alt="Huginn Proxy" width="280" height="280" />
+						<img src={`${base}android-chrome-512x512.png`} alt="Huginn Proxy" width="280" height="280" />
 					</div>
 				</div>
 			</header>
@@ -71,14 +73,14 @@ const github = 'https://github.com/biandratti/huginn-proxy';
 							</tr>
 						</thead>
 						<tbody>
-						<tr>
-							<td><code>x-tls-ja4</code> (+ <code>-r</code> / <code>-o</code> / <code>-or</code>)</td>
-							<td>TLS ClientHello: FoxIO-LLC JA4 family (hashed &amp; raw variants)</td>
-						</tr>
-						<tr>
-							<td><code>x-tls-ja4-sv1</code> (+ <code>-sv1r</code>)</td>
-							<td>TLS ClientHello: stable JA4 (ephemeral extensions excluded)</td>
-						</tr>
+							<tr>
+								<td><code>x-tls-ja4</code> (+ <code>-r</code> / <code>-o</code> / <code>-or</code>)</td>
+								<td>TLS ClientHello: FoxIO-LLC JA4 family (hashed &amp; raw variants)</td>
+							</tr>
+							<tr>
+								<td><code>x-tls-ja4-sv1</code> (+ <code>-sv1r</code>)</td>
+								<td>TLS ClientHello: stable JA4 (ephemeral extensions excluded)</td>
+							</tr>
 							<tr>
 								<td><code>x-http2-akamai</code></td>
 								<td>HTTP/2 only</td>
