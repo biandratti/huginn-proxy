@@ -1,13 +1,13 @@
 ---
 title: Routes & Domains
-description: Domain-based routing with per-hostname TLS certs, path matching, path rewrite, and connection reuse. Beta.
+description: Domain-based routing with per-hostname TLS certs, path matching, path rewrite, and connection reuse.
 sidebar:
   order: 4
 ---
 
 import { Tabs, TabItem } from '@astrojs/starlight/components';
 
-Routes are **nested inside domain entries** (`[[domains]]`). A domain groups a TLS certificate, per-domain headers and security policy, and one or more path-prefix routes. **Dynamic** — hot-reloadable.
+Routes are **nested inside domain entries** (`[[domains]]`). A domain groups a TLS certificate, per-domain headers and security policy, and one or more path-prefix routes. **Dynamic**: hot-reloadable.
 
 ## Domains
 
@@ -16,158 +16,158 @@ Each `[[domains]]` entry handles one hostname (exact or wildcard). Omit `host` f
 ### Named domain (HTTPS)
 
 <Tabs syncKey="huginn-config">
-  <TabItem label="YAML">
+ <TabItem label="YAML">
 
 ```yaml
 domains:
-  - host: "api.example.com"
-    cert_path: "/config/certs/api.crt"
-    key_path:  "/config/certs/api.key"
-    routes:
-      - prefix: "/api"
-        backend: "backend-a:9000"
-      - prefix: "/"
-        backend: "backend-b:9000"
+ - host: "api.example.com"
+ cert_path: "/config/certs/api.crt"
+ key_path: "/config/certs/api.key"
+ routes:
+ - prefix: "/api"
+ backend: "backend-a:9000"
+ - prefix: "/"
+ backend: "backend-b:9000"
 ```
 
-  </TabItem>
-  <TabItem label="TOML">
+ </TabItem>
+ <TabItem label="TOML">
 
 ```toml
 [[domains]]
-host      = "api.example.com"
+host = "api.example.com"
 cert_path = "/config/certs/api.crt"
-key_path  = "/config/certs/api.key"
+key_path = "/config/certs/api.key"
 
-  [[domains.routes]]
-  prefix  = "/api"
-  backend = "backend-a:9000"
+ [[domains.routes]]
+ prefix = "/api"
+ backend = "backend-a:9000"
 
-  [[domains.routes]]
-  prefix  = "/"
-  backend = "backend-b:9000"
+ [[domains.routes]]
+ prefix = "/"
+ backend = "backend-b:9000"
 ```
 
-  </TabItem>
+ </TabItem>
 </Tabs>
 
 ### Wildcard domain
 
 <Tabs syncKey="huginn-config">
-  <TabItem label="YAML">
+ <TabItem label="YAML">
 
 ```yaml
 domains:
-  - host: "*.example.com"
-    cert_path: "/config/certs/wildcard.crt"
-    key_path:  "/config/certs/wildcard.key"
-    routes:
-      - prefix: "/"
-        backend: "backend-a:9000"
+ - host: "*.example.com"
+ cert_path: "/config/certs/wildcard.crt"
+ key_path: "/config/certs/wildcard.key"
+ routes:
+ - prefix: "/"
+ backend: "backend-a:9000"
 ```
 
-  </TabItem>
-  <TabItem label="TOML">
+ </TabItem>
+ <TabItem label="TOML">
 
 ```toml
 [[domains]]
-host      = "*.example.com"
+host = "*.example.com"
 cert_path = "/config/certs/wildcard.crt"
-key_path  = "/config/certs/wildcard.key"
+key_path = "/config/certs/wildcard.key"
 
-  [[domains.routes]]
-  prefix  = "/"
-  backend = "backend-a:9000"
+ [[domains.routes]]
+ prefix = "/"
+ backend = "backend-a:9000"
 ```
 
-  </TabItem>
+ </TabItem>
 </Tabs>
 
-Wildcard matching is **one level only** — `*.example.com` matches `api.example.com` but not `a.b.example.com`.
+Wildcard matching is **one level only**: `*.example.com` matches `api.example.com` but not `a.b.example.com`.
 
 ### Catch-all domain (no `host`)
 
-Matches any host that has no explicit domain entry. Its certificate (if set) becomes the **TLS default certificate** — the fallback for connections that send no SNI or an unrecognized SNI. Omit cert/key for plain-HTTP only.
+Matches any host that has no explicit domain entry. Its certificate (if set) becomes the **TLS default certificate** (the fallback for connections that send no SNI or an unrecognized SNI). Omit cert/key for plain-HTTP only.
 
 <Tabs syncKey="huginn-config">
-  <TabItem label="YAML">
+ <TabItem label="YAML">
 
 ```yaml
 domains:
-  - routes:
-      - prefix: "/"
-        backend: "localhost:3000"
+ - routes:
+ - prefix: "/"
+ backend: "localhost:3000"
 ```
 
-  </TabItem>
-  <TabItem label="TOML">
+ </TabItem>
+ <TabItem label="TOML">
 
 ```toml
-[[domains]]   # no host = catch-all
+[[domains]] # no host = catch-all
 
-  [[domains.routes]]
-  prefix  = "/"
-  backend = "localhost:3000"
+ [[domains.routes]]
+ prefix = "/"
+ backend = "localhost:3000"
 ```
 
-  </TabItem>
+ </TabItem>
 </Tabs>
 
 ## Host matching
 
 The request host is resolved from the HTTP-layer authority for **all** protocol versions:
-`:authority` (HTTP/2) or the `Host` header (HTTP/1.1). TLS SNI is **not** used for routing — it only selects the certificate.
+`:authority` (HTTP/2) or the `Host` header (HTTP/1.1). TLS SNI is **not** used for routing: it only selects the certificate.
 
 Matching order:
-1. **Exact** — `"api.example.com"`
-2. **Wildcard** — `"*.example.com"` (one level only)
-3. **Catch-all** — the entry with no `host` key, if present
+1. **Exact**: `"api.example.com"`
+2. **Wildcard**: `"*.example.com"` (one level only)
+3. **Catch-all**: the entry with no `host` key, if present
 4. No match → **421 Misdirected Request**
 
 Host values are lowercased at load and compared case-insensitively. The config is rejected if two domains share the same effective host or if more than one catch-all is defined.
 
 ## Prefix matching
 
-Within a domain, routes are matched by **URL prefix**. The **most specific (longest) prefix wins** — sorted at config load time, so declaration order does not affect which route matches.
+Within a domain, routes are matched by **URL prefix**. The **most specific (longest) prefix wins**: sorted at config load time, so declaration order does not affect which route matches.
 
 `/api/v2` beats `/api` beats `/` for a request to `/api/v2/users`. Identical prefixes are treated as load-balance candidates (round-robin).
 
 <Tabs syncKey="huginn-config">
-  <TabItem label="YAML">
+ <TabItem label="YAML">
 
 ```yaml
 domains:
-  - host: "api.example.com"
-    routes:
-      - prefix: "/api/v2"
-        backend: "backend-a:9000"
-      - prefix: "/api"
-        backend: "backend-b:9000"
-      - prefix: "/"
-        backend: "backend-b:9000"
+ - host: "api.example.com"
+ routes:
+ - prefix: "/api/v2"
+ backend: "backend-a:9000"
+ - prefix: "/api"
+ backend: "backend-b:9000"
+ - prefix: "/"
+ backend: "backend-b:9000"
 ```
 
-  </TabItem>
-  <TabItem label="TOML">
+ </TabItem>
+ <TabItem label="TOML">
 
 ```toml
 [[domains]]
 host = "api.example.com"
 
-  [[domains.routes]]
-  prefix  = "/api/v2"
-  backend = "backend-a:9000"
+ [[domains.routes]]
+ prefix = "/api/v2"
+ backend = "backend-a:9000"
 
-  [[domains.routes]]
-  prefix  = "/api"
-  backend = "backend-b:9000"
+ [[domains.routes]]
+ prefix = "/api"
+ backend = "backend-b:9000"
 
-  [[domains.routes]]
-  prefix  = "/"
-  backend = "backend-b:9000"
+ [[domains.routes]]
+ prefix = "/"
+ backend = "backend-b:9000"
 ```
 
-  </TabItem>
+ </TabItem>
 </Tabs>
 
 ## Path manipulation
@@ -183,61 +183,61 @@ Query strings are preserved. There is **no regular-expression** routing, only pr
 **Strip:** `/strip/users` → backend receives `/users`:
 
 <Tabs syncKey="huginn-config">
-  <TabItem label="YAML">
+ <TabItem label="YAML">
 
 ```yaml
 domains:
-  - host: "api.example.com"
-    routes:
-      - prefix: "/strip"
-        backend: "backend-a:9000"
-        replace_path: ""
+ - host: "api.example.com"
+ routes:
+ - prefix: "/strip"
+ backend: "backend-a:9000"
+ replace_path: ""
 ```
 
-  </TabItem>
-  <TabItem label="TOML">
+ </TabItem>
+ <TabItem label="TOML">
 
 ```toml
 [[domains]]
 host = "api.example.com"
 
-  [[domains.routes]]
-  prefix       = "/strip"
-  backend      = "backend-a:9000"
-  replace_path = ""
+ [[domains.routes]]
+ prefix = "/strip"
+ backend = "backend-a:9000"
+ replace_path = ""
 ```
 
-  </TabItem>
+ </TabItem>
 </Tabs>
 
 **Rewrite:** `/old/data` → backend receives `/new/data`:
 
 <Tabs syncKey="huginn-config">
-  <TabItem label="YAML">
+ <TabItem label="YAML">
 
 ```yaml
 domains:
-  - host: "api.example.com"
-    routes:
-      - prefix: "/old"
-        backend: "backend-b:9000"
-        replace_path: "/new"
+ - host: "api.example.com"
+ routes:
+ - prefix: "/old"
+ backend: "backend-b:9000"
+ replace_path: "/new"
 ```
 
-  </TabItem>
-  <TabItem label="TOML">
+ </TabItem>
+ <TabItem label="TOML">
 
 ```toml
 [[domains]]
 host = "api.example.com"
 
-  [[domains.routes]]
-  prefix       = "/old"
-  backend      = "backend-b:9000"
-  replace_path = "/new"
+ [[domains.routes]]
+ prefix = "/old"
+ backend = "backend-b:9000"
+ replace_path = "/new"
 ```
 
-  </TabItem>
+ </TabItem>
 </Tabs>
 
 ## Fingerprinting gate
@@ -247,33 +247,33 @@ The `fingerprinting` field controls **header injection** for fingerprint data. C
 Resolution order: `route` → `domain` → global default (`true`).
 
 <Tabs syncKey="huginn-config">
-  <TabItem label="YAML">
+ <TabItem label="YAML">
 
 ```yaml
 domains:
-  - host: "api.example.com"
-    fingerprinting: true   # domain-level default
-    routes:
-      - prefix: "/internal"
-        backend: "backend-a:9000"
-        fingerprinting: false   # override for this route
+ - host: "api.example.com"
+ fingerprinting: true # domain-level default
+ routes:
+ - prefix: "/internal"
+ backend: "backend-a:9000"
+ fingerprinting: false # override for this route
 ```
 
-  </TabItem>
-  <TabItem label="TOML">
+ </TabItem>
+ <TabItem label="TOML">
 
 ```toml
 [[domains]]
-host            = "api.example.com"
-fingerprinting  = true
+host = "api.example.com"
+fingerprinting = true
 
-  [[domains.routes]]
-  prefix         = "/internal"
-  backend        = "backend-a:9000"
-  fingerprinting = false
+ [[domains.routes]]
+ prefix = "/internal"
+ backend = "backend-a:9000"
+ fingerprinting = false
 ```
 
-  </TabItem>
+ </TabItem>
 </Tabs>
 
 ## Preserve host
@@ -281,62 +281,62 @@ fingerprinting  = true
 Top-level boolean. When **`true`**, the original client `Host` header is forwarded to the upstream. When **`false`** (default), the request is forwarded with the backend address as its authority. **Dynamic.**
 
 <Tabs syncKey="huginn-config">
-  <TabItem label="YAML">
+ <TabItem label="YAML">
 
 ```yaml
 preserve_host: false
 ```
 
-  </TabItem>
-  <TabItem label="TOML">
+ </TabItem>
+ <TabItem label="TOML">
 
 ```toml
 preserve_host = false
 ```
 
-  </TabItem>
+ </TabItem>
 </Tabs>
 
 ## Connection reuse
 
 `force_new_connection = true` bypasses the connection pool and opens a fresh TCP+TLS connection per request to the upstream. Use it when you need a new TLS handshake for each request. Adds latency; avoid in high-throughput routes.
 
-It does **not** affect client fingerprint capture — TLS JA4 and HTTP/2 signatures come from the client→proxy connection, and TCP SYN is captured via eBPF at the client→proxy edge.
+It does **not** affect client fingerprint capture: TLS JA4 and HTTP/2 signatures come from the client→proxy connection, and TCP SYN is captured via eBPF at the client→proxy edge.
 
 <Tabs syncKey="huginn-config">
-  <TabItem label="YAML">
+ <TabItem label="YAML">
 
 ```yaml
 domains:
-  - host: "api.example.com"
-    routes:
-      - prefix: "/isolated"
-        backend: "backend-a:9000"
-        force_new_connection: true
-      - prefix: "/api"
-        backend: "backend-a:9000"
-        force_new_connection: false
+ - host: "api.example.com"
+ routes:
+ - prefix: "/isolated"
+ backend: "backend-a:9000"
+ force_new_connection: true
+ - prefix: "/api"
+ backend: "backend-a:9000"
+ force_new_connection: false
 ```
 
-  </TabItem>
-  <TabItem label="TOML">
+ </TabItem>
+ <TabItem label="TOML">
 
 ```toml
 [[domains]]
 host = "api.example.com"
 
-  [[domains.routes]]
-  prefix               = "/isolated"
-  backend              = "backend-a:9000"
-  force_new_connection = true
+ [[domains.routes]]
+ prefix = "/isolated"
+ backend = "backend-a:9000"
+ force_new_connection = true
 
-  [[domains.routes]]
-  prefix               = "/api"
-  backend              = "backend-a:9000"
-  force_new_connection = false
+ [[domains.routes]]
+ prefix = "/api"
+ backend = "backend-a:9000"
+ force_new_connection = false
 ```
 
-  </TabItem>
+ </TabItem>
 </Tabs>
 
 Pool settings are under **[`[backend_pool]`](/huginn-proxy/docs/backends/#backend-pool)**.
@@ -344,16 +344,16 @@ Pool settings are under **[`[backend_pool]`](/huginn-proxy/docs/backends/#backen
 ## Route fields (summary)
 
 - **`prefix`**, **`backend`**, **`replace_path`**, **`fingerprinting`**, **`force_new_connection`**
-- Optional **`security`:** per-route `ip_filter`, `rate_limit`, `headers` (whole-block replaces) — see [Security](/huginn-proxy/docs/security/) and [Rate limiting](/huginn-proxy/docs/rate-limiting/)
-- Optional **`[domains.routes.headers]`:** same shape as global `[headers]` — see [Headers](/huginn-proxy/docs/headers/)
+- Optional **`security`:** per-route `ip_filter`, `rate_limit`, `headers` (whole-block replaces). See [Security](/huginn-proxy/docs/security/) and [Rate limiting](/huginn-proxy/docs/rate-limiting/)
+- Optional **`[domains.routes.headers]`:** same shape as global `[headers]`. See [Headers](/huginn-proxy/docs/headers/)
 
 ## Domain fields (summary)
 
 - **`host`** (exact, `*.wildcard`, or absent for catch-all)
-- **`cert_path`**, **`key_path`** — TLS certificate for this domain (omit for plain HTTP)
-- **`fingerprinting`** — domain-level gate (resolved against route-level `fingerprinting`)
-- **`headers`** — domain-level header manipulation (same shape as global `[headers]`)
-- **`security`** — per-domain overrides for `ip_filter`, `rate_limit`, `headers` (whole-block replaces)
-- **`routes`** — array of route entries (see above)
+- **`cert_path`**, **`key_path`**: TLS certificate for this domain (omit for plain HTTP)
+- **`fingerprinting`**: domain-level gate (resolved against route-level `fingerprinting`)
+- **`headers`**: domain-level header manipulation (same shape as global `[headers]`)
+- **`security`**: per-domain overrides for `ip_filter`, `rate_limit`, `headers` (whole-block replaces)
+- **`routes`**: array of route entries (see above)
 
 See [Configuration overview](/huginn-proxy/docs/configuration/) for the full config layout.

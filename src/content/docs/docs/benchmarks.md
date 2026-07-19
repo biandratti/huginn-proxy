@@ -1,6 +1,6 @@
 ---
 title: Benchmarks
-description: Fingerprinting overhead and throughput figures. Beta.
+description: Fingerprinting overhead and throughput figures.
 sidebar:
   order: 11
 ---
@@ -12,11 +12,11 @@ Huginn Proxy is benchmarked with [Criterion](https://bheisler.github.io/criterio
 | | |
 | --- | --- |
 | **OS** | Linux |
-| **CPU** | Intel Core i7-1165G7 @ 2.80 GHz — 4 cores / 8 threads |
+| **CPU** | Intel Core i7-1165G7 @ 2.80 GHz (4 cores / 8 threads) |
 | **Stack** | Single proxy + single eBPF agent + `traefik/whoami` backend (Docker Compose, localhost) |
 | **Tool** | rewrk 0.3.2 · `c=512, t=4, 15 s` |
 
-All figures are **indicative** (~±5–15 % between runs, more on HTTP/1.1 — see note below). Criterion runs execute on the host without Compose; load tests target the Compose stack over localhost TLS — not a realistic network path.
+All figures are **indicative** (~±5–15 % between runs, more on HTTP/1.1; see note below). Criterion runs execute on the host without Compose; load tests target the Compose stack over localhost TLS, not a realistic network path.
 
 ## Fingerprinting overhead
 
@@ -29,9 +29,9 @@ Measured as the delta between `with_fingerprinting` and `without_fingerprinting`
 
 Pure parser cost (no network) is ~930–970 ns per fingerprint (`bench_fingerprinting`).
 
-## Throughput — with eBPF vs without
+## Throughput: with eBPF vs without
 
-The meaningful comparison is **with eBPF vs without eBPF**: it isolates the cost of TCP SYN fingerprinting on top of the TLS + HTTP fingerprinting baseline. All runs use HTTPS with TLS termination and full fingerprinting — the real production workload.
+The meaningful comparison is **with eBPF vs without eBPF**: it isolates the cost of TCP SYN fingerprinting on top of the TLS + HTTP fingerprinting baseline. All runs use HTTPS with TLS termination and full fingerprinting (the real production workload).
 
 Averages over clean runs: **with eBPF n=5, without eBPF n=1** (the no-eBPF baseline has limited statistical weight).
 
@@ -44,6 +44,6 @@ Averages over clean runs: **with eBPF n=5, without eBPF n=1** (the no-eBPF basel
 
 **HTTP/1.1 req/s has high run-to-run variance** (~19k–34k depending on TLS connection-pool state). The averages are directionally correct but should not be read as stable figures. HTTP/2 multiplexes over fewer long-lived connections and is more stable (stdev < 3 % across all H2 runs).
 
-**eBPF overhead: ~3 % on HTTP/1.1, negligible on HTTP/2.** The XDP SYN map lookup cost per new connection is dominated by the TLS handshake at this concurrency.
+**eBPF overhead: ~3 % on HTTP/1.1, negligible on HTTP/2.** The eBPF SYN map lookup cost per new connection is dominated by the TLS handshake at this concurrency.
 
-These numbers are **not** a comparison with nginx, Envoy, or Caddy — those benchmarks typically run plain HTTP without fingerprinting, which is not this proxy's use case. See the [benches README](https://github.com/biandratti/huginn-proxy/tree/master/benches) for full methodology, regression detection, and load test scripts.
+These numbers are **not** a comparison with nginx, Envoy, or Caddy. Those benchmarks typically run plain HTTP without fingerprinting, which is not this proxy's use case. See the [benches README](https://github.com/biandratti/huginn-proxy/tree/master/benches) for full methodology, regression detection, and load test scripts.

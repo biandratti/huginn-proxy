@@ -1,6 +1,6 @@
 ---
 title: Headers
-description: Global request and response header add/remove. Beta.
+description: Global request and response header add/remove.
 sidebar:
   order: 10
 ---
@@ -11,7 +11,7 @@ The **`[headers]`** section configures **global** request and response header ma
 
 - **Per-domain** header rules under **`[domains.headers]`** (same shape; applied after global headers)
 - **Per-route** header rules under **`[domains.routes.headers]`** (same shape; applied after domain headers)
-- **`[security.headers]`:** HSTS, CSP, and custom **security** response headers — whole-block replace semantics (see [Security](/huginn-proxy/docs/security/))
+- **`[security.headers]`:** HSTS, CSP, and custom **security** response headers: whole-block replace semantics (see [Security](/huginn-proxy/docs/security/))
 - **Forwarding:** `X-Forwarded-*` set by the proxy (see [Security](/huginn-proxy/docs/security/#forwarding-headers))
 
 The `[headers]` cascade is **additive**: global → domain → route accumulate in order; for a given header name the most specific scope wins. This is different from `security.headers`, which is replaced wholesale.
@@ -26,43 +26,43 @@ The same shape applies at `[domains.headers]` and `[domains.routes.headers]`.
 ## Example
 
 <Tabs syncKey="huginn-config">
-  <TabItem label="YAML">
+ <TabItem label="YAML">
 
 ```yaml
 headers:
-  request:
-    remove:
-      - "X-Forwarded-Server"
-    add:
-      - name: "X-Proxy-Name"
-        value: "huginn-proxy"
-  response:
-    remove:
-      - "Server"
-      - "X-Powered-By"
-    add:
-      - name: "X-Proxy"
-        value: "huginn-proxy"
+ request:
+ remove:
+ - "X-Forwarded-Server"
+ add:
+ - name: "X-Proxy-Name"
+ value: "huginn-proxy"
+ response:
+ remove:
+ - "Server"
+ - "X-Powered-By"
+ add:
+ - name: "X-Proxy"
+ value: "huginn-proxy"
 ```
 
-  </TabItem>
-  <TabItem label="TOML">
+ </TabItem>
+ <TabItem label="TOML">
 
 ```toml
 [headers.request]
 remove = ["X-Forwarded-Server"]
 add = [
-    { name = "X-Proxy-Name", value = "huginn-proxy" },
+ { name = "X-Proxy-Name", value = "huginn-proxy" },
 ]
 
 [headers.response]
 remove = ["Server", "X-Powered-By"]
 add = [
-    { name = "X-Proxy", value = "huginn-proxy" },
+ { name = "X-Proxy", value = "huginn-proxy" },
 ]
 ```
 
-  </TabItem>
+ </TabItem>
 </Tabs>
 
 See [`examples/config/compose.toml`](https://github.com/biandratti/huginn-proxy/blob/master/examples/config/compose.toml) and [`compose.yaml`](https://github.com/biandratti/huginn-proxy/blob/master/examples/config/compose.yaml) on GitHub for complete examples.

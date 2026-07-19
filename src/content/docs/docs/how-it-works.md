@@ -1,6 +1,6 @@
 ---
 title: How it works
-description: Request path, proxy-only vs proxy+agent, fingerprint timing, trust boundary. Beta.
+description: Request path, proxy-only vs proxy+agent, fingerprint timing, trust boundary.
 sidebar:
   order: 3
 ---
@@ -9,10 +9,10 @@ Traffic enters the proxy listener (plain or TLS). The first matching **route** w
 
 ## With or without the eBPF agent
 
-You can run **only the proxy** or **the proxy plus the eBPF agent** — they are different operational setups (Compose files and images are not interchangeable). Details: [Containers](/huginn-proxy/docs/containers/).
+You can run **only the proxy** or **the proxy plus the eBPF agent**: they are different operational setups (Compose files and images are not interchangeable). Details: [Containers](/huginn-proxy/docs/containers/).
 
-- **Proxy alone** (typical “plain” image / single service): TLS and HTTP/2 are terminated in-process; **JA4** and **HTTP/2 (Akamai)** headers are produced here when enabled. There is **no** TCP SYN capture — no `x-tcp-p0f` from the kernel path.
-- **Proxy + agent**: a **sidecar** loads XDP, pins maps, and records SYNs; the proxy **reads** those maps and adds **`x-tcp-p0f`**. Needs Linux (e.g. kernel ≥ 5.11), bpffs, and the extra privileges described in [eBPF TCP setup](/huginn-proxy/docs/ebpf-setup/).
+- **Proxy alone** (typical “plain” image / single service): TLS and HTTP/2 are terminated in-process; **JA4** and **HTTP/2 (Akamai)** headers are produced here when enabled. There is **no** TCP SYN capture (no `x-tcp-p0f` from the kernel path).
+- **Proxy + agent**: a **sidecar** loads an eBPF capture program (XDP or TC), pins maps, and records SYNs; the proxy **reads** those maps and adds **`x-tcp-p0f`**. Needs Linux (e.g. kernel ≥ 5.11), bpffs, and the extra privileges described in [eBPF TCP setup](/huginn-proxy/docs/ebpf-setup/).
 
 JA4 and Akamai always come from the **proxy process**; only the SYN fingerprint depends on the **agent**.
 

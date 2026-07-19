@@ -1,6 +1,6 @@
 ---
 title: Quick start
-description: "Full example with all options and latest image, on GitHub. Beta."
+description: "Full example with all options and latest image, on GitHub."
 sidebar:
   order: 2
 ---

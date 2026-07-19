@@ -1,6 +1,6 @@
 ---
 title: Artifacts
-description: Published container images on GHCR and release binaries. Beta.
+description: Published container images on GHCR and release binaries.
 sidebar:
   order: 29
 ---
@@ -15,9 +15,9 @@ Runtime images are published for `linux/amd64` and `linux/arm64`. There are **th
 
 | Image | Base | User | Capabilities |
 | --- | --- | --- | --- |
-| `ghcr.io/biandratti/huginn-proxy:latest` | `debian:trixie-slim` (Debian 13) | `10001` | Proxy (eBPF build) — reads pinned maps — `CAP_BPF` |
+| `ghcr.io/biandratti/huginn-proxy:latest` | `debian:trixie-slim` (Debian 13) | `10001` | Proxy (eBPF build); reads pinned maps; `CAP_BPF` |
 | `ghcr.io/biandratti/huginn-proxy-plain:latest` | `debian:trixie-slim` (Debian 13) | `10001` | Proxy without eBPF in the binary |
-| `ghcr.io/biandratti/huginn-proxy-ebpf-agent:latest` | `debian:trixie-slim` (Debian 13) | `root` | Agent loads XDP — `CAP_BPF` `CAP_NET_ADMIN` `CAP_PERFMON` |
+| `ghcr.io/biandratti/huginn-proxy-ebpf-agent:latest` | `debian:trixie-slim` (Debian 13) | `root` | Agent loads XDP/TC; `CAP_BPF` `CAP_NET_ADMIN` `CAP_PERFMON` |
 
 Replace `:latest` with `:vX.Y.Z` to pin a release.
 
@@ -29,8 +29,8 @@ Replace `:latest` with `:vX.Y.Z` to pin a release.
 | `huginn-proxy` | `aarch64-unknown-linux-musl` | Linux | arm64 | musl (static) | No |
 | `huginn-proxy` | `x86_64-unknown-linux-gnu-ebpf` | Linux | amd64 | glibc | Yes (reader) |
 | `huginn-proxy` | `aarch64-unknown-linux-gnu-ebpf` | Linux | arm64 | glibc | Yes (reader) |
-| `huginn-proxy` | `x86_64-apple-darwin` | macOS | amd64 | — | No |
-| `huginn-proxy` | `aarch64-apple-darwin` | macOS | arm64 | — | No |
+| `huginn-proxy` | `x86_64-apple-darwin` | macOS | amd64 | - | No |
+| `huginn-proxy` | `aarch64-apple-darwin` | macOS | arm64 | - | No |
 | `huginn-ebpf-agent` | `x86_64-unknown-linux-gnu-ebpf-agent` | Linux | amd64 | glibc | Yes (loader) |
 | `huginn-ebpf-agent` | `aarch64-unknown-linux-gnu-ebpf-agent` | Linux | arm64 | glibc | Yes (loader) |
 
@@ -39,7 +39,7 @@ Replace `:latest` with `:vX.Y.Z` to pin a release.
 
 ## Where to download
 
-- **[GitHub Releases](https://github.com/biandratti/huginn-proxy/releases)** — attached files on each tag.
-- **Actions** — workflow **Release** for that tag → **Artifacts** (ZIP per platform).
+- **[GitHub Releases](https://github.com/biandratti/huginn-proxy/releases)**: attached files on each tag.
+- **Actions**: workflow **Release** for that tag → **Artifacts** (ZIP per platform).
 
 Images stay on **GHCR**; they are not attached as files on the Releases page.

@@ -18,7 +18,7 @@ const github = 'https://github.com/biandratti/huginn-proxy';
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<meta
 			name="description"
-			content="Huginn Proxy: high-performance passive fingerprinting (TLS, HTTP/2, TCP SYN) via Huginn Net parsers. MIT/Apache for proxy and signature path. Beta."
+			content="Huginn Proxy: high-performance passive fingerprinting (TLS, HTTP/2, TCP SYN) via Huginn Net parsers. MIT/Apache for proxy and signature path."
 		/>
 		<title>Huginn Proxy</title>
 		<link rel="icon" type="image/x-icon" href={`${base}favicon.ico`} />
@@ -72,11 +72,11 @@ const github = 'https://github.com/biandratti/huginn-proxy';
 						<tbody>
 						<tr>
 							<td><code>x-tls-ja4</code> (+ <code>-r</code> / <code>-o</code> / <code>-or</code>)</td>
-							<td>TLS ClientHello — FoxIO-LLC JA4 family (hashed &amp; raw variants)</td>
+							<td>TLS ClientHello: FoxIO-LLC JA4 family (hashed &amp; raw variants)</td>
 						</tr>
 						<tr>
 							<td><code>x-tls-ja4-sv1</code> (+ <code>-sv1r</code>)</td>
-							<td>TLS ClientHello — stable JA4 (ephemeral extensions excluded)</td>
+							<td>TLS ClientHello: stable JA4 (ephemeral extensions excluded)</td>
 						</tr>
 							<tr>
 								<td><code>x-http2-akamai</code></td>
@@ -84,7 +84,7 @@ const github = 'https://github.com/biandratti/huginn-proxy';
 							</tr>
 							<tr>
 								<td><code>x-tcp-p0f</code></td>
-								<td>TCP SYN via eBPF/XDP when enabled</td>
+								<td>TCP SYN via eBPF (XDP or TC) when enabled</td>
 							</tr>
 						</tbody>
 					</table>
@@ -100,7 +100,6 @@ const github = 'https://github.com/biandratti/huginn-proxy';
 					Huginn Proxy is dual-licensed under the <a href={`${github}/blob/master/LICENSE-MIT`}>MIT License</a> or the
 					<a href={`${github}/blob/master/LICENSE-APACHE`}>Apache License 2.0</a>, at your option.
 				</p>
-				<p>This software is beta quality: behavior and configuration may change between releases.</p>
 			</footer>
 		</div>
 	</body>

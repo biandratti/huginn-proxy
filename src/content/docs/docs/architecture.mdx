@@ -1,13 +1,13 @@
 ---
 title: Architecture
-description: How the reverse proxy and the eBPF stack relate. Beta.
+description: How the reverse proxy and the eBPF stack relate.
 sidebar:
   order: 40
 ---
 
 import ArchitectureDiagram from '../../../components/ArchitectureDiagram.astro';
 
-High-level view: HTTP/TLS traffic goes through **Huginn Proxy** to your backends. For TCP SYN signatures, a separate **agent** loads XDP and pins maps; the proxy only **reads** those maps (it does not load eBPF itself).
+High-level view: HTTP/TLS traffic goes through **Huginn Proxy** to your backends. For TCP SYN signatures, a separate **agent** loads an eBPF capture program (XDP or TC) and pins maps; the proxy only **reads** those maps (it does not load eBPF itself).
 
 <ArchitectureDiagram />
 

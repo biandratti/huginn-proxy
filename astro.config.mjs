@@ -34,7 +34,7 @@ export default defineConfig({
 			},
 			title: 'Huginn Proxy',
 			description:
-				'High-performance reverse proxy with passive fingerprints via Huginn Net (MIT/Apache). Beta.',
+				'High-performance reverse proxy with passive fingerprints via Huginn Net (MIT/Apache).',
 			titleDelimiter: '·',
 			tagline: releaseTag,
 			logo: {
