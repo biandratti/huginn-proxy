@@ -7,7 +7,8 @@ const releasePath = join(process.cwd(), 'src/data/release-version.json');
 const { tag: releaseTag } = JSON.parse(readFileSync(releasePath, 'utf8'));
 
 const base = import.meta.env.BASE_URL;
-const docs = `${base}docs/getting-started/`;
+const docs = `${base}docs/`;
+const quickStart = `${base}docs/quick-example/`;
 const github = 'https://github.com/biandratti/huginn-proxy';
 ---
 
@@ -18,10 +19,12 @@ const github = 'https://github.com/biandratti/huginn-proxy';
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<meta
 			name="description"
-			content="Huginn Proxy: high-performance passive fingerprinting (TLS, HTTP/2, TCP SYN) via Huginn Net parsers. MIT/Apache for proxy and signature path. Beta."
+			content="Huginn Proxy: 100% open source reverse proxy with passive TLS, HTTP/2, and TCP SYN (eBPF) fingerprints (MIT/Apache, including the signature path)."
 		/>
 		<title>Huginn Proxy</title>
-		<link rel="icon" type="image/x-icon" href={`${base}favicon.ico`} />
+		<link rel="icon" href={`${base}favicon.ico`} sizes="any" />
+		<link rel="apple-touch-icon" sizes="180x180" href={`${base}apple-touch-icon.png`} />
+		<link rel="manifest" href={`${base}site.webmanifest`} />
 		<link rel="preconnect" href="https://fonts.googleapis.com" />
 		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 		<link
@@ -37,21 +40,21 @@ const github = 'https://github.com/biandratti/huginn-proxy';
 						<span class="hp-badge">{releaseTag}</span>
 						<h1 class="hp-title">Huginn Proxy</h1>
 						<p class="hp-tagline">
-							High-performance reverse proxy: passive TLS, HTTP/2, and TCP SYN fingerprints, injected as trusted headers for your backends.
+							High-performance reverse proxy: passive TLS, HTTP/2, and TCP SYN (eBPF) fingerprints, injected as trusted headers for your backends.
 						</p>
 						<p class="hp-lede">
-							Fingerprints are parsed by{' '}
-							<a href="https://github.com/biandratti/huginn-net">Huginn Net</a>. The entire signature path carries
-							the same MIT/Apache terms as the proxy itself. Use it in any commercial product without a separate
-							licensing deal for the fingerprint logic.
+							<strong>100% open source.</strong> Fingerprints come from{' '}
+							<a href="https://github.com/biandratti/huginn-net">Huginn Net</a>; proxy and signature path are both
+							MIT/Apache. No proprietary fingerprint stack, no extra license for commercial use.
 						</p>
 						<div class="hp-actions">
-							<a class="hp-btn hp-btn--ghost" href={github}>View on GitHub</a>
-							<a class="hp-btn hp-btn--ghost" href={`${base}docs/`}>Documentation</a>
+							<a class="hp-btn hp-btn--primary" href={docs}>Documentation</a>
+							<a class="hp-btn hp-btn--ghost" href={quickStart}>Quick start</a>
+							<a class="hp-btn hp-btn--ghost" href={github}>GitHub</a>
 						</div>
 					</div>
 					<div class="hp-hero-img">
-						<img src={`${base}huginn-proxy.png`} alt="Huginn Proxy" width="280" height="280" />
+						<img src={`${base}android-chrome-512x512.png`} alt="Huginn Proxy" width="280" height="280" />
 					</div>
 				</div>
 			</header>
@@ -70,21 +73,21 @@ const github = 'https://github.com/biandratti/huginn-proxy';
 							</tr>
 						</thead>
 						<tbody>
-						<tr>
-							<td><code>x-tls-ja4</code> (+ <code>-r</code> / <code>-o</code> / <code>-or</code>)</td>
-							<td>TLS ClientHello — FoxIO-LLC JA4 family (hashed &amp; raw variants)</td>
-						</tr>
-						<tr>
-							<td><code>x-tls-ja4-sv1</code> (+ <code>-sv1r</code>)</td>
-							<td>TLS ClientHello — stable JA4 (ephemeral extensions excluded)</td>
-						</tr>
+							<tr>
+								<td><code>x-tls-ja4</code> (+ <code>-r</code> / <code>-o</code> / <code>-or</code>)</td>
+								<td>TLS ClientHello: FoxIO-LLC JA4 family (hashed &amp; raw variants)</td>
+							</tr>
+							<tr>
+								<td><code>x-tls-ja4-sv1</code> (+ <code>-sv1r</code>)</td>
+								<td>TLS ClientHello: stable JA4 (ephemeral extensions excluded)</td>
+							</tr>
 							<tr>
 								<td><code>x-http2-akamai</code></td>
 								<td>HTTP/2 only</td>
 							</tr>
 							<tr>
 								<td><code>x-tcp-p0f</code></td>
-								<td>TCP SYN via eBPF/XDP when enabled</td>
+								<td>TCP SYN via eBPF (XDP or TC) when enabled</td>
 							</tr>
 						</tbody>
 					</table>
@@ -100,7 +103,6 @@ const github = 'https://github.com/biandratti/huginn-proxy';
 					Huginn Proxy is dual-licensed under the <a href={`${github}/blob/master/LICENSE-MIT`}>MIT License</a> or the
 					<a href={`${github}/blob/master/LICENSE-APACHE`}>Apache License 2.0</a>, at your option.
 				</p>
-				<p>This software is beta quality: behavior and configuration may change between releases.</p>
 			</footer>
 		</div>
 	</body>

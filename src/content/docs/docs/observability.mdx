@@ -1,11 +1,11 @@
 ---
 title: Observability
-description: Run Prometheus and Grafana alongside Huginn Proxy to visualize metrics and health. Beta.
+description: Run Prometheus and Grafana alongside Huginn Proxy to visualize metrics and health.
 sidebar:
   order: 32
 ---
 
-A pre-built **Prometheus + Grafana** stack ships with the repo. Grafana is pre-provisioned with a data source and a dashboard — no manual import or configuration needed.
+A pre-built **Prometheus + Grafana** stack ships with the repo. Grafana is pre-provisioned with a data source and a dashboard. No manual import or configuration needed.
 
 Dashboard JSON: [`examples/grafana/dashboards/huginn-proxy.json`](https://github.com/biandratti/huginn-proxy/blob/master/examples/grafana/dashboards/huginn-proxy.json).
 
@@ -17,8 +17,8 @@ Dashboard JSON: [`examples/grafana/dashboards/huginn-proxy.json`](https://github
 
 The **main proxy stack** must already be running and exposing ports on the host:
 
-- **`9090`** — proxy metrics (`/metrics`, `/health`, `/ready`, `/live`)
-- **`9091`** — eBPF agent metrics (only when using the TCP SYN stack)
+- **`9090`**: proxy metrics (`/metrics`, `/health`, `/ready`, `/live`)
+- **`9091`**: eBPF agent metrics (only when using the TCP SYN stack)
 
 Prometheus reaches both via `host.docker.internal` from inside the observability containers.
 
@@ -58,7 +58,7 @@ This starts **Prometheus** and **Grafana** as a separate Compose project. They s
 | **Config hot reload** | Reload success/error rate, time since last successful reload, active config hash |
 | **eBPF agent** | Agent up, TCP SYN captured / insert failures / malformed (when eBPF stack is running) |
 
-Full PromQL for each panel: **[TELEMETRY.md — Grafana Dashboard Suggestions](https://github.com/biandratti/huginn-proxy/blob/master/TELEMETRY.md#grafana-dashboard-suggestions)**.
+Full PromQL for each panel: **[TELEMETRY.md: Grafana Dashboard Suggestions](https://github.com/biandratti/huginn-proxy/blob/master/TELEMETRY.md#grafana-dashboard-suggestions)**.
 
 ---
 
@@ -68,15 +68,15 @@ The observability Compose file already wires this up. For custom deployments:
 
 ```yaml
 scrape_configs:
-  - job_name: huginn-proxy
-    static_configs:
-      - targets: ["localhost:9090"]
-    scrape_interval: 15s
+ - job_name: huginn-proxy
+ static_configs:
+ - targets: ["localhost:9090"]
+ scrape_interval: 15s
 
-  - job_name: huginn-ebpf-agent
-    static_configs:
-      - targets: ["localhost:9091"]
-    scrape_interval: 15s
+ - job_name: huginn-ebpf-agent
+ static_configs:
+ - targets: ["localhost:9091"]
+ scrape_interval: 15s
 ```
 
 Adjust hosts to your Docker/Kubernetes networking. See [Telemetry](/huginn-proxy/docs/telemetry/) for the full metric reference.

@@ -1,6 +1,6 @@
 ---
 title: Fingerprinting
-description: TLS JA4, HTTP/2 Akamai, and TCP SYN headers. Beta.
+description: TLS JA4, HTTP/2 Akamai, and TCP SYN headers.
 sidebar:
   order: 6
 ---
@@ -106,7 +106,7 @@ tcp_enabled = true
 
 **Constraints**
 
-- Linux with XDP/eBPF; not available on macOS or Windows for this path.
+- Linux with eBPF (XDP or TC); not available on macOS or Windows for this path.
 - Typically **one signature per TCP connection**, reused across HTTP requests on that connection.
 
 ## Per-route toggle
@@ -119,13 +119,15 @@ Example: fingerprints on `/api`, but not on `/static`:
   <TabItem label="YAML">
 
 ```yaml
-routes:
-  - prefix: "/api"
-    backend: "api:9000"
-    fingerprinting: true
-  - prefix: "/static"
-    backend: "cdn:9000"
-    fingerprinting: false
+domains:
+  - host: "example.com"
+    routes:
+      - prefix: "/api"
+        backend: "api:9000"
+        fingerprinting: true
+      - prefix: "/static"
+        backend: "cdn:9000"
+        fingerprinting: false
 
 fingerprint:
   tls_enabled: true
@@ -138,15 +140,18 @@ fingerprint:
   <TabItem label="TOML">
 
 ```toml
-[[routes]]
-prefix = "/api"
-backend = "api:9000"
-fingerprinting = true
+[[domains]]
+host = "example.com"
 
-[[routes]]
-prefix = "/static"
-backend = "cdn:9000"
-fingerprinting = false
+  [[domains.routes]]
+  prefix = "/api"
+  backend = "api:9000"
+  fingerprinting = true
+
+  [[domains.routes]]
+  prefix = "/static"
+  backend = "cdn:9000"
+  fingerprinting = false
 
 [fingerprint]
 tls_enabled = true

@@ -1,13 +1,13 @@
 ---
 title: IP filtering
-description: Allowlist and denylist by CIDR under [security.ip_filter]. Hot-reloadable. Beta.
+description: Allowlist and denylist by CIDR under [security.ip_filter]. Hot-reloadable.
 sidebar:
   order: 7
 ---
 
 import { Tabs, TabItem } from '@astrojs/starlight/components';
 
-The **`[security.ip_filter]`** block controls which client IPs may connect, using IPv4/IPv6 **CIDR** ranges. **Dynamic** — changes apply on reload without restarting the process.
+The **`[security.ip_filter]`** block controls which client IPs may connect, using IPv4/IPv6 **CIDR** ranges. **Dynamic**: changes apply on reload without restarting the process.
 
 There is **no** GeoIP or ASN filtering in the proxy itself.
 
@@ -20,71 +20,71 @@ There is **no** GeoIP or ASN filtering in the proxy itself.
 ## Disabled (default in many examples)
 
 <Tabs syncKey="huginn-config">
-  <TabItem label="YAML">
+ <TabItem label="YAML">
 
 ```yaml
 security:
-  ip_filter:
-    mode: "disabled"
+ ip_filter:
+ mode: "disabled"
 ```
 
-  </TabItem>
-  <TabItem label="TOML">
+ </TabItem>
+ <TabItem label="TOML">
 
 ```toml
 [security.ip_filter]
 mode = "disabled"
 ```
 
-  </TabItem>
+ </TabItem>
 </Tabs>
 
 ## Allowlist (only these networks can reach the proxy)
 
 <Tabs syncKey="huginn-config">
-  <TabItem label="YAML">
+ <TabItem label="YAML">
 
 ```yaml
 security:
-  ip_filter:
-    mode: "allowlist"
-    allowlist:
-      - "127.0.0.1/32"
-      - "::1/128"
-      - "10.0.0.0/8"
+ ip_filter:
+ mode: "allowlist"
+ allowlist:
+ - "127.0.0.1/32"
+ - "::1/128"
+ - "10.0.0.0/8"
 ```
 
-  </TabItem>
-  <TabItem label="TOML">
+ </TabItem>
+ <TabItem label="TOML">
 
 ```toml
 [security.ip_filter]
 mode = "allowlist"
 allowlist = [
-  "127.0.0.1/32",
-  "::1/128",
-  "10.0.0.0/8",
+ "127.0.0.1/32",
+ "::1/128",
+ "10.0.0.0/8",
 ]
 ```
 
-  </TabItem>
+ </TabItem>
 </Tabs>
 
 ## Denylist (block specific ranges)
 
 <Tabs syncKey="huginn-config">
-  <TabItem label="YAML">
+ <TabItem label="YAML">
 
 ```yaml
 security:
-  ip_filter:
-    mode: "denylist"
-    denylist:
-      - "198.51.100.0/24"
+ ip_filter:
+ mode: "denylist"
+ denylist:
+ - "198.51.100.0/24"
 ```
 
-  </TabItem>
-  <TabItem label="TOML">
+ </TabItem>
+ <TabItem label="TOML">
 
 ```toml
 [security.ip_filter]
@@ -92,7 +92,7 @@ mode = "denylist"
 denylist = ["198.51.100.0/24"]
 ```
 
-  </TabItem>
+ </TabItem>
 </Tabs>
 
 ## Related

@@ -7,21 +7,21 @@ sidebar:
 
 import { Tabs, TabItem } from '@astrojs/starlight/components';
 
-The **`[logging]`** section configures application logging. **Static** — the logger is initialized once at startup.
+The **`[logging]`** section configures application logging. **Static**: the logger is initialized once at startup.
 
 The **`level`** can be overridden with the **`RUST_LOG`** environment variable.
 
 <Tabs syncKey="huginn-config">
-  <TabItem label="YAML">
+ <TabItem label="YAML">
 
 ```yaml
 logging:
-  level: "info"
-  show_target: false
+ level: "info"
+ show_target: false
 ```
 
-  </TabItem>
-  <TabItem label="TOML">
+ </TabItem>
+ <TabItem label="TOML">
 
 ```toml
 [logging]
@@ -29,7 +29,7 @@ level = "info"
 show_target = false
 ```
 
-  </TabItem>
+ </TabItem>
 </Tabs>
 
 | Key | Default | Description |

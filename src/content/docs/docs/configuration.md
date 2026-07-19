@@ -1,6 +1,6 @@
 ---
 title: Configuration overview
-description: Single config file in TOML or YAML, validation, reload behavior, and links to each section. Beta.
+description: Single config file in TOML or YAML, strict validation, effective config, reload behavior, and links to each section.
 sidebar:
   order: 1
 ---
@@ -20,20 +20,31 @@ huginn-proxy --validate config.toml
 huginn-proxy --validate config.yaml
 ```
 
-**Hot reload:** dynamic sections update on `SIGHUP` or a file-watcher trigger without dropping connections. Static sections require a process restart — changes are logged as a warning and ignored. See the [SETTINGS.md](https://github.com/biandratti/huginn-proxy/blob/master/SETTINGS.md) reference on GitHub for the static/dynamic split per section.
+Print the validated, **effective** configuration as deterministic JSON (implies `--validate`, then exits):
+
+```bash
+huginn-proxy --print-effective-config config.toml
+huginn-proxy --validate --print-effective-config config.yaml
+```
+
+Includes defaults, normalizations, and fallbacks. Header values and CSP policy are replaced with `<redacted>`; certificate/key/CA paths appear only as configured/not-configured booleans. Diagnostics go to stderr so stdout stays valid JSON for `jq` or CI.
+
+**Strict keys:** unknown or misplaced keys are rejected at every nesting level during startup, `--validate`, and hot reload (they are never silently ignored). This catches typos and YAML indentation mistakes; a failed reload keeps the currently active config.
+
+**Hot reload:** dynamic sections update on `SIGHUP` or a file-watcher trigger without dropping connections. Static sections require a process restart. Changes are logged as a warning and ignored. See the [SETTINGS.md](https://github.com/biandratti/huginn-proxy/blob/master/SETTINGS.md) reference on GitHub for the static/dynamic split per section.
 
 ## Environment variables
 
-These apply to the **`huginn-proxy`** process. They do **not** change how TOML vs YAML is detected: that is always from the **config file path** you pass (positional argument or `HUGINN_CONFIG_PATH`) — extension `.yaml` / `.yml` → YAML, `.toml` or other → TOML.
+These apply to the **`huginn-proxy`** process. They do **not** change how TOML vs YAML is detected: that is always from the **config file path** you pass (positional argument or `HUGINN_CONFIG_PATH`): extension `.yaml` / `.yml` → YAML, `.toml` or other → TOML.
 
 | Variable | Role |
 | --- | --- |
 | `HUGINN_CONFIG_PATH` | Path to the config file when you do **not** pass it as the sole CLI argument (equivalent to `huginn-proxy /path/to/config`). |
-| `HUGINN_WATCH` | Set to `true` to enable a **file watcher** so config (and other reloadable files, e.g. TLS PEMs) can refresh without sending `SIGHUP`. |
-| `HUGINN_WATCH_DELAY_SECS` | Debounce delay in **seconds** after a file change before reload (avoids thrashing on editors that rewrite often). |
-| `RUST_LOG` | Overrides log filtering at the Rust tracing layer; can override `[logging].level` — see [Logging](/huginn-proxy/docs/logging/). |
+| `HUGINN_WATCH` | Set to `true` to enable a **file watcher** so config (and TLS PEMs via config reload) can refresh without sending `SIGHUP`. |
+| `HUGINN_WATCH_DELAY_SECS` | Debounce delay in **seconds** after a file change before reload (avoids thrashing on editors that rewrite often). Default `60`. |
+| `RUST_LOG` | Overrides log filtering at the Rust tracing layer; can override `[logging].level`. See [Logging](/huginn-proxy/docs/logging/). |
 
-**eBPF (TCP SYN path):** when the proxy uses pinned BPF maps, it also reads **`HUGINN_EBPF_PIN_PATH`** and **`HUGINN_EBPF_SYN_MAP_MAX_ENTRIES`** — they must match the agent. Documented in [eBPF TCP setup](/huginn-proxy/docs/ebpf-setup/#environment-variables).
+**eBPF (TCP SYN path):** when the proxy uses pinned BPF maps, it reads **`HUGINN_EBPF_PIN_PATH`** (must match the agent) and optionally **`HUGINN_EBPF_RECONNECT_POLL_SECS`**. Map capacity (`HUGINN_EBPF_SYN_MAP_MAX_ENTRIES`) is **agent-only**: the proxy reads it from the pinned `syn_meta` map. Capture backend (`HUGINN_EBPF_CAPTURE`: `xdp-native` / `xdp-skb` / `tc`) is **agent-only**. See [eBPF TCP setup](/huginn-proxy/docs/ebpf-setup/#environment-variables).
 
 Canonical field tables and copy-paste snippets: **[SETTINGS.md](https://github.com/biandratti/huginn-proxy/blob/master/SETTINGS.md)** (same content as the shipped reference in the repo).
 
@@ -47,8 +58,8 @@ Rough split: **static** blocks need a process restart to take effect; **dynamic*
 
 | Key | Page / notes |
 | --- | --- |
-| `[listen]` | [Listen](/huginn-proxy/docs/listen/) |
-| `[tls]` | [TLS](/huginn-proxy/docs/tls/) — transport options only; cert/key paths are per domain |
+| `[listen]` | [Listen](/huginn-proxy/docs/listen/) (including `proxy_protocol`) |
+| `[tls]` | [TLS](/huginn-proxy/docs/tls/) (transport options only; cert/key paths are per domain) |
 | `[fingerprint]` | [Fingerprinting](/huginn-proxy/docs/fingerprinting/) |
 | `[timeout]` | [Timeout](/huginn-proxy/docs/timeout/) |
 | `[logging]` | [Logging](/huginn-proxy/docs/logging/) |
@@ -58,21 +69,21 @@ Rough split: **static** blocks need a process restart to take effect; **dynamic*
 
 | Key | Page / notes |
 | --- | --- |
-| `preserve_host` | Top-level bool — [Routes](/huginn-proxy/docs/routes/) (forwarding `Host` upstream) |
+| `preserve_host` | Top-level bool: [Routes](/huginn-proxy/docs/routes/) (forwarding `Host` upstream) |
 | `[[backends]]` | [Backends](/huginn-proxy/docs/backends/) |
-| `[[domains]]` | [Routes](/huginn-proxy/docs/routes/) — hostname matching, TLS certs, nested routes |
-| `[security.trusted_proxies]` | [Security](/huginn-proxy/docs/security/) — global CIDR list for XFF client-IP resolution |
+| `[[domains]]` | [Routes](/huginn-proxy/docs/routes/) (hostname matching, TLS certs, nested routes) |
+| `[security.trusted_proxies]` | [Security](/huginn-proxy/docs/security/) (global CIDR list for XFF / PROXY client-IP resolution) |
 | `[security.ip_filter]` | [IP filtering](/huginn-proxy/docs/ip-filtering/) |
 | `[security.rate_limit]` | [Rate limiting](/huginn-proxy/docs/rate-limiting/) |
-| `[security.headers]` | [Security](/huginn-proxy/docs/security/) (HSTS, CSP, custom — reloadable) |
+| `[security.headers]` | [Security](/huginn-proxy/docs/security/) (HSTS, CSP, custom: reloadable) |
 | `[headers]` | [Headers](/huginn-proxy/docs/headers/) |
 | `[backend_pool]` | [Backends](/huginn-proxy/docs/backends/#backend-pool) |
 
-**`[security]`** also includes **`max_connections`** ([Security](/huginn-proxy/docs/security/)), which is **static** — restart required. Treat **`[security]`** as mixed: use the pages above for each subsection.
+**`[security]`** also includes **`max_connections`** ([Security](/huginn-proxy/docs/security/)), which is **static** (restart required). Treat **`[security]`** as mixed; use the pages above for each subsection.
 
 ## Scope and override summary
 
-Security policies and headers can be set at three scopes — **global**, **domain**, and **route** — and each policy has its own override semantics:
+Security policies and headers can be set at three scopes (**global**, **domain**, and **route**), and each policy has its own override semantics:
 
 | Policy | Global | Domain | Route | Semantics |
 | --- | --- | --- | --- | --- |
@@ -84,7 +95,7 @@ Security policies and headers can be set at three scopes — **global**, **domai
 | `trusted_proxies` | yes | no | no | Global only |
 | `max_connections` | yes | no | no | Global only (static) |
 
-**Whole-block replace:** the most specific scope that defines a block wins entirely. A partial override drops the parent’s other keys — for example, a route `rate_limit` with only `requests_per_second` and no `enabled = true` **disables** rate limiting for that route. Re-state every key you need.
+**Whole-block replace:** the most specific scope that defines a block wins entirely. A partial override drops the parent's other keys. For example, a route `rate_limit` with only `requests_per_second` and no `enabled = true` **disables** rate limiting for that route. Re-state every key you need.
 
 **Additive cascade:** global, domain, and route headers accumulate in order; for a given header name the most specific scope wins.
 

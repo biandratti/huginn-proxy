@@ -1,6 +1,6 @@
 ---
 title: Rate limiting
-description: Token-bucket limits globally and per domain/route. Beta.
+description: Token-bucket limits globally and per domain/route.
 sidebar:
   order: 8
 ---
@@ -9,7 +9,7 @@ import { Tabs, TabItem } from '@astrojs/starlight/components';
 
 Token-bucket rate limits live under **`[security.rate_limit]`** (global), **`[domains.security.rate_limit]`** (per domain), and **`[domains.routes.security.rate_limit]`** (per route). **Dynamic.**
 
-Per-domain and per-route blocks are **whole-block replaces** — the most specific scope that defines a `rate_limit` block replaces the parent's block entirely. There is no field-level inheritance.
+Per-domain and per-route blocks are **whole-block replaces**: the most specific scope that defines a `rate_limit` block replaces the parent's block entirely. There is no field-level inheritance.
 
 See [`examples/config/rate-limit-example.toml`](https://github.com/biandratti/huginn-proxy/blob/master/examples/config/rate-limit-example.toml) on GitHub for a full file.
 
@@ -17,7 +17,7 @@ See [`examples/config/rate-limit-example.toml`](https://github.com/biandratti/hu
 
 Key **`limit_by`** values:
 
-- **`ip`:** client IP (resolved from `X-Forwarded-For` when `[security].trusted_proxies` is set — see below)
+- **`ip`:** client IP (resolved from `X-Forwarded-For` when `[security].trusted_proxies` is set; see below)
 - **`header`:** value of a named header (`limit_by_header`)
 - **`route`:** shared limit per route path
 - **`combined`:** IP + route
@@ -29,67 +29,67 @@ Responses use **429** when exceeded. Counters are **in-memory** and **per proces
 When the proxy sits behind a trusted load balancer, set **`[security].trusted_proxies`** (a global CIDR list) so `limit_by = "ip"` and `"combined"` resolve the real client IP from `X-Forwarded-For` instead of the proxy's IP:
 
 <Tabs syncKey="huginn-config">
-  <TabItem label="YAML">
+ <TabItem label="YAML">
 
 ```yaml
 security:
-  trusted_proxies:
-    - "10.0.0.0/8"
-    - "172.16.0.0/12"
-  rate_limit:
-    enabled: true
-    requests_per_second: 500
-    burst: 1000
-    limit_by: "ip"
+ trusted_proxies:
+ - "10.0.0.0/8"
+ - "172.16.0.0/12"
+ rate_limit:
+ enabled: true
+ requests_per_second: 500
+ burst: 1000
+ limit_by: "ip"
 ```
 
-  </TabItem>
-  <TabItem label="TOML">
+ </TabItem>
+ <TabItem label="TOML">
 
 ```toml
 [security]
 trusted_proxies = ["10.0.0.0/8", "172.16.0.0/12"]
 
 [security.rate_limit]
-enabled             = true
+enabled = true
 requests_per_second = 500
-burst               = 1000
-limit_by            = "ip"
+burst = 1000
+limit_by = "ip"
 ```
 
-  </TabItem>
+ </TabItem>
 </Tabs>
 
-`trusted_proxies` is **global only** — it is a property of the network topology, not of any individual domain or route.
+`trusted_proxies` is **global only**: it is a property of the network topology, not of any individual domain or route.
 
 ## Global default
 
 <Tabs syncKey="huginn-config">
-  <TabItem label="YAML">
+ <TabItem label="YAML">
 
 ```yaml
 security:
-  rate_limit:
-    enabled: true
-    requests_per_second: 1000
-    burst: 2000
-    window_seconds: 1
-    limit_by: "ip"
+ rate_limit:
+ enabled: true
+ requests_per_second: 1000
+ burst: 2000
+ window_seconds: 1
+ limit_by: "ip"
 ```
 
-  </TabItem>
-  <TabItem label="TOML">
+ </TabItem>
+ <TabItem label="TOML">
 
 ```toml
 [security.rate_limit]
-enabled             = true
+enabled = true
 requests_per_second = 1000
-burst               = 2000
-window_seconds      = 1
-limit_by            = "ip"
+burst = 2000
+window_seconds = 1
+limit_by = "ip"
 ```
 
-  </TabItem>
+ </TabItem>
 </Tabs>
 
 ## Per-domain override
@@ -97,34 +97,34 @@ limit_by            = "ip"
 The domain block **replaces** the global rate-limit config entirely for all requests that match this domain.
 
 <Tabs syncKey="huginn-config">
-  <TabItem label="YAML">
+ <TabItem label="YAML">
 
 ```yaml
 domains:
-  - host: "api.example.com"
-    security:
-      rate_limit:
-        enabled: true
-        requests_per_second: 50
-        burst: 100
-        limit_by: "combined"
+ - host: "api.example.com"
+ security:
+ rate_limit:
+ enabled: true
+ requests_per_second: 50
+ burst: 100
+ limit_by: "combined"
 ```
 
-  </TabItem>
-  <TabItem label="TOML">
+ </TabItem>
+ <TabItem label="TOML">
 
 ```toml
 [[domains]]
 host = "api.example.com"
 
 [domains.security.rate_limit]
-enabled             = true
+enabled = true
 requests_per_second = 50
-burst               = 100
-limit_by            = "combined"
+burst = 100
+limit_by = "combined"
 ```
 
-  </TabItem>
+ </TabItem>
 </Tabs>
 
 ## Per-route override
@@ -132,83 +132,83 @@ limit_by            = "combined"
 The route block **replaces** the domain (or global) rate-limit config for requests matching this route.
 
 <Tabs syncKey="huginn-config">
-  <TabItem label="YAML">
+ <TabItem label="YAML">
 
 ```yaml
 domains:
-  - host: "api.example.com"
-    routes:
-      - prefix: "/api"
-        backend: "backend-a:9000"
-        security:
-          rate_limit:
-            enabled: true
-            requests_per_second: 50
-            burst: 100
-            limit_by: "combined"
-      - prefix: "/public"
-        backend: "backend-b:9000"
-        security:
-          rate_limit:
-            enabled: false
+ - host: "api.example.com"
+ routes:
+ - prefix: "/api"
+ backend: "backend-a:9000"
+ security:
+ rate_limit:
+ enabled: true
+ requests_per_second: 50
+ burst: 100
+ limit_by: "combined"
+ - prefix: "/public"
+ backend: "backend-b:9000"
+ security:
+ rate_limit:
+ enabled: false
 ```
 
-  </TabItem>
-  <TabItem label="TOML">
+ </TabItem>
+ <TabItem label="TOML">
 
 ```toml
 [[domains]]
 host = "api.example.com"
 
-  [[domains.routes]]
-  prefix  = "/api"
-  backend = "backend-a:9000"
+ [[domains.routes]]
+ prefix = "/api"
+ backend = "backend-a:9000"
 
-  [domains.routes.security.rate_limit]
-  enabled             = true
-  requests_per_second = 50
-  burst               = 100
-  limit_by            = "combined"
+ [domains.routes.security.rate_limit]
+ enabled = true
+ requests_per_second = 50
+ burst = 100
+ limit_by = "combined"
 
-  [[domains.routes]]
-  prefix  = "/public"
-  backend = "backend-b:9000"
+ [[domains.routes]]
+ prefix = "/public"
+ backend = "backend-b:9000"
 
-  [domains.routes.security.rate_limit]
-  enabled = false   # disable for this route
+ [domains.routes.security.rate_limit]
+ enabled = false # disable for this route
 ```
 
-  </TabItem>
+ </TabItem>
 </Tabs>
 
 ## Rate limit by header
 
 <Tabs syncKey="huginn-config">
-  <TabItem label="YAML">
+ <TabItem label="YAML">
 
 ```yaml
 security:
-  rate_limit:
-    enabled: true
-    requests_per_second: 200
-    burst: 400
-    limit_by: "header"
-    limit_by_header: "X-API-Key"
+ rate_limit:
+ enabled: true
+ requests_per_second: 200
+ burst: 400
+ limit_by: "header"
+ limit_by_header: "X-API-Key"
 ```
 
-  </TabItem>
-  <TabItem label="TOML">
+ </TabItem>
+ <TabItem label="TOML">
 
 ```toml
 [security.rate_limit]
-enabled             = true
+enabled = true
 requests_per_second = 200
-burst               = 400
-limit_by            = "header"
-limit_by_header     = "X-API-Key"
+burst = 400
+limit_by = "header"
+limit_by_header = "X-API-Key"
 ```
 
-  </TabItem>
+ </TabItem>
 </Tabs>
 
 ## Related

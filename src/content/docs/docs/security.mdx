@@ -1,6 +1,6 @@
 ---
 title: Security
-description: Connection limits, trusted proxies, response security headers, and per-domain/route overrides. Beta.
+description: Connection limits, trusted proxies, response security headers, and per-domain/route overrides.
 sidebar:
   order: 7
 ---
@@ -13,91 +13,91 @@ The **`[security]`** block groups controls that apply **before** and **around** 
 
 ## Connection limit
 
-**`max_connections`** caps concurrent client connections. **Static** — enforced at the acceptor.
+**`max_connections`** caps concurrent client connections. **Static**: enforced at the acceptor.
 
 <Tabs syncKey="huginn-config">
-  <TabItem label="YAML">
+ <TabItem label="YAML">
 
 ```yaml
 security:
-  max_connections: 512
+ max_connections: 512
 ```
 
-  </TabItem>
-  <TabItem label="TOML">
+ </TabItem>
+ <TabItem label="TOML">
 
 ```toml
 [security]
 max_connections = 512
 ```
 
-  </TabItem>
+ </TabItem>
 </Tabs>
 
 ## Trusted proxies
 
-When the proxy sits behind a load balancer or ingress, client IPs in `X-Forwarded-For` can be trusted for real-IP resolution. **`trusted_proxies`** is a global CIDR list — it applies to **all** requests and is **not** overridable per domain or route.
+When the proxy sits behind a load balancer or ingress, client IPs in `X-Forwarded-For` can be trusted for real-IP resolution. **`trusted_proxies`** is a global CIDR list: it applies to **all** requests and is **not** overridable per domain or route.
 
-When set and the peer IP is in this list, the proxy walks `X-Forwarded-For` right-to-left and uses the first IP **not** in the trusted list as the real client IP. This real IP drives rate limiting (`limit_by = "ip"` or `"combined"`) and IP filtering.
+When set and the peer IP is in this list, the proxy walks `X-Forwarded-For` right-to-left and uses the first IP **not** in the trusted list as the real client IP. This real IP drives rate limiting (`limit_by = "ip"` or `"combined"`) and IP filtering. The same list gates [PROXY protocol](/huginn-proxy/docs/listen/#proxy-protocol) headers: only trusted peers may supply a PROXY address.
 
 When empty (default), the non-forgeable TCP peer IP is used directly. **Dynamic** (hot-reloadable).
 
 <Tabs syncKey="huginn-config">
-  <TabItem label="YAML">
+ <TabItem label="YAML">
 
 ```yaml
 security:
-  trusted_proxies:
-    - "10.0.0.0/8"
-    - "172.16.0.0/12"
+ trusted_proxies:
+ - "10.0.0.0/8"
+ - "172.16.0.0/12"
 ```
 
-  </TabItem>
-  <TabItem label="TOML">
+ </TabItem>
+ <TabItem label="TOML">
 
 ```toml
 [security]
 trusted_proxies = ["10.0.0.0/8", "172.16.0.0/12"]
 ```
 
-  </TabItem>
+ </TabItem>
 </Tabs>
 
 ## Security headers
 
-HSTS, CSP, and custom headers attach to **responses**. The global `[security.headers]` block applies to all responses. Per-domain and per-route overrides use the same shape inside `[domains.security.headers]` and `[domains.routes.security.headers]` respectively — each is a **whole-block replace**: the most specific scope that defines a `security.headers` block replaces the parent's block entirely (no field-level merge).
+HSTS, CSP, and custom headers attach to **responses**. The global `[security.headers]` block applies to all responses. Per-domain and per-route overrides use the same shape inside `[domains.security.headers]` and `[domains.routes.security.headers]` respectively: each is a **whole-block replace**: the most specific scope that defines a `security.headers` block replaces the parent's block entirely (no field-level merge).
 
 **Example (global):**
 
 <Tabs syncKey="huginn-config">
-  <TabItem label="YAML">
+ <TabItem label="YAML">
 
 ```yaml
 security:
-  headers:
-    custom:
-      - name: "X-Frame-Options"
-        value: "DENY"
-      - name: "X-Content-Type-Options"
-        value: "nosniff"
-    hsts:
-      enabled: true
-      max_age: 31536000
-      include_subdomains: false
-      preload: false
-    csp:
-      enabled: true
-      policy: "default-src 'self'; script-src 'self' 'unsafe-inline'"
+ headers:
+ custom:
+ - name: "X-Frame-Options"
+ value: "DENY"
+ - name: "X-Content-Type-Options"
+ value: "nosniff"
+ hsts:
+ enabled: true
+ max_age: 31536000
+ include_subdomains: false
+ preload: false
+ csp:
+ enabled: true
+ policy: "default-src 'self'; script-src 'self' 'unsafe-inline'"
 ```
 
-  </TabItem>
-  <TabItem label="TOML">
+ </TabItem>
+ <TabItem label="TOML">
 
 ```toml
 [security.headers]
 custom = [
-  { name = "X-Frame-Options", value = "DENY" },
-  { name = "X-Content-Type-Options", value = "nosniff" },
+ { name = "X-Frame-Options", value = "DENY" },
+ { name = "X-Content-Type-Options", value = "nosniff" },
 ]
 
 [security.headers.hsts]
@@ -111,71 +111,71 @@ enabled = true
 policy = "default-src 'self'; script-src 'self' 'unsafe-inline'"
 ```
 
-  </TabItem>
+ </TabItem>
 </Tabs>
 
 ### Header cascade vs. security headers
 
 There are two header mechanisms with **different semantics**:
 
-- **`[headers]` (add/remove) — additive cascade.** Global → domain → route accumulate; for a given header name, the most specific scope wins. Nothing is replaced wholesale.
-- **`security.headers` — whole-block replace.** Like `ip_filter` and `rate_limit`, the most specific scope that defines the block replaces the parent entirely. Setting `security.headers` on a route silently drops any global or domain `security.headers` for that route.
+- **`[headers]` (add/remove): additive cascade.** Global → domain → route accumulate; for a given header name, the most specific scope wins. Nothing is replaced wholesale.
+- **`security.headers`: whole-block replace.** Like `ip_filter` and `rate_limit`, the most specific scope that defines the block replaces the parent entirely. Setting `security.headers` on a route silently drops any global or domain `security.headers` for that route.
 
 Use `[headers]` for free-form request/response plumbing; use `security.headers` as a security policy you intend to define completely at a given scope.
 
 ## Per-domain and per-route security overrides
 
-`ip_filter`, `rate_limit`, and `security.headers` can be overridden at the domain and route levels. Each override is a **whole-block replace** — it does not merge with the global config.
+`ip_filter`, `rate_limit`, and `security.headers` can be overridden at the domain and route levels. Each override is a **whole-block replace**: it does not merge with the global config.
 
 <Tabs syncKey="huginn-config">
-  <TabItem label="YAML">
+ <TabItem label="YAML">
 
 ```yaml
 domains:
-  - host: "api.example.com"
-    security:
-      ip_filter:
-        mode: "allowlist"
-        allowlist: ["10.0.0.0/8"]
-      rate_limit:
-        enabled: true
-        requests_per_second: 50
-        burst: 100
-        limit_by: "ip"
-    routes:
-      - prefix: "/internal"
-        backend: "backend-a:9000"
-        security:
-          rate_limit:
-            enabled: false   # this route is exempt
+ - host: "api.example.com"
+ security:
+ ip_filter:
+ mode: "allowlist"
+ allowlist: ["10.0.0.0/8"]
+ rate_limit:
+ enabled: true
+ requests_per_second: 50
+ burst: 100
+ limit_by: "ip"
+ routes:
+ - prefix: "/internal"
+ backend: "backend-a:9000"
+ security:
+ rate_limit:
+ enabled: false # this route is exempt
 ```
 
-  </TabItem>
-  <TabItem label="TOML">
+ </TabItem>
+ <TabItem label="TOML">
 
 ```toml
 [[domains]]
 host = "api.example.com"
 
 [domains.security.ip_filter]
-mode      = "allowlist"
+mode = "allowlist"
 allowlist = ["10.0.0.0/8"]
 
 [domains.security.rate_limit]
-enabled              = true
-requests_per_second  = 50
-burst                = 100
-limit_by             = "ip"
+enabled = true
+requests_per_second = 50
+burst = 100
+limit_by = "ip"
 
-  [[domains.routes]]
-  prefix  = "/internal"
-  backend = "backend-a:9000"
+ [[domains.routes]]
+ prefix = "/internal"
+ backend = "backend-a:9000"
 
-  [domains.routes.security.rate_limit]
-  enabled = false   # this route is exempt
+ [domains.routes.security.rate_limit]
+ enabled = false # this route is exempt
 ```
 
-  </TabItem>
+ </TabItem>
 </Tabs>
 
 ## Forwarding headers

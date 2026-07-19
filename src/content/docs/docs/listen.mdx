@@ -1,42 +1,64 @@
 ---
 title: Listen
-description: Bind addresses and TCP backlog. Beta.
+description: Bind addresses, TCP backlog, and PROXY protocol.
 sidebar:
   order: 2
 ---
 
 import { Tabs, TabItem } from '@astrojs/starlight/components';
 
-The **`[listen]`** section controls where the proxy accepts client connections. **Static** — changing it requires a process restart.
+The **`[listen]`** section controls where the proxy accepts client connections. **Static**: changing it requires a process restart.
 
 ## Fields
 
 - **`addrs`:** list of socket addresses (IPv4 and/or IPv6), for example `0.0.0.0:7000` and `[::]:7000` for dual-stack.
 - **`tcp_backlog`:** listen queue depth (default **`4096`**).
+- **`proxy_protocol`:** optional PROXY protocol v1/v2 support when huginn sits behind a trusted L4 load balancer (see below).
 
 ## Example
 
 <Tabs syncKey="huginn-config">
-  <TabItem label="YAML">
+ <TabItem label="YAML">
 
 ```yaml
 listen:
-  addrs:
-    - "0.0.0.0:7000"
-    - "[::]:7000"
-  # tcp_backlog: 4096
+ addrs:
+ - "0.0.0.0:7000"
+ - "[::]:7000"
+ # tcp_backlog: 4096
+ # proxy_protocol:
+ # mode: off # off | optional | require
+ # header_timeout_ms: 100
 ```
 
-  </TabItem>
-  <TabItem label="TOML">
+ </TabItem>
+ <TabItem label="TOML">
 
 ```toml
 [listen]
 addrs = ["0.0.0.0:7000", "[::]:7000"]
 # tcp_backlog = 4096
+
+# [listen.proxy_protocol]
+# mode = "off" # off | optional | require
+# header_timeout_ms = 100
 ```
 
-  </TabItem>
+ </TabItem>
 </Tabs>
+
+## PROXY protocol
+
+When an L4 load balancer prepends a [PROXY protocol](https://www.haproxy.org/download/2.0/doc/proxy-protocol.txt) header (HAProxy, nginx stream, AWS NLB, Envoy, …), huginn can recover the real client `(src_ip, src_port)`. That address is used for `X-Forwarded-For` / `X-Forwarded-Port`, rate limiting, IP filtering, eBPF SYN lookup, and logs.
+
+| `mode` | Behavior |
+| --- | --- |
+| `off` (default) | Never read a PROXY header; peer is always the TCP socket peer. |
+| `optional` | If a **trusted** peer sends a header, use it; otherwise treat as a direct client. |
+| `require` | A **trusted** peer **must** send a valid header, else the connection is dropped. |
+
+A header is honored **only** from peers in [`security.trusted_proxies`](/huginn-proxy/docs/security/#trusted-proxies). With an empty list, `optional` behaves like `off`, and `require` drops every connection (fail-closed).
+
+`header_timeout_ms` (default `100`) bounds how long a trusted peer may sit waiting for the header. Both **v1** (text) and **v2** (binary) are auto-detected.
 
 See [Configuration overview](/huginn-proxy/docs/configuration/) for the full config layout.

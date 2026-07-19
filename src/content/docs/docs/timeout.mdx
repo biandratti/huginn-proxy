@@ -7,7 +7,7 @@ sidebar:
 
 import { Tabs, TabItem } from '@astrojs/starlight/components';
 
-The **`[timeout]`** section sets connection timeouts and graceful shutdown behavior. **Static** — applied at startup.
+The **`[timeout]`** section sets connection timeouts and graceful shutdown behavior. **Static**: applied at startup.
 
 | Key | Default | Description |
 | --- | --- | --- |
@@ -18,22 +18,22 @@ The **`[timeout]`** section sets connection timeouts and graceful shutdown behav
 | `shutdown_secs` | `30` | Graceful shutdown window. |
 
 <Tabs syncKey="huginn-config">
-  <TabItem label="YAML">
+ <TabItem label="YAML">
 
 ```yaml
 timeout:
-  upstream_connect_ms: 5000
-  proxy_idle_ms: 60000
-  tls_handshake_secs: 15
-  connection_handling_secs: 300
-  shutdown_secs: 30
-  keep_alive:
-    enabled: true
-    upstream_idle_timeout: 60
+ upstream_connect_ms: 5000
+ proxy_idle_ms: 60000
+ tls_handshake_secs: 15
+ connection_handling_secs: 300
+ shutdown_secs: 30
+ keep_alive:
+ enabled: true
+ upstream_idle_timeout: 60
 ```
 
-  </TabItem>
-  <TabItem label="TOML">
+ </TabItem>
+ <TabItem label="TOML">
 
 ```toml
 [timeout]
@@ -48,7 +48,7 @@ enabled = true
 upstream_idle_timeout = 60
 ```
 
-  </TabItem>
+ </TabItem>
 </Tabs>
 
 ### `[timeout.keep_alive]`
