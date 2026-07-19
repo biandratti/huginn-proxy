@@ -16,10 +16,9 @@ Inspired by production-grade proxies like [Pingora](https://github.com/cloudflar
 
 ## Scope and limitations
 
-Huginn Proxy is built for **passive fingerprinting** and a small set of production hardening features, not feature parity with general-purpose load balancers. Before you invest time, be aware of the rough edges (this list will grow as we document more):
+Huginn Proxy focuses on **passive fingerprinting** and a small set of hardening features, not feature parity with Nginx/Traefik. Current rough edges:
 
-- **TLS (per-domain certificates):** each `[[domains]]` entry carries its own `cert_path` / `key_path`. SNI-based certificate selection across domains is supported; the catch-all domain (no `host`) acts as the default certificate for unmatched-SNI or no-SNI connections.
-- **TLS (certificate management):** there is **no built-in ACME** (Let's Encrypt), internal CA, or automatic issuance; many other proxies integrate that. You point config at files that **some other process** issues and renews (Kubernetes cert-manager, systemd timers, acme.sh, Vault, manual installs, etc.). Cert PEMs are re-read on **config reload** (SIGHUP or config-file watch), not by watching the cert files alone. See [TLS certificate rotation](/huginn-proxy/docs/tls/#certificate-rotation).
-- **Load balancing:** simple **round-robin** when a route references more than one backend address. There are **no** in-proxy health checks, least-connections, or weights. The design assumes an **orchestrator** (Kubernetes, Nomad, Docker Compose, etc.) or another layer owns **replicas, health, and failover**. If you run bare VMs without that, plan for health and failover **outside** this proxy (see [Routes](/huginn-proxy/docs/routes/) for the longer story).
+- **No built-in ACME:** certificates are files on disk (`cert_path` / `key_path` per domain). Another process issues and renews them (cert-manager, acme.sh, Vault, etc.). PEMs reload on **config reload**, not by watching cert files alone. See [TLS](/huginn-proxy/docs/tls/).
+- **Load balancing:** round-robin across backend addresses on a route. Optional active [`health_check`](/huginn-proxy/docs/backends/#health-checks). No least-connections or weights; many setups still leave replicas and failover to an orchestrator (see [Routes](/huginn-proxy/docs/routes/)).
 
-It is the current **scope**. If you **need an additional feature** (TLS, routing, balancing, ops, etc.), open an [**issue on GitHub**](https://github.com/biandratti/huginn-proxy/issues/new) and describe the **requirements and constraints** (environment, scale, must-haves vs nice-to-haves). That gives maintainers something concrete to evaluate; there is no guarantee of priority or implementation.
+If you **need an additional feature**, open an [**issue on GitHub**](https://github.com/biandratti/huginn-proxy/issues/new) with requirements and constraints.

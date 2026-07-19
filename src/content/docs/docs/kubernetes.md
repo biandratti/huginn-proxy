@@ -7,6 +7,8 @@ sidebar:
 
 > **Huginn Proxy is not a Kubernetes Ingress controller.** There is no Helm chart, CRD, or Ingress class. You run it as a normal workload (Deployment or DaemonSet) with raw manifests.
 
+This setup has been tested and runs in Kubernetes today. The same ideas apply outside Kubernetes: any environment where you can run the proxy as a container or process, plus (for TCP SYN) one eBPF agent per host with shared bpffs (Docker Compose, Nomad, bare metal, etc.).
+
 Images and capabilities: [Artifacts](/huginn-proxy/docs/artifacts/). Capture backends, env vars, and privileges: [eBPF TCP setup](/huginn-proxy/docs/ebpf-setup/).
 
 ## How it scales
