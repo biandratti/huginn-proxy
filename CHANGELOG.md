@@ -7,6 +7,39 @@ follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [uncoming]
+
+### Added
+
+- **Config validation warnings + `--validate --strict`.** Config loading audits for likely mistakes
+  and logs non-fatal warnings (boot, `--validate`, hot reload): duplicate/contradictory header
+  manipulation, security overrides that drop parent protection, over-broad `trusted_proxies` ranges,
+  and `proxy_protocol` with no trusted peer. `--validate` prints a warning count; `--strict` exits
+  non-zero on any warning. See `SETTINGS.md`.
+
+### Breaking changes
+
+- **`[security].trusted_proxies` is now a table** (`cidrs` + `insecure`). `insecure = true` replaces
+  listing `0.0.0.0/0`; a `/0` CIDR still works but warns.
+
+  ```toml
+  [security.trusted_proxies]
+  cidrs = ["10.0.0.0/8", "192.168.0.0/16"]
+  insecure = false   # trust every peer; default false
+  ```
+
+- **Filesystem watch moved to `[reload]`; `--watch`/`--watch-delay-secs` flags and
+  `HUGINN_WATCH`/`HUGINN_WATCH_DELAY_SECS` env vars removed.** Watch now defaults to `true`; set
+  `watch = false` to disable. See `SETTINGS.md`.
+
+  ```toml
+  [reload]
+  watch = true
+  debounce_secs = 60
+  ```
+
+---
+
 ## [0.0.3-beta.0]
 
 ### Added

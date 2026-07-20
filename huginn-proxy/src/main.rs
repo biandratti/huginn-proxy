@@ -22,9 +22,25 @@ use tracing::info;
 type BoxError = Box<dyn std::error::Error + Send + Sync>;
 
 #[derive(Parser)]
-#[command(name = "huginn-proxy", about = "High-performance reverse proxy")]
+#[command(
+    name = "huginn-proxy",
+    version,
+    about = "High-performance reverse proxy",
+    long_about = "High-performance reverse proxy with passive client fingerprinting (TLS JA4, \
+HTTP/2 Akamai, TCP SYN), TLS termination, hot-reload config, and Prometheus metrics.",
+    after_help = "EXAMPLES:\n  \
+huginn-proxy config.toml                              Start the proxy\n  \
+huginn-proxy --validate config.toml                  Validate the config, then exit\n  \
+huginn-proxy --validate --strict config.toml         Validate and fail on any warning\n  \
+huginn-proxy --print-effective-config config.toml    Print the effective, secret-redacted config as JSON\n\n\
+ENVIRONMENT:\n  \
+HUGINN_CONFIG_PATH   Config file path (alternative to the CONFIG argument)\n  \
+RUST_LOG             Override the log level at runtime (e.g. RUST_LOG=debug)\n\n\
+Filesystem hot reload is configured in the [reload] section of the config file (watch on by default).\n\
+Run --help to see all options."
+)]
 struct Cli {
-    /// Path to the TOML configuration file
+    /// Path to the TOML or YAML configuration file
     #[arg(value_name = "CONFIG", env = "HUGINN_CONFIG_PATH")]
     config_path: PathBuf,
 
@@ -36,13 +52,9 @@ struct Cli {
     #[arg(long)]
     print_effective_config: bool,
 
-    /// Enable filesystem watching for config and TLS certificate hot reload
-    #[arg(long, env = "HUGINN_WATCH")]
-    watch: bool,
-
-    /// Debounce delay in seconds before applying a reload after a file-change event
-    #[arg(long, default_value = "60", env = "HUGINN_WATCH_DELAY_SECS")]
-    watch_delay_secs: u32,
+    /// With --validate/--print-effective-config, exit non-zero if any config warnings are found
+    #[arg(long)]
+    strict: bool,
 }
 
 #[tokio::main]
@@ -51,7 +63,7 @@ async fn main() -> Result<(), BoxError> {
     let validation_mode = cli.validate || cli.print_effective_config;
 
     if validation_mode {
-        return validation::run(&cli.config_path, cli.print_effective_config);
+        return validation::run(&cli.config_path, cli.print_effective_config, cli.strict);
     }
 
     let config = load_from_path(&cli.config_path)?;
@@ -117,8 +129,8 @@ async fn main() -> Result<(), BoxError> {
 
     let watch_opts = WatchOptions {
         config_path: Some(cli.config_path.clone()),
-        watch: cli.watch,
-        watch_delay_secs: cli.watch_delay_secs,
+        watch: static_cfg.reload.watch,
+        debounce_secs: static_cfg.reload.debounce_secs,
     };
 
     // run() broadcasts shutdown_tx on SIGTERM/SIGINT and awaits

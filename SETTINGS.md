@@ -612,6 +612,12 @@ domains:
 
 Global header manipulation applied to every request/response. **Dynamic** (hot-reloadable).
 
+> **Validation:** header names are case-insensitive and `add` uses last-wins semantics, so listing
+> the same name twice in one `add` list (per scope, per request/response), or adding and removing the
+> same name in one block, emits a non-fatal warning during `--validate`, startup, and reload. The
+> same duplicate check applies to `[security.headers].custom`. Overriding the same header across
+> scopes (global → domain → route) is intentional and is not warned.
+
 ### `[headers.request]`
 
 | Key      | Type                     | Default | Description                                                            |
@@ -1024,6 +1030,54 @@ telemetry:
 
 ---
 
+## `[reload]`
+
+Filesystem-watch / hot-reload controls. **Static** — read once at startup; changing these requires a restart. Reloading
+via `SIGHUP` works regardless of this section.
+
+When watching is enabled, the proxy watches the config file and the TLS certificate/key files and applies changes without
+dropping connections. A burst of writes is coalesced into a single reload once changes have been quiet for `debounce_secs`.
+
+| Key             | Type    | Default | Description                                                                                                        |
+|-----------------|---------|---------|------------------------------------------------------------------------------------------------------------------|
+| `watch`         | bool    | `true`  | Watch the config file and TLS cert/key files, hot-reloading them on change.                                        |
+| `debounce_secs` | integer | `60`    | Seconds a file must be quiet before a detected change is applied (trailing-edge debounce). Only used when `watch = true`. |
+
+> **Note:** These settings live only in the config file. There is no CLI flag or environment variable for them.
+
+<table>
+<thead>
+<tr>
+<th>TOML</th>
+<th>YAML</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td valign="top">
+
+```toml
+[reload]
+watch = true
+debounce_secs = 60
+```
+
+</td>
+<td valign="top">
+
+```yaml
+reload:
+  watch: true
+  debounce_secs: 60
+```
+
+</td>
+</tr>
+</tbody>
+</table>
+
+---
+
 ## `[timeout]`
 
 Connection timeout controls. **Static** — applied once at startup; the connection pool and acceptor are built with these
@@ -1170,7 +1224,23 @@ backend_pool:
 | Key               | Type         | Default | Description                                                                         |
 |-------------------|--------------|---------|-------------------------------------------------------------------------------------|
 | `max_connections` | integer      | `512`   | Maximum concurrent client connections. **Static** — enforced at the acceptor level. |
-| `trusted_proxies` | string array | `[]`    | Trusted reverse-proxy CIDRs used to resolve the real client IP from `X-Forwarded-For`. **Global only** — a property of the network topology, *not* overridable per domain/route. When empty (default), the non-forgeable TCP peer IP is used. When set and the peer is a trusted proxy, XFF is walked right-to-left and the first IP **not** in this list is used. Consumed by rate limiting (`limit_by = "ip" \| "combined"`). **Dynamic** (hot-reloadable). Accepts CIDR notation. |
+| `trusted_proxies` | table        | `{}`    | Trusted reverse-proxy configuration for real-client-IP resolution. **Global only** — a property of the network topology, *not* overridable per domain/route. **Dynamic** (hot-reloadable). See sub-keys below. |
+
+#### `[security.trusted_proxies]`
+
+| Key        | Type         | Default | Description                                                                          |
+|------------|--------------|---------|--------------------------------------------------------------------------------------|
+| `cidrs`    | string array | `[]`    | Trusted reverse-proxy CIDRs. When empty (default), the non-forgeable TCP peer IP is used. When set and the peer is a trusted proxy, `X-Forwarded-For` is walked right-to-left and the first IP **not** in this list is used. Consumed by rate limiting (`limit_by = "ip" \| "combined"`) and PROXY protocol. Accepts CIDR notation. |
+| `insecure` | boolean      | `false` | Trust **every** peer, regardless of `cidrs` (Traefik-style). Dangerous: any client can then spoof `X-Forwarded-For` and the PROXY protocol header. Set to `true` to opt in deliberately (e.g. behind a controlled L4 LB); this also silences the trust-all config warning. |
+
+> **Validation:** `trusted_proxies` is the trust boundary for `X-Forwarded-For` and the PROXY protocol
+> header — a peer inside it may declare the real client address. On load, `--validate`, and every hot
+> reload the proxy logs a non-fatal warning if a `cidrs` entry is **trust-all** (`0.0.0.0/0` or `::/0`;
+> anyone can then spoof the client IP) or a **very broad public range** (IPv4 broader than `/8` or IPv6
+> broader than `/7`). Standard private/reserved ranges (`10/8`, `172.16/12`, `192.168/16`, `fc00::/7`,
+> `fe80::/10`) never warn. Set `insecure = true` to silence the trust-all warning when it is intentional.
+> These are warnings, not errors: loading still succeeds. With `huginn-proxy --validate --strict`, any
+> config warning makes validation exit non-zero (useful in CI).
 
 <table>
 <thead>
@@ -1186,8 +1256,10 @@ backend_pool:
 ```toml
 [security]
 max_connections = 512
+
 # Trusted load balancers in front of the proxy; recover the real client IP from XFF.
-trusted_proxies = ["10.0.0.0/8", "172.16.0.0/12"]
+[security.trusted_proxies]
+cidrs = ["10.0.0.0/8", "172.16.0.0/12"]
 ```
 
 </td>
@@ -1198,8 +1270,9 @@ security:
   max_connections: 512
   # Trusted load balancers in front of the proxy; recover the real client IP from XFF.
   trusted_proxies:
-    - "10.0.0.0/8"
-    - "172.16.0.0/12"
+    cidrs:
+      - "10.0.0.0/8"
+      - "172.16.0.0/12"
 ```
 
 </td>
@@ -1387,8 +1460,8 @@ security:
 # Rate limit by real client IP behind a trusted load balancer.
 # The client IP is resolved from the GLOBAL `[security].trusted_proxies`
 # (walking XFF right-to-left); without it the TCP peer IP is used.
-[security]
-trusted_proxies = ["10.0.0.0/8", "172.16.0.0/12"]
+[security.trusted_proxies]
+cidrs = ["10.0.0.0/8", "172.16.0.0/12"]
 
 [security.rate_limit]
 enabled = true
@@ -1406,8 +1479,9 @@ limit_by = "ip"
 # (walking XFF right-to-left); without it the TCP peer IP is used.
 security:
   trusted_proxies:
-    - "10.0.0.0/8"
-    - "172.16.0.0/12"
+    cidrs:
+      - "10.0.0.0/8"
+      - "172.16.0.0/12"
   rate_limit:
     enabled: true
     requests_per_second: 500

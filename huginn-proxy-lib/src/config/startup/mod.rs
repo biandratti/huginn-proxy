@@ -1,5 +1,6 @@
 pub mod fingerprinting;
 pub mod listen;
+pub mod reload;
 pub mod telemetry;
 pub mod timeout;
 pub mod tls;
@@ -8,12 +9,14 @@ use serde::Serialize;
 
 pub use fingerprinting::FingerprintConfig;
 pub use listen::{ListenConfig, ProxyProtocolConfig, ProxyProtocolMode};
+pub use reload::ReloadConfig;
 pub use telemetry::{LoggingConfig, TelemetryConfig};
 pub use timeout::{KeepAliveConfig, TimeoutConfig};
 pub use tls::{ClientAuth, SessionResumptionConfig, TlsConfig, TlsOptions, TlsVersion};
 
 use fingerprinting::FingerprintView;
 use listen::ListenView;
+use reload::ReloadView;
 use telemetry::{LoggingView, TelemetryView};
 use timeout::TimeoutView;
 use tls::{effective_tls_view, TlsView};
@@ -37,6 +40,8 @@ pub struct StaticConfig {
     pub timeout: TimeoutConfig,
     /// Telemetry / metrics configuration
     pub telemetry: TelemetryConfig,
+    /// Filesystem-watch / hot-reload configuration
+    pub reload: ReloadConfig,
     /// Maximum concurrent connections (from \[security\] in TOML)
     pub max_connections: usize,
 }
@@ -51,6 +56,7 @@ pub(crate) struct StaticView<'a> {
     logging: LoggingView<'a>,
     timeout: TimeoutView,
     telemetry: TelemetryView<'a>,
+    reload: ReloadView,
     max_connections: usize,
 }
 
@@ -63,6 +69,7 @@ impl StaticConfig {
             logging: self.logging.effective_view(),
             timeout: self.timeout.effective_view(),
             telemetry: self.telemetry.effective_view(),
+            reload: self.reload.effective_view(),
             max_connections: self.max_connections,
         }
     }

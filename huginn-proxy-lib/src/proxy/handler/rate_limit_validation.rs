@@ -1,10 +1,9 @@
 use http::StatusCode;
 use hyper::Response;
-use ipnet::IpNet;
 use std::sync::Arc;
 use tracing::debug;
 
-use crate::config::RateLimitConfig;
+use crate::config::{RateLimitConfig, TrustedProxiesConfig};
 use crate::proxy::router::RouteMatch;
 use crate::security::{extract_rate_limit_key, RateLimitManager, RateLimitResult};
 use crate::telemetry::Metrics;
@@ -24,7 +23,7 @@ pub fn check_rate_limit(
     headers: &http::HeaderMap,
     metrics: &Arc<Metrics>,
     domain: &str,
-    trusted_proxies: &[IpNet],
+    trusted_proxies: &TrustedProxiesConfig,
 ) -> Option<Response<RespBody>> {
     let manager = rate_limit_manager?;
 

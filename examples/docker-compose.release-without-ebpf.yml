@@ -10,6 +10,9 @@ services:
       # - HUGINN_CONFIG_PATH=/config/compose.toml
       - HUGINN_CONFIG_PATH=/config/compose.yaml
       - RUST_LOG=${RUST_LOG:-info}
+      # DEPRECATED: read only by the previously published release image. The current
+      # code moved watch/debounce to the config file ([reload] section, watch=true by
+      # default). Kept for the pinned release image; remove in the next release.
       - HUGINN_WATCH=true
       - HUGINN_WATCH_DELAY_SECS=10
     volumes:

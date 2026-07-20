@@ -118,7 +118,7 @@ pub fn write_toml(
 pub async fn spawn_proxy(
     config_path: &Path,
     watch: bool,
-    watch_delay_secs: u32,
+    debounce_secs: u32,
 ) -> Result<(SocketAddr, tokio::task::AbortHandle), Box<dyn std::error::Error + Send + Sync>> {
     let config = load_from_path(config_path)?;
     let listen_addr = config.listen.addrs[0];
@@ -135,7 +135,7 @@ pub async fn spawn_proxy(
             dynamic_cfg,
             Metrics::new_noop(),
             None,
-            WatchOptions { config_path: Some(config_path_buf), watch, watch_delay_secs },
+            WatchOptions { config_path: Some(config_path_buf), watch, debounce_secs },
             shutdown_tx,
             huginn_proxy_lib::Readiness::new(),
         )
