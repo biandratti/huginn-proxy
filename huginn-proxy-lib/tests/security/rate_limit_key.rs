@@ -1,14 +1,20 @@
-use huginn_proxy_lib::config::LimitBy;
+use huginn_proxy_lib::config::{LimitBy, TrustedProxiesConfig};
 use huginn_proxy_lib::security::extract_rate_limit_key;
-use ipnet::IpNet;
 
 fn peer(s: &str) -> std::net::SocketAddr {
     s.parse()
         .unwrap_or_else(|_| std::net::SocketAddr::from(([0, 0, 0, 0], 0)))
 }
 
-fn nets(cidrs: &[&str]) -> Vec<IpNet> {
-    cidrs.iter().filter_map(|s| s.parse().ok()).collect()
+fn nets(cidrs: &[&str]) -> TrustedProxiesConfig {
+    TrustedProxiesConfig {
+        cidrs: cidrs.iter().filter_map(|s| s.parse().ok()).collect(),
+        insecure: false,
+    }
+}
+
+fn none() -> TrustedProxiesConfig {
+    TrustedProxiesConfig::default()
 }
 
 fn headers_with_xff(xff: &str) -> http::HeaderMap {
@@ -19,24 +25,39 @@ fn headers_with_xff(xff: &str) -> http::HeaderMap {
     h
 }
 
-fn key_ip(peer_addr: std::net::SocketAddr, headers: &http::HeaderMap, proxies: &[IpNet]) -> String {
+fn key_ip(
+    peer_addr: std::net::SocketAddr,
+    headers: &http::HeaderMap,
+    proxies: &TrustedProxiesConfig,
+) -> String {
     extract_rate_limit_key(LimitBy::Ip, peer_addr, "/", None, headers, proxies)
 }
 
 #[test]
 fn ip_no_trusted_uses_peer() {
     // No trusted_proxies → always peer IP, even with XFF present.
-    assert_eq!(key_ip(peer("1.2.3.4:1234"), &headers_with_xff("9.9.9.9"), &[]), "1.2.3.4");
+    assert_eq!(key_ip(peer("1.2.3.4:1234"), &headers_with_xff("9.9.9.9"), &none()), "1.2.3.4");
 }
 
 #[test]
 fn ip_spoof_rotation_pinned_to_peer() {
     // Client rotates XFF values, result never changes without trusted_proxies.
-    let proxies: &[IpNet] = &[];
+    let proxies = none();
     let p = peer("1.2.3.4:1234");
     for xff in &["10.0.0.1", "172.16.0.1", "203.0.113.5, 10.0.0.1"] {
-        assert_eq!(key_ip(p, &headers_with_xff(xff), proxies), "1.2.3.4");
+        assert_eq!(key_ip(p, &headers_with_xff(xff), &proxies), "1.2.3.4");
     }
+}
+
+#[test]
+fn ip_insecure_trusts_all_falls_back_to_peer() {
+    // `insecure = true` trusts every peer and every XFF hop, so (like an explicit 0.0.0.0/0
+    // entry) resolution falls back to the TCP peer IP.
+    let proxies = TrustedProxiesConfig { cidrs: vec![], insecure: true };
+    assert_eq!(
+        key_ip(peer("8.8.8.8:80"), &headers_with_xff("203.0.113.5"), &proxies),
+        "8.8.8.8"
+    );
 }
 
 #[test]
@@ -116,7 +137,7 @@ fn combined_no_trusted_uses_peer() {
         "/api",
         None,
         &headers_with_xff("9.9.9.9"),
-        &[],
+        &none(),
     );
     assert_eq!(key, "1.2.3.4:/api");
 }
@@ -148,7 +169,7 @@ fn header_strategy_unchanged() {
         "/",
         Some("x-api-key"),
         &h,
-        &[],
+        &none(),
     );
     assert_eq!(key, "secret-token");
 }
@@ -161,7 +182,7 @@ fn route_strategy_unchanged() {
         "/api",
         None,
         &headers_with_xff("9.9.9.9"),
-        &[],
+        &none(),
     );
     assert_eq!(key, "/api");
 }

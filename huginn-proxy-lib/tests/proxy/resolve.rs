@@ -1,6 +1,6 @@
 use huginn_proxy_lib::config::{
     Domain, DomainSecurityConfig, HstsConfig, IpFilterConfig, IpFilterMode, RateLimitConfig, Route,
-    RouteSecurityConfig, SecurityHeaders,
+    RouteSecurityConfig, SecurityHeaders, TrustedProxiesConfig,
 };
 use huginn_proxy_lib::proxy::handler::resolve::domain_defers_ip_filter;
 use huginn_proxy_lib::proxy::handler::resolve_security;
@@ -23,7 +23,14 @@ fn headers(max_age: u64) -> SecurityHeaders {
 }
 
 fn ctx(ip_filter: IpFilterConfig, headers: SecurityHeaders) -> SecurityContext {
-    SecurityContext::new(headers, ip_filter, RateLimitConfig::default(), None, None, vec![])
+    SecurityContext::new(
+        headers,
+        ip_filter,
+        RateLimitConfig::default(),
+        None,
+        None,
+        TrustedProxiesConfig::default(),
+    )
 }
 
 fn route(security: Option<RouteSecurityConfig>, fingerprinting: Option<bool>) -> Route {

@@ -2,7 +2,7 @@ use std::net::{IpAddr, SocketAddr};
 use std::str::FromStr;
 use std::time::{Duration, Instant};
 
-use huginn_proxy_lib::config::ProxyProtocolMode;
+use huginn_proxy_lib::config::{ProxyProtocolMode, TrustedProxiesConfig};
 use huginn_proxy_lib::proxy::peer_resolution::resolve_peer;
 use huginn_proxy_lib::telemetry::Metrics;
 use ipnet::IpNet;
@@ -33,8 +33,12 @@ async fn accept_one(
     Ok((stream, peer))
 }
 
-fn localhost_net() -> Result<IpNet, <IpNet as FromStr>::Err> {
-    IpNet::from_str("127.0.0.1/32")
+fn localhost_trusted() -> Result<TrustedProxiesConfig, <IpNet as FromStr>::Err> {
+    Ok(TrustedProxiesConfig { cidrs: vec![IpNet::from_str("127.0.0.1/32")?], insecure: false })
+}
+
+fn no_trust() -> TrustedProxiesConfig {
+    TrustedProxiesConfig::default()
 }
 
 #[tokio::test]
@@ -46,7 +50,7 @@ async fn resolve_peer_off_passthrough() -> TestResult {
         ProxyProtocolMode::Off,
         Duration::from_secs(5),
         &metrics,
-        &[],
+        &no_trust(),
         &mut stream,
         socket_peer,
     )
@@ -65,7 +69,7 @@ async fn resolve_peer_optional_untrusted_passthrough() -> TestResult {
         ProxyProtocolMode::Optional,
         Duration::from_secs(5),
         &metrics,
-        &[],
+        &no_trust(),
         &mut stream,
         socket_peer,
     )
@@ -84,7 +88,7 @@ async fn resolve_peer_require_untrusted_drops() -> TestResult {
         ProxyProtocolMode::Require,
         Duration::from_secs(5),
         &metrics,
-        &[],
+        &no_trust(),
         &mut stream,
         socket_peer,
     )
@@ -99,7 +103,7 @@ async fn resolve_peer_optional_trusted_no_header_passthrough() -> TestResult {
     // 0x16 = TLS record type; neither v1 prefix ('P') nor v2 signature (0x0D).
     let (mut stream, socket_peer) = accept_one(b"\x16\x03\x01").await?;
     let metrics = Metrics::new_noop();
-    let trusted = [localhost_net()?];
+    let trusted = localhost_trusted()?;
 
     let result = resolve_peer(
         ProxyProtocolMode::Optional,
@@ -120,7 +124,7 @@ async fn resolve_peer_optional_trusted_v1_header_recovers_client() -> TestResult
     let header = b"PROXY TCP4 192.168.1.1 10.0.0.2 12345 80\r\n";
     let (mut stream, socket_peer) = accept_one(header).await?;
     let metrics = Metrics::new_noop();
-    let trusted = [localhost_net()?];
+    let trusted = localhost_trusted()?;
 
     let result = resolve_peer(
         ProxyProtocolMode::Optional,
@@ -141,7 +145,7 @@ async fn resolve_peer_optional_trusted_v1_header_recovers_client() -> TestResult
 async fn resolve_peer_require_trusted_no_header_short_timeout_drops() -> TestResult {
     let (mut stream, socket_peer) = accept_one(b"").await?;
     let metrics = Metrics::new_noop();
-    let trusted = [localhost_net()?];
+    let trusted = localhost_trusted()?;
 
     let start = Instant::now();
     let result = resolve_peer(

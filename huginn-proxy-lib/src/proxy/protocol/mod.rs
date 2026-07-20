@@ -34,10 +34,9 @@ pub use v2::{read_proxy_header_v2, V2_SIGNATURE};
 use std::fmt;
 use std::net::{IpAddr, SocketAddr};
 
-use ipnet::IpNet;
 use tracing::{error, warn};
 
-use crate::config::ProxyProtocolMode;
+use crate::config::{ProxyProtocolMode, TrustedProxiesConfig};
 
 /// Errors from reading/parsing a PROXY protocol header.
 #[derive(Debug)]
@@ -111,10 +110,13 @@ pub fn normalize_mapped_ipv4(addr: IpAddr) -> IpAddr {
 /// `trusted_proxies` is dynamic (hot-reloadable), so this is checked both at startup and on each
 /// reload. `off` is a no-op. The classification is shared with the `--validate` audit via
 /// [`crate::config::audit::proxy_protocol::trust_gap`] so runtime and validation never drift.
-pub(crate) fn warn_proxy_protocol_trust_gap(mode: ProxyProtocolMode, trusted_proxies: &[IpNet]) {
+pub(crate) fn warn_proxy_protocol_trust_gap(
+    mode: ProxyProtocolMode,
+    trusted_proxies: &TrustedProxiesConfig,
+) {
     use crate::config::audit::proxy_protocol::{trust_gap, TrustGap};
 
-    match trust_gap(mode, trusted_proxies.is_empty()) {
+    match trust_gap(mode, trusted_proxies.has_trust()) {
         Some(gap @ TrustGap::RequireDropsAll) => error!("{}", gap.message()),
         Some(gap @ TrustGap::OptionalDegradesToOff) => warn!("{}", gap.message()),
         None => {}

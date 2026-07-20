@@ -83,7 +83,7 @@ impl EffectiveConfigSummary {
             route_count,
             backend_count: dynamic_cfg.backends.len(),
             rate_limit_enabled,
-            trusted_proxy_count: dynamic_cfg.security.trusted_proxies.len(),
+            trusted_proxy_count: dynamic_cfg.security.trusted_proxies.cidrs.len(),
             preserve_host: dynamic_cfg.preserve_host,
             max_connections: static_cfg.max_connections,
         }

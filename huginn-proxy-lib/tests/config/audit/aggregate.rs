@@ -19,7 +19,7 @@ listen = { addrs = ["127.0.0.1:0"] }
 backends = [{ address = "backend:9000" }]
 
 [security]
-trusted_proxies = ["0.0.0.0/0"]
+trusted_proxies = { cidrs = ["0.0.0.0/0"] }
 
 [security.rate_limit]
 enabled = true

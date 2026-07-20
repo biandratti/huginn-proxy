@@ -170,8 +170,8 @@ fn config_toml(listen_port: u16, backend: SocketAddr, mode: &str, trusted: &str)
         r#"listen = {{ addrs = ["127.0.0.1:{listen_port}"], proxy_protocol = {{ mode = "{mode}" }} }}
 backends = [{{ address = "{backend}" }}]
 
-[security]
-trusted_proxies = [{trusted}]
+[security.trusted_proxies]
+cidrs = [{trusted}]
 
 [[domains]]
 host = "127.0.0.1"
@@ -280,10 +280,13 @@ async fn spawn_proxy_tls(
     std::fs::write(key_file.path(), &key_pem)?;
 
     // Parse trusted_proxies from a CIDR string.
-    let trusted_proxies: Vec<ipnet::IpNet> = if trusted_cidr.is_empty() {
-        vec![]
-    } else {
-        vec![trusted_cidr.parse()?]
+    let trusted_proxies = huginn_proxy_lib::config::TrustedProxiesConfig {
+        cidrs: if trusted_cidr.is_empty() {
+            vec![]
+        } else {
+            vec![trusted_cidr.parse()?]
+        },
+        insecure: false,
     };
 
     let listen_port = free_port()?;

@@ -7,7 +7,17 @@ follows [Semantic Versioning](https://semver.org/).
 
 ---
 
-## [0.0.3-beta.0]
+## [uncoming]
+
+### Breaking changes
+
+**Non-fatal config validation warnings + `--validate --strict`**
+
+Config loading now audits for likely mistakes and logs them as non-fatal warnings (on boot,
+`--validate`, and hot reload): duplicate/contradictory header manipulation, whole-block security
+overrides that drop parent protection, over-broad `trusted_proxies` ranges, and a `proxy_protocol`
+mode with no trusted peer. `--validate` prints a warning count; the new `--strict` flag makes it
+exit non-zero when any warning is present (useful in CI). See `SETTINGS.md`.
 
 ### Breaking changes
 
@@ -32,15 +42,11 @@ in the list). Configs that still list a `/0` CIDR keep working but emit a non-fa
 suggesting `insecure = true`; `huginn-proxy --validate --strict` turns that warning into a
 non-zero exit. See `SETTINGS.md`.
 
+---
+
+## [0.0.3-beta.0]
+
 ### Added
-
-**Non-fatal config validation warnings + `--validate --strict`**
-
-Config loading now audits for likely mistakes and logs them as non-fatal warnings (on boot,
-`--validate`, and hot reload): duplicate/contradictory header manipulation, whole-block security
-overrides that drop parent protection, over-broad `trusted_proxies` ranges, and a `proxy_protocol`
-mode with no trusted peer. `--validate` prints a warning count; the new `--strict` flag makes it
-exit non-zero when any warning is present (useful in CI). See `SETTINGS.md`.
 
 **PROXY protocol support (`listen.proxy_protocol`)**
 

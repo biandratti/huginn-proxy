@@ -1,3 +1,5 @@
+use std::net::IpAddr;
+
 use ipnet::IpNet;
 use serde::{Deserialize, Serialize};
 
@@ -20,26 +22,12 @@ pub struct SecurityConfig {
     /// Rate limiting configuration
     #[serde(default)]
     pub rate_limit: RateLimitConfig,
-    /// Trusted reverse-proxy CIDRs for client-IP resolution (global, opt-in).
+    /// Trusted reverse-proxy configuration for client-IP resolution (`[security.trusted_proxies]`).
     ///
     /// A property of the network topology (which load balancers sit in front), not of a
     /// route, so it is configured once globally and is **not** overridable per domain/route.
-    /// When empty (default), the client IP is always the non-forgeable TCP peer IP. When
-    /// non-empty and the peer is a trusted proxy, `X-Forwarded-For` is walked right-to-left
-    /// and the first IP not in this list is used as the real client IP. Consumed by rate
-    /// limiting (`limit_by = "ip" | "combined"`). Accepts CIDR notation,
-    /// e.g. `["10.0.0.0/8", "::1/128"]`.
     #[serde(default)]
-    #[serde(deserialize_with = "deserialize_ip_networks")]
-    pub trusted_proxies: Vec<IpNet>,
-    /// Explicitly acknowledge a trust-all `trusted_proxies` entry (`0.0.0.0/0` or `::/0`).
-    ///
-    /// Trusting every peer means any client can spoof `X-Forwarded-For` and the PROXY protocol
-    /// header. When `false` (default), such an entry raises a non-fatal config warning. Set to
-    /// `true` to opt in deliberately (e.g. behind a controlled L4 LB) and silence that warning.
-    /// Purely advisory: it does not change runtime trust behaviour.
-    #[serde(default)]
-    pub trust_all_proxies: bool,
+    pub trusted_proxies: TrustedProxiesConfig,
 }
 
 impl Default for SecurityConfig {
@@ -49,9 +37,47 @@ impl Default for SecurityConfig {
             headers: SecurityHeaders::default(),
             ip_filter: IpFilterConfig::default(),
             rate_limit: RateLimitConfig::default(),
-            trusted_proxies: vec![],
-            trust_all_proxies: false,
+            trusted_proxies: TrustedProxiesConfig::default(),
         }
+    }
+}
+
+/// Trusted reverse-proxy configuration (`[security.trusted_proxies]`).
+///
+/// Defines which immediate TCP peers are allowed to declare the real client address via
+/// `X-Forwarded-For` (rate-limit client IP) and the PROXY protocol header. This is the trust
+/// boundary against source-IP spoofing: an untrusted peer's `X-Forwarded-For`/PROXY header is
+/// ignored, so only the non-forgeable TCP peer IP is used.
+///
+/// When a peer is trusted, `X-Forwarded-For` is walked right-to-left and the first IP not in
+/// `cidrs` is used as the real client IP. Consumed by rate limiting (`limit_by = "ip" | "combined"`)
+/// and PROXY protocol handling.
+#[derive(Debug, Deserialize, Clone, PartialEq, Default)]
+#[serde(deny_unknown_fields)]
+pub struct TrustedProxiesConfig {
+    /// Trusted reverse-proxy CIDRs. Accepts CIDR notation, e.g. `["10.0.0.0/8", "::1/128"]`.
+    /// Empty (default) means no peer is trusted and the client IP is always the TCP peer IP.
+    #[serde(default)]
+    #[serde(deserialize_with = "deserialize_ip_networks")]
+    pub cidrs: Vec<IpNet>,
+    /// Trust **every** peer, regardless of `cidrs` (Traefik-style `insecure`).
+    ///
+    /// Dangerous: any client can then spoof `X-Forwarded-For` and the PROXY protocol header.
+    /// Default `false`. Set to `true` to deliberately opt in (e.g. behind a controlled L4 LB);
+    /// this also silences the over-broad `trusted_proxies` config warning.
+    #[serde(default)]
+    pub insecure: bool,
+}
+
+impl TrustedProxiesConfig {
+    /// Whether the peer at `ip` is a trusted proxy (any peer when `insecure`).
+    pub fn trusts(&self, ip: &IpAddr) -> bool {
+        self.insecure || self.cidrs.iter().any(|net| net.contains(ip))
+    }
+
+    /// Whether at least one peer can be trusted (used to detect a `proxy_protocol` trust gap).
+    pub fn has_trust(&self) -> bool {
+        self.insecure || !self.cidrs.is_empty()
     }
 }
 
@@ -93,8 +119,8 @@ pub struct SecurityDynamicConfig {
     pub ip_filter: IpFilterConfig,
     /// Rate limiting policy
     pub rate_limit: RateLimitConfig,
-    /// Trusted reverse-proxy CIDRs for client-IP resolution (global, not overridable per scope).
-    pub trusted_proxies: Vec<IpNet>,
+    /// Trusted reverse-proxy configuration (global, not overridable per scope).
+    pub trusted_proxies: TrustedProxiesConfig,
 }
 
 /// Security headers configuration
@@ -341,7 +367,13 @@ pub(crate) struct SecurityView<'a> {
     headers: SecurityHeadersView<'a>,
     ip_filter: IpFilterView,
     rate_limit: RateLimitView<'a>,
-    trusted_proxies: Vec<String>,
+    trusted_proxies: TrustedProxiesView,
+}
+
+#[derive(Serialize)]
+struct TrustedProxiesView {
+    cidrs: Vec<String>,
+    insecure: bool,
 }
 
 /// Shared effective-config view for the per-domain and per-route `security` override blocks
@@ -397,11 +429,15 @@ impl SecurityDynamicConfig {
             headers: self.headers.effective_view(),
             ip_filter: self.ip_filter.effective_view(),
             rate_limit: self.rate_limit.effective_view(),
-            trusted_proxies: self
-                .trusted_proxies
-                .iter()
-                .map(ToString::to_string)
-                .collect(),
+            trusted_proxies: TrustedProxiesView {
+                cidrs: self
+                    .trusted_proxies
+                    .cidrs
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect(),
+                insecure: self.trusted_proxies.insecure,
+            },
         }
     }
 }

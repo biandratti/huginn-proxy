@@ -12,9 +12,9 @@ fn trusted_proxies_audit_warns_on_trust_all_and_broad_range(
 listen = { addrs = ["127.0.0.1:0"] }
 backends = [{ address = "backend:9000" }]
 
-[security]
+[security.trusted_proxies]
 # 0.0.0.0/0 trusts everyone; 11.0.0.0/6 is broader than /8 (public); ::/0 trusts all IPv6.
-trusted_proxies = ["0.0.0.0/0", "11.0.0.0/6", "::/0"]
+cidrs = ["0.0.0.0/0", "11.0.0.0/6", "::/0"]
 "#;
     fs::write(&path, toml)?;
     let cfg = load_from_path(&path)?;
@@ -39,17 +39,17 @@ trusted_proxies = ["0.0.0.0/0", "11.0.0.0/6", "::/0"]
 }
 
 #[test]
-fn trust_all_proxies_opt_in_silences_trust_all_warning(
+fn insecure_opt_in_silences_trust_all_warning(
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let path = tmp_path("tp-optin");
-    // trust_all_proxies acknowledges the /0 footgun, but a broad non-/0 range still warns.
+    // insecure acknowledges the /0 footgun, but a broad non-/0 range still warns.
     let toml = r#"
 listen = { addrs = ["127.0.0.1:0"] }
 backends = [{ address = "backend:9000" }]
 
-[security]
-trust_all_proxies = true
-trusted_proxies = ["0.0.0.0/0", "11.0.0.0/6"]
+[security.trusted_proxies]
+insecure = true
+cidrs = ["0.0.0.0/0", "11.0.0.0/6"]
 "#;
     fs::write(&path, toml)?;
     let cfg = load_from_path(&path)?;
@@ -76,8 +76,8 @@ fn trusted_proxies_audit_silent_on_private_ranges(
 listen = { addrs = ["127.0.0.1:0"] }
 backends = [{ address = "backend:9000" }]
 
-[security]
-trusted_proxies = ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "fc00::/7", "::1/128"]
+[security.trusted_proxies]
+cidrs = ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "fc00::/7", "::1/128"]
 "#;
     fs::write(&path, toml)?;
     let cfg = load_from_path(&path)?;

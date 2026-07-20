@@ -53,9 +53,23 @@ fn require_with_trusted_proxies_does_not_warn(
 listen = { addrs = ["127.0.0.1:0"], proxy_protocol = { mode = "require" } }
 backends = [{ address = "backend:9000" }]
 
-[security]
-trusted_proxies = ["10.0.0.0/8"]
+[security.trusted_proxies]
+cidrs = ["10.0.0.0/8"]
 "#;
     assert_eq!(warnings_for("pp-require-trusted", toml)?, 0);
+    Ok(())
+}
+
+#[test]
+fn require_with_insecure_does_not_warn() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    // `insecure = true` trusts every peer, so `require` has a peer to trust: no gap.
+    let toml = r#"
+listen = { addrs = ["127.0.0.1:0"], proxy_protocol = { mode = "require" } }
+backends = [{ address = "backend:9000" }]
+
+[security.trusted_proxies]
+insecure = true
+"#;
+    assert_eq!(warnings_for("pp-require-insecure", toml)?, 0);
     Ok(())
 }

@@ -1,13 +1,12 @@
-use std::net::{IpAddr, SocketAddr};
+use std::net::SocketAddr;
 use std::time::Duration;
 
-use ipnet::IpNet;
 use tokio::net::TcpStream;
 use tokio::time::error::Elapsed;
 use tokio::time::timeout;
 use tracing::{debug, trace, warn};
 
-use crate::config::{ProxyProtocolConfig, ProxyProtocolMode};
+use crate::config::{ProxyProtocolConfig, ProxyProtocolMode, TrustedProxiesConfig};
 use crate::proxy::protocol::{
     detect_proxy_protocol, normalize_mapped_ipv4, read_proxy_header_v1, read_proxy_header_v2,
     ProxyProtocolDetection, ProxyProtocolError, ProxySource,
@@ -33,12 +32,12 @@ impl ResolvedProxyProtocol {
     }
 }
 
-/// Whether `peer_ip` matches any CIDR in `trusted_proxies`.
+/// Whether `peer_ip` is a trusted proxy (matches a CIDR in `trusted_proxies`, or `insecure`).
 ///
 /// The caller normalizes IPv4-mapped IPv6 first (a dual-stack listener bound to `[::]` reports an
 /// incoming IPv4 connection as `::ffff:a.b.c.d`, which an `IpNet::V4` entry would never match).
-fn is_trusted(peer_ip: IpAddr, trusted_proxies: &[IpNet]) -> bool {
-    !trusted_proxies.is_empty() && trusted_proxies.iter().any(|n| n.contains(&peer_ip))
+fn is_trusted(peer_ip: std::net::IpAddr, trusted_proxies: &TrustedProxiesConfig) -> bool {
+    trusted_proxies.trusts(&peer_ip)
 }
 
 /// Whether a passthrough outcome (non-`Require` mode, no PROXY source available) is worth
@@ -142,7 +141,7 @@ pub async fn resolve_peer(
     proxy_mode: ProxyProtocolMode,
     timeout_dur: Duration,
     metrics: &Metrics,
-    trusted_proxies: &[IpNet],
+    trusted_proxies: &TrustedProxiesConfig,
     stream: &mut TcpStream,
     socket_peer: SocketAddr,
 ) -> Option<SocketAddr> {

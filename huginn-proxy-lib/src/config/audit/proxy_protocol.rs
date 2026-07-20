@@ -34,10 +34,10 @@ impl TrustGap {
     }
 }
 
-/// Classify the trust gap for a `proxy_protocol` mode. `off`, or any non-empty `trusted_proxies`,
-/// yields `None`.
-pub(crate) fn trust_gap(mode: ProxyProtocolMode, trusted_proxies_empty: bool) -> Option<TrustGap> {
-    if !trusted_proxies_empty {
+/// Classify the trust gap for a `proxy_protocol` mode. `off`, or a `trusted_proxies` that can trust
+/// at least one peer (non-empty `cidrs` or `insecure`), yields `None`.
+pub(crate) fn trust_gap(mode: ProxyProtocolMode, has_trust: bool) -> Option<TrustGap> {
+    if has_trust {
         return None;
     }
     match mode {
@@ -53,7 +53,7 @@ pub(crate) fn trust_gap(mode: ProxyProtocolMode, trusted_proxies_empty: bool) ->
 /// already logs this via `warn_proxy_protocol_trust_gap` (at `error!`/`warn!` level), so adding it
 /// there would double-log. `--validate` calls this explicitly since the runtime never runs.
 pub fn proxy_protocol_trust_warnings(cfg: &Config) -> Vec<ConfigWarning> {
-    trust_gap(cfg.listen.proxy_protocol.mode, cfg.security.trusted_proxies.is_empty())
+    trust_gap(cfg.listen.proxy_protocol.mode, cfg.security.trusted_proxies.has_trust())
         .map(|gap| ConfigWarning {
             scope: "proxy_protocol".to_string(),
             message: gap.message().to_string(),

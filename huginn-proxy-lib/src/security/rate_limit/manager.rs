@@ -1,7 +1,6 @@
 use super::{RateLimitResult, RateLimiter};
-use crate::config::{Domain, LimitBy, RateLimitConfig};
+use crate::config::{Domain, LimitBy, RateLimitConfig, TrustedProxiesConfig};
 use ahash::AHashMap;
-use ipnet::IpNet;
 use std::net::IpAddr;
 use std::time::Duration;
 
@@ -136,8 +135,8 @@ impl RateLimitManager {
 
 /// Resolve the effective client IP for rate limiting.
 ///
-/// When `trusted_proxies` is empty, returns the TCP peer IP unconditionally,
-/// this is the secure default and cannot be spoofed by a client.
+/// When no peer is trusted (empty `cidrs` and not `insecure`), returns the TCP peer IP
+/// unconditionally, this is the secure default and cannot be spoofed by a client.
 ///
 /// When the peer is a trusted proxy, walks the inbound `X-Forwarded-For` right-to-left
 /// (most-trusted first) and returns the first non-trusted IP, the real client behind
@@ -145,17 +144,17 @@ impl RateLimitManager {
 fn resolve_client_ip(
     peer: std::net::SocketAddr,
     headers: &http::HeaderMap,
-    trusted_proxies: &[IpNet],
+    trusted_proxies: &TrustedProxiesConfig,
 ) -> String {
     let peer_ip = peer.ip();
-    if trusted_proxies.is_empty() || !trusted_proxies.iter().any(|net| net.contains(&peer_ip)) {
+    if !trusted_proxies.trusts(&peer_ip) {
         return peer_ip.to_string();
     }
     if let Some(xff) = headers.get("x-forwarded-for") {
         if let Ok(xff_str) = xff.to_str() {
             for raw in xff_str.rsplit(',') {
                 if let Ok(ip) = raw.trim().parse::<IpAddr>() {
-                    if !trusted_proxies.iter().any(|net| net.contains(&ip)) {
+                    if !trusted_proxies.trusts(&ip) {
                         return ip.to_string();
                     }
                 }
@@ -183,7 +182,7 @@ pub fn extract_rate_limit_key(
     route_prefix: &str,
     header_name: Option<&str>,
     headers: &http::HeaderMap,
-    trusted_proxies: &[IpNet],
+    trusted_proxies: &TrustedProxiesConfig,
 ) -> String {
     match limit_by {
         LimitBy::Ip => resolve_client_ip(peer, headers, trusted_proxies),

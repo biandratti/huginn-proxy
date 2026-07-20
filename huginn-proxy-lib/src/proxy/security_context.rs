@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
-use ipnet::IpNet;
-
-use crate::config::{HeaderManipulation, IpFilterConfig, RateLimitConfig, SecurityHeaders};
+use crate::config::{
+    HeaderManipulation, IpFilterConfig, RateLimitConfig, SecurityHeaders, TrustedProxiesConfig,
+};
 use crate::security::RateLimitManager;
 
 /// Security-related context for request handling
@@ -13,8 +13,8 @@ pub struct SecurityContext {
     pub rate_limit_config: RateLimitConfig,
     pub rate_limit_manager: Option<Arc<RateLimitManager>>,
     pub global_header_manipulation: Option<HeaderManipulation>,
-    /// Global trusted reverse-proxy CIDRs used to resolve the real client IP from XFF.
-    pub trusted_proxies: Vec<IpNet>,
+    /// Global trusted reverse-proxy config used to resolve the real client IP from XFF.
+    pub trusted_proxies: TrustedProxiesConfig,
 }
 
 impl SecurityContext {
@@ -24,7 +24,7 @@ impl SecurityContext {
         rate_limit_config: RateLimitConfig,
         rate_limit_manager: Option<Arc<RateLimitManager>>,
         global_header_manipulation: Option<HeaderManipulation>,
-        trusted_proxies: Vec<IpNet>,
+        trusted_proxies: TrustedProxiesConfig,
     ) -> Self {
         Self {
             headers,

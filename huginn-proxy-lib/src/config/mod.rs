@@ -16,6 +16,7 @@ pub use audit::{
 pub use dynamic::security::{
     CspConfig, DomainSecurityConfig, HstsConfig, IpFilterConfig, IpFilterMode, LimitBy,
     RateLimitConfig, RouteSecurityConfig, SecurityConfig, SecurityDynamicConfig, SecurityHeaders,
+    TrustedProxiesConfig,
 };
 pub use dynamic::{
     sort_domain_routes, sort_routes, Backend, BackendHttpVersion, BackendPoolConfig, CustomHeader,
