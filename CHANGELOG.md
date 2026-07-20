@@ -9,56 +9,34 @@ follows [Semantic Versioning](https://semver.org/).
 
 ## [uncoming]
 
-### Breaking changes
+### Added
 
-**Non-fatal config validation warnings + `--validate --strict`**
-
-Config loading now audits for likely mistakes and logs them as non-fatal warnings (on boot,
-`--validate`, and hot reload): duplicate/contradictory header manipulation, whole-block security
-overrides that drop parent protection, over-broad `trusted_proxies` ranges, and a `proxy_protocol`
-mode with no trusted peer. `--validate` prints a warning count; the new `--strict` flag makes it
-exit non-zero when any warning is present (useful in CI). See `SETTINGS.md`.
+- **Config validation warnings + `--validate --strict`.** Config loading audits for likely mistakes
+  and logs non-fatal warnings (boot, `--validate`, hot reload): duplicate/contradictory header
+  manipulation, security overrides that drop parent protection, over-broad `trusted_proxies` ranges,
+  and `proxy_protocol` with no trusted peer. `--validate` prints a warning count; `--strict` exits
+  non-zero on any warning. See `SETTINGS.md`.
 
 ### Breaking changes
 
-**`[security].trusted_proxies` is now a table (`cidrs` + `insecure`)**
+- **`[security].trusted_proxies` is now a table** (`cidrs` + `insecure`). `insecure = true` replaces
+  listing `0.0.0.0/0`; a `/0` CIDR still works but warns.
 
-The flat CIDR array became a table so the trust-all switch lives alongside the list, mirroring
-Traefik's `forwardedHeaders` (`trustedIPs` + `insecure`):
+  ```toml
+  [security.trusted_proxies]
+  cidrs = ["10.0.0.0/8", "192.168.0.0/16"]
+  insecure = false   # trust every peer; default false
+  ```
 
-```toml
-# Before
-[security]
-trusted_proxies = ["10.0.0.0/8", "192.168.0.0/16"]
+- **Filesystem watch moved to `[reload]`; `--watch`/`--watch-delay-secs` flags and
+  `HUGINN_WATCH`/`HUGINN_WATCH_DELAY_SECS` env vars removed.** Watch now defaults to `true`; set
+  `watch = false` to disable. See `SETTINGS.md`.
 
-# After
-[security.trusted_proxies]
-cidrs = ["10.0.0.0/8", "192.168.0.0/16"]
-insecure = false   # trust EVERY peer (any client can spoof XFF / PROXY header); default false
-```
-
-`insecure = true` is the explicit, greppable way to trust all peers (replaces putting `0.0.0.0/0`
-in the list). Configs that still list a `/0` CIDR keep working but emit a non-fatal warning
-suggesting `insecure = true`; `huginn-proxy --validate --strict` turns that warning into a
-non-zero exit. See `SETTINGS.md`.
-
-### Breaking changes
-
-**Filesystem watch moved to `[reload]` config; `--watch` flags and `HUGINN_WATCH*` env vars removed**
-
-Hot-reload watching is now configured in the config file and **enabled by default**:
-
-```toml
-[reload]
-watch = true        # was: --watch / HUGINN_WATCH=true
-debounce_secs = 60  # was: --watch-delay-secs / HUGINN_WATCH_DELAY_SECS
-```
-
-The `--watch` / `--watch-delay-secs` CLI flags and the `HUGINN_WATCH` / `HUGINN_WATCH_DELAY_SECS`
-environment variables are gone (no override). The CLI now only handles actions and bootstrap
-(`--validate`, `--strict`, `--print-effective-config`, config path / `HUGINN_CONFIG_PATH`).
-Because watching now defaults to on, deployments that relied on it being off must set
-`[reload].watch = false`. See `SETTINGS.md`.
+  ```toml
+  [reload]
+  watch = true
+  debounce_secs = 60
+  ```
 
 ---
 
