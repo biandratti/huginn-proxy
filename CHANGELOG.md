@@ -42,6 +42,24 @@ in the list). Configs that still list a `/0` CIDR keep working but emit a non-fa
 suggesting `insecure = true`; `huginn-proxy --validate --strict` turns that warning into a
 non-zero exit. See `SETTINGS.md`.
 
+### Breaking changes
+
+**Filesystem watch moved to `[reload]` config; `--watch` flags and `HUGINN_WATCH*` env vars removed**
+
+Hot-reload watching is now configured in the config file and **enabled by default**:
+
+```toml
+[reload]
+watch = true        # was: --watch / HUGINN_WATCH=true
+debounce_secs = 60  # was: --watch-delay-secs / HUGINN_WATCH_DELAY_SECS
+```
+
+The `--watch` / `--watch-delay-secs` CLI flags and the `HUGINN_WATCH` / `HUGINN_WATCH_DELAY_SECS`
+environment variables are gone (no override). The CLI now only handles actions and bootstrap
+(`--validate`, `--strict`, `--print-effective-config`, config path / `HUGINN_CONFIG_PATH`).
+Because watching now defaults to on, deployments that relied on it being off must set
+`[reload].watch = false`. See `SETTINGS.md`.
+
 ---
 
 ## [0.0.3-beta.0]

@@ -213,3 +213,7 @@ security:
 telemetry:
   metrics_port: 9090
   otel_log_level: "warn"
+
+reload:
+  watch: true
+  debounce_secs: 10

@@ -21,8 +21,8 @@ type TestResult = Result<(), Box<dyn std::error::Error + Send + Sync>>;
 
 fn minimal_config(backend_addr: std::net::SocketAddr, listen_port: u16) -> Config {
     use huginn_proxy_lib::config::{
-        Backend, Domain, FingerprintConfig, KeepAliveConfig, ListenConfig, LoggingConfig, Route,
-        SecurityConfig, TelemetryConfig, TimeoutConfig,
+        Backend, Domain, FingerprintConfig, KeepAliveConfig, ListenConfig, LoggingConfig,
+        ReloadConfig, Route, SecurityConfig, TelemetryConfig, TimeoutConfig,
     };
 
     Config {
@@ -72,6 +72,7 @@ fn minimal_config(backend_addr: std::net::SocketAddr, listen_port: u16) -> Confi
         },
         security: SecurityConfig::default(),
         telemetry: TelemetryConfig { metrics_port: None, otel_log_level: "warn".to_string() },
+        reload: ReloadConfig::default(),
         headers: None,
         preserve_host: false,
         backend_pool: Default::default(),

@@ -1,6 +1,6 @@
 use huginn_proxy_lib::config::{
     load_from_path, Backend, Config, FingerprintConfig, KeepAliveConfig, ListenConfig,
-    LoggingConfig, SecurityConfig, TelemetryConfig, TimeoutConfig,
+    LoggingConfig, ReloadConfig, SecurityConfig, TelemetryConfig, TimeoutConfig,
 };
 use std::io::Write;
 
@@ -34,6 +34,7 @@ fn create_test_config(listen: &str, backends: Vec<Backend>) -> Config {
         },
         security: SecurityConfig::default(),
         telemetry: TelemetryConfig { metrics_port: None, otel_log_level: "warn".to_string() },
+        reload: ReloadConfig::default(),
         headers: None,
     }
 }

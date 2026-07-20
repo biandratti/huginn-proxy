@@ -1030,6 +1030,54 @@ telemetry:
 
 ---
 
+## `[reload]`
+
+Filesystem-watch / hot-reload controls. **Static** — read once at startup; changing these requires a restart. Reloading
+via `SIGHUP` works regardless of this section.
+
+When watching is enabled, the proxy watches the config file and the TLS certificate/key files and applies changes without
+dropping connections. A burst of writes is coalesced into a single reload once changes have been quiet for `debounce_secs`.
+
+| Key             | Type    | Default | Description                                                                                                        |
+|-----------------|---------|---------|------------------------------------------------------------------------------------------------------------------|
+| `watch`         | bool    | `true`  | Watch the config file and TLS cert/key files, hot-reloading them on change.                                        |
+| `debounce_secs` | integer | `60`    | Seconds a file must be quiet before a detected change is applied (trailing-edge debounce). Only used when `watch = true`. |
+
+> **Note:** These settings live only in the config file. There is no CLI flag or environment variable for them.
+
+<table>
+<thead>
+<tr>
+<th>TOML</th>
+<th>YAML</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td valign="top">
+
+```toml
+[reload]
+watch = true
+debounce_secs = 60
+```
+
+</td>
+<td valign="top">
+
+```yaml
+reload:
+  watch: true
+  debounce_secs: 60
+```
+
+</td>
+</tr>
+</tbody>
+</table>
+
+---
+
 ## `[timeout]`
 
 Connection timeout controls. **Static** — applied once at startup; the connection pool and acceptor are built with these

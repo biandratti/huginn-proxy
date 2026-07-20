@@ -121,10 +121,6 @@ spec:
       env:
         - name: HUGINN_CONFIG_PATH
           value: "/config/config.toml"
-        - name: HUGINN_WATCH
-          value: "true"
-        - name: HUGINN_WATCH_DELAY_SECS
-          value: "60"
       volumeMounts:
         - name: bpffs
           mountPath: /sys/fs/bpf
@@ -148,11 +144,9 @@ spec:
       env:
         - name: HUGINN_CONFIG_PATH
           value: "/config/config.toml"
-        - name: HUGINN_WATCH
-          value: "true"
-        - name: HUGINN_WATCH_DELAY_SECS
-          value: "60"
 ```
+
+Filesystem hot reload is on by default (`[reload].watch = true` in the config file); no environment variable is needed. Set `watch = false` in the config to rely on SIGHUP only.
 
 `HUGINN_CONFIG_PATH` sets the config file path without changing the container `command`. Useful when the same image is shared across environments (staging, prod) and only the ConfigMap mount point differs — override the path via env var rather than patching the Deployment spec each time.
 
@@ -262,7 +256,7 @@ continues running with the old values.
 
 > **TLS certificates** are re-read as part of a **config reload**, not by an
 > independent cert-file watcher. A reload (SIGHUP, or a change to the *config file*
-> when `HUGINN_WATCH=true`) re-reads the cert and key files from their configured
+> when `[reload].watch = true`) re-reads the cert and key files from their configured
 > paths. New connections pick up the new certificate without a restart; existing
 > connections are unaffected. Reload is best-effort per domain: a domain whose cert
 > fails to load keeps its previously serving certificate.
@@ -281,8 +275,8 @@ To rotate a certificate:
 1. Replace the certificate/key files at their configured paths (Secret in Kubernetes, volume in Docker). Keep the paths unchanged.
 2. Trigger a config reload, either:
    - **SIGHUP** — `kill -HUP <pid>` (e.g. `kubectl exec <pod> -- kill -HUP 1`), or
-   - **Config-file watch** — with `HUGINN_WATCH=true`, touch or re-write the *config
-     file* (not the cert files); the reload fires after the debounce window (`HUGINN_WATCH_DELAY_SECS`, default: 60s).
+   - **Config-file watch** — with `[reload].watch = true` (the default), touch or re-write the *config
+     file* (not the cert files); the reload fires after the debounce window (`[reload].debounce_secs`, default: 60s).
 3. New connections use the new certificate; existing connections continue with the old one until they close.
 
 Reload is best-effort per domain: if a domain's new cert fails to load, that domain

@@ -9,8 +9,8 @@ use tracing::{error, info};
 /// Spawn a background task that watches `config_path` for filesystem changes and
 /// sends a unit signal on `reload_tx` after each debounced event.
 ///
-/// Activated only when `--watch` is enabled. A single signal is sent per
-/// burst of changes (debounced by `watch_delay_secs`).
+/// Activated only when `[reload].watch` is enabled. A single signal is sent per
+/// burst of changes (debounced by `[reload].debounce_secs`).
 ///
 /// The returned [`ServiceHandle`] must be awaited during graceful shutdown
 /// (after signalling via [`crate::proxy::shutdown::ShutdownSender`]) to ensure
@@ -28,7 +28,7 @@ use tracing::{error, info};
 pub fn spawn_config_watcher(
     config_path: PathBuf,
     reload_tx: UnboundedSender<()>,
-    watch_delay_secs: u32,
+    debounce_secs: u32,
     mut shutdown_rx: ShutdownWatch,
 ) -> crate::error::Result<ServiceHandle> {
     let config_path_for_watcher = config_path.clone();
@@ -66,12 +66,12 @@ pub fn spawn_config_watcher(
 
     info!(
         path = %config_path.display(),
-        debounce_secs = watch_delay_secs,
+        debounce_secs,
         "Config watcher started, watching for file changes"
     );
 
     let handle = tokio::spawn(async move {
-        let debounce_duration = Duration::from_secs(watch_delay_secs as u64);
+        let debounce_duration = Duration::from_secs(debounce_secs as u64);
         let mut reload_deadline: Option<Instant> = None;
         let _watcher = watcher;
 
@@ -83,7 +83,7 @@ pub fn spawn_config_watcher(
                     break;
                 }
                 _ = event_rx.recv() => {
-                    info!(path = %config_path.display(), debounce_secs = watch_delay_secs, "Config file change detected, reload scheduled");
+                    info!(path = %config_path.display(), debounce_secs, "Config file change detected, reload scheduled");
                     reload_deadline = Some(crate::utils::deadline_from(Instant::now(), debounce_duration));
                 }
                 _ = async {

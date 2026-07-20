@@ -38,7 +38,7 @@ See [`examples/`](examples/).
 
 - **Configuration** - One file, **[TOML or YAML](SETTINGS.md)** (picked from the extension). **Dynamic** sections (
   routes,
-  backends, pools, headers, security filters, rate limits, …) **hot-reload** on SIGHUP or `--watch`; **static** sections
+  backends, pools, headers, security filters, rate limits, …) **hot-reload** on SIGHUP or file-watch (`[reload].watch`, on by default); **static** sections
   (listen, TLS, fingerprint flags, logging, telemetry, timeouts, …) need a **restart** (reload ignores them). See
   [DEPLOYMENT.md](DEPLOYMENT.md).
 - **IPv4 & IPv6 Dual-Stack** - Listen on both address families simultaneously with per-family eBPF maps

@@ -30,6 +30,6 @@ pub use root::{Config, ConfigParts};
 pub use secret::Secret;
 pub use startup::{
     ClientAuth, FingerprintConfig, KeepAliveConfig, ListenConfig, LoggingConfig,
-    ProxyProtocolConfig, ProxyProtocolMode, SessionResumptionConfig, StaticConfig, TelemetryConfig,
-    TimeoutConfig, TlsConfig, TlsOptions, TlsVersion,
+    ProxyProtocolConfig, ProxyProtocolMode, ReloadConfig, SessionResumptionConfig, StaticConfig,
+    TelemetryConfig, TimeoutConfig, TlsConfig, TlsOptions, TlsVersion,
 };

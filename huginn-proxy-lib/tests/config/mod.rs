@@ -3,6 +3,7 @@ mod effective;
 mod header_manipulation;
 mod loader;
 mod parser;
+mod reload;
 mod secret;
 mod types;
 

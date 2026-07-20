@@ -41,6 +41,9 @@ services:
       - RUST_LOG=${RUST_LOG:-info}
       - HUGINN_EBPF_PIN_PATH=/sys/fs/bpf/huginn
       - HUGINN_EBPF_RECONNECT_POLL_SECS=5
+      # DEPRECATED: read only by the previously published release image. The current
+      # code moved watch/debounce to the config file ([reload] section, watch=true by
+      # default). Kept for the pinned release image; remove in the next release.
       - HUGINN_WATCH=true
       - HUGINN_WATCH_DELAY_SECS=10
     volumes:

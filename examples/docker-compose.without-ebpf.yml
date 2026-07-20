@@ -9,8 +9,6 @@ services:
     # - HUGINN_CONFIG_PATH=/config/compose.toml
       - HUGINN_CONFIG_PATH=/config/compose.yaml
       - RUST_LOG=${RUST_LOG:-info}
-      - HUGINN_WATCH=true
-      - HUGINN_WATCH_DELAY_SECS=10
     volumes:
       #- ./config/compose.toml:/config/compose.toml:ro
       - ./config/compose.yaml:/config/compose.yaml:ro

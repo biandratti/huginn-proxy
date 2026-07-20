@@ -182,7 +182,7 @@ on
 genuinely cross-certificate requests, and plain HTTP / no-SNI connections are unaffected.
 
 Certificates are re-read as part of a **config reload** — driven by SIGHUP or by a change to the *config file* (when the
-`--watch` file watcher is enabled, debounced by a configurable delay), not by an independent cert-file watcher. Each
+`[reload].watch` file watcher is enabled, debounced by a configurable delay), not by an independent cert-file watcher. Each
 reload re-reads the cert/key files from their configured paths. The `DynamicCertResolver` is updated in place and its
 cert map is swapped atomically (`ArcSwap`); the acceptor's `ServerConfig` itself is built once at startup, so cipher
 suites, ALPN, client auth, and session resumption settings never drift between the initial configuration and reloaded
@@ -380,8 +380,8 @@ keep-alive requests) finish on their original snapshot. No connections are dropp
 Reload triggers and config:
 
 - **SIGHUP** — always available: `kill -SIGHUP <pid>` or `docker kill --signal=SIGHUP <container>`
-- **File watcher** — enabled with `--watch` flag (or `HUGINN_WATCH=true`). Configurable debounce via
-  `--watch-delay-secs` / `HUGINN_WATCH_DELAY_SECS` (default: 60s).
+- **File watcher** — enabled by default via `[reload].watch = true` in the config file. Configurable debounce via
+  `[reload].debounce_secs` (default: 60s). Set `watch = false` to disable and rely on SIGHUP only.
 - **TOML or YAML** — both formats are supported; the parser is chosen from the file extension (`.yaml`/`.yml` vs `.toml`
   or anything else). Hot reload behaves the same. See [SETTINGS.md](SETTINGS.md).
 

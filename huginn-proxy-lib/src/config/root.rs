@@ -9,6 +9,7 @@ use super::dynamic::security::{SecurityConfig, SecurityDynamicConfig};
 use super::dynamic::DynamicConfig;
 use super::startup::fingerprinting::FingerprintConfig;
 use super::startup::listen::ListenConfig;
+use super::startup::reload::ReloadConfig;
 use super::startup::telemetry::{LoggingConfig, TelemetryConfig};
 use super::startup::timeout::TimeoutConfig;
 use super::startup::tls::TlsConfig;
@@ -54,6 +55,9 @@ pub struct Config {
     /// Controls metrics, tracing, and observability features
     #[serde(default)]
     pub telemetry: TelemetryConfig,
+    /// Filesystem-watch / hot-reload configuration
+    #[serde(default)]
+    pub reload: ReloadConfig,
     /// Global header manipulation (optional)
     /// Allows adding or removing headers for all routes
     #[serde(default)]
@@ -116,6 +120,7 @@ impl Config {
                 logging: self.logging,
                 timeout: self.timeout,
                 telemetry: self.telemetry,
+                reload: self.reload,
                 max_connections: self.security.max_connections,
             },
             dynamic_cfg: DynamicConfig {
