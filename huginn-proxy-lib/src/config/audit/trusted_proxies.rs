@@ -20,7 +20,8 @@ const IPV6_BROAD_PREFIX: u8 = 7;
 /// IP filtering, and poisoning logs. Two tiers are reported:
 ///
 /// - **trust-all** (`0.0.0.0/0` or `::/0`, i.e. a `/0` prefix): every peer is trusted, so both XFF
-///   and the PROXY header become forgeable by anyone. Reported for either address family.
+///   and the PROXY header become forgeable by anyone. Reported for either address family, unless
+///   `security.trust_all_proxies = true` explicitly opts in (then this tier is suppressed).
 /// - **very broad public range**: an IPv4 prefix shorter than `/8` or an IPv6
 ///   prefix shorter than `/7`. Those thresholds sit just above the standard
 ///   private/reserved blocks (`10/8`, `172.16/12`, `192.168/16`, `fc00::/7`, `fe80::/10`), so
@@ -29,12 +30,14 @@ pub fn trusted_proxies_warnings(cfg: &Config) -> Vec<ConfigWarning> {
     let mut out = Vec::new();
     for net in &cfg.security.trusted_proxies {
         if net.prefix_len() == 0 {
-            out.push(ConfigWarning {
-                scope: "trusted_proxies".to_string(),
-                message: format!(
-                    "'{net}' trusts every IP address; any client can spoof X-Forwarded-For and the PROXY protocol header"
-                ),
-            });
+            if !cfg.security.trust_all_proxies {
+                out.push(ConfigWarning {
+                    scope: "trusted_proxies".to_string(),
+                    message: format!(
+                        "'{net}' trusts every IP address; any client can spoof X-Forwarded-For and the PROXY protocol header"
+                    ),
+                });
+            }
             continue;
         }
         let broad = match net {

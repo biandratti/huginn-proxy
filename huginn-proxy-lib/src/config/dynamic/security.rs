@@ -32,6 +32,14 @@ pub struct SecurityConfig {
     #[serde(default)]
     #[serde(deserialize_with = "deserialize_ip_networks")]
     pub trusted_proxies: Vec<IpNet>,
+    /// Explicitly acknowledge a trust-all `trusted_proxies` entry (`0.0.0.0/0` or `::/0`).
+    ///
+    /// Trusting every peer means any client can spoof `X-Forwarded-For` and the PROXY protocol
+    /// header. When `false` (default), such an entry raises a non-fatal config warning. Set to
+    /// `true` to opt in deliberately (e.g. behind a controlled L4 LB) and silence that warning.
+    /// Purely advisory: it does not change runtime trust behaviour.
+    #[serde(default)]
+    pub trust_all_proxies: bool,
 }
 
 impl Default for SecurityConfig {
@@ -42,6 +50,7 @@ impl Default for SecurityConfig {
             ip_filter: IpFilterConfig::default(),
             rate_limit: RateLimitConfig::default(),
             trusted_proxies: vec![],
+            trust_all_proxies: false,
         }
     }
 }

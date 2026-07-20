@@ -13,6 +13,16 @@ headers = { request = { add = [
 ] } }
 "#;
 
+// Same header added twice → a duplicate-header warning (non-fatal).
+const CONFIG_WITH_WARNING: &str = r#"
+listen = { addrs = ["127.0.0.1:0"] }
+backends = [{ address = "backend:9000" }]
+headers = { request = { add = [
+  { name = "X-Foo", value = "a" },
+  { name = "x-foo", value = "b" }
+] } }
+"#;
+
 fn temp_config(name: &str, contents: &str) -> Result<PathBuf, std::io::Error> {
     let nanos = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -37,6 +47,63 @@ fn validate_keeps_existing_output() -> TestResult {
     let _ = fs::remove_file(path);
 
     assert!(output.status.success());
+    assert_eq!(String::from_utf8(output.stdout)?, format!("Config OK: {path_arg}\n"));
+    Ok(())
+}
+
+#[test]
+fn validate_reports_warning_count_but_exits_zero_by_default() -> TestResult {
+    let path = temp_config("validate-warn", CONFIG_WITH_WARNING)?;
+    let path_arg = path.to_string_lossy().into_owned();
+    let output = run(&["--validate", &path_arg])?;
+    let _ = fs::remove_file(path);
+
+    assert!(output.status.success(), "warnings must not fail without --strict");
+    let stdout = String::from_utf8(output.stdout)?;
+    assert!(stdout.contains(&format!("Config OK: {path_arg}")), "stdout: {stdout}");
+    assert!(stdout.contains("warning(s) found"), "stdout: {stdout}");
+    Ok(())
+}
+
+#[test]
+fn validate_strict_fails_on_warnings() -> TestResult {
+    let path = temp_config("validate-strict-warn", CONFIG_WITH_WARNING)?;
+    let path_arg = path.to_string_lossy().into_owned();
+    let output = run(&["--validate", "--strict", &path_arg])?;
+    let _ = fs::remove_file(path);
+
+    assert!(!output.status.success(), "--strict must fail when warnings exist");
+    let stderr = String::from_utf8(output.stderr)?;
+    assert!(stderr.contains("strict validation failed"), "stderr: {stderr}");
+    Ok(())
+}
+
+#[test]
+fn validate_strict_fails_on_proxy_protocol_trust_gap() -> TestResult {
+    // proxy_protocol=require with no trusted_proxies drops every connection; surfaced in --validate.
+    let toml = r#"
+listen = { addrs = ["127.0.0.1:0"], proxy_protocol = { mode = "require" } }
+backends = [{ address = "backend:9000" }]
+"#;
+    let path = temp_config("validate-pp-gap", toml)?;
+    let path_arg = path.to_string_lossy().into_owned();
+    let output = run(&["--validate", "--strict", &path_arg])?;
+    let _ = fs::remove_file(path);
+
+    assert!(!output.status.success(), "proxy_protocol trust gap must fail --strict");
+    let stderr = String::from_utf8(output.stderr)?;
+    assert!(stderr.contains("strict validation failed"), "stderr: {stderr}");
+    Ok(())
+}
+
+#[test]
+fn validate_strict_passes_on_clean_config() -> TestResult {
+    let path = temp_config("validate-strict-clean", CONFIG)?;
+    let path_arg = path.to_string_lossy().into_owned();
+    let output = run(&["--validate", "--strict", &path_arg])?;
+    let _ = fs::remove_file(path);
+
+    assert!(output.status.success(), "clean config must pass --strict");
     assert_eq!(String::from_utf8(output.stdout)?, format!("Config OK: {path_arg}\n"));
     Ok(())
 }

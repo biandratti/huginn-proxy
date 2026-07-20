@@ -9,7 +9,38 @@ follows [Semantic Versioning](https://semver.org/).
 
 ## [0.0.3-beta.0]
 
+### Breaking changes
+
+**`[security].trusted_proxies` is now a table (`cidrs` + `insecure`)**
+
+The flat CIDR array became a table so the trust-all switch lives alongside the list, mirroring
+Traefik's `forwardedHeaders` (`trustedIPs` + `insecure`):
+
+```toml
+# Before
+[security]
+trusted_proxies = ["10.0.0.0/8", "192.168.0.0/16"]
+
+# After
+[security.trusted_proxies]
+cidrs = ["10.0.0.0/8", "192.168.0.0/16"]
+insecure = false   # trust EVERY peer (any client can spoof XFF / PROXY header); default false
+```
+
+`insecure = true` is the explicit, greppable way to trust all peers (replaces putting `0.0.0.0/0`
+in the list). Configs that still list a `/0` CIDR keep working but emit a non-fatal warning
+suggesting `insecure = true`; `huginn-proxy --validate --strict` turns that warning into a
+non-zero exit. See `SETTINGS.md`.
+
 ### Added
+
+**Non-fatal config validation warnings + `--validate --strict`**
+
+Config loading now audits for likely mistakes and logs them as non-fatal warnings (on boot,
+`--validate`, and hot reload): duplicate/contradictory header manipulation, whole-block security
+overrides that drop parent protection, over-broad `trusted_proxies` ranges, and a `proxy_protocol`
+mode with no trusted peer. `--validate` prints a warning count; the new `--strict` flag makes it
+exit non-zero when any warning is present (useful in CI). See `SETTINGS.md`.
 
 **PROXY protocol support (`listen.proxy_protocol`)**
 

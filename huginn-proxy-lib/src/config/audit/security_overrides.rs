@@ -1,22 +1,14 @@
 //! Audit for whole-block security overrides that silently drop parent protection.
 
+use super::ConfigWarning;
 use crate::config::{Config, IpFilterConfig, IpFilterMode, RateLimitConfig, SecurityHeaders};
-
-/// A whole-block override that silently drops protection the parent scope had enabled.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SecurityOverrideWarning {
-    /// Where the override lives, e.g. `domain 'api.example.com'` or `route '/admin' in domain '…'`.
-    pub scope: String,
-    /// Human-readable description of the dropped protection.
-    pub message: String,
-}
 
 /// Non-fatal audit for the whole-block override footgun.
 ///
 /// Security policies (`rate_limit`, `ip_filter`, `headers`) replace the parent scope **entirely**
 /// when set at a domain or route (no field merge). A partial override can therefore silently drop
 /// protection the parent had enabled. Returns one finding per such case so callers can log them.
-pub fn security_override_warnings(cfg: &Config) -> Vec<SecurityOverrideWarning> {
+pub fn security_override_warnings(cfg: &Config) -> Vec<ConfigWarning> {
     let g = &cfg.security;
     let mut out = Vec::new();
     for domain in &cfg.domains {
@@ -68,7 +60,7 @@ pub fn security_override_warnings(cfg: &Config) -> Vec<SecurityOverrideWarning> 
 /// Append a finding for each parent-enabled policy the override block turns off (whole-block).
 #[allow(clippy::too_many_arguments)]
 fn collect_dropped(
-    out: &mut Vec<SecurityOverrideWarning>,
+    out: &mut Vec<ConfigWarning>,
     scope: &str,
     parent_rl: &RateLimitConfig,
     over_rl: Option<&RateLimitConfig>,
@@ -77,8 +69,7 @@ fn collect_dropped(
     parent_hdr: &SecurityHeaders,
     over_hdr: Option<&SecurityHeaders>,
 ) {
-    let mut push =
-        |message: String| out.push(SecurityOverrideWarning { scope: scope.to_string(), message });
+    let mut push = |message: String| out.push(ConfigWarning { scope: scope.to_string(), message });
 
     if let Some(over) = over_rl {
         if parent_rl.enabled && !over.enabled {

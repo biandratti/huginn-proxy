@@ -39,6 +39,36 @@ trusted_proxies = ["0.0.0.0/0", "11.0.0.0/6", "::/0"]
 }
 
 #[test]
+fn trust_all_proxies_opt_in_silences_trust_all_warning(
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let path = tmp_path("tp-optin");
+    // trust_all_proxies acknowledges the /0 footgun, but a broad non-/0 range still warns.
+    let toml = r#"
+listen = { addrs = ["127.0.0.1:0"] }
+backends = [{ address = "backend:9000" }]
+
+[security]
+trust_all_proxies = true
+trusted_proxies = ["0.0.0.0/0", "11.0.0.0/6"]
+"#;
+    fs::write(&path, toml)?;
+    let cfg = load_from_path(&path)?;
+
+    let warnings = trusted_proxies_warnings(&cfg);
+    assert_eq!(warnings.len(), 1, "trust-all suppressed, broad range still warns: {warnings:?}");
+    assert!(warnings[0].message.contains("very large address range"));
+    assert!(
+        !warnings
+            .iter()
+            .any(|w| w.message.contains("trusts every IP address")),
+        "trust-all must be suppressed by opt-in: {warnings:?}"
+    );
+
+    let _ = fs::remove_file(&path);
+    Ok(())
+}
+
+#[test]
 fn trusted_proxies_audit_silent_on_private_ranges(
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let path = tmp_path("tp-private");

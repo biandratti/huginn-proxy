@@ -109,20 +109,14 @@ pub fn normalize_mapped_ipv4(addr: IpAddr) -> IpAddr {
 /// - `optional` never parses a header, silently degrading to `off` → `warn`
 ///
 /// `trusted_proxies` is dynamic (hot-reloadable), so this is checked both at startup and on each
-/// reload. `off` is a no-op.
+/// reload. `off` is a no-op. The classification is shared with the `--validate` audit via
+/// [`crate::config::audit::proxy_protocol::trust_gap`] so runtime and validation never drift.
 pub(crate) fn warn_proxy_protocol_trust_gap(mode: ProxyProtocolMode, trusted_proxies: &[IpNet]) {
-    if !trusted_proxies.is_empty() {
-        return;
-    }
-    match mode {
-        ProxyProtocolMode::Require => error!(
-            "proxy_protocol=require but security.trusted_proxies is empty: every connection will \
-             be dropped (no peer can be trusted to send a PROXY header)"
-        ),
-        ProxyProtocolMode::Optional => warn!(
-            "proxy_protocol=optional but security.trusted_proxies is empty: no peer is trusted, \
-             the PROXY header is never parsed (effectively behaves as off)"
-        ),
-        ProxyProtocolMode::Off => {}
+    use crate::config::audit::proxy_protocol::{trust_gap, TrustGap};
+
+    match trust_gap(mode, trusted_proxies.is_empty()) {
+        Some(gap @ TrustGap::RequireDropsAll) => error!("{}", gap.message()),
+        Some(gap @ TrustGap::OptionalDegradesToOff) => warn!("{}", gap.message()),
+        None => {}
     }
 }

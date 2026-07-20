@@ -1177,13 +1177,16 @@ backend_pool:
 |-------------------|--------------|---------|-------------------------------------------------------------------------------------|
 | `max_connections` | integer      | `512`   | Maximum concurrent client connections. **Static** — enforced at the acceptor level. |
 | `trusted_proxies` | string array | `[]`    | Trusted reverse-proxy CIDRs used to resolve the real client IP from `X-Forwarded-For`. **Global only** — a property of the network topology, *not* overridable per domain/route. When empty (default), the non-forgeable TCP peer IP is used. When set and the peer is a trusted proxy, XFF is walked right-to-left and the first IP **not** in this list is used. Consumed by rate limiting (`limit_by = "ip" \| "combined"`). **Dynamic** (hot-reloadable). Accepts CIDR notation. |
+| `trust_all_proxies` | boolean | `false` | Explicitly acknowledge a **trust-all** `trusted_proxies` entry (`0.0.0.0/0` or `::/0`). When `false` (default), such an entry raises a non-fatal config warning. Set to `true` to opt in deliberately and silence *only* that warning. **Advisory only** — it does not change runtime trust behaviour (a `/0` entry already trusts every peer). **Dynamic** (hot-reloadable). |
 
 > **Validation:** `trusted_proxies` is the trust boundary for `X-Forwarded-For` and the PROXY protocol
 > header — a peer inside it may declare the real client address. On load, `--validate`, and every hot
 > reload the proxy logs a non-fatal warning if an entry is **trust-all** (`0.0.0.0/0` or `::/0`; anyone
 > can then spoof the client IP) or a **very broad public range** (IPv4 broader than `/8` or IPv6 broader
 > than `/7`). Standard private/reserved ranges (`10/8`, `172.16/12`, `192.168/16`, `fc00::/7`, `fe80::/10`)
-> never warn. These are warnings, not errors: loading still succeeds.
+> never warn. Set `trust_all_proxies = true` to silence the trust-all warning when it is intentional.
+> These are warnings, not errors: loading still succeeds. With `huginn-proxy --validate --strict`, any
+> config warning makes validation exit non-zero (useful in CI).
 
 <table>
 <thead>

@@ -36,6 +36,10 @@ struct Cli {
     #[arg(long)]
     print_effective_config: bool,
 
+    /// With --validate/--print-effective-config, exit non-zero if any config warnings are found
+    #[arg(long)]
+    strict: bool,
+
     /// Enable filesystem watching for config and TLS certificate hot reload
     #[arg(long, env = "HUGINN_WATCH")]
     watch: bool,
@@ -51,7 +55,7 @@ async fn main() -> Result<(), BoxError> {
     let validation_mode = cli.validate || cli.print_effective_config;
 
     if validation_mode {
-        return validation::run(&cli.config_path, cli.print_effective_config);
+        return validation::run(&cli.config_path, cli.print_effective_config, cli.strict);
     }
 
     let config = load_from_path(&cli.config_path)?;

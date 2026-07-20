@@ -12,13 +12,15 @@
 //! | [`trusted_proxies`]  | [`trusted_proxies_warnings`] | over-broad `trusted_proxies` ranges       |
 
 mod headers;
+pub(crate) mod proxy_protocol;
 mod security_overrides;
 mod trusted_proxies;
 
 use tracing::warn;
 
 pub use headers::header_config_warnings;
-pub use security_overrides::{security_override_warnings, SecurityOverrideWarning};
+pub use proxy_protocol::proxy_protocol_trust_warnings;
+pub use security_overrides::security_override_warnings;
 pub use trusted_proxies::trusted_proxies_warnings;
 
 use crate::config::Config;
@@ -32,16 +34,20 @@ pub struct ConfigWarning {
     pub message: String,
 }
 
+/// Every non-fatal config finding, aggregated across all audits. Pure: this is what `run` logs and
+/// what `--validate` counts. Does **not** include the `proxy_protocol` trust-gap check, which has its
+/// own runtime logger and is only surfaced by `--validate`.
+pub fn all_warnings(cfg: &Config) -> Vec<ConfigWarning> {
+    let mut out = header_config_warnings(cfg);
+    out.extend(security_override_warnings(cfg));
+    out.extend(trusted_proxies_warnings(cfg));
+    out
+}
+
 /// Run every non-fatal config audit and log each finding as a `warn!`. Runs on boot, `--validate`,
 /// and every hot reload; never aborts, since the config still loads.
 pub(crate) fn run(cfg: &Config) {
-    for w in header_config_warnings(cfg) {
-        warn!(scope = %w.scope, "{}", w.message);
-    }
-    for w in security_override_warnings(cfg) {
-        warn!(scope = %w.scope, "{}", w.message);
-    }
-    for w in trusted_proxies_warnings(cfg) {
+    for w in all_warnings(cfg) {
         warn!(scope = %w.scope, "{}", w.message);
     }
 }

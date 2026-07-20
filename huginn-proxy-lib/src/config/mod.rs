@@ -5,13 +5,13 @@ mod secret;
 pub mod startup;
 pub mod watcher;
 
-mod audit;
+pub(crate) mod audit;
 mod loader;
 mod root;
 
 pub use audit::{
-    header_config_warnings, security_override_warnings, trusted_proxies_warnings, ConfigWarning,
-    SecurityOverrideWarning,
+    all_warnings, header_config_warnings, proxy_protocol_trust_warnings,
+    security_override_warnings, trusted_proxies_warnings, ConfigWarning,
 };
 pub use dynamic::security::{
     CspConfig, DomainSecurityConfig, HstsConfig, IpFilterConfig, IpFilterMode, LimitBy,
