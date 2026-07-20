@@ -19,7 +19,6 @@ pub(crate) enum TrustGap {
 }
 
 impl TrustGap {
-    /// Human-readable description, shared by the runtime logger and the `--validate` audit.
     pub(crate) fn message(&self) -> &'static str {
         match self {
             TrustGap::RequireDropsAll => {
@@ -47,11 +46,8 @@ pub(crate) fn trust_gap(mode: ProxyProtocolMode, has_trust: bool) -> Option<Trus
     }
 }
 
-/// Non-fatal audit for the `proxy_protocol` trust gap, for `--validate`.
-///
-/// Deliberately **not** part of `run`/[`super::all_warnings`]: at boot and on hot reload the runtime
-/// already logs this via `warn_proxy_protocol_trust_gap` (at `error!`/`warn!` level), so adding it
-/// there would double-log. `--validate` calls this explicitly since the runtime never runs.
+/// Trust-gap warning for `--validate`. Kept out of `all_warnings` to avoid double-logging: the
+/// runtime already emits it at boot/reload via `warn_proxy_protocol_trust_gap`.
 pub fn proxy_protocol_trust_warnings(cfg: &Config) -> Vec<ConfigWarning> {
     trust_gap(cfg.listen.proxy_protocol.mode, cfg.security.trusted_proxies.has_trust())
         .map(|gap| ConfigWarning {

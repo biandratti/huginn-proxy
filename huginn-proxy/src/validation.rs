@@ -19,6 +19,10 @@ pub(crate) fn run(
     result
 }
 
+/// Validate the config and, with `print_effective_config`, print the effective (secret-redacted)
+/// view. `load_from_path` already logged the config-audit findings; the `proxy_protocol` trust-gap
+/// check has its own runtime logger that never fires under `--validate`, so it is logged here and
+/// folded into the warning count. With `strict`, a non-zero count makes this return an error.
 fn validate_and_report(
     config_path: &Path,
     print_effective_config: bool,
@@ -27,9 +31,6 @@ fn validate_and_report(
     let config = load_from_path(config_path)?;
     config.validate_cross_refs()?;
 
-    // `load_from_path` already logged the config-audit findings. The proxy_protocol trust-gap check
-    // has its own runtime logger that never fires in --validate, so we log it here and fold it into
-    // the count/`--strict` gate.
     let mut warning_count = all_warnings(&config).len();
     for w in proxy_protocol_trust_warnings(&config) {
         tracing::warn!(scope = %w.scope, "{}", w.message);
