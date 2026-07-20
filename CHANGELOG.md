@@ -7,7 +7,7 @@ follows [Semantic Versioning](https://semver.org/).
 
 ---
 
-## [Unreleased]
+## [0.0.3-beta.0]
 
 ### Added
 
@@ -38,6 +38,12 @@ view or logs regardless of how the config grows.
 
 - Configuration loading now rejects unknown or misplaced keys at every nesting level during
   startup, `--validate`, and hot reload.
+
+### Fixed
+
+- eBPF SYN map handling now survives agent restarts: the agent reuses pinned maps when
+  possible, and the proxy reconnects if map IDs change (e.g. after
+  `HUGINN_EBPF_SYN_MAP_MAX_ENTRIES` changes).
 
 ---
 

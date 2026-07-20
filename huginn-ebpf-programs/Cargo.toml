@@ -6,7 +6,7 @@
 
 [package]
 name = "huginn-ebpf-programs"
-version = "0.0.2-beta.1"
+version = "0.0.3-beta.0"
 edition = "2021"
 publish = false
 
