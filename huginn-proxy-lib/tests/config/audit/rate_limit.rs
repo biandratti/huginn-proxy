@@ -59,6 +59,54 @@ window_seconds = 0
 }
 
 #[test]
+fn warns_when_limit_by_header_without_header_name() -> TestResult {
+    let path = tmp_path("rl-header-missing");
+    let toml = r#"
+listen = { addrs = ["127.0.0.1:0"] }
+backends = [{ address = "backend:9000" }]
+
+[security.rate_limit]
+enabled = true
+limit_by = "header"
+"#;
+    fs::write(&path, toml)?;
+    let cfg = load_from_path(&path)?;
+
+    let warnings = rate_limit_warnings(&cfg);
+    assert_eq!(warnings.len(), 1, "expected one finding, got: {warnings:?}");
+    assert_eq!(warnings[0].scope, "global rate_limit");
+    assert!(warnings[0].message.contains("limit_by_header"));
+
+    let _ = fs::remove_file(&path);
+    Ok(())
+}
+
+#[test]
+fn silent_when_limit_by_header_has_name() -> TestResult {
+    let path = tmp_path("rl-header-ok");
+    let toml = r#"
+listen = { addrs = ["127.0.0.1:0"] }
+backends = [{ address = "backend:9000" }]
+
+[security.rate_limit]
+enabled = true
+limit_by = "header"
+limit_by_header = "X-Api-Key"
+"#;
+    fs::write(&path, toml)?;
+    let cfg = load_from_path(&path)?;
+
+    assert!(
+        rate_limit_warnings(&cfg).is_empty(),
+        "a configured header name must not warn: {:?}",
+        rate_limit_warnings(&cfg)
+    );
+
+    let _ = fs::remove_file(&path);
+    Ok(())
+}
+
+#[test]
 fn silent_when_disabled_or_positive_window() -> TestResult {
     let path = tmp_path("rl-ok");
     // Disabled block with a zero window (inert), and an enabled block with a valid window.

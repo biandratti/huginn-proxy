@@ -1365,7 +1365,7 @@ The real client IP used for `limit_by = "ip" | "combined"` is resolved from the 
 | `burst`               | integer | `2000`  | Maximum burst size above the sustained rate.                                        |
 | `window_seconds`      | integer | `1`     | Sliding window in seconds for the token bucket refill. Must be `> 0` when `enabled` — an enabled limiter with `window_seconds = 0` emits a non-fatal validation warning. |
 | `limit_by`            | string       | `"ip"`  | Key used to track limits: `"ip"`, `"header"`, `"route"`, `"combined"` (IP + route). |
-| `limit_by_header`     | string       | `null`  | Header name to use as the rate limit key when `limit_by = "header"`.                |
+| `limit_by_header`     | string       | `null`  | Header name to use as the rate limit key when `limit_by = "header"`. Required in that mode — if missing, the limiter silently falls back to the client IP and a non-fatal validation warning is emitted. |
 
 <table>
 <thead>

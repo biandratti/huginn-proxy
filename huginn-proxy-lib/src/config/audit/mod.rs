@@ -8,7 +8,7 @@
 //! | Submodule            | Pure entry point             | Detects                                   |
 //! |----------------------|------------------------------|-------------------------------------------|
 //! | [`headers`]          | [`header_config_warnings`]   | duplicate / contradictory header config   |
-//! | [`rate_limit`]       | [`rate_limit_warnings`]      | enabled rate limit with zero window       |
+//! | [`rate_limit`]       | [`rate_limit_warnings`]      | enabled rate limit with a broken config   |
 //! | [`security_overrides`] | [`security_override_warnings`] | whole-block overrides dropping protection |
 //! | [`trusted_proxies`]  | [`trusted_proxies_warnings`] | over-broad `trusted_proxies` ranges       |
 

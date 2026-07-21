@@ -390,7 +390,8 @@ changed, the proxy logs an error and ignores those changes (restart required).
 
 On load, `--validate`, and every reload the proxy also emits **non-fatal `WARN`s** for likely config mistakes — e.g. a
 whole-block override (domain or route) that drops a protection the parent had enabled (a partial
-`rate_limit`/`ip_filter`/`headers` block silently disabling a globally-enabled policy), or an enabled `rate_limit` with
-`window_seconds = 0` (cannot compute a rate). These never abort, since some of them may be intended.
+`rate_limit`/`ip_filter`/`headers` block silently disabling a globally-enabled policy), or an enabled `rate_limit` that is
+self-defeating (`window_seconds = 0`, or `limit_by = "header"` with no `limit_by_header` so it silently keys by IP).
+These never abort, since some of them may be intended.
 
 Limitation: No per-section partial reload. Dynamic config is always swapped as a whole.
