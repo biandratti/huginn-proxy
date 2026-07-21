@@ -145,8 +145,8 @@ fn peer_from_read_result(
 ///
 /// The returned peer is always plain IPv4 when the client arrives as an IPv4-mapped IPv6 address
 /// (`::ffff:a.b.c.d`, e.g. declared that way in a PROXY header). Canonicalization happens at the
-/// two points an address enters — the socket peer below, and the PROXY-declared client in
-/// [`peer_from_read_result`] — so every trust check, fallback and return shares one form and
+/// two points an address enters: the socket peer below, and the PROXY-declared client in
+/// `peer_from_read_result`; every trust check, fallback and return shares one form and
 /// downstream consumers (SYN probe, IP filter, rate limit, `X-Forwarded-For`) must not re-normalize.
 pub async fn resolve_peer(
     proxy_mode: ProxyProtocolMode,

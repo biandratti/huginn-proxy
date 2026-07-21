@@ -85,7 +85,7 @@ pub enum ProxySource {
 
 /// Normalize an IPv4-mapped IPv6 address (`::ffff:a.b.c.d`) to plain IPv4.
 ///
-/// An IPv4 client can surface as an IPv4-mapped IPv6 address — a dual-stack listener bound to
+/// An IPv4 client can surface as an IPv4-mapped IPv6 address, a dual-stack listener bound to
 /// `[::]`, or (more relevant here, since our listener forces `IPV6_V6ONLY`) a client declared that
 /// way in a PROXY protocol header by a downstream L4 proxy. Left as-is, an `IpNet::V4` entry never
 /// contains an `IpAddr::V6`, so `trusted_proxies`/`ip_filter` matches silently fail and the
