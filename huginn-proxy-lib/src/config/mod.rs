@@ -10,7 +10,7 @@ mod loader;
 mod root;
 
 pub use audit::{
-    all_warnings, header_config_warnings, proxy_protocol_trust_warnings,
+    all_warnings, header_config_warnings, proxy_protocol_trust_warnings, rate_limit_warnings,
     security_override_warnings, trusted_proxies_warnings, ConfigWarning,
 };
 pub use dynamic::security::{

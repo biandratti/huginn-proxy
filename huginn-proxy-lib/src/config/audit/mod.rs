@@ -8,11 +8,13 @@
 //! | Submodule            | Pure entry point             | Detects                                   |
 //! |----------------------|------------------------------|-------------------------------------------|
 //! | [`headers`]          | [`header_config_warnings`]   | duplicate / contradictory header config   |
+//! | [`rate_limit`]       | [`rate_limit_warnings`]      | enabled rate limit with zero window       |
 //! | [`security_overrides`] | [`security_override_warnings`] | whole-block overrides dropping protection |
 //! | [`trusted_proxies`]  | [`trusted_proxies_warnings`] | over-broad `trusted_proxies` ranges       |
 
 mod headers;
 pub(crate) mod proxy_protocol;
+mod rate_limit;
 mod security_overrides;
 mod trusted_proxies;
 
@@ -20,6 +22,7 @@ use tracing::warn;
 
 pub use headers::header_config_warnings;
 pub use proxy_protocol::proxy_protocol_trust_warnings;
+pub use rate_limit::rate_limit_warnings;
 pub use security_overrides::security_override_warnings;
 pub use trusted_proxies::trusted_proxies_warnings;
 
@@ -39,6 +42,7 @@ pub struct ConfigWarning {
 /// own runtime logger and is only surfaced by `--validate`.
 pub fn all_warnings(cfg: &Config) -> Vec<ConfigWarning> {
     let mut out = header_config_warnings(cfg);
+    out.extend(rate_limit_warnings(cfg));
     out.extend(security_override_warnings(cfg));
     out.extend(trusted_proxies_warnings(cfg));
     out

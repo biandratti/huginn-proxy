@@ -1,8 +1,8 @@
 use std::fs;
 
 use huginn_proxy_lib::config::{
-    all_warnings, header_config_warnings, load_from_path, security_override_warnings,
-    trusted_proxies_warnings,
+    all_warnings, header_config_warnings, load_from_path, rate_limit_warnings,
+    security_override_warnings, trusted_proxies_warnings,
 };
 
 use crate::config::tmp_path;
@@ -42,6 +42,7 @@ enabled = false
     let cfg = load_from_path(&path)?;
 
     let expected = header_config_warnings(&cfg).len()
+        + rate_limit_warnings(&cfg).len()
         + security_override_warnings(&cfg).len()
         + trusted_proxies_warnings(&cfg).len();
     let all = all_warnings(&cfg);

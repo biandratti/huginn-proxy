@@ -388,8 +388,9 @@ Reload triggers and config:
 On reload, if the new config is invalid the proxy keeps the current config and logs the error. If static sections
 changed, the proxy logs an error and ignores those changes (restart required).
 
-On load, `--validate`, and every reload the proxy also emits a **non-fatal `WARN`** when a whole-block override (domain
-or route) drops a protection the parent had enabled — e.g. a partial `rate_limit`/`ip_filter`/`headers` block that
-silently disables a globally-enabled policy. It never aborts, since dropping a policy may be intended.
+On load, `--validate`, and every reload the proxy also emits **non-fatal `WARN`s** for likely config mistakes — e.g. a
+whole-block override (domain or route) that drops a protection the parent had enabled (a partial
+`rate_limit`/`ip_filter`/`headers` block silently disabling a globally-enabled policy), or an enabled `rate_limit` with
+`window_seconds = 0` (cannot compute a rate). These never abort, since some of them may be intended.
 
 Limitation: No per-section partial reload. Dynamic config is always swapped as a whole.

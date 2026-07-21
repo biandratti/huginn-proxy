@@ -14,8 +14,8 @@ follows [Semantic Versioning](https://semver.org/).
 - **Config validation warnings + `--validate --strict`.** Config loading audits for likely mistakes
   and logs non-fatal warnings (boot, `--validate`, hot reload): duplicate/contradictory header
   manipulation, security overrides that drop parent protection, over-broad `trusted_proxies` ranges,
-  and `proxy_protocol` with no trusted peer. `--validate` prints a warning count; `--strict` exits
-  non-zero on any warning. See `SETTINGS.md`.
+  an enabled `rate_limit` with `window_seconds = 0`, and `proxy_protocol` with no trusted peer.
+  `--validate` prints a warning count; `--strict` exits non-zero on any warning. See `SETTINGS.md`.
 
 ### Breaking changes
 
