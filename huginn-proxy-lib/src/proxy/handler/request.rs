@@ -80,7 +80,13 @@ fn enforce_ip_access(
     Ok(())
 }
 
-/// Handle request routing and forwarding
+/// Handle request routing and forwarding.
+///
+/// `peer` is the effective client address as resolved by `resolve_peer`, and is expected to be
+/// already canonicalized: IPv4-mapped IPv6 clients (`::ffff:a.b.c.d`, e.g. declared in a PROXY
+/// protocol header) are normalized to plain IPv4 at that single point. This handler therefore does
+/// **not** re-normalize; it relies on that contract so `ip_filter`, the rate-limit key and
+/// `X-Forwarded-For` all observe one consistent form.
 #[allow(clippy::too_many_arguments)]
 pub async fn handle_proxy_request(
     mut req: Request<Incoming>,

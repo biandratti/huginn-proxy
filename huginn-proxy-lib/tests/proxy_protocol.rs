@@ -11,7 +11,7 @@
 //! bytes so that the very next byte huginn reads is the TLS `0x16 0x03` record.
 
 use std::convert::Infallible;
-use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
+use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -53,6 +53,20 @@ fn proxy_v2_ipv4(src: SocketAddrV4, dst: SocketAddrV4) -> Vec<u8> {
     buf.extend_from_slice(&dst.ip().octets());
     buf.extend_from_slice(&src.port().to_be_bytes());
     buf.extend_from_slice(&dst.port().to_be_bytes());
+    buf
+}
+
+/// Build a PROXY protocol v2 header for an IPv6 TCP `(src, dst)` pair (AF_INET6, 36-byte block).
+fn proxy_v2_ipv6(src_ip: Ipv6Addr, src_port: u16, dst_ip: Ipv6Addr, dst_port: u16) -> Vec<u8> {
+    let mut buf = Vec::with_capacity(52);
+    buf.extend_from_slice(&V2_SIGNATURE);
+    buf.push((2 << 4) | 0x1); // version 2, command PROXY
+    buf.push((0x2 << 4) | 0x1); // AF_INET6, STREAM
+    buf.extend_from_slice(&36u16.to_be_bytes()); // address block length
+    buf.extend_from_slice(&src_ip.octets());
+    buf.extend_from_slice(&dst_ip.octets());
+    buf.extend_from_slice(&src_port.to_be_bytes());
+    buf.extend_from_slice(&dst_port.to_be_bytes());
     buf
 }
 
@@ -202,6 +216,39 @@ async fn optional_trusted_peer_header_is_applied() -> TestResult {
     assert!(
         resp.contains("xfp=51115"),
         "X-Forwarded-Port should be the PROXY-declared source port, got: {resp}"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn ipv4_mapped_client_is_normalized_in_forwarded_headers() -> TestResult {
+    // A downstream LB declares the client as an IPv4-mapped IPv6 address (`::ffff:203.0.113.7`).
+    // The handler must normalize it to plain IPv4 before building X-Forwarded-For (same as the
+    // ip_filter / rate-limit key), so the backend sees `203.0.113.7`, not `::ffff:203.0.113.7`.
+    let (backend, _bh) = spawn_echo_backend().await?;
+    let port = free_port()?;
+    let (proxy, _ph) =
+        spawn_proxy(&config_toml(port, backend, "optional", "\"127.0.0.1/32\", \"::1/128\""))
+            .await?;
+
+    let src_v4 = Ipv4Addr::new(203, 0, 113, 7);
+    let header = proxy_v2_ipv6(
+        src_v4.to_ipv6_mapped(),
+        51115,
+        Ipv4Addr::new(127, 0, 0, 1).to_ipv6_mapped(),
+        port,
+    );
+
+    let resp = raw_request(proxy, &header).await;
+
+    assert!(resp.contains("200"), "expected a 200 response, got: {resp}");
+    assert!(
+        resp.contains("xff=203.0.113.7"),
+        "IPv4-mapped client must be normalized to plain IPv4 in X-Forwarded-For, got: {resp}"
+    );
+    assert!(
+        !resp.contains("::ffff:"),
+        "X-Forwarded-For must not carry the IPv4-mapped form, got: {resp}"
     );
     Ok(())
 }

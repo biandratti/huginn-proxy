@@ -85,11 +85,15 @@ pub enum ProxySource {
 
 /// Normalize an IPv4-mapped IPv6 address (`::ffff:a.b.c.d`) to plain IPv4.
 ///
-/// A dual-stack listener bound to `[::]` reports an incoming IPv4 connection with an
-/// IPv4-mapped IPv6 peer address. The `trusted_proxies` gate matches the peer against configured
-/// CIDRs, and an `IpNet::V4` entry does **not** contain an `IpAddr::V6`, so without this the
-/// trust check silently fails for an IPv4 proxy on a dual-stack listener and the whole feature
-/// degrades to `off`. Applied to the peer IP before the trust check. Mirrors rust-rpxy.
+/// An IPv4 client can surface as an IPv4-mapped IPv6 address, a dual-stack listener bound to
+/// `[::]`, or (more relevant here, since our listener forces `IPV6_V6ONLY`) a client declared that
+/// way in a PROXY protocol header by a downstream L4 proxy. Left as-is, an `IpNet::V4` entry never
+/// contains an `IpAddr::V6`, so `trusted_proxies`/`ip_filter` matches silently fail and the
+/// rate-limit key splits from the equivalent native-IPv4 peer.
+///
+/// Used in two spots: on the socket peer before the `trusted_proxies` trust check, and on the
+/// effective peer returned by `resolve_peer` (the single canonicalization point for everything
+/// downstream). Mirrors rust-rpxy.
 pub fn normalize_mapped_ipv4(addr: IpAddr) -> IpAddr {
     match addr {
         IpAddr::V6(v6) => match v6.to_ipv4_mapped() {

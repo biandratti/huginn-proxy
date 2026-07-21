@@ -40,6 +40,11 @@ fn is_trusted(peer_ip: std::net::IpAddr, trusted_proxies: &TrustedProxiesConfig)
     trusted_proxies.trusts(&peer_ip)
 }
 
+/// Collapse an IPv4-mapped IPv6 peer (`::ffff:a.b.c.d`) to plain IPv4, preserving the port.
+fn canonical_peer(peer: SocketAddr) -> SocketAddr {
+    SocketAddr::new(normalize_mapped_ipv4(peer.ip()), peer.port())
+}
+
 /// Whether a passthrough outcome (non-`Require` mode, no PROXY source available) is worth
 /// recording. An untrusted peer passing through is the common, unremarkable case when
 /// `proxy_protocol=optional` serves both proxied and direct clients, so it stays silent; a
@@ -96,7 +101,7 @@ fn peer_from_read_result(
                 real_client = %src,
                 "PROXY header: real client recovered"
             );
-            Some(src)
+            Some(canonical_peer(src))
         }
         Ok(Ok(ProxySource::Local)) => {
             metrics.record_proxy_protocol_passthrough();
@@ -137,6 +142,12 @@ fn peer_from_read_result(
 /// Security boundary: a PROXY header is parsed **only** when the immediate socket peer is in
 /// `trusted_proxies`. Untrusted peers are never parsed, so a direct attacker cannot forge a
 /// header to spoof its source (classic PROXY-protocol spoofing).
+///
+/// The returned peer is always plain IPv4 when the client arrives as an IPv4-mapped IPv6 address
+/// (`::ffff:a.b.c.d`, e.g. declared that way in a PROXY header). Canonicalization happens at the
+/// two points an address enters: the socket peer below, and the PROXY-declared client in
+/// `peer_from_read_result`; every trust check, fallback and return shares one form and
+/// downstream consumers (SYN probe, IP filter, rate limit, `X-Forwarded-For`) must not re-normalize.
 pub async fn resolve_peer(
     proxy_mode: ProxyProtocolMode,
     timeout_dur: Duration,
@@ -145,13 +156,14 @@ pub async fn resolve_peer(
     stream: &mut TcpStream,
     socket_peer: SocketAddr,
 ) -> Option<SocketAddr> {
+    let socket_peer = canonical_peer(socket_peer);
+
     let mode = match proxy_mode {
         ProxyProtocolMode::Off => return Some(socket_peer),
         mode => mode,
     };
 
-    let peer_ip = normalize_mapped_ipv4(socket_peer.ip());
-    if !is_trusted(peer_ip, trusted_proxies) {
+    if !is_trusted(socket_peer.ip(), trusted_proxies) {
         return require_drops(
             mode,
             metrics,
