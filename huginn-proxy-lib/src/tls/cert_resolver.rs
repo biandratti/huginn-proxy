@@ -9,7 +9,7 @@ use tokio_rustls::rustls::sign::CertifiedKey;
 use crate::config::Domain;
 use crate::error::{ProxyError, Result};
 use crate::telemetry::Metrics;
-use crate::tls::cert_source::{cert_chain_hash, read_certs_and_keys};
+use huginn_certs::{cert_chain_hash, read_certs_and_keys};
 use tracing::{info, warn};
 
 /// Outcome of a [`DynamicCertResolver::update`] call.

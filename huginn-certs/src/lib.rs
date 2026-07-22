@@ -24,4 +24,6 @@ pub mod crypto_source;
 pub mod error;
 pub mod server_crypto;
 
+pub use certs::{cert_chain_hash, ServerCertsKeys};
+pub use crypto_source::read_certs_and_keys;
 pub use error::CertError;

@@ -1128,6 +1128,7 @@ dependencies = [
  "criterion",
  "http",
  "http-body-util",
+ "huginn-certs",
  "huginn-net-http",
  "huginn-net-tcp",
  "huginn-net-tls",
