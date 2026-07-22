@@ -1,11 +1,10 @@
 //! Certificate source: loading cert/key material from PEM files.
 //!
-//! Currently the only source is the filesystem ([`read_certs_and_keys`]). The
-//! `CertEntry` description consumed by
-//! [`DynamicCertResolver`](crate::server_crypto::DynamicCertResolver) is added
-//! alongside the resolver.
+//! Currently the only source is the filesystem ([`read_certs_and_keys`]). A
+//! [`CertEntry`] describes one domain's cert material for
+//! [`DynamicCertResolver::update`](crate::server_crypto::DynamicCertResolver::update).
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use rustls_pki_types::pem::PemObject;
 use rustls_pki_types::{CertificateDer, PrivateKeyDer};
@@ -14,6 +13,25 @@ use tracing::debug;
 
 use crate::certs::ServerCertsKeys;
 use crate::error::CertError;
+
+/// One domain's certificate material, decoupled from the proxy's config types.
+///
+/// The caller (huginn-proxy-lib) translates each configured domain that declares
+/// a cert into a `CertEntry`; domains without cert/key paths are filtered out
+/// before reaching the resolver.
+#[derive(Debug, Clone)]
+pub struct CertEntry {
+    /// SNI host this cert serves. `None` = catch-all (populates the default cert
+    /// slot). `Some("*.base")` = wildcard; `Some("host")` = exact match.
+    pub host: Option<String>,
+    /// Path to the certificate chain PEM file.
+    pub cert_path: PathBuf,
+    /// Path to the private key PEM file.
+    pub key_path: PathBuf,
+    /// Stable identifier for metrics/logs (the host, or `"_default_"` for the
+    /// catch-all). Chosen by the caller so the crate stays config-agnostic.
+    pub label: String,
+}
 
 /// Read the certificate and private key from the disk.
 ///

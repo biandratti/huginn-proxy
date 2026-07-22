@@ -69,11 +69,13 @@ pub async fn run(
     // `None` when TLS is not configured (plain HTTP mode).
     let cert_resolver: Option<Arc<DynamicCertResolver>> = if let Some(tls) = &static_cfg.tls {
         let resolver = Arc::new(DynamicCertResolver::new(tls.options.sni_strict));
-        let report = resolver.update(&dynamic_cfg.load().domains, &metrics).await;
+        let report =
+            crate::tls::reload_certs(resolver.as_ref(), &dynamic_cfg.load().domains, &metrics)
+                .await;
         if report.is_partial() {
             info!(
-                failed = report.failed,
-                loaded = report.loaded,
+                failed = report.failed.len(),
+                loaded = report.loaded.len(),
                 "Some domain certificates failed to load at startup; those domains will not serve TLS"
             );
         }

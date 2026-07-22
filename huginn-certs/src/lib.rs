@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 //! TLS certificate material and SNI-based resolution for huginn-proxy.
 //!
 //! This crate owns everything about *which certificate to serve* and *how cert
@@ -25,5 +27,6 @@ pub mod error;
 pub mod server_crypto;
 
 pub use certs::{cert_chain_hash, ServerCertsKeys};
-pub use crypto_source::read_certs_and_keys;
+pub use crypto_source::{read_certs_and_keys, CertEntry};
 pub use error::CertError;
+pub use server_crypto::{CertReloadReport, DynamicCertResolver};

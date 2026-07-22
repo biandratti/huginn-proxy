@@ -6,7 +6,7 @@ use tokio_rustls::TlsAcceptor;
 use crate::config::TlsConfig;
 use crate::error::Result;
 use crate::tls::acceptor::build_server_config_with_resolver;
-use crate::tls::cert_resolver::DynamicCertResolver;
+use crate::tls::DynamicCertResolver;
 
 pub type SharedTlsAcceptor = Arc<ArcSwap<TlsAcceptor>>;
 

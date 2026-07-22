@@ -177,6 +177,7 @@ jobs:
       matrix:
         crate:
           - huginn-proxy
+          - huginn-certs
           - huginn-ebpf
           - huginn-ebpf-agent
           - huginn-ebpf-common

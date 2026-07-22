@@ -1,5 +1,4 @@
 mod acceptor;
-mod cert_resolver;
 mod cert_source;
 mod cipher_curve_signature;
 mod options;
