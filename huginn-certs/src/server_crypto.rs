@@ -1,33 +1,50 @@
+//! SNI-based certificate resolution and atomic hot-reload.
+//!
+//! [`DynamicCertResolver`] implements rustls' [`ResolvesServerCert`] over a cert
+//! map swapped atomically via `ArcSwap`, so `resolve()` (called on every TLS
+//! handshake) never blocks. [`DynamicCertResolver::update`] rebuilds the map from
+//! a list of [`CertEntry`] and swaps it in with a single pointer store.
+//!
+//! Resolution order is exact → wildcard → default (catch-all), with `sni_strict`
+//! parity to Traefik's `sniStrict`. This is huginn's model, not rpxy's per-SNI
+//! `HashMap<SNI, ServerConfig>`.
+
 use std::collections::HashMap;
-use std::path::Path;
 use std::sync::Arc;
 
 use arc_swap::ArcSwap;
 use tokio_rustls::rustls::server::{ClientHello, ResolvesServerCert};
 use tokio_rustls::rustls::sign::CertifiedKey;
-
-use crate::config::Domain;
-use crate::error::{ProxyError, Result};
-use crate::telemetry::Metrics;
-use crate::tls::cert_source::{cert_chain_hash, read_certs_and_keys};
 use tracing::{info, warn};
+
+use crate::certs::cert_chain_hash;
+use crate::crypto_source::{CertEntry, CryptoSource};
+use crate::error::CertError;
 
 /// Outcome of a [`DynamicCertResolver::update`] call.
 ///
 /// `update()` is best-effort per-domain: it always performs the atomic swap and
-/// loads as many certs as it can. `loaded` counts domains whose cert went live
-/// in this call; `failed` counts domains whose cert could not be loaded (those
-/// keep their previously serving cert, if any). `failed > 0` is a *partial* reload.
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+/// loads as many certs as it can. `loaded` holds `(label, cert_hash)` for each
+/// domain whose cert went live in this call; `failed` holds the labels of domains
+/// whose cert could not be loaded (those keep their previously serving cert, if
+/// any). A non-empty `failed` is a *partial* reload.
+///
+/// The report carries labels and hashes rather than emitting metrics itself, so
+/// the crate stays free of any telemetry dependency: the caller
+/// (huginn-proxy-lib) records `tls_cert_reload_*` from this report *after*
+/// `update` returns, i.e. after the atomic swap.
+#[derive(Debug, Default, Clone)]
 pub struct CertReloadReport {
-    pub loaded: usize,
-    pub failed: usize,
+    /// `(label, cert_hash)` per cert that went into service this reload.
+    pub loaded: Vec<(String, u64)>,
+    /// Labels of domains whose cert failed to load this reload.
+    pub failed: Vec<String>,
 }
 
 impl CertReloadReport {
     /// `true` when at least one domain's cert failed to load this reload.
     pub fn is_partial(&self) -> bool {
-        self.failed > 0
+        !self.failed.is_empty()
     }
 }
 
@@ -89,7 +106,7 @@ impl CertMap {
     }
 }
 
-/// SNI-based certificate resolver populated from `DynamicConfig.domains`.
+/// SNI-based certificate resolver populated from a list of [`CertEntry`].
 ///
 /// Cert maps are swapped atomically via `ArcSwap` so `resolve()` (called on
 /// every TLS handshake) never blocks. `update()` builds the new maps async,
@@ -126,58 +143,44 @@ impl DynamicCertResolver {
         Self { inner: ArcSwap::new(Arc::new(CertMap::default())), sni_strict }
     }
 
-    /// Reload cert maps from `domains`. Domains without `cert_path`/`key_path` are skipped.
+    /// Reload cert maps from `entries`.
     ///
     /// Best-effort, per-domain: a domain whose cert fails to load does **not** abort the
     /// reload. The atomic swap always runs with every cert that loaded successfully, and a
     /// failing domain keeps its *previously serving* cert (carried over from the old map) so
     /// a bad file mid-rotation never takes that domain offline. The returned
-    /// [`CertReloadReport`] reports how many certs loaded vs. failed; `failed > 0` is a
-    /// partial reload (caller emits the partial signal, see `proxy/reload.rs`).
+    /// [`CertReloadReport`] lists which certs loaded (with their chain hash) vs. which
+    /// failed; a non-empty `failed` is a partial reload.
     ///
-    /// A per-domain error metric fires for each failure. Success metrics are recorded only
-    /// *after* the atomic swap, so the `tls_cert_hash`/timestamp gauges always reflect a
-    /// certificate that actually went into service (carried-over certs keep their existing
-    /// gauge value; no spurious success is emitted for them).
-    pub async fn update(&self, domains: &[Domain], metrics: &Metrics) -> CertReloadReport {
+    /// The report's `loaded` list is built as certs go into `next` and returned only after
+    /// the atomic swap, so a caller that records success metrics from it never advertises a
+    /// certificate that didn't actually go into service (carried-over certs are not listed
+    /// as loaded; no spurious success is emitted for them).
+    pub async fn update(&self, entries: &[CertEntry]) -> CertReloadReport {
         let old = self.inner.load();
         let mut next = CertMap::default();
-        // Buffered until after the swap; (host, cert_hash) per successfully loaded cert.
         let mut loaded: Vec<(String, u64)> = Vec::new();
-        let mut failed: usize = 0;
+        let mut failed: Vec<String> = Vec::new();
 
-        for domain in domains {
-            // Label for metrics/logs; the catch-all domain has no host string.
-            let host = domain.label();
-            let (cert_path, key_path) = match (&domain.cert_path, &domain.key_path) {
-                (Some(c), Some(k)) => (c.as_str(), k.as_str()),
-                _ => {
-                    info!(
-                        host,
-                        "Domain has no cert_path/key_path; it will serve TLS only if a default certificate exists"
-                    );
-                    continue;
-                }
-            };
-
-            let slot = classify(domain.host.as_deref());
-            match load_certified_key(cert_path, key_path, host).await {
+        for entry in entries {
+            let label = entry.label.as_str();
+            let slot = classify(entry.host.as_deref());
+            match load_certified_key(entry.source.as_ref(), label).await {
                 Ok((certified_key, cert_hash)) => {
                     next.place(&slot, certified_key);
-                    loaded.push((host.to_string(), cert_hash));
+                    loaded.push((label.to_string(), cert_hash));
                 }
                 Err(e) => {
-                    metrics.record_tls_cert_reload_error(host);
-                    failed = failed.saturating_add(1);
+                    failed.push(label.to_string());
                     // Best-effort: carry the domain's previously serving cert forward so a
                     // transient bad cert does not drop TLS for a host that was working.
                     match old.get(&slot) {
                         Some(prev) => {
-                            info!(host, error = %e, "Cert load failed; keeping previously loaded certificate");
+                            info!(host = label, error = %e, "Cert load failed; keeping previously loaded certificate");
                             next.place(&slot, prev);
                         }
                         None => {
-                            info!(host, error = %e, "Cert load failed; domain has no previous certificate and will not serve TLS");
+                            info!(host = label, error = %e, "Cert load failed; domain has no previous certificate and will not serve TLS");
                         }
                     }
                 }
@@ -186,13 +189,7 @@ impl DynamicCertResolver {
 
         self.inner.store(Arc::new(next));
 
-        // Emit success metrics only now that the new map is live, so the gauges
-        // never advertise a cert that didn't actually go into service.
-        for (host, cert_hash) in &loaded {
-            metrics.record_tls_cert_reload_success(host, *cert_hash);
-        }
-
-        CertReloadReport { loaded: loaded.len(), failed }
+        CertReloadReport { loaded, failed }
     }
 
     /// Core SNI → cert resolution. Separated from [`ResolvesServerCert::resolve`]
@@ -262,20 +259,20 @@ impl ResolvesServerCert for DynamicCertResolver {
     }
 }
 
-/// Read a cert/key pair from disk and build a `(CertifiedKey, chain_hash)`.
+/// Read a cert/key pair from `source` and build a `(CertifiedKey, chain_hash)`.
 ///
-/// `host` is used only to label the signing-key error. Errors are returned, not
+/// `label` is used only to label the signing-key error. Errors are returned, not
 /// recorded as metrics, so the caller decides how to treat the failure.
 async fn load_certified_key(
-    cert_path: &str,
-    key_path: &str,
-    host: &str,
-) -> Result<(Arc<CertifiedKey>, u64)> {
-    let certs_keys = read_certs_and_keys(Path::new(cert_path), Path::new(key_path)).await?;
+    source: &dyn CryptoSource,
+    label: &str,
+) -> Result<(Arc<CertifiedKey>, u64), CertError> {
+    let certs_keys = source.read().await?;
     let signing_key =
         tokio_rustls::rustls::crypto::aws_lc_rs::sign::any_supported_type(&certs_keys.key)
-            .map_err(|e| {
-                ProxyError::Tls(format!("Failed to build signing key for '{host}': {e}"))
+            .map_err(|e| CertError::SigningKey {
+                label: label.to_string(),
+                message: e.to_string(),
             })?;
     let cert_hash = cert_chain_hash(&certs_keys.certs);
     let certified_key = Arc::new(CertifiedKey::new(certs_keys.certs, signing_key));
@@ -286,14 +283,15 @@ async fn load_certified_key(
             tokio_rustls::rustls::InconsistentKeys::Unknown,
         )) => {
             warn!(
-                host,
+                host = label,
                 "could not verify that the private key matches the certificate; proceeding"
             );
         }
         Err(e) => {
-            return Err(ProxyError::Tls(format!(
-                "certificate and private key for '{host}' do not match: {e}"
-            )));
+            return Err(CertError::KeyMismatch {
+                label: label.to_string(),
+                message: e.to_string(),
+            });
         }
     }
 

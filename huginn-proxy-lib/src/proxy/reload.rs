@@ -96,7 +96,8 @@ pub async fn try_reload(
 
     let cert_report = match cert_resolver {
         Some(resolver) => {
-            let report = resolver.update(&new_dynamic.domains, metrics).await;
+            let report =
+                crate::tls::reload_certs(resolver.as_ref(), &new_dynamic.domains, metrics).await;
             if !resolver.has_serviceable_cert() && !new_dynamic.domains.is_empty() {
                 info!(
                     "TLS is configured but no certificate is serviceable after reload; all TLS \
@@ -110,8 +111,8 @@ pub async fn try_reload(
 
     if cert_report.is_partial() {
         info!(
-            failed = cert_report.failed,
-            loaded = cert_report.loaded,
+            failed = cert_report.failed.len(),
+            loaded = cert_report.loaded.len(),
             "Some domain certificates failed to load on reload; new routes/backends are live and \
              failed domains keep their previous certificates"
         );
