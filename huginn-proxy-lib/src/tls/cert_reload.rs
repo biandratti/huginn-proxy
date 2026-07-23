@@ -7,8 +7,8 @@
 //! `tls_cert_reload_*` metrics from the report, keeping the crate free of any
 //! dependency on `config` or `telemetry`.
 
-use huginn_certs::{CertEntry, CertReloadReport, DynamicCertResolver};
-use std::path::PathBuf;
+use huginn_certs::{CertEntry, CertReloadReport, CryptoFileSource, DynamicCertResolver};
+use std::sync::Arc;
 use tracing::info;
 
 use crate::config::Domain;
@@ -26,8 +26,7 @@ pub fn cert_entries_from_domains(domains: &[Domain]) -> Vec<CertEntry> {
         match (&domain.cert_path, &domain.key_path) {
             (Some(cert_path), Some(key_path)) => entries.push(CertEntry {
                 host: domain.host.clone(),
-                cert_path: PathBuf::from(cert_path),
-                key_path: PathBuf::from(key_path),
+                source: Arc::new(CryptoFileSource::new(cert_path, key_path)),
                 label: domain.label().to_string(),
             }),
             _ => info!(

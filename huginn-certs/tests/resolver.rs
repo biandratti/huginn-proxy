@@ -5,8 +5,9 @@
 //! proxy's `Domain` type, and read counts from the enriched report via `.len()`.
 
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
-use huginn_certs::{CertEntry, DynamicCertResolver};
+use huginn_certs::{CertEntry, CryptoFileSource, DynamicCertResolver};
 
 type TestResult = Result<(), Box<dyn std::error::Error + Send + Sync>>;
 
@@ -39,8 +40,7 @@ fn make_cert() -> Result<TestCert, Box<dyn std::error::Error + Send + Sync>> {
 fn entry(host: Option<&str>, cert: &Path, key: &Path) -> CertEntry {
     CertEntry {
         host: host.map(str::to_string),
-        cert_path: cert.to_path_buf(),
-        key_path: key.to_path_buf(),
+        source: Arc::new(CryptoFileSource::new(cert, key)),
         label: host.unwrap_or("_default_").to_string(),
     }
 }

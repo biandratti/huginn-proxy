@@ -10,7 +10,6 @@
 //! `HashMap<SNI, ServerConfig>`.
 
 use std::collections::HashMap;
-use std::path::Path;
 use std::sync::Arc;
 
 use arc_swap::ArcSwap;
@@ -19,7 +18,7 @@ use tokio_rustls::rustls::sign::CertifiedKey;
 use tracing::{info, warn};
 
 use crate::certs::cert_chain_hash;
-use crate::crypto_source::{read_certs_and_keys, CertEntry};
+use crate::crypto_source::{CertEntry, CryptoSource};
 use crate::error::CertError;
 
 /// Outcome of a [`DynamicCertResolver::update`] call.
@@ -166,7 +165,7 @@ impl DynamicCertResolver {
         for entry in entries {
             let label = entry.label.as_str();
             let slot = classify(entry.host.as_deref());
-            match load_certified_key(&entry.cert_path, &entry.key_path, label).await {
+            match load_certified_key(entry.source.as_ref(), label).await {
                 Ok((certified_key, cert_hash)) => {
                     next.place(&slot, certified_key);
                     loaded.push((label.to_string(), cert_hash));
@@ -260,16 +259,15 @@ impl ResolvesServerCert for DynamicCertResolver {
     }
 }
 
-/// Read a cert/key pair from disk and build a `(CertifiedKey, chain_hash)`.
+/// Read a cert/key pair from `source` and build a `(CertifiedKey, chain_hash)`.
 ///
 /// `label` is used only to label the signing-key error. Errors are returned, not
 /// recorded as metrics, so the caller decides how to treat the failure.
 async fn load_certified_key(
-    cert_path: &Path,
-    key_path: &Path,
+    source: &dyn CryptoSource,
     label: &str,
 ) -> Result<(Arc<CertifiedKey>, u64), CertError> {
-    let certs_keys = read_certs_and_keys(cert_path, key_path).await?;
+    let certs_keys = source.read().await?;
     let signing_key =
         tokio_rustls::rustls::crypto::aws_lc_rs::sign::any_supported_type(&certs_keys.key)
             .map_err(|e| CertError::SigningKey {
