@@ -22,9 +22,7 @@ pub enum ProxyError {
 
 impl From<huginn_certs::CertError> for ProxyError {
     fn from(e: huginn_certs::CertError) -> Self {
-        match e {
-            huginn_certs::CertError::Tls(msg) => ProxyError::Tls(msg),
-        }
+        ProxyError::Tls(e.to_string())
     }
 }
 

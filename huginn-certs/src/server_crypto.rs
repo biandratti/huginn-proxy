@@ -272,8 +272,9 @@ async fn load_certified_key(
     let certs_keys = read_certs_and_keys(cert_path, key_path).await?;
     let signing_key =
         tokio_rustls::rustls::crypto::aws_lc_rs::sign::any_supported_type(&certs_keys.key)
-            .map_err(|e| {
-                CertError::Tls(format!("Failed to build signing key for '{label}': {e}"))
+            .map_err(|e| CertError::SigningKey {
+                label: label.to_string(),
+                message: e.to_string(),
             })?;
     let cert_hash = cert_chain_hash(&certs_keys.certs);
     let certified_key = Arc::new(CertifiedKey::new(certs_keys.certs, signing_key));
@@ -289,9 +290,10 @@ async fn load_certified_key(
             );
         }
         Err(e) => {
-            return Err(CertError::Tls(format!(
-                "certificate and private key for '{label}' do not match: {e}"
-            )));
+            return Err(CertError::KeyMismatch {
+                label: label.to_string(),
+                message: e.to_string(),
+            });
         }
     }
 
