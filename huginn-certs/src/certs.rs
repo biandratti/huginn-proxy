@@ -6,8 +6,13 @@
 //! SNI-based selection and atomic hot-reload.
 
 use std::hash::{Hash, Hasher};
+use std::sync::Arc;
 
 use rustls_pki_types::{CertificateDer, PrivateKeyDer};
+use tokio_rustls::rustls::sign::CertifiedKey;
+use tracing::warn;
+
+use crate::error::CertError;
 
 /// A parsed certificate chain and its matching private key for one domain.
 ///
@@ -53,4 +58,43 @@ pub fn cert_chain_hash(certs: &[CertificateDer<'static>]) -> u64 {
         cert.as_ref().hash(&mut hasher);
     }
     hasher.finish()
+}
+
+/// Build a rustls [`CertifiedKey`] from parsed material, returning it with the
+/// chain hash.
+///
+/// Shared by the SNI resolver and the per-SNI `ServerConfig` builder. `label`
+/// only tags errors. A key that cannot be *proven* to match the cert
+/// (`InconsistentKeys::Unknown`, e.g. some PSS/EC combinations) is accepted with
+/// a warning, matching rustls' own leniency; a proven mismatch is rejected.
+pub(crate) fn build_certified_key(
+    material: &ServerCertsKeys,
+    label: &str,
+) -> Result<(Arc<CertifiedKey>, u64), CertError> {
+    let signing_key = tokio_rustls::rustls::crypto::aws_lc_rs::sign::any_supported_type(
+        &material.key,
+    )
+    .map_err(|e| CertError::SigningKey { label: label.to_string(), message: e.to_string() })?;
+    let cert_hash = cert_chain_hash(&material.certs);
+    let certified_key = Arc::new(CertifiedKey::new(material.certs.clone(), signing_key));
+
+    match certified_key.keys_match() {
+        Ok(()) => {}
+        Err(tokio_rustls::rustls::Error::InconsistentKeys(
+            tokio_rustls::rustls::InconsistentKeys::Unknown,
+        )) => {
+            warn!(
+                host = label,
+                "could not verify that the private key matches the certificate; proceeding"
+            );
+        }
+        Err(e) => {
+            return Err(CertError::KeyMismatch {
+                label: label.to_string(),
+                message: e.to_string(),
+            });
+        }
+    }
+
+    Ok((certified_key, cert_hash))
 }

@@ -19,13 +19,18 @@
 //! | `error` | [`error::CertError`] |
 //! | `certs` | Cert/key material read from disk + chain hashing |
 //! | `crypto_source` | Cert source description (file paths) + PEM loading |
+//! | `cipher_suites` | Cipher-suite name ⇄ rustls type mapping |
 //! | `server_crypto` | `DynamicCertResolver`, SNI cert map, atomic reload |
+//! | `build` | Per-SNI `ServerConfig` map (`build_server_crypto`) + shared ticketer |
 
+pub mod build;
 pub mod certs;
+pub mod cipher_suites;
 pub mod crypto_source;
 pub mod error;
 pub mod server_crypto;
 
+pub use build::{build_server_crypto, ServerCryptoMap, TlsBuildOptions};
 pub use certs::{cert_chain_hash, ServerCertsKeys};
 pub use crypto_source::{read_certs_and_keys, CertEntry, CryptoFileSource, CryptoSource};
 pub use error::CertError;

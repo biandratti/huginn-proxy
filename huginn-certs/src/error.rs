@@ -55,4 +55,18 @@ pub enum CertError {
         /// Underlying rustls error message.
         message: String,
     },
+
+    /// The process-wide stateless session ticketer could not be created.
+    #[error("failed to build TLS session ticketer: {0}")]
+    Ticketer(String),
+
+    /// A per-domain rustls `ServerConfig` could not be assembled (protocol
+    /// versions, client verifier, or trust-anchor setup).
+    #[error("failed to build TLS server config for '{label}': {message}")]
+    ServerConfig {
+        /// Domain label whose config failed to build.
+        label: String,
+        /// Underlying rustls error message.
+        message: String,
+    },
 }

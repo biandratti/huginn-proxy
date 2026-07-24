@@ -15,9 +15,8 @@ use std::sync::Arc;
 use arc_swap::ArcSwap;
 use tokio_rustls::rustls::server::{ClientHello, ResolvesServerCert};
 use tokio_rustls::rustls::sign::CertifiedKey;
-use tracing::{info, warn};
+use tracing::info;
 
-use crate::certs::cert_chain_hash;
 use crate::crypto_source::{CertEntry, CryptoSource};
 use crate::error::CertError;
 
@@ -261,39 +260,12 @@ impl ResolvesServerCert for DynamicCertResolver {
 
 /// Read a cert/key pair from `source` and build a `(CertifiedKey, chain_hash)`.
 ///
-/// `label` is used only to label the signing-key error. Errors are returned, not
-/// recorded as metrics, so the caller decides how to treat the failure.
+/// `label` is used only to label errors. Errors are returned, not recorded as
+/// metrics, so the caller decides how to treat the failure.
 async fn load_certified_key(
     source: &dyn CryptoSource,
     label: &str,
 ) -> Result<(Arc<CertifiedKey>, u64), CertError> {
-    let certs_keys = source.read().await?;
-    let signing_key =
-        tokio_rustls::rustls::crypto::aws_lc_rs::sign::any_supported_type(&certs_keys.key)
-            .map_err(|e| CertError::SigningKey {
-                label: label.to_string(),
-                message: e.to_string(),
-            })?;
-    let cert_hash = cert_chain_hash(&certs_keys.certs);
-    let certified_key = Arc::new(CertifiedKey::new(certs_keys.certs, signing_key));
-
-    match certified_key.keys_match() {
-        Ok(()) => {}
-        Err(tokio_rustls::rustls::Error::InconsistentKeys(
-            tokio_rustls::rustls::InconsistentKeys::Unknown,
-        )) => {
-            warn!(
-                host = label,
-                "could not verify that the private key matches the certificate; proceeding"
-            );
-        }
-        Err(e) => {
-            return Err(CertError::KeyMismatch {
-                label: label.to_string(),
-                message: e.to_string(),
-            });
-        }
-    }
-
-    Ok((certified_key, cert_hash))
+    let material = source.read().await?;
+    crate::certs::build_certified_key(&material, label)
 }
