@@ -41,6 +41,15 @@ follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- **TLS version limits are now enforced.** `[tls.options].versions` (or `min_version`/`max_version`)
+  are applied to the acceptor instead of only being validated — e.g. `min_version = "1.3"` now refuses
+  TLS 1.2 handshakes. The default (TLS 1.2 + 1.3) is unchanged.
+- **`[tls.options].curve_preferences` is now applied** (previously validated but ignored). It selects
+  the key-exchange groups, most preferred first. Two related **breaking** changes: (1) the default is
+  now **empty**, which keeps the provider's safe defaults — these lead with the post-quantum hybrid
+  `X25519MLKEM768`, so setting an explicit classical-only list now *drops* PQ protection; include a PQ
+  hybrid to keep it. (2) `secp521r1` is no longer a valid value — the aws-lc-rs provider does not offer
+  it as a key-exchange group — and `X25519MLKEM768` / `SECP256R1MLKEM768` are now accepted.
 - **TLS session resumption is now stateless tickets only.** A process-wide shared ticketer (kept
   across cert hot-reloads) replaces the former server-side TLS 1.2 session-ID cache. This also turns
   on TLS 1.3 resumption, which was previously off. mTLS domains never resume.

@@ -76,6 +76,54 @@ async fn build(
     Ok(build_server_crypto(entries, opts, previous).await?)
 }
 
+/// A restricted protocol-version list is accepted by the builder and still yields a
+/// resolvable config (the build path applies `with_protocol_versions` instead of the
+/// safe defaults).
+#[tokio::test]
+async fn restricted_protocol_version_still_builds() -> TestResult {
+    let fx = fixture()?;
+    let opts = TlsBuildOptions {
+        protocol_versions: vec![&tokio_rustls::rustls::version::TLS13],
+        ..options(true, false)
+    };
+    let entries = vec![entry(Some("api.example.com"), &fx.cert, &fx.key)];
+    let (map, report) = build(&entries, &opts, None).await?;
+
+    assert!(report.failed.is_empty(), "a TLS 1.3-only config must build");
+    assert!(map.resolves_for(Some("api.example.com")), "the restricted config must resolve");
+    Ok(())
+}
+
+/// Explicit curve preferences (including the post-quantum hybrid) resolve to
+/// key-exchange groups and still build a resolvable config; unknown names are
+/// dropped.
+#[tokio::test]
+async fn restricted_curve_preferences_still_build() -> TestResult {
+    use huginn_certs::kx_groups::resolve_kx_groups;
+
+    // Mapping: known names resolve, unknown (and the unavailable secp521r1) are dropped.
+    let names = vec![
+        "X25519MLKEM768".to_string(),
+        "X25519".to_string(),
+        "secp256r1".to_string(),
+        "secp521r1".to_string(),
+        "bogus".to_string(),
+    ];
+    assert_eq!(resolve_kx_groups(&names).len(), 3, "only the 3 available groups map");
+
+    let fx = fixture()?;
+    let opts = TlsBuildOptions {
+        curve_preferences: vec!["X25519MLKEM768".to_string(), "X25519".to_string()],
+        ..options(true, false)
+    };
+    let entries = vec![entry(Some("api.example.com"), &fx.cert, &fx.key)];
+    let (map, report) = build(&entries, &opts, None).await?;
+
+    assert!(report.failed.is_empty(), "a curve-restricted config must build");
+    assert!(map.resolves_for(Some("api.example.com")), "the restricted config must resolve");
+    Ok(())
+}
+
 /// Named + wildcard + catch-all land in exact / wildcard / default respectively.
 #[tokio::test]
 async fn configs_routed_by_host_shape() -> TestResult {

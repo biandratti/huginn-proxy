@@ -153,8 +153,10 @@ Limitation: No geographic filtering or ASN-based rules.
 
 **Server-side TLS with hot reload**
 
-Configurable cipher suites, curve preferences, and TLS version restrictions (1.2 and 1.3 supported). ALPN works for
-HTTP/2 negotiation.
+Configurable cipher suites, key-exchange curves, and TLS version restrictions (1.2 and 1.3 supported): `versions` or
+`min_version`/`max_version` are enforced by the acceptor (e.g. `min_version = "1.3"` refuses TLS 1.2). ALPN works for
+HTTP/2 negotiation. `curve_preferences` selects the key-exchange groups; leaving it empty keeps the provider's safe
+defaults, which lead with the post-quantum hybrid group `X25519MLKEM768`.
 
 **SNI-based multi-certificate selection.** The proxy serves a different certificate per domain, selected from the TLS
 ClientHello SNI. Each `[[domains]]` entry carries its own `cert_path` / `key_path`. The resolver picks a certificate by

@@ -22,12 +22,14 @@
 //! | `certs` | Cert/key material read from disk + chain hashing |
 //! | `crypto_source` | Cert source description (file paths) + PEM loading |
 //! | `cipher_suites` | Cipher-suite name ⇄ rustls type mapping |
+//! | `kx_groups` | Key-exchange group (curve) name ⇄ rustls type mapping |
 //! | `server_crypto` | Per-SNI `ServerConfig` map (`build_server_crypto`) + shared ticketer |
 
 pub mod certs;
 pub mod cipher_suites;
 pub mod crypto_source;
 pub mod error;
+pub mod kx_groups;
 pub mod server_crypto;
 
 pub use certs::{cert_chain_hash, ServerCertsKeys};

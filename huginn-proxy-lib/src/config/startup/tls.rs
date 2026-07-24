@@ -39,13 +39,17 @@ pub struct TlsOptions {
     /// See `supported_cipher_suites()` for the complete list.
     #[serde(default = "default_cipher_suites")]
     pub cipher_suites: Vec<String>,
-    /// Elliptic curve preferences (key exchange groups)
+    /// Elliptic curve / key-exchange group preferences.
     ///
-    /// Specifies the order of preference for elliptic curves used in ECDHE key exchange.
-    /// The first curve in the list is preferred.
+    /// Specifies the order of preference for the groups used in (EC)DHE key
+    /// exchange; the first entry is most preferred. Valid names are those returned
+    /// by `supported_curves()`.
     ///
-    /// Default: empty (uses rustls safe defaults)
-    #[serde(default = "default_curve_preferences")]
+    /// Default: empty, which keeps the provider's safe defaults — including the
+    /// post-quantum hybrid `X25519MLKEM768`. Setting an explicit list applies
+    /// exactly those groups, so include a PQ hybrid to retain post-quantum
+    /// protection.
+    #[serde(default)]
     pub curve_preferences: Vec<String>,
     /// Strict SNI checking.
     ///
@@ -65,7 +69,7 @@ impl Default for TlsOptions {
             min_version: default_min_version(),
             max_version: default_max_version(),
             cipher_suites: default_cipher_suites(),
-            curve_preferences: default_curve_preferences(),
+            curve_preferences: Vec::new(),
             sni_strict: false,
         }
     }
@@ -85,13 +89,6 @@ fn default_max_version() -> Option<TlsVersion> {
 
 fn default_cipher_suites() -> Vec<String> {
     crate::tls::cipher_suites::supported_cipher_suites()
-        .into_iter()
-        .map(|s| s.to_string())
-        .collect()
-}
-
-fn default_curve_preferences() -> Vec<String> {
-    crate::tls::curves::supported_curves()
         .into_iter()
         .map(|s| s.to_string())
         .collect()

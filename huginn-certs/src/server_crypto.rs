@@ -32,13 +32,16 @@ use tokio_rustls::rustls::server::{
     ClientHello, NoServerSessionStorage, ProducesTickets, ResolvesServerCert, WebPkiClientVerifier,
 };
 use tokio_rustls::rustls::sign::CertifiedKey;
-use tokio_rustls::rustls::{RootCertStore, ServerConfig};
+use tokio_rustls::rustls::{
+    ConfigBuilder, RootCertStore, ServerConfig, SupportedProtocolVersion, WantsVerifier,
+};
 use tracing::info;
 
 use crate::certs::build_certified_key;
 use crate::cipher_suites::resolve_cipher_suites;
 use crate::crypto_source::CertEntry;
 use crate::error::CertError;
+use crate::kx_groups::resolve_kx_groups;
 
 /// Outcome of a [`build_server_crypto`] call.
 ///
@@ -90,15 +93,22 @@ fn shared_ticketer() -> Result<Arc<dyn ProducesTickets>, CertError> {
 ///
 /// Deliberately config-agnostic (plain `std`/rustls-free of `huginn-proxy-lib`
 /// types) so the crate does not depend on the proxy's config model. Only carries
-/// what is actually applied at build time: TLS versions and key-exchange curves
-/// are left at the provider's safe defaults (which include the post-quantum hybrid
-/// group), matching rpxy.
+/// what is actually applied at build time.
 #[derive(Debug, Clone, Default)]
 pub struct TlsBuildOptions {
     /// ALPN protocols to advertise (e.g. `["h2", "http/1.1"]`). Empty = none.
     pub alpn: Vec<String>,
     /// Cipher-suite names overriding the provider defaults. Empty = provider defaults.
     pub cipher_suites: Vec<String>,
+    /// Key-exchange group (curve) names overriding the provider defaults, in order
+    /// of preference. Empty = provider defaults, which include the post-quantum
+    /// hybrid group `X25519MLKEM768`. A non-empty list applies exactly those groups,
+    /// so include a PQ hybrid explicitly to keep post-quantum protection.
+    pub curve_preferences: Vec<String>,
+    /// TLS protocol versions to enforce. Empty = the provider's safe defaults
+    /// (TLS 1.2 + 1.3); a non-empty list restricts the handshake to exactly those
+    /// versions. The caller resolves `min/max_version` / `versions` config into this.
+    pub protocol_versions: Vec<&'static SupportedProtocolVersion>,
     /// When `true`, non-mTLS configs issue stateless session tickets (see module docs).
     pub resumption_enabled: bool,
     /// Strict SNI: reject unmatched / no-SNI connections instead of serving the catch-all.
@@ -253,29 +263,61 @@ impl ServerCryptoMap {
     }
 }
 
-/// Build the aws-lc-rs crypto provider, overriding the cipher-suite list only when
-/// the config specifies one. Key-exchange groups stay at the provider defaults
-/// (which include the post-quantum hybrid group).
+/// Build the aws-lc-rs crypto provider, overriding the cipher-suite list and/or
+/// key-exchange groups only when the config specifies them. Anything left empty
+/// keeps the provider defaults — which include the post-quantum hybrid group
+/// `X25519MLKEM768` for key exchange.
 fn build_provider(options: &TlsBuildOptions) -> Arc<CryptoProvider> {
-    let provider = if options.cipher_suites.is_empty() {
-        aws_lc_rs::default_provider()
+    if options.cipher_suites.is_empty() && options.curve_preferences.is_empty() {
+        return Arc::new(aws_lc_rs::default_provider());
+    }
+
+    let default = aws_lc_rs::default_provider();
+    let cipher_suites = if options.cipher_suites.is_empty() {
+        default.cipher_suites.clone()
     } else {
-        CryptoProvider {
-            cipher_suites: resolve_cipher_suites(&options.cipher_suites),
-            ..aws_lc_rs::default_provider()
+        resolve_cipher_suites(&options.cipher_suites)
+    };
+    // Fall back to defaults if the resolved list is empty (e.g. all names unknown),
+    // since a provider with no key-exchange groups cannot complete a handshake.
+    let kx_groups = if options.curve_preferences.is_empty() {
+        default.kx_groups.clone()
+    } else {
+        let resolved = resolve_kx_groups(&options.curve_preferences);
+        if resolved.is_empty() {
+            default.kx_groups.clone()
+        } else {
+            resolved
         }
     };
-    Arc::new(provider)
+
+    Arc::new(CryptoProvider { cipher_suites, kx_groups, ..default })
+}
+
+/// Start a `ServerConfig` builder with the configured protocol versions applied.
+///
+/// An empty `options.protocol_versions` keeps the provider's safe defaults
+/// (TLS 1.2 + 1.3); a non-empty list restricts the handshake to exactly those.
+fn config_builder_with_versions(
+    provider: &Arc<CryptoProvider>,
+    options: &TlsBuildOptions,
+    label: &str,
+) -> Result<ConfigBuilder<ServerConfig, WantsVerifier>, CertError> {
+    let base = ServerConfig::builder_with_provider(Arc::clone(provider));
+    let result = if options.protocol_versions.is_empty() {
+        base.with_safe_default_protocol_versions()
+    } else {
+        base.with_protocol_versions(&options.protocol_versions)
+    };
+    result.map_err(|e| CertError::ServerConfig { label: label.to_string(), message: e.to_string() })
 }
 
 /// Build the reject sentinel config (resolver returns `None`).
-fn build_reject_config(provider: &Arc<CryptoProvider>) -> Result<Arc<ServerConfig>, CertError> {
-    let config = ServerConfig::builder_with_provider(Arc::clone(provider))
-        .with_safe_default_protocol_versions()
-        .map_err(|e| CertError::ServerConfig {
-            label: "_reject_".to_string(),
-            message: e.to_string(),
-        })?
+fn build_reject_config(
+    provider: &Arc<CryptoProvider>,
+    options: &TlsBuildOptions,
+) -> Result<Arc<ServerConfig>, CertError> {
+    let config = config_builder_with_versions(provider, options, "_reject_")?
         .with_no_client_auth()
         .with_cert_resolver(Arc::new(RejectResolver));
     Ok(Arc::new(config))
@@ -294,12 +336,7 @@ async fn build_entry_config(
     let material = entry.source.read().await?;
     let (certified_key, cert_hash) = build_certified_key(&material, label)?;
 
-    let builder = ServerConfig::builder_with_provider(Arc::clone(provider))
-        .with_safe_default_protocol_versions()
-        .map_err(|e| CertError::ServerConfig {
-            label: label.to_string(),
-            message: e.to_string(),
-        })?;
+    let builder = config_builder_with_versions(provider, options, label)?;
 
     let mut config = if material.is_mutual_tls() {
         let mut roots = RootCertStore::empty();
@@ -362,7 +399,7 @@ pub async fn build_server_crypto(
     } else {
         None
     };
-    let reject = build_reject_config(&provider)?;
+    let reject = build_reject_config(&provider, options)?;
 
     let mut map = ServerCryptoMap {
         exact: HashMap::new(),

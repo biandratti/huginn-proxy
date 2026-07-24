@@ -745,17 +745,22 @@ tls:
 
 | Key                 | Type             | Default          | Description                                                |
 |---------------------|------------------|------------------|------------------------------------------------------------|
-| `versions`          | array of strings | `["1.2", "1.3"]` | Allowed TLS versions. Values: `"1.2"`, `"1.3"`. **Currently parsed and validated but not enforced** — see note below. |
-| `min_version`       | string           | `null`           | Minimum TLS version (`"1.2"` or `"1.3"`). Mutually exclusive with an explicit `versions` list. **Currently parsed and validated but not enforced** — see note below. |
-| `max_version`       | string           | `null`           | Maximum TLS version (`"1.2"` or `"1.3"`). Mutually exclusive with an explicit `versions` list. **Currently parsed and validated but not enforced** — see note below. |
+| `versions`          | array of strings | `["1.2", "1.3"]` | Allowed TLS versions. Values: `"1.2"`, `"1.3"`. Applied to the TLS stack. Mutually exclusive with `min_version`/`max_version`. |
+| `min_version`       | string           | `null`           | Minimum TLS version (`"1.2"` or `"1.3"`). Applied to the TLS stack. Mutually exclusive with an explicit `versions` list. |
+| `max_version`       | string           | `null`           | Maximum TLS version (`"1.2"` or `"1.3"`). Applied to the TLS stack. Mutually exclusive with an explicit `versions` list. |
 | `cipher_suites`     | array of strings | all supported    | Named cipher suites. Restrict to tighten security posture. Applied to the TLS stack. |
-| `curve_preferences` | array of strings | all supported    | Named elliptic curves for key exchange. **Currently parsed and validated but not enforced** — see note below. |
+| `curve_preferences` | array of strings | `[]` (empty)     | Ordered key-exchange groups (curves), most preferred first. Applied to the TLS stack. Empty keeps the provider defaults — see note below. Valid: `"X25519MLKEM768"`, `"SECP256R1MLKEM768"`, `"X25519"`, `"secp256r1"`, `"secp384r1"`. |
 | `sni_strict`        | bool             | `false`          | When `true`, disable the default-cert fallback entirely (full parity with Traefik's `sniStrict`): reject (`unrecognized_name`) both a TLS connection whose SNI matches no domain cert **and** a connection that sends no SNI (IP-literal clients). When `false`, both fall back to the default cert. Production hardening against unknown-hostname / no-SNI access. |
 
-> **Note:** `cipher_suites` and `sni_strict` are applied to the TLS stack. `versions`, `min_version`,
-> `max_version`, and `curve_preferences` are currently validated at load but **not** applied — the
-> acceptor is built with rustls' safe defaults (TLS 1.2 **and** 1.3, default curve preferences). Do
-> not rely on these four keys to restrict the negotiated TLS version or curves yet.
+> **TLS versions are enforced.** `versions` (or `min_version`/`max_version`) restrict the versions
+> the acceptor offers: e.g. `min_version = "1.3"` refuses TLS 1.2 handshakes. The default (1.2 **and**
+> 1.3) leaves rustls' safe defaults in place.
+
+> **Note on `curve_preferences`:** leaving it **empty** (the default) keeps the provider's safe
+> defaults, which lead with the post-quantum hybrid group `X25519MLKEM768`. A non-empty list applies
+> **exactly** those groups in order, so if you set one, keep a PQ hybrid first — otherwise you silently
+> drop post-quantum protection. `secp521r1` is **not** available as a key-exchange group with the
+> aws-lc-rs provider and is rejected at load.
 
 > **Misdirected requests (HTTP 421)** are handled automatically and are not configurable. On a
 > coalesced HTTP/2 connection, any request whose host is served by a different certificate than
@@ -784,7 +789,7 @@ cipher_suites = [
     "TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256",
     "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256",
 ]
-curve_preferences = ["X25519", "secp256r1", "secp384r1"]
+curve_preferences = ["X25519MLKEM768", "X25519", "secp256r1", "secp384r1"]
 sni_strict = false   # set true in production to reject unknown-hostname SNI
 ```
 
@@ -804,6 +809,7 @@ tls:
       - "TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256"
       - "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"
     curve_preferences:
+      - "X25519MLKEM768"
       - "X25519"
       - "secp256r1"
       - "secp384r1"

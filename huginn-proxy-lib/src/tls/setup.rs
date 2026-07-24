@@ -2,6 +2,8 @@ use std::sync::Arc;
 
 use arc_swap::ArcSwap;
 use huginn_certs::{ServerCryptoMap, TlsBuildOptions};
+use tokio_rustls::rustls::version::{TLS12, TLS13};
+use tokio_rustls::rustls::SupportedProtocolVersion;
 
 use crate::config::{TlsConfig, TlsOptions, TlsVersion};
 use crate::error::{ProxyError, Result};
@@ -19,17 +21,46 @@ pub type SharedServerCrypto = Arc<ArcSwap<ServerCryptoMap>>;
 /// Project the proxy's static `TlsConfig` onto the config-agnostic
 /// [`TlsBuildOptions`] consumed by [`huginn_certs::build_server_crypto`].
 ///
-/// Only the listener-global knobs that are actually applied per config are
-/// carried: ALPN, cipher-suite overrides, resumption on/off, and `sni_strict`.
-/// TLS versions and key-exchange curves are intentionally left at the provider's
-/// safe defaults (matching rpxy), so `min/max_version` and `curve_preferences`
-/// are validated (see [`validate_tls_options`]) but not applied.
+/// Carries the listener-global knobs that are actually applied per config: ALPN,
+/// cipher-suite overrides, key-exchange curve overrides, resolved protocol
+/// versions, resumption on/off, and `sni_strict`. An empty `curve_preferences`
+/// keeps the provider's safe defaults (which include the post-quantum hybrid
+/// group); a non-empty list applies exactly those groups.
 pub fn tls_build_options(tls: &TlsConfig) -> TlsBuildOptions {
     TlsBuildOptions {
         alpn: tls.alpn.clone(),
         cipher_suites: tls.options.cipher_suites.clone(),
+        curve_preferences: tls.options.curve_preferences.clone(),
+        protocol_versions: resolve_protocol_versions(&tls.options),
         resumption_enabled: tls.session_resumption.enabled,
         sni_strict: tls.options.sni_strict,
+    }
+}
+
+/// Resolve the effective TLS protocol versions to enforce from `min_version` /
+/// `max_version` (which take precedence) or the `versions` list.
+///
+/// Returns an empty vec when no real restriction applies (both versions allowed,
+/// or a degenerate empty `versions` with no bounds) so the build falls back to
+/// rustls' safe defaults; a single allowed version yields a one-element list.
+/// [`validate_tls_options`] guarantees `versions` and `min/max_version` are not
+/// combined and that `min <= max`.
+fn resolve_protocol_versions(options: &TlsOptions) -> Vec<&'static SupportedProtocolVersion> {
+    let (allow_12, allow_13) = if options.min_version.is_some() || options.max_version.is_some() {
+        let min = options.min_version.unwrap_or(TlsVersion::V1_2);
+        let max = options.max_version.unwrap_or(TlsVersion::V1_3);
+        (min == TlsVersion::V1_2, max == TlsVersion::V1_3)
+    } else {
+        (
+            options.versions.contains(&TlsVersion::V1_2),
+            options.versions.contains(&TlsVersion::V1_3),
+        )
+    };
+
+    match (allow_12, allow_13) {
+        (true, true) | (false, false) => Vec::new(),
+        (true, false) => vec![&TLS12],
+        (false, true) => vec![&TLS13],
     }
 }
 
