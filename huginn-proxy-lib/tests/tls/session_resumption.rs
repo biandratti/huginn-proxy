@@ -15,42 +15,30 @@ fn test_session_resumption_disabled() {
     let config = TlsConfig {
         alpn: vec![],
         options: Default::default(),
-        session_resumption: SessionResumptionConfig { enabled: false, max_sessions: 256 },
+        session_resumption: SessionResumptionConfig { enabled: false },
     };
     assert!(!config.session_resumption.enabled);
 }
 
 #[test]
-fn test_session_resumption_custom_cache_size() {
-    let config = TlsConfig {
-        alpn: vec![],
-        options: Default::default(),
-        session_resumption: SessionResumptionConfig { enabled: true, max_sessions: 512 },
-    };
-    assert_eq!(config.session_resumption.max_sessions, 512);
-}
-
-#[test]
 fn test_session_resumption_config_defaults() {
     let config = SessionResumptionConfig::default();
-
-    // Verify defaults
     assert!(config.enabled);
-    assert_eq!(config.max_sessions, 256);
 }
 
 #[test]
 fn test_session_resumption_config_toml_deserialization(
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    // Test TOML deserialization (config files use TOML)
-    let toml_str = r#"
-enabled = true
-max_sessions = 512
-"#;
-
-    let deserialized: SessionResumptionConfig = toml::from_str(toml_str)?;
-
+    let deserialized: SessionResumptionConfig = toml::from_str("enabled = true\n")?;
     assert!(deserialized.enabled);
-    assert_eq!(deserialized.max_sessions, 512);
     Ok(())
+}
+
+/// `max_sessions` was removed: with `deny_unknown_fields`, a config that still
+/// declares it must now fail to parse (breaking change, surfaced loudly).
+#[test]
+fn test_session_resumption_rejects_removed_max_sessions() {
+    let result: Result<SessionResumptionConfig, _> =
+        toml::from_str("enabled = true\nmax_sessions = 512\n");
+    assert!(result.is_err(), "the removed `max_sessions` key must be rejected, not ignored");
 }

@@ -107,27 +107,16 @@ pub struct SessionResumptionConfig {
     /// server-side session cache.
     #[serde(default = "default_true")]
     pub enabled: bool,
-    /// **Obsolete.** Kept only so existing configs still parse; it has no effect.
-    ///
-    /// Resumption is now stateless (session tickets only), so there is no
-    /// server-side session cache to size. It previously bounded the TLS 1.2
-    /// session-ID cache, which no longer exists.
-    #[serde(default = "default_session_cache_size")]
-    pub max_sessions: usize,
 }
 
 impl Default for SessionResumptionConfig {
     fn default() -> Self {
-        Self { enabled: default_true(), max_sessions: default_session_cache_size() }
+        Self { enabled: default_true() }
     }
 }
 
 fn default_true() -> bool {
     true
-}
-
-fn default_session_cache_size() -> usize {
-    256
 }
 
 #[derive(Debug, Deserialize, Clone, PartialEq)]
@@ -177,7 +166,6 @@ struct TlsOptionsView<'a> {
 #[derive(Serialize)]
 struct SessionResumptionView {
     enabled: bool,
-    max_sessions: usize,
 }
 
 /// Build the effective-config view for the optional TLS section.
@@ -202,10 +190,7 @@ pub(crate) fn effective_tls_view(config: Option<&TlsConfig>) -> TlsView<'_> {
             curve_preferences: config.options.curve_preferences.as_slice(),
             sni_strict: config.options.sni_strict,
         },
-        session_resumption: SessionResumptionView {
-            enabled: config.session_resumption.enabled,
-            max_sessions: config.session_resumption.max_sessions,
-        },
+        session_resumption: SessionResumptionView { enabled: config.session_resumption.enabled },
     })
 }
 
