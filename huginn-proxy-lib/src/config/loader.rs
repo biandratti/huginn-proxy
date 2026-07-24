@@ -87,6 +87,20 @@ fn validate_config(cfg: &Config) -> Result<()> {
                 )));
             }
         }
+
+        if let Some(ca) = &domain.client_ca_path {
+            if domain.cert_path.is_none() || domain.key_path.is_none() {
+                return Err(ProxyError::Config(format!(
+                    "Domain '{host}': client_ca_path requires cert_path and key_path \
+                     (mutual TLS needs the domain's own certificate)"
+                )));
+            }
+            if !Path::new(ca).exists() {
+                return Err(ProxyError::Config(format!(
+                    "Domain '{host}': client CA file not found: {ca}"
+                )));
+            }
+        }
     }
 
     cfg.validate_cross_refs()?;

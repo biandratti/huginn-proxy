@@ -85,6 +85,7 @@ fn effective_config_reports_applied_values_and_defaults() -> TestResult {
     assert_eq!(value["static"]["tls"]["client_auth"]["ca_certificate_configured"], true);
     assert_eq!(value["dynamic"]["domains"][0]["cert_configured"], true);
     assert_eq!(value["dynamic"]["domains"][0]["private_key_configured"], true);
+    assert_eq!(value["dynamic"]["domains"][0]["client_auth_configured"], false);
     assert_eq!(value["dynamic"]["headers"]["request"]["add"][0]["value"], "<redacted>");
     assert_eq!(value["dynamic"]["security"]["headers"]["csp"]["policy"], "<redacted>");
     Ok(())

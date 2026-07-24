@@ -41,6 +41,7 @@ fn minimal_config(backend_addr: std::net::SocketAddr, listen_port: u16) -> Confi
             host: Some("127.0.0.1".to_string()),
             cert_path: None,
             key_path: None,
+            client_ca_path: None,
             headers: None,
             security: None,
             fingerprinting: None,

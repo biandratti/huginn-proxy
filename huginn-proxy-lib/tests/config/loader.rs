@@ -74,6 +74,114 @@ routes = [
 }
 
 #[test]
+fn loads_domain_client_ca_path() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let path = tmp_path("domain-mtls");
+    let cert_path = tmp_path("mtls-server.crt");
+    let key_path = tmp_path("mtls-server.key");
+    let ca_path = tmp_path("mtls-client-ca.crt");
+    fs::write(&cert_path, "dummy cert")?;
+    fs::write(&key_path, "dummy key")?;
+    fs::write(&ca_path, "dummy ca")?;
+
+    let toml = format!(
+        r#"
+listen = {{ addrs = ["127.0.0.1:0"] }}
+backends = [{{ address = "backend:9000" }}]
+
+[[domains]]
+host = "secure.example.com"
+cert_path = "{}"
+key_path  = "{}"
+client_ca_path = "{}"
+routes = [{{ prefix = "/", backend = "backend:9000" }}]
+"#,
+        cert_path.display(),
+        key_path.display(),
+        ca_path.display()
+    );
+    fs::write(&path, toml)?;
+
+    let cfg = load_from_path(&path)?;
+    assert_eq!(
+        cfg.domains[0].client_ca_path.as_deref(),
+        Some(ca_path.display().to_string().as_str()),
+        "client_ca_path must round-trip from config"
+    );
+
+    let _ = fs::remove_file(&cert_path);
+    let _ = fs::remove_file(&key_path);
+    let _ = fs::remove_file(&ca_path);
+    let _ = fs::remove_file(&path);
+    Ok(())
+}
+
+#[test]
+fn rejects_client_ca_without_cert() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let path = tmp_path("mtls-no-cert");
+    let ca_path = tmp_path("orphan-client-ca.crt");
+    fs::write(&ca_path, "dummy ca")?;
+
+    let toml = format!(
+        r#"
+listen = {{ addrs = ["127.0.0.1:0"] }}
+backends = [{{ address = "backend:9000" }}]
+
+[[domains]]
+host = "secure.example.com"
+client_ca_path = "{}"
+"#,
+        ca_path.display()
+    );
+    fs::write(&path, toml)?;
+
+    let err = match load_from_path(&path) {
+        Ok(_) => panic!("client_ca_path without cert_path/key_path must be rejected"),
+        Err(e) => e.to_string(),
+    };
+    assert!(err.contains("client_ca_path requires cert_path"), "got: {err}");
+
+    let _ = fs::remove_file(&ca_path);
+    let _ = fs::remove_file(&path);
+    Ok(())
+}
+
+#[test]
+fn rejects_missing_client_ca_file() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let path = tmp_path("mtls-missing-ca");
+    let cert_path = tmp_path("mtls2-server.crt");
+    let key_path = tmp_path("mtls2-server.key");
+    fs::write(&cert_path, "dummy cert")?;
+    fs::write(&key_path, "dummy key")?;
+
+    let toml = format!(
+        r#"
+listen = {{ addrs = ["127.0.0.1:0"] }}
+backends = [{{ address = "backend:9000" }}]
+
+[[domains]]
+host = "secure.example.com"
+cert_path = "{}"
+key_path  = "{}"
+client_ca_path = "/nonexistent/huginn-test/missing-ca.crt"
+"#,
+        cert_path.display(),
+        key_path.display()
+    );
+    fs::write(&path, toml)?;
+
+    let err = match load_from_path(&path) {
+        Ok(_) => panic!("a missing client CA file must be rejected"),
+        Err(e) => e.to_string(),
+    };
+    assert!(err.contains("client CA file not found"), "got: {err}");
+
+    let _ = fs::remove_file(&cert_path);
+    let _ = fs::remove_file(&key_path);
+    let _ = fs::remove_file(&path);
+    Ok(())
+}
+
+#[test]
 fn normalizes_domain_host_to_lowercase() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let path = tmp_path("host-case");
     let toml = r#"

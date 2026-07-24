@@ -313,6 +313,7 @@ enforce).
 | `host`      | string | `null`  | Domain pattern for host matching: exact (`api.example.com`) or single-level wildcard (`*.example.com`). **Omit for a catch-all** that matches any host; its cert (if any) is the TLS default certificate. |
 | `cert_path` | string | `null`  | Path to the TLS certificate PEM file. Omit for plain-HTTP-only domains.                          |
 | `key_path`  | string | `null`  | Path to the TLS private key PEM file. Must be set together with `cert_path` or both omitted.     |
+| `client_ca_path` | string | `null` | Path to a client-CA bundle PEM file. When set, this domain requires **mutual TLS**: clients must present a certificate signed by one of these CAs. Requires `cert_path`/`key_path`. Hot-reloadable per-domain. |
 | `headers`   | table  | —       | Domain-level header manipulation. Merged between global and route-level headers.                 |
 | `security`  | table  | —       | Per-domain security overrides (`ip_filter`, `rate_limit`, `headers`). See [`[domains.security]`](#domainssecurity) below. |
 | `fingerprinting` | bool | `null` (inherit) | Domain-level fingerprint-header **injection** gate. Resolved per route as `route.or(domain).unwrap_or(true)`. Controls header injection only; capture is the static global `[fingerprint]`. |
