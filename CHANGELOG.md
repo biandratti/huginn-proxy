@@ -11,6 +11,10 @@ follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **Client-CA trust anchors deduplicated by Subject Key Identifier.** A per-domain `client_ca_path`
+  bundle that repeats a CA — the same PEM twice, or the same CA key re-issued/re-encoded — now
+  collapses to a single trust anchor (SKID-based dedup via `x509-parser`). A CA that carries no SKID
+  extension falls back to DER identity and is still trusted rather than dropped.
 - **Per-domain mTLS attribution in handshake-failure logs.** The `TLS accept failed` and `TLS
   handshake timeout` warnings now include the selected `sni` and an `mtls` flag indicating whether the
   matched domain required a client certificate. The flag comes from the per-SNI config chosen from the

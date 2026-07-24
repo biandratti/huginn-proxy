@@ -24,9 +24,10 @@
 //! a resumed handshake would otherwise restore the stored client identity without
 //! re-running the verifier.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, OnceLock};
 
+use rustls_pki_types::CertificateDer;
 use tokio_rustls::rustls::crypto::{aws_lc_rs, CryptoProvider};
 use tokio_rustls::rustls::server::{
     ClientHello, NoServerSessionStorage, ProducesTickets, ResolvesServerCert, WebPkiClientVerifier,
@@ -326,6 +327,53 @@ fn config_builder_with_versions(
     result.map_err(|e| CertError::ServerConfig { label: label.to_string(), message: e.to_string() })
 }
 
+/// Deduplication key for a client-CA anchor: its X.509 Subject Key Identifier
+/// (SKID) when present, otherwise the raw DER bytes.
+///
+/// Mirrors rpxy, which keys trust anchors by SKID so re-encodings of the same CA
+/// key collapse to one anchor. Unlike rpxy — which drops a CA that has no SKID
+/// extension — we fall back to DER identity so such a CA is still trusted rather
+/// than silently discarded.
+fn anchor_dedup_key(der: &[u8]) -> Vec<u8> {
+    if let Ok((_, cert)) = x509_parser::parse_x509_certificate(der) {
+        for ext in cert.iter_extensions() {
+            if let x509_parser::prelude::ParsedExtension::SubjectKeyIdentifier(skid) =
+                ext.parsed_extension()
+            {
+                return skid.0.to_vec();
+            }
+        }
+    }
+    der.to_vec()
+}
+
+/// Build a client-CA [`RootCertStore`] for mutual TLS, deduplicating anchors that
+/// share a Subject Key Identifier (see `anchor_dedup_key`).
+///
+/// A client-CA bundle that repeats a CA — the same PEM twice, or the same CA key
+/// re-issued/re-encoded — would otherwise add redundant trust anchors.
+///
+/// Exposed (rather than private) so the SKID dedup can be asserted directly from the
+/// crate's integration tests, where the collapsed anchor count is observable but the
+/// public `build_server_crypto` path would hide it.
+pub fn build_client_root_store(
+    cas: &[CertificateDer<'static>],
+    label: &str,
+) -> Result<RootCertStore, CertError> {
+    let mut store = RootCertStore::empty();
+    let mut seen: HashSet<Vec<u8>> = HashSet::new();
+    for ca in cas {
+        if !seen.insert(anchor_dedup_key(ca.as_ref())) {
+            continue;
+        }
+        store.add(ca.clone()).map_err(|e| CertError::ServerConfig {
+            label: label.to_string(),
+            message: e.to_string(),
+        })?;
+    }
+    Ok(store)
+}
+
 /// Build the reject sentinel config (resolver returns `None`).
 fn build_reject_config(
     provider: &Arc<CryptoProvider>,
@@ -354,13 +402,8 @@ async fn build_entry_config(
     let builder = config_builder_with_versions(provider, options, label)?;
 
     let mut config = if material.is_mutual_tls() {
-        let mut roots = RootCertStore::empty();
-        for ca in material.client_ca_certs.iter().flatten() {
-            roots.add(ca.clone()).map_err(|e| CertError::ServerConfig {
-                label: label.to_string(),
-                message: e.to_string(),
-            })?;
-        }
+        let roots =
+            build_client_root_store(material.client_ca_certs.as_deref().unwrap_or(&[]), label)?;
         let verifier =
             WebPkiClientVerifier::builder_with_provider(Arc::new(roots), Arc::clone(provider))
                 .build()

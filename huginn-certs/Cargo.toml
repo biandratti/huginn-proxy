@@ -17,6 +17,7 @@ thiserror.workspace = true
 tokio = { workspace = true, features = ["fs"] }
 tokio-rustls.workspace = true
 tracing.workspace = true
+x509-parser.workspace = true
 
 [dev-dependencies]
 rcgen.workspace = true

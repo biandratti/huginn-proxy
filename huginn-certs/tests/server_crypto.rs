@@ -8,9 +8,11 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use huginn_certs::server_crypto::build_client_root_store;
 use huginn_certs::{
     build_server_crypto, CertEntry, CryptoFileSource, ServerCryptoMap, TlsBuildOptions,
 };
+use rcgen::{BasicConstraints, CertificateParams, IsCa, KeyPair};
 
 type TestResult = Result<(), Box<dyn std::error::Error + Send + Sync>>;
 
@@ -334,5 +336,46 @@ async fn ticketer_is_shared_across_rebuilds() -> TestResult {
         Arc::ptr_eq(&first_cfg.config.ticketer, &second_cfg.config.ticketer),
         "ticketer must be one process-wide instance so tickets survive hot-reloads"
     );
+    Ok(())
+}
+
+/// A CA cert whose Subject Key Identifier extension is emitted (rcgen writes it for
+/// `IsCa::Ca`), so the client-CA dedup keys on SKID rather than falling back to DER.
+fn ca_cert(name: &str, key: &KeyPair) -> Result<rcgen::Certificate, rcgen::Error> {
+    let mut params = CertificateParams::new(vec![name.to_string()])?;
+    params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
+    params.self_signed(key)
+}
+
+/// A client-CA bundle listing the same certificate twice collapses to one anchor.
+#[test]
+fn client_root_store_dedups_identical_der() -> TestResult {
+    let key = KeyPair::generate()?;
+    let der = ca_cert("client-ca", &key)?.der().clone();
+
+    let single = build_client_root_store(std::slice::from_ref(&der), "test")?;
+    let duplicated = build_client_root_store(&[der.clone(), der], "test")?;
+
+    assert_eq!(single.roots.len(), 1, "one anchor stays one");
+    assert_eq!(duplicated.roots.len(), 1, "a repeated DER anchor must dedup to one");
+    Ok(())
+}
+
+/// Two distinct DER encodings of the *same* CA key share a Subject Key Identifier,
+/// so SKID dedup collapses them to one anchor — something byte dedup alone cannot do.
+#[test]
+fn client_root_store_dedups_same_key_across_different_der() -> TestResult {
+    let key = KeyPair::generate()?;
+    let der_one = ca_cert("ca-one.example", &key)?.der().clone();
+    let der_two = ca_cert("ca-two.example", &key)?.der().clone();
+
+    assert_ne!(
+        der_one.as_ref(),
+        der_two.as_ref(),
+        "the two certs must differ at the byte level"
+    );
+
+    let store = build_client_root_store(&[der_one, der_two], "test")?;
+    assert_eq!(store.roots.len(), 1, "same CA key (shared SKID) must dedup across encodings");
     Ok(())
 }
