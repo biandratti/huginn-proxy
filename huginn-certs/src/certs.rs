@@ -2,7 +2,7 @@
 //!
 //! [`ServerCertsKeys`] holds the parsed certificate chain and private key for a
 //! single domain, handed to
-//! [`build_server_crypto`](crate::build::build_server_crypto) which turns it into a
+//! [`build_server_crypto`](crate::server_crypto::build_server_crypto) which turns it into a
 //! per-SNI rustls `ServerConfig`.
 
 use std::hash::{Hash, Hasher};

@@ -5,7 +5,7 @@
 //! implementation today is [`CryptoFileSource`] (backed by [`read_certs_and_keys`]),
 //! but the trait keeps the door open to other sources without touching the
 //! per-SNI config builder. A [`CertEntry`] pairs one such source with its SNI host
-//! and label for [`build_server_crypto`](crate::build::build_server_crypto).
+//! and label for [`build_server_crypto`](crate::server_crypto::build_server_crypto).
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -86,7 +86,7 @@ pub struct CertEntry {
 
 /// Read the certificate, private key, and optional client-CA bundle from disk.
 ///
-/// Used by [`build_server_crypto`](crate::build::build_server_crypto) to load each
+/// Used by [`build_server_crypto`](crate::server_crypto::build_server_crypto) to load each
 /// domain's cert material during startup and hot-reload. When `client_ca_path` is
 /// `Some`, the returned material carries the parsed client-CA trust anchors and
 /// [`ServerCertsKeys::is_mutual_tls`] reports `true`.
