@@ -1,12 +1,14 @@
-//! `CryptoSource` abstraction: the resolver loads cert material from *any*
+//! `CryptoSource` abstraction: the config builder loads cert material from *any*
 //! source, not just files. These tests wire a purely in-memory `CryptoSource`
-//! (and a deliberately failing one) through `DynamicCertResolver::update` to show
-//! the origin of the material is decoupled from resolution.
+//! (and a deliberately failing one) through `build_server_crypto` to show the
+//! origin of the material is decoupled from per-SNI config construction.
 
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use huginn_certs::{CertEntry, CertError, CryptoSource, DynamicCertResolver, ServerCertsKeys};
+use huginn_certs::{
+    build_server_crypto, CertEntry, CertError, CryptoSource, ServerCertsKeys, TlsBuildOptions,
+};
 use rustls_pki_types::pem::PemObject;
 use rustls_pki_types::{CertificateDer, PrivateKeyDer};
 
@@ -15,6 +17,11 @@ type TestResult = Result<(), Box<dyn std::error::Error + Send + Sync>>;
 /// Install the aws-lc-rs default crypto provider once (idempotent across tests).
 fn ensure_crypto_provider() {
     let _ = tokio_rustls::rustls::crypto::aws_lc_rs::default_provider().install_default();
+}
+
+fn options() -> TlsBuildOptions {
+    ensure_crypto_provider();
+    TlsBuildOptions::default()
 }
 
 /// Build cert/key material in memory (never written to disk) via rcgen.
@@ -63,7 +70,6 @@ impl CryptoSource for FailingSource {
 /// A non-file source loads and resolves exactly like a `CryptoFileSource` would.
 #[tokio::test]
 async fn in_memory_source_loads_and_resolves() -> TestResult {
-    let resolver = DynamicCertResolver::new(false);
     let source = Arc::new(InMemorySource(certs_keys_in_memory("mem.example.com")?));
     let entries = vec![CertEntry {
         host: Some("mem.example.com".to_string()),
@@ -71,43 +77,40 @@ async fn in_memory_source_loads_and_resolves() -> TestResult {
         label: "mem.example.com".to_string(),
     }];
 
-    let report = resolver.update(&entries).await;
+    let (map, report) = build_server_crypto(&entries, &options(), None).await?;
 
     assert!(report.failed.is_empty(), "an in-memory cert must load");
     assert_eq!(report.loaded.len(), 1, "the in-memory domain went live");
     assert!(
-        resolver.resolves_for(Some("mem.example.com")),
+        map.resolves_for(Some("mem.example.com")),
         "the in-memory cert resolves for its host"
     );
     Ok(())
 }
 
-/// A failing source is reported as `failed` and never resolves - the resolver
+/// A failing source is reported as `failed` and never resolves - the builder
 /// treats any `CryptoSource` uniformly, file-backed or not.
 #[tokio::test]
 async fn failing_source_is_reported_and_does_not_resolve() -> TestResult {
-    ensure_crypto_provider();
-    let resolver = DynamicCertResolver::new(false);
     let entries = vec![CertEntry {
         host: None,
         source: Arc::new(FailingSource),
         label: "_default_".to_string(),
     }];
 
-    let report = resolver.update(&entries).await;
+    let (map, report) = build_server_crypto(&entries, &options(), None).await?;
 
     assert!(report.loaded.is_empty(), "a failing source loads nothing");
     assert_eq!(report.failed.len(), 1, "the failing source is reported as failed");
     assert!(report.is_partial(), "a failed source makes the report partial");
-    assert!(!resolver.resolves_for(None), "nothing resolves from a failing source");
+    assert!(!map.resolves_for(None), "nothing resolves from a failing source");
     Ok(())
 }
 
-/// Different `CryptoSource` implementations can be mixed in one reload: an
+/// Different `CryptoSource` implementations can be mixed in one build: an
 /// in-memory catch-all serves alongside a failing named domain.
 #[tokio::test]
 async fn mixed_sources_in_one_reload() -> TestResult {
-    let resolver = DynamicCertResolver::new(false);
     let entries = vec![
         CertEntry {
             host: None,
@@ -121,12 +124,12 @@ async fn mixed_sources_in_one_reload() -> TestResult {
         },
     ];
 
-    let report = resolver.update(&entries).await;
+    let (map, report) = build_server_crypto(&entries, &options(), None).await?;
 
     assert_eq!(report.loaded.len(), 1, "only the in-memory catch-all loads");
     assert_eq!(report.failed.len(), 1, "the failing named domain is reported");
-    let (_, _, has_default) = resolver.cert_map_summary();
+    let (_, _, has_default) = map.config_summary();
     assert!(has_default, "the in-memory catch-all populated the default slot");
-    assert!(resolver.resolves_for(None), "no-SNI clients get the in-memory default cert");
+    assert!(map.resolves_for(None), "no-SNI clients get the in-memory default config");
     Ok(())
 }

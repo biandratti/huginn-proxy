@@ -39,7 +39,32 @@ use crate::certs::build_certified_key;
 use crate::cipher_suites::resolve_cipher_suites;
 use crate::crypto_source::CertEntry;
 use crate::error::CertError;
-use crate::server_crypto::CertReloadReport;
+
+/// Outcome of a [`build_server_crypto`] call.
+///
+/// The build is best-effort per-domain: it always produces a [`ServerCryptoMap`]
+/// and builds as many configs as it can. `loaded` holds `(label, cert_hash)` for
+/// each domain whose config went live in this build; `failed` holds the labels of
+/// domains whose config could not be built (those keep their previously serving
+/// config, if any). A non-empty `failed` is a *partial* build.
+///
+/// The report carries labels and hashes rather than emitting metrics itself, so
+/// the crate stays free of any telemetry dependency: the caller (huginn-proxy-lib)
+/// records `tls_cert_reload_*` from this report *after* the atomic swap.
+#[derive(Debug, Default, Clone)]
+pub struct CertReloadReport {
+    /// `(label, cert_hash)` per config that went into service this build.
+    pub loaded: Vec<(String, u64)>,
+    /// Labels of domains whose config failed to build this reload.
+    pub failed: Vec<String>,
+}
+
+impl CertReloadReport {
+    /// `true` when at least one domain's config failed to build this reload.
+    pub fn is_partial(&self) -> bool {
+        !self.failed.is_empty()
+    }
+}
 
 /// Process-wide stateless session ticketer, shared by every non-mTLS `ServerConfig`
 /// and across certificate hot-reloads.

@@ -12,7 +12,7 @@ use hyper::Request;
 /// 2. `Host` header - fallback (HTTP/1.1 origin-form, or HTTP/2 without `:authority`).
 ///
 /// TLS SNI is intentionally NOT a routing input. It is used only for certificate
-/// selection at the TLS layer ([`crate::tls::DynamicCertResolver`]) and the optional
+/// selection at the TLS layer ([`crate::tls::ServerCryptoMap`]) and the optional
 /// `sni_strict` handshake rejection (exactly like Traefik), whose routers match on
 /// the HTTP host while SNI only drives cert / TLS-option selection. Routing uniformly
 /// by authority (instead of SNI-first for HTTP/1.1) keeps both protocol versions

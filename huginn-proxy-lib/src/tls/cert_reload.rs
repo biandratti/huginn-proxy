@@ -1,34 +1,52 @@
 //! Glue between the proxy's config/telemetry and the config-agnostic
 //! [`huginn_certs`] crate.
 //!
-//! [`huginn_certs::DynamicCertResolver::update`] takes plain [`CertEntry`] values
-//! and returns a [`CertReloadReport`] without touching metrics. This module
-//! translates configured [`Domain`]s into `CertEntry`s and records the
-//! `tls_cert_reload_*` metrics from the report, keeping the crate free of any
-//! dependency on `config` or `telemetry`.
+//! [`huginn_certs::build_server_crypto`] takes plain [`CertEntry`] values plus
+//! [`TlsBuildOptions`] and returns a [`ServerCryptoMap`] + [`CertReloadReport`]
+//! without touching metrics. This module translates configured [`Domain`]s into
+//! `CertEntry`s and records the `tls_cert_reload_*` metrics from the report,
+//! keeping the crate free of any dependency on `config` or `telemetry`.
 
-use huginn_certs::{CertEntry, CertReloadReport, CryptoFileSource, DynamicCertResolver};
+use huginn_certs::{
+    build_server_crypto, CertEntry, CertReloadReport, CryptoFileSource, ServerCryptoMap,
+    TlsBuildOptions,
+};
 use std::sync::Arc;
-use tracing::info;
+use tracing::{error, info};
 
 use crate::config::Domain;
+use crate::error::{ProxyError, Result};
 use crate::telemetry::Metrics;
+use crate::tls::setup::SharedServerCrypto;
 
-/// Translate configured domains into cert entries for the resolver.
+/// Translate configured domains into cert entries for the per-SNI config builder.
 ///
 /// Domains that declare both a `cert_path` and a `key_path` become a
 /// [`CertEntry`]; a domain missing either is skipped (it can still serve TLS via
-/// the catch-all default cert) with an informational log, mirroring the previous
-/// in-resolver behaviour.
-pub fn cert_entries_from_domains(domains: &[Domain]) -> Vec<CertEntry> {
+/// the catch-all default cert) with an informational log.
+///
+/// `global_client_ca` is the process-wide `[tls].client_auth` CA path, if any:
+/// while client-auth is still configured globally, it is attached to *every*
+/// domain's source so each per-SNI `ServerConfig` enforces mutual TLS, preserving
+/// the pre-per-SNI behaviour. Per-domain `client_ca_path` overrides this later.
+pub fn cert_entries_from_domains(
+    domains: &[Domain],
+    global_client_ca: Option<&str>,
+) -> Vec<CertEntry> {
     let mut entries = Vec::with_capacity(domains.len());
     for domain in domains {
         match (&domain.cert_path, &domain.key_path) {
-            (Some(cert_path), Some(key_path)) => entries.push(CertEntry {
-                host: domain.host.clone(),
-                source: Arc::new(CryptoFileSource::new(cert_path, key_path)),
-                label: domain.label().to_string(),
-            }),
+            (Some(cert_path), Some(key_path)) => {
+                let mut source = CryptoFileSource::new(cert_path, key_path);
+                if let Some(ca) = global_client_ca {
+                    source = source.with_client_ca(ca);
+                }
+                entries.push(CertEntry {
+                    host: domain.host.clone(),
+                    source: Arc::new(source),
+                    label: domain.label().to_string(),
+                });
+            }
             _ => info!(
                 host = domain.label(),
                 "Domain has no cert_path/key_path; it will serve TLS only if a default certificate exists"
@@ -38,18 +56,23 @@ pub fn cert_entries_from_domains(domains: &[Domain]) -> Vec<CertEntry> {
     entries
 }
 
-/// Reload the resolver's certs from `domains` and record reload metrics.
+/// Build a [`ServerCryptoMap`] from `domains` and record reload metrics.
 ///
-/// Success metrics carry each cert's chain hash and are emitted only after the
-/// resolver's atomic swap (they come from the returned report), so the gauges
-/// never advertise a cert that didn't go into service.
-pub async fn reload_certs(
-    resolver: &DynamicCertResolver,
+/// `previous` carries forward a domain's last-good config when its new cert fails
+/// to build (best-effort, per-domain). Success metrics carry each cert's chain
+/// hash and come from the returned report. Returns `Err` only for process-wide
+/// setup failures (ticketer/provider), which are fatal at startup.
+pub async fn build_server_crypto_map(
     domains: &[Domain],
+    options: &TlsBuildOptions,
+    global_client_ca: Option<&str>,
+    previous: Option<&ServerCryptoMap>,
     metrics: &Metrics,
-) -> CertReloadReport {
-    let entries = cert_entries_from_domains(domains);
-    let report = resolver.update(&entries).await;
+) -> Result<(ServerCryptoMap, CertReloadReport)> {
+    let entries = cert_entries_from_domains(domains, global_client_ca);
+    let (map, report) = build_server_crypto(&entries, options, previous)
+        .await
+        .map_err(|e| ProxyError::Tls(e.to_string()))?;
 
     for (label, cert_hash) in &report.loaded {
         metrics.record_tls_cert_reload_success(label, *cert_hash);
@@ -58,5 +81,33 @@ pub async fn reload_certs(
         metrics.record_tls_cert_reload_error(label);
     }
 
-    report
+    Ok((map, report))
+}
+
+/// Rebuild the per-SNI config map from `domains` and swap it in atomically.
+///
+/// The current map is used as `previous`, so a domain whose cert fails to reload
+/// keeps its last-good `ServerConfig`. On a process-wide build failure the swap is
+/// skipped and the previous map stays live (fail-safe), reported as an empty
+/// [`CertReloadReport`] so the caller does not advertise any change.
+pub async fn reload_server_crypto(
+    shared: &SharedServerCrypto,
+    domains: &[Domain],
+    options: &TlsBuildOptions,
+    global_client_ca: Option<&str>,
+    metrics: &Metrics,
+) -> CertReloadReport {
+    let previous = shared.load_full();
+    match build_server_crypto_map(domains, options, global_client_ca, Some(&previous), metrics)
+        .await
+    {
+        Ok((map, report)) => {
+            shared.store(Arc::new(map));
+            report
+        }
+        Err(e) => {
+            error!(error = %e, "TLS config rebuild failed on reload; keeping previous configs");
+            CertReloadReport::default()
+        }
+    }
 }

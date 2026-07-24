@@ -1,13 +1,13 @@
 use crate::backend::health_check::HealthCheckSupervisor;
 use crate::config::{
-    load_from_path, Backend, BackendPoolConfig, Domain, DynamicConfig, RateLimitConfig,
+    load_from_path, Backend, BackendPoolConfig, ClientAuth, Domain, DynamicConfig, RateLimitConfig,
     StaticConfig,
 };
 use crate::proxy::client_pool::ClientPool;
 use crate::proxy::protocol::warn_proxy_protocol_trust_gap;
 use crate::security::RateLimitManager;
 use crate::telemetry::Metrics;
-use crate::tls::DynamicCertResolver;
+use crate::tls::setup::SharedServerCrypto;
 use arc_swap::ArcSwap;
 use std::collections::{BTreeMap, HashSet};
 use std::hash::{Hash, Hasher};
@@ -50,7 +50,7 @@ pub async fn try_reload(
     reload_mutex: &tokio::sync::Mutex<()>,
     metrics: &Arc<Metrics>,
     health_supervisor: &HealthCheckSupervisor,
-    cert_resolver: Option<&Arc<DynamicCertResolver>>,
+    server_crypto: Option<&SharedServerCrypto>,
 ) {
     let _guard = reload_mutex.lock().await;
 
@@ -94,11 +94,22 @@ pub async fn try_reload(
     let hash = fnv1a_hash(&new_dynamic);
     let old_hash = fnv1a_hash(&old_dynamic);
 
-    let cert_report = match cert_resolver {
-        Some(resolver) => {
-            let report =
-                crate::tls::reload_certs(resolver.as_ref(), &new_dynamic.domains, metrics).await;
-            if !resolver.has_serviceable_cert() && !new_dynamic.domains.is_empty() {
+    let cert_report = match (server_crypto, static_cfg.tls.as_ref()) {
+        (Some(shared), Some(tls)) => {
+            let options = crate::tls::tls_build_options(tls);
+            let global_client_ca = match &tls.client_auth {
+                ClientAuth::Required { ca_cert_path } => Some(ca_cert_path.as_str()),
+                ClientAuth::Disabled => None,
+            };
+            let report = crate::tls::reload_server_crypto(
+                shared,
+                &new_dynamic.domains,
+                &options,
+                global_client_ca,
+                metrics,
+            )
+            .await;
+            if !shared.load().has_serviceable_config() && !new_dynamic.domains.is_empty() {
                 info!(
                     "TLS is configured but no certificate is serviceable after reload; all TLS \
                      handshakes will be rejected until a cert is provided"
@@ -106,7 +117,7 @@ pub async fn try_reload(
             }
             report
         }
-        None => crate::tls::CertReloadReport::default(),
+        _ => crate::tls::CertReloadReport::default(),
     };
 
     if cert_report.is_partial() {

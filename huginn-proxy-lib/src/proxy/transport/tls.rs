@@ -10,17 +10,19 @@ use crate::proxy::synthetic_response::synthetic_error_response;
 use crate::proxy::ClientPool;
 use crate::telemetry::Metrics;
 use crate::tls::record_tls_handshake_metrics;
-use crate::tls::setup::SharedTlsAcceptor;
+use crate::tls::setup::SharedServerCrypto;
 use http::StatusCode;
 use hyper_util::rt::{TokioExecutor, TokioIo};
 use hyper_util::server::conn::auto::Builder as ConnBuilder;
 use tokio::net::TcpStream;
 use tokio::time::Instant;
+use tokio_rustls::rustls::server::Acceptor;
+use tokio_rustls::LazyConfigAcceptor;
 use tracing::warn;
 
 /// Configuration for handling TLS connections
 pub struct TlsConnectionConfig {
-    pub tls_acceptor: SharedTlsAcceptor,
+    pub server_crypto: SharedServerCrypto,
     pub fingerprint_config: crate::config::FingerprintConfig,
     pub domains: Arc<Vec<crate::config::Domain>>,
     pub backends: Arc<Vec<crate::config::Backend>>,
@@ -43,7 +45,7 @@ pub async fn handle_tls_connection(
     config: TlsConnectionConfig,
 ) {
     let metrics = config.metrics.clone();
-    let acc = config.tls_acceptor.load_full();
+    let crypto = config.server_crypto.load_full();
     {
         let handshake_start = Instant::now();
         let (prefix, ja4_fingerprints) =
@@ -57,8 +59,19 @@ pub async fn handle_tls_connection(
             };
 
         let prefixed = PrefixedStream::new(prefix, stream);
-        let tls_accept_result =
-            tokio::time::timeout(config.tls_handshake_timeout, acc.accept(prefixed)).await;
+        // Two-phase handshake: `LazyConfigAcceptor` reads the ClientHello (replayed
+        // from the prefix), then we pick the per-SNI `ServerConfig` and finish. The
+        // whole exchange is bounded by the single handshake timeout.
+        let tls_accept_result = tokio::time::timeout(config.tls_handshake_timeout, async {
+            let start = LazyConfigAcceptor::new(Acceptor::default(), prefixed).await?;
+            let server_config = {
+                let client_hello = start.client_hello();
+                let sni = client_hello.server_name();
+                crypto.select(sni).unwrap_or_else(|| crypto.reject_config())
+            };
+            start.into_stream(server_config).await
+        })
+        .await;
 
         let tls = match tls_accept_result {
             Ok(Ok(tls)) => tls,

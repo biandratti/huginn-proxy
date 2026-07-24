@@ -2,8 +2,8 @@
 //!
 //! [`ServerCertsKeys`] holds the parsed certificate chain and private key for a
 //! single domain, handed to
-//! [`DynamicCertResolver`](crate::server_crypto::DynamicCertResolver) which owns
-//! SNI-based selection and atomic hot-reload.
+//! [`build_server_crypto`](crate::build::build_server_crypto) which turns it into a
+//! per-SNI rustls `ServerConfig`.
 
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;

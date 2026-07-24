@@ -71,7 +71,7 @@ pub fn pick_domain<'a>(domains: &'a [Domain], host: &str) -> Option<&'a Domain> 
 
 /// The certificate a domain is effectively served with: its own `cert_path`, or the
 /// default certificate (the catch-all/host-less domain's `cert_path`) when it declares
-/// none. Mirrors `DynamicCertResolver`'s exact → wildcard → default resolution.
+/// none. Mirrors `ServerCryptoMap`'s exact → wildcard → default resolution.
 fn effective_cert_path<'a>(domain: &'a Domain, default_cert: Option<&'a str>) -> Option<&'a str> {
     domain.cert_path.as_deref().or(default_cert)
 }

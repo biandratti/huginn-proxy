@@ -4,8 +4,8 @@
 //! not care whether it is a file, a secret store, or an in-memory blob. The only
 //! implementation today is [`CryptoFileSource`] (backed by [`read_certs_and_keys`]),
 //! but the trait keeps the door open to other sources without touching the
-//! resolver. A [`CertEntry`] pairs one such source with its SNI host and label
-//! for [`DynamicCertResolver::update`](crate::server_crypto::DynamicCertResolver::update).
+//! per-SNI config builder. A [`CertEntry`] pairs one such source with its SNI host
+//! and label for [`build_server_crypto`](crate::build::build_server_crypto).
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -86,10 +86,10 @@ pub struct CertEntry {
 
 /// Read the certificate, private key, and optional client-CA bundle from disk.
 ///
-/// Used by [`DynamicCertResolver`](crate::server_crypto::DynamicCertResolver) to
-/// load each domain's cert material during startup and hot-reload. When
-/// `client_ca_path` is `Some`, the returned material carries the parsed client-CA
-/// trust anchors and [`ServerCertsKeys::is_mutual_tls`] reports `true`.
+/// Used by [`build_server_crypto`](crate::build::build_server_crypto) to load each
+/// domain's cert material during startup and hot-reload. When `client_ca_path` is
+/// `Some`, the returned material carries the parsed client-CA trust anchors and
+/// [`ServerCertsKeys::is_mutual_tls`] reports `true`.
 pub async fn read_certs_and_keys(
     cert_path: &Path,
     key_path: &Path,

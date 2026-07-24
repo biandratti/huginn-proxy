@@ -1,8 +1,7 @@
 use huginn_proxy_lib::config::{TlsOptions, TlsVersion};
-#[cfg(test)]
-use huginn_proxy_lib::tls::acceptor::validate_tls_options;
 use huginn_proxy_lib::tls::cipher_suites::supported_cipher_suites;
 use huginn_proxy_lib::tls::curves::supported_curves;
+use huginn_proxy_lib::tls::validate_tls_options;
 
 #[test]
 fn test_validate_tls_options_default() {
