@@ -39,6 +39,18 @@ follows [Semantic Versioning](https://semver.org/).
   debounce_secs = 60
   ```
 
+### Changed
+
+- **TLS session resumption is now stateless tickets only.** A process-wide shared ticketer (kept
+  across cert hot-reloads) replaces the former server-side TLS 1.2 session-ID cache. This also turns
+  on TLS 1.3 resumption, which was previously off. mTLS domains never resume.
+
+### Deprecated
+
+- **`session_resumption.max_sessions` no longer has any effect.** It previously sized the TLS 1.2
+  server-side session cache, which no longer exists (resumption is stateless). The key is still
+  accepted so existing configs parse, but it is a no-op and will be removed in a future release.
+
 ---
 
 ## [0.0.3-beta.0]

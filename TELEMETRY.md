@@ -674,8 +674,8 @@ sum by (protocol) (rate(huginn_mtls_connections_total[5m]))
 
 **Notes**:
 
-- Cert loading is driven by config hot-reload (`DynamicCertResolver::update`) — each SIGHUP or config file change
-  reloads all domain certs. This replaces the former per-file watcher model.
+- Cert loading is driven by config hot-reload (the per-SNI `ServerCryptoMap` is rebuilt and swapped) — each SIGHUP or
+  config file change reloads all domain certs. This replaces the former per-file watcher model.
 - All three metrics are **per-domain** so you can track cert rotation independently for each domain.
 - Only domains that declare a certificate emit these metrics. Plain-HTTP domains and a cert-less catch-all
   produce no cert series.

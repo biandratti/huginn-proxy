@@ -172,7 +172,7 @@ a reused (coalesced) HTTP/2 connection could carry a request for a host served b
 rejects
 that with `421 Misdirected Request` — the same default protection nginx and Apache `mod_http2` apply (RFC 9110
 §15.5.20 /
-RFC 7540 §9.1.2). Because huginn uses a single global TLS configuration, "authoritative" reduces to "served by the same
+RFC 7540 §9.1.2). Because huginn selects the certificate by SNI, "authoritative" reduces to "served by the same
 certificate": a request whose host is not covered by the certificate the connection's SNI selected is rejected. The
 check
 compares certificate coverage rather than literal `authority == SNI`, so hosts sharing a single certificate (a
@@ -183,10 +183,10 @@ genuinely cross-certificate requests, and plain HTTP / no-SNI connections are un
 
 Certificates are re-read as part of a **config reload** — driven by SIGHUP or by a change to the *config file* (when the
 `[reload].watch` file watcher is enabled, debounced by a configurable delay), not by an independent cert-file watcher. Each
-reload re-reads the cert/key files from their configured paths. The `DynamicCertResolver` is updated in place and its
-cert map is swapped atomically (`ArcSwap`); the acceptor's `ServerConfig` itself is built once at startup, so cipher
-suites, ALPN, client auth, and session resumption settings never drift between the initial configuration and reloaded
-certificates.
+reload re-reads the cert/key files from their configured paths, rebuilds the per-SNI `ServerConfig` map (`ServerCryptoMap`,
+one config per domain), and swaps it in atomically (`ArcSwap`). Listener-global TLS options (cipher suites, ALPN,
+`sni_strict`, resumption on/off) are **static** and cannot change on reload; the stateless session ticketer is a
+process-wide instance shared across rebuilds, so tickets issued before a reload stay valid afterward.
 
 Reloading is **best-effort and per-domain** (Traefik-style): if one domain's new certificate fails to load, the other
 domains still swap to their fresh certs, and the failing domain keeps serving its previously loaded certificate so a
@@ -211,28 +211,28 @@ certificate but not the TLS parameters.
 
 ## TLS Session Resumption
 
-**TLS 1.2 session IDs and TLS 1.3 session tickets**
+**Stateless session tickets only**
 
-Session resumption reduces handshake overhead for subsequent connections. TLS 1.2 uses server-side session ID caching (
-default: 256 sessions), while TLS 1.3 uses stateless session tickets.
+Session resumption reduces handshake overhead for subsequent connections. Huginn issues **stateless TLS session
+tickets** (used by both TLS 1.2 and 1.3) from a single process-wide ticketer shared across certificate hot-reloads, so
+tickets stay decryptable after a reload. There is **no server-side session cache**.
 
-Enabled by default. Configurable via `session_resumption.enabled` and `session_resumption.max_sessions` (for TLS 1.2
-cache size).
+Enabled by default; toggle with `session_resumption.enabled`. mTLS domains never resume (see below).
 
-Limitation: TLS 1.3 ticket lifetime and rotation are managed by rustls defaults. No manual control over ticket
-encryption keys or expiration.
+Limitation: ticket lifetime and rotation are managed by rustls defaults. No manual control over ticket encryption keys
+or expiration.
 
 ## mTLS (Mutual TLS)
 
-**Client certificate authentication**
+**Per-domain client certificate authentication**
 
-When enabled, clients must present a valid certificate signed by the configured CA. Supports multiple CA certificates in
-a single file.
+A `[[domains]]` entry that sets `client_ca_path` requires clients to present a valid certificate signed by one of the
+CAs in that bundle (multiple CA certificates per file supported). Because the client verifier is bound to each domain's
+own TLS `ServerConfig`, mTLS is **per-domain**: one listener can freely mix domains that require client certs with
+public ones. An mTLS domain never resumes a TLS session, so the client certificate is re-verified on every connection.
 
-This is a global setting. Either all routes require client certs, or none do.
-
-Limitation: No per-route mTLS configuration. No option for optional client certificates (it's either required or
-disabled).
+Limitation: client auth is required-or-absent per domain (no "optional client certificate" mode), and there is no
+per-route granularity below the domain.
 
 ## Fingerprinting
 
