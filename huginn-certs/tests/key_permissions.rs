@@ -84,7 +84,7 @@ async fn read_capturing(cert: &Path, key: &Path) -> (bool, String) {
         .without_time()
         .finish();
     let _guard = tracing::subscriber::set_default(subscriber);
-    let ok = read_certs_and_keys(cert, key).await.is_ok();
+    let ok = read_certs_and_keys(cert, key, None).await.is_ok();
     (ok, cap.snapshot())
 }
 

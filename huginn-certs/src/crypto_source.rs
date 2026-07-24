@@ -31,26 +31,39 @@ pub trait CryptoSource: std::fmt::Debug + Send + Sync {
     async fn read(&self) -> Result<ServerCertsKeys, CertError>;
 }
 
-/// A [`CryptoSource`] backed by two PEM files on disk.
+/// A [`CryptoSource`] backed by PEM files on disk.
+///
+/// Reads the server certificate chain and private key, plus an optional client-CA
+/// bundle that turns on mutual TLS for the domain.
 #[derive(Debug, Clone)]
 pub struct CryptoFileSource {
     /// Path to the certificate chain PEM file.
     pub cert_path: PathBuf,
     /// Path to the private key PEM file.
     pub key_path: PathBuf,
+    /// Optional path to a client-CA bundle PEM file. When set, the domain
+    /// requires mutual TLS and client certs are verified against these CAs.
+    pub client_ca_path: Option<PathBuf>,
 }
 
 impl CryptoFileSource {
-    /// Build a file source from a cert and key path.
+    /// Build a file source from a cert and key path (no client auth).
     pub fn new(cert_path: impl Into<PathBuf>, key_path: impl Into<PathBuf>) -> Self {
-        Self { cert_path: cert_path.into(), key_path: key_path.into() }
+        Self { cert_path: cert_path.into(), key_path: key_path.into(), client_ca_path: None }
+    }
+
+    /// Enable mutual TLS for this source by pointing at a client-CA bundle.
+    #[must_use]
+    pub fn with_client_ca(mut self, client_ca_path: impl Into<PathBuf>) -> Self {
+        self.client_ca_path = Some(client_ca_path.into());
+        self
     }
 }
 
 #[async_trait]
 impl CryptoSource for CryptoFileSource {
     async fn read(&self) -> Result<ServerCertsKeys, CertError> {
-        read_certs_and_keys(&self.cert_path, &self.key_path).await
+        read_certs_and_keys(&self.cert_path, &self.key_path, self.client_ca_path.as_deref()).await
     }
 }
 
@@ -71,13 +84,16 @@ pub struct CertEntry {
     pub label: String,
 }
 
-/// Read the certificate and private key from the disk.
+/// Read the certificate, private key, and optional client-CA bundle from disk.
 ///
 /// Used by [`DynamicCertResolver`](crate::server_crypto::DynamicCertResolver) to
-/// load each domain's cert material during startup and hot-reload.
+/// load each domain's cert material during startup and hot-reload. When
+/// `client_ca_path` is `Some`, the returned material carries the parsed client-CA
+/// trust anchors and [`ServerCertsKeys::is_mutual_tls`] reports `true`.
 pub async fn read_certs_and_keys(
     cert_path: &Path,
     key_path: &Path,
+    client_ca_path: Option<&Path>,
 ) -> Result<ServerCertsKeys, CertError> {
     debug!("Reading TLS server certificates and private key");
 
@@ -115,7 +131,38 @@ pub async fn read_certs_and_keys(
 
     let key = keys.pop().ok_or(CertError::NoPrivateKey)?;
 
-    Ok(ServerCertsKeys { certs, key })
+    let client_ca_certs = match client_ca_path {
+        Some(path) => Some(read_client_ca_certs(path).await?),
+        None => None,
+    };
+
+    Ok(ServerCertsKeys { certs, key, client_ca_certs })
+}
+
+/// Read and parse a client-CA bundle PEM file into trust anchors for mTLS.
+///
+/// Errors with [`CertError::NoClientCert`] if the file parses but is empty, so a
+/// misconfigured mTLS domain fails loudly instead of silently disabling client
+/// auth.
+async fn read_client_ca_certs(path: &Path) -> Result<Vec<CertificateDer<'static>>, CertError> {
+    let ca_bytes = fs::read(path).await.map_err(|source| CertError::Io {
+        kind: "client CA certificates",
+        path: path.display().to_string(),
+        source,
+    })?;
+
+    let ca_certs: Vec<CertificateDer<'static>> = CertificateDer::pem_slice_iter(&ca_bytes)
+        .collect::<Result<Vec<_>, rustls_pki_types::pem::Error>>()
+        .map_err(|e| CertError::Parse(format!("client CA certificates: {e}")))?
+        .into_iter()
+        .map(|c| c.into_owned())
+        .collect();
+
+    if ca_certs.is_empty() {
+        return Err(CertError::NoClientCert);
+    }
+
+    Ok(ca_certs)
 }
 
 /// Emit a `warn!` if the private key file at `path` has any group- or

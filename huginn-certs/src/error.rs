@@ -33,6 +33,11 @@ pub enum CertError {
     #[error("no private keys found - make sure they are in PKCS#8/PEM format")]
     NoPrivateKey,
 
+    /// A client-CA file was configured for mutual TLS but contained no
+    /// certificates.
+    #[error("no client CA certificates found")]
+    NoClientCert,
+
     /// The private key could not be turned into a rustls signing key.
     #[error("failed to build signing key for '{label}': {message}")]
     SigningKey {

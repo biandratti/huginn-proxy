@@ -10,15 +10,38 @@ use std::hash::{Hash, Hasher};
 use rustls_pki_types::{CertificateDer, PrivateKeyDer};
 
 /// A parsed certificate chain and its matching private key for one domain.
+///
+/// Optionally carries the client-CA trust anchors for that domain: when present
+/// the domain requires mutual TLS, verifying client certificates against them.
+/// Because rustls binds the client-cert verifier to the `ServerConfig` (not to
+/// the resolved cert), keeping the client CA here lets mTLS be configured
+/// per-domain and hot-reloaded alongside the server cert.
 #[derive(Debug, PartialEq, Eq)]
 pub struct ServerCertsKeys {
     pub certs: Vec<CertificateDer<'static>>,
     pub key: PrivateKeyDer<'static>,
+    /// Client-CA trust anchors for mutual TLS. `None` (or empty) = this domain
+    /// does not require client certificates.
+    pub client_ca_certs: Option<Vec<CertificateDer<'static>>>,
+}
+
+impl ServerCertsKeys {
+    /// Whether this domain enables mutual TLS, i.e. it carries client-CA trust
+    /// anchors to verify client certificates against.
+    pub fn is_mutual_tls(&self) -> bool {
+        self.client_ca_certs
+            .as_ref()
+            .is_some_and(|ca| !ca.is_empty())
+    }
 }
 
 impl Clone for ServerCertsKeys {
     fn clone(&self) -> Self {
-        Self { certs: self.certs.to_vec(), key: self.key.clone_key() }
+        Self {
+            certs: self.certs.to_vec(),
+            key: self.key.clone_key(),
+            client_ca_certs: self.client_ca_certs.clone(),
+        }
     }
 }
 

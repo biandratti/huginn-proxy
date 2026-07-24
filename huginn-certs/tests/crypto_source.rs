@@ -35,7 +35,7 @@ fn certs_keys_in_memory(
         .collect();
     let key = PrivateKeyDer::from_pem_slice(key_pem.as_bytes())?.clone_key();
 
-    Ok(ServerCertsKeys { certs, key })
+    Ok(ServerCertsKeys { certs, key, client_ca_certs: None })
 }
 
 /// A `CryptoSource` that hands back pre-parsed material held in memory.
