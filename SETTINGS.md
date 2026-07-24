@@ -815,49 +815,25 @@ tls:
 </tbody>
 </table>
 
-### `[tls.client_auth]`
+### Mutual TLS (mTLS)
 
-Mutual TLS (mTLS). Omit to disable. **Static**.
-
-<table>
-<thead>
-<tr>
-<th>TOML</th>
-<th>YAML</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td valign="top">
-
-```toml
-# Require client certificates signed by this CA
-[tls.client_auth]
-required = { ca_cert_path = "/config/certs/ca.crt" }
-```
-
-</td>
-<td valign="top">
-
-```yaml
-# Require client certificates signed by this CA
-tls:
-  client_auth:
-    required:
-      ca_cert_path: "/config/certs/ca.crt"
-```
-
-</td>
-</tr>
-</tbody>
-</table>
+Client authentication is **per-domain**, configured with `client_ca_path` on each
+`[[domains]]` entry (see [`[[domains]]`](#domains)) — there is no listener-wide
+`[tls.client_auth]` setting. A domain that sets `client_ca_path` requires clients to
+present a certificate signed by that CA; domains without it do not. Because the
+client verifier is bound to each domain's own TLS config, one listener can mix mTLS
+and public domains. mTLS domains never resume a session (the client certificate is
+re-verified on every connection).
 
 ### `[tls.session_resumption]`
 
-| Key            | Type    | Default | Description                                                                    |
-|----------------|---------|---------|--------------------------------------------------------------------------------|
-| `enabled`      | bool    | `true`  | Enable TLS session resumption (TLS 1.2 session IDs + TLS 1.3 session tickets). |
-| `max_sessions` | integer | `256`   | TLS 1.2 server-side session cache size.                                        |
+Resumption uses **stateless TLS session tickets only** — there is no server-side
+session cache. mTLS domains never resume regardless of this setting.
+
+| Key            | Type    | Default | Description                                                                                      |
+|----------------|---------|---------|--------------------------------------------------------------------------------------------------|
+| `enabled`      | bool    | `true`  | Issue stateless session tickets so non-mTLS clients can resume without a full handshake.         |
+| `max_sessions` | integer | `256`   | **Obsolete** — kept only so existing configs parse; has no effect (resumption is stateless now). |
 
 <table>
 <thead>
@@ -873,7 +849,6 @@ tls:
 ```toml
 [tls.session_resumption]
 enabled = true
-max_sessions = 256
 ```
 
 </td>
@@ -883,7 +858,6 @@ max_sessions = 256
 tls:
   session_resumption:
     enabled: true
-    max_sessions: 256
 ```
 
 </td>

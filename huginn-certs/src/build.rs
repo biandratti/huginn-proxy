@@ -17,8 +17,8 @@
 //! ## Resumption policy (mirrors rpxy)
 //!
 //! Resumption is via **stateless session tickets only** (no server-side cache):
-//! the ticket keys are a single [`shared_ticketer`] instance shared across every
-//! non-mTLS config and across hot-reloads, so outstanding tickets stay
+//! the ticket keys are a single process-wide `shared_ticketer` instance shared
+//! across every non-mTLS config and across hot-reloads, so outstanding tickets stay
 //! decryptable when the map is rebuilt. **mTLS domains never resume** (no ticketer
 //! and no cache) so the client certificate is verified on every connection —
 //! a resumed handshake would otherwise restore the stored client identity without

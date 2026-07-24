@@ -97,35 +97,24 @@ fn default_curve_preferences() -> Vec<String> {
         .collect()
 }
 
-/// Client authentication mode for mTLS
-#[derive(Debug, Deserialize, Clone, PartialEq, Eq, Default)]
-#[serde(rename_all = "lowercase")]
-pub enum ClientAuth {
-    /// Client authentication is disabled (default)
-    #[default]
-    Disabled,
-    /// Client authentication is required
-    /// Clients must present valid certificates signed by the specified CA
-    Required {
-        /// Path to client CA certificate file (PEM format)
-        /// File must exist and be readable at startup
-        /// Can contain one or more CA certificates
-        ca_cert_path: String,
-    },
-}
-
 /// Session resumption configuration for TLS
 #[derive(Debug, Deserialize, Clone, PartialEq)]
 #[cfg_attr(test, derive(serde::Serialize))]
 #[serde(deny_unknown_fields)]
 pub struct SessionResumptionConfig {
     /// Enable session resumption (default: true)
-    /// When enabled, clients can reuse previous TLS sessions to reduce handshake overhead
+    ///
+    /// When enabled, non-mTLS domains issue **stateless TLS session tickets** so
+    /// clients can resume without a round-trip. mTLS domains never resume (the
+    /// client certificate is re-verified on every connection). There is no
+    /// server-side session cache.
     #[serde(default = "default_true")]
     pub enabled: bool,
-    /// Maximum number of sessions to cache (default: 256)
-    /// Only applies to TLS 1.2 session ID resumption
-    /// TLS 1.3 uses stateless session tickets and doesn't use this cache
+    /// **Obsolete.** Kept only so existing configs still parse; it has no effect.
+    ///
+    /// Resumption is now stateless (session tickets only), so there is no
+    /// server-side session cache to size. It previously bounded the TLS 1.2
+    /// session-ID cache, which no longer exists.
     #[serde(default = "default_session_cache_size")]
     pub max_sessions: usize,
 }
@@ -155,17 +144,14 @@ pub struct TlsConfig {
     /// Controls TLS versions and cipher suites
     #[serde(default)]
     pub options: TlsOptions,
-    /// Client authentication mode for mTLS (mutual TLS authentication)
-    /// Default: disabled (no client authentication required)
-    #[serde(default)]
-    pub client_auth: ClientAuth,
     /// Session resumption configuration
     #[serde(default)]
     pub session_resumption: SessionResumptionConfig,
 }
 
 /// Allowlisted effective-config view of TLS: `{"enabled": false}` when TLS is off, otherwise the
-/// full view. Certificate/key material and mTLS CA paths are never included (only presence flags).
+/// full view. Certificate/key material is never included. Client authentication is per-domain
+/// (see the domain view's `client_auth_configured` flag), not part of the static TLS section.
 #[derive(Serialize)]
 #[serde(untagged)]
 pub(crate) enum TlsView<'a> {
@@ -178,7 +164,6 @@ pub(crate) struct TlsEnabledView<'a> {
     enabled: bool,
     alpn: &'a [String],
     options: TlsOptionsView<'a>,
-    client_auth: ClientAuthView,
     session_resumption: SessionResumptionView,
 }
 
@@ -193,13 +178,6 @@ struct TlsOptionsView<'a> {
 }
 
 #[derive(Serialize)]
-struct ClientAuthView {
-    mode: &'static str,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    ca_certificate_configured: Option<bool>,
-}
-
-#[derive(Serialize)]
 struct SessionResumptionView {
     enabled: bool,
     max_sessions: usize,
@@ -209,15 +187,6 @@ struct SessionResumptionView {
 pub(crate) fn effective_tls_view(config: Option<&TlsConfig>) -> TlsView<'_> {
     let Some(config) = config else {
         return TlsView::Disabled { enabled: false };
-    };
-
-    let client_auth = match &config.client_auth {
-        ClientAuth::Disabled => {
-            ClientAuthView { mode: "disabled", ca_certificate_configured: None }
-        }
-        ClientAuth::Required { .. } => {
-            ClientAuthView { mode: "required", ca_certificate_configured: Some(true) }
-        }
     };
 
     TlsView::Enabled(TlsEnabledView {
@@ -236,7 +205,6 @@ pub(crate) fn effective_tls_view(config: Option<&TlsConfig>) -> TlsView<'_> {
             curve_preferences: config.options.curve_preferences.as_slice(),
             sni_strict: config.options.sni_strict,
         },
-        client_auth,
         session_resumption: SessionResumptionView {
             enabled: config.session_resumption.enabled,
             max_sessions: config.session_resumption.max_sessions,

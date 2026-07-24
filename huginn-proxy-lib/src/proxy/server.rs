@@ -1,7 +1,6 @@
 use crate::backend::health_check::{HealthCheckSupervisor, HealthRegistry};
 use crate::backend::BackendSelector;
 use crate::config::watcher::spawn_config_watcher;
-use crate::config::ClientAuth;
 use crate::config::{EffectiveConfigSummary, EffectiveConfigView, StaticConfig};
 use crate::error::Result;
 pub use crate::proxy::accept::SynProbe;
@@ -73,18 +72,8 @@ pub async fn run(
     let server_crypto: Option<SharedServerCrypto> = if let Some(tls) = &static_cfg.tls {
         validate_tls_options(&tls.options)?;
         let options = tls_build_options(tls);
-        let global_client_ca = match &tls.client_auth {
-            ClientAuth::Required { ca_cert_path } => Some(ca_cert_path.as_str()),
-            ClientAuth::Disabled => None,
-        };
-        let (map, report) = build_server_crypto_map(
-            &dynamic_cfg.load().domains,
-            &options,
-            global_client_ca,
-            None,
-            &metrics,
-        )
-        .await?;
+        let (map, report) =
+            build_server_crypto_map(&dynamic_cfg.load().domains, &options, None, &metrics).await?;
         if report.is_partial() {
             info!(
                 failed = report.failed.len(),

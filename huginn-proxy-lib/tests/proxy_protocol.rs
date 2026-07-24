@@ -371,7 +371,6 @@ async fn spawn_proxy_tls(
         tls: Some(TlsConfig {
             alpn: vec!["http/1.1".to_string()],
             options: Default::default(),
-            client_auth: Default::default(),
             session_resumption: Default::default(),
         }),
         fingerprint: FingerprintConfig {

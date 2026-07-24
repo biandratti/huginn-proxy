@@ -237,6 +237,31 @@ async fn mtls_config_disables_resumption_entirely() -> TestResult {
     Ok(())
 }
 
+/// Client auth is per-domain, not listener-wide: in one map, only the mTLS domain
+/// disables resumption while a plain domain alongside it still issues tickets.
+#[tokio::test]
+async fn mtls_is_per_domain_not_listener_wide() -> TestResult {
+    let fx = fixture()?;
+    let entries = vec![
+        entry(Some("plain.example.com"), &fx.cert, &fx.key),
+        mtls_entry(Some("secure.example.com"), &fx.cert, &fx.key, &fx.client_ca),
+    ];
+    let (map, report) = build(&entries, &options(true, false), None).await?;
+
+    assert!(report.failed.is_empty(), "both the plain and mTLS configs must build");
+
+    let plain = map
+        .select(Some("plain.example.com"))
+        .ok_or("plain domain must resolve")?;
+    assert!(plain.ticketer.enabled(), "non-mTLS domain still resumes via tickets");
+
+    let secure = map
+        .select(Some("secure.example.com"))
+        .ok_or("secure domain must resolve")?;
+    assert!(!secure.ticketer.enabled(), "mTLS domain in the same map never resumes");
+    Ok(())
+}
+
 /// The stateless ticketer is one process-wide instance, so tickets stay decryptable
 /// after a rebuild (certificate hot-reload).
 #[tokio::test]

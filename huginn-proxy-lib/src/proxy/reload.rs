@@ -1,6 +1,6 @@
 use crate::backend::health_check::HealthCheckSupervisor;
 use crate::config::{
-    load_from_path, Backend, BackendPoolConfig, ClientAuth, Domain, DynamicConfig, RateLimitConfig,
+    load_from_path, Backend, BackendPoolConfig, Domain, DynamicConfig, RateLimitConfig,
     StaticConfig,
 };
 use crate::proxy::client_pool::ClientPool;
@@ -97,18 +97,9 @@ pub async fn try_reload(
     let cert_report = match (server_crypto, static_cfg.tls.as_ref()) {
         (Some(shared), Some(tls)) => {
             let options = crate::tls::tls_build_options(tls);
-            let global_client_ca = match &tls.client_auth {
-                ClientAuth::Required { ca_cert_path } => Some(ca_cert_path.as_str()),
-                ClientAuth::Disabled => None,
-            };
-            let report = crate::tls::reload_server_crypto(
-                shared,
-                &new_dynamic.domains,
-                &options,
-                global_client_ca,
-                metrics,
-            )
-            .await;
+            let report =
+                crate::tls::reload_server_crypto(shared, &new_dynamic.domains, &options, metrics)
+                    .await;
             if !shared.load().has_serviceable_config() && !new_dynamic.domains.is_empty() {
                 info!(
                     "TLS is configured but no certificate is serviceable after reload; all TLS \

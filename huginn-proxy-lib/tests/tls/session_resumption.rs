@@ -1,11 +1,10 @@
-use huginn_proxy_lib::config::{ClientAuth, SessionResumptionConfig, TlsConfig};
+use huginn_proxy_lib::config::{SessionResumptionConfig, TlsConfig};
 
 #[test]
 fn test_session_resumption_enabled_default() {
     let config = TlsConfig {
         alpn: vec![],
         options: Default::default(),
-        client_auth: ClientAuth::Disabled,
         session_resumption: Default::default(),
     };
     assert!(config.session_resumption.enabled);
@@ -16,7 +15,6 @@ fn test_session_resumption_disabled() {
     let config = TlsConfig {
         alpn: vec![],
         options: Default::default(),
-        client_auth: ClientAuth::Disabled,
         session_resumption: SessionResumptionConfig { enabled: false, max_sessions: 256 },
     };
     assert!(!config.session_resumption.enabled);
@@ -27,7 +25,6 @@ fn test_session_resumption_custom_cache_size() {
     let config = TlsConfig {
         alpn: vec![],
         options: Default::default(),
-        client_auth: ClientAuth::Disabled,
         session_resumption: SessionResumptionConfig { enabled: true, max_sessions: 512 },
     };
     assert_eq!(config.session_resumption.max_sessions, 512);

@@ -25,20 +25,16 @@ use crate::tls::setup::SharedServerCrypto;
 /// [`CertEntry`]; a domain missing either is skipped (it can still serve TLS via
 /// the catch-all default cert) with an informational log.
 ///
-/// `global_client_ca` is the process-wide `[tls].client_auth` CA path, if any:
-/// while client-auth is still configured globally, it is attached to *every*
-/// domain's source so each per-SNI `ServerConfig` enforces mutual TLS, preserving
-/// the pre-per-SNI behaviour. Per-domain `client_ca_path` overrides this later.
-pub fn cert_entries_from_domains(
-    domains: &[Domain],
-    global_client_ca: Option<&str>,
-) -> Vec<CertEntry> {
+/// A domain that also sets `client_ca_path` gets that CA attached to its source,
+/// so its per-SNI `ServerConfig` enforces mutual TLS while other domains do not —
+/// client authentication is per-domain, not listener-wide.
+pub fn cert_entries_from_domains(domains: &[Domain]) -> Vec<CertEntry> {
     let mut entries = Vec::with_capacity(domains.len());
     for domain in domains {
         match (&domain.cert_path, &domain.key_path) {
             (Some(cert_path), Some(key_path)) => {
                 let mut source = CryptoFileSource::new(cert_path, key_path);
-                if let Some(ca) = global_client_ca {
+                if let Some(ca) = &domain.client_ca_path {
                     source = source.with_client_ca(ca);
                 }
                 entries.push(CertEntry {
@@ -65,11 +61,10 @@ pub fn cert_entries_from_domains(
 pub async fn build_server_crypto_map(
     domains: &[Domain],
     options: &TlsBuildOptions,
-    global_client_ca: Option<&str>,
     previous: Option<&ServerCryptoMap>,
     metrics: &Metrics,
 ) -> Result<(ServerCryptoMap, CertReloadReport)> {
-    let entries = cert_entries_from_domains(domains, global_client_ca);
+    let entries = cert_entries_from_domains(domains);
     let (map, report) = build_server_crypto(&entries, options, previous)
         .await
         .map_err(|e| ProxyError::Tls(e.to_string()))?;
@@ -94,13 +89,10 @@ pub async fn reload_server_crypto(
     shared: &SharedServerCrypto,
     domains: &[Domain],
     options: &TlsBuildOptions,
-    global_client_ca: Option<&str>,
     metrics: &Metrics,
 ) -> CertReloadReport {
     let previous = shared.load_full();
-    match build_server_crypto_map(domains, options, global_client_ca, Some(&previous), metrics)
-        .await
-    {
+    match build_server_crypto_map(domains, options, Some(&previous), metrics).await {
         Ok((map, report)) => {
             shared.store(Arc::new(map));
             report
