@@ -628,7 +628,10 @@ sum by (protocol) (rate(huginn_mtls_connections_total[5m]))
 - This metric only counts successful TLS handshakes where a client certificate was present and verified.
 - mTLS verification failures are captured in `huginn_tls_handshake_errors_total`.
 - When mTLS is required but client certificate is invalid/absent, the TLS handshake fails before this metric is
-  recorded.
+  recorded. In that case the `TLS accept failed` / `TLS handshake timeout` **warning logs** carry `mtls=true` and the
+  selected `sni`, so a failure against a domain that required a client certificate can be attributed per-domain (the
+  mTLS flag comes from the per-SNI config picked from the ClientHello, so it is known even though the handshake never
+  completed).
 
 ---
 

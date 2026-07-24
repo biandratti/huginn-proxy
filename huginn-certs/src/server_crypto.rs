@@ -156,17 +156,31 @@ fn classify(host: Option<&str>) -> Slot<'_> {
     }
 }
 
+/// A per-SNI `ServerConfig` paired with whether its domain enforces mutual TLS.
+///
+/// Mirrors rpxy's `ServerCryptoForSni`. The accept path selects this by SNI after
+/// reading the ClientHello; `is_mutual_tls` is known at that point — even when the
+/// handshake later fails — so it can tag handshake-failure logs with whether the
+/// selected domain required a client certificate.
+#[derive(Clone)]
+pub struct ServerCryptoForSni {
+    /// The domain's rustls server configuration.
+    pub config: Arc<ServerConfig>,
+    /// `true` when the domain configures a client-certificate verifier (mTLS).
+    pub is_mutual_tls: bool,
+}
+
 /// SNI → `ServerConfig` map with huginn's `exact → wildcard → catch-all` +
 /// `sni_strict` resolution. Swapped atomically by the proxy on hot-reload.
 pub struct ServerCryptoMap {
-    exact: HashMap<String, Arc<ServerConfig>>,
+    exact: HashMap<String, ServerCryptoForSni>,
     /// Keyed by base domain (e.g. `"example.com"` for `"*.example.com"`).
-    wildcard: HashMap<String, Arc<ServerConfig>>,
+    wildcard: HashMap<String, ServerCryptoForSni>,
     /// Catch-all (host-less) domain's config, served for no-SNI / unmatched SNI in
     /// lenient mode. `None` or `sni_strict` disables the fallback.
-    default: Option<Arc<ServerConfig>>,
+    default: Option<ServerCryptoForSni>,
     /// Sentinel config whose resolver returns `None`; handed to the accept path so
-    /// rustls emits `unrecognized_name` for the strict / no-match case.
+    /// rustls emits `unrecognized_name` for the strict / no-match case. Never mTLS.
     reject: Arc<ServerConfig>,
     sni_strict: bool,
 }
@@ -183,35 +197,35 @@ impl std::fmt::Debug for ServerCryptoMap {
 }
 
 impl ServerCryptoMap {
-    fn place(&mut self, slot: &Slot<'_>, config: Arc<ServerConfig>) {
+    fn place(&mut self, slot: &Slot<'_>, crypto: ServerCryptoForSni) {
         match *slot {
             Slot::Exact(h) => {
-                self.exact.insert(h.to_string(), config);
+                self.exact.insert(h.to_string(), crypto);
             }
             Slot::Wildcard(base) => {
-                self.wildcard.insert(base.to_string(), config);
+                self.wildcard.insert(base.to_string(), crypto);
             }
-            Slot::Default => self.default = Some(config),
+            Slot::Default => self.default = Some(crypto),
         }
     }
 
     /// Config currently in `slot` (used to carry a domain's previously serving
     /// config forward when its new cert fails to load).
-    fn get(&self, slot: &Slot<'_>) -> Option<Arc<ServerConfig>> {
+    fn get(&self, slot: &Slot<'_>) -> Option<ServerCryptoForSni> {
         match *slot {
-            Slot::Exact(h) => self.exact.get(h).map(Arc::clone),
-            Slot::Wildcard(base) => self.wildcard.get(base).map(Arc::clone),
+            Slot::Exact(h) => self.exact.get(h).cloned(),
+            Slot::Wildcard(base) => self.wildcard.get(base).cloned(),
             Slot::Default => self.default.clone(),
         }
     }
 
-    /// Resolve `sni` (or no SNI = `None`) to a `ServerConfig`.
+    /// Resolve `sni` (or no SNI = `None`) to a [`ServerCryptoForSni`].
     ///
     /// Order: exact → wildcard (one label stripped) → catch-all default. `None` means
     /// no match: in strict mode an unmatched or absent SNI resolves to nothing; in
     /// lenient mode both fall back to the default cert if one exists. A `None` result
     /// tells the accept path to use [`reject_config`](Self::reject_config).
-    pub fn select(&self, sni: Option<&str>) -> Option<Arc<ServerConfig>> {
+    pub fn select(&self, sni: Option<&str>) -> Option<ServerCryptoForSni> {
         let Some(sni) = sni else {
             if self.sni_strict {
                 return None;
@@ -219,16 +233,16 @@ impl ServerCryptoMap {
             return self.default.clone();
         };
 
-        if let Some(config) = self.exact.get(sni) {
-            return Some(Arc::clone(config));
+        if let Some(crypto) = self.exact.get(sni) {
+            return Some(crypto.clone());
         }
 
         // Wildcard: strip the leftmost label. `*.example.com` matches `a.example.com`
         // but NOT `a.b.example.com`.
         if let Some(dot) = sni.find('.') {
             let base = &sni[dot.saturating_add(1)..];
-            if let Some(config) = self.wildcard.get(base) {
-                return Some(Arc::clone(config));
+            if let Some(crypto) = self.wildcard.get(base) {
+                return Some(crypto.clone());
             }
         }
 
@@ -331,10 +345,11 @@ async fn build_entry_config(
     options: &TlsBuildOptions,
     provider: &Arc<CryptoProvider>,
     ticketer: Option<&Arc<dyn ProducesTickets>>,
-) -> Result<(Arc<ServerConfig>, u64), CertError> {
+) -> Result<(ServerCryptoForSni, u64), CertError> {
     let label = entry.label.as_str();
     let material = entry.source.read().await?;
     let (certified_key, cert_hash) = build_certified_key(&material, label)?;
+    let is_mutual_tls = material.is_mutual_tls();
 
     let builder = config_builder_with_versions(provider, options, label)?;
 
@@ -369,13 +384,13 @@ async fn build_entry_config(
     // Stateless tickets only: never a server-side cache. mTLS domains get neither, so
     // the client cert is verified on every connection (no resumption bypass).
     config.session_storage = Arc::new(NoServerSessionStorage {});
-    if !material.is_mutual_tls() {
+    if !is_mutual_tls {
         if let Some(ticketer) = ticketer {
             config.ticketer = Arc::clone(ticketer);
         }
     }
 
-    Ok((Arc::new(config), cert_hash))
+    Ok((ServerCryptoForSni { config: Arc::new(config), is_mutual_tls }, cert_hash))
 }
 
 /// Build a [`ServerCryptoMap`] from `entries`.
@@ -415,8 +430,8 @@ pub async fn build_server_crypto(
         let label = entry.label.as_str();
         let slot = classify(entry.host.as_deref());
         match build_entry_config(entry, options, &provider, ticketer.as_ref()).await {
-            Ok((config, cert_hash)) => {
-                map.place(&slot, config);
+            Ok((crypto, cert_hash)) => {
+                map.place(&slot, crypto);
                 loaded.push((label.to_string(), cert_hash));
             }
             Err(e) => {

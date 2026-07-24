@@ -245,9 +245,10 @@ async fn non_mtls_uses_stateless_tickets_without_cache() -> TestResult {
     let cfg = map
         .select(Some("example.com"))
         .ok_or("example.com must resolve")?;
-    assert!(cfg.ticketer.enabled(), "non-mTLS config must issue stateless tickets");
+    assert!(!cfg.is_mutual_tls, "a plain domain must not be flagged as mutual TLS");
+    assert!(cfg.config.ticketer.enabled(), "non-mTLS config must issue stateless tickets");
     assert!(
-        !cfg.session_storage.can_cache(),
+        !cfg.config.session_storage.can_cache(),
         "non-mTLS config keeps no server-side session state"
     );
     Ok(())
@@ -263,8 +264,8 @@ async fn resumption_disabled_means_no_ticketer() -> TestResult {
     let cfg = map
         .select(Some("example.com"))
         .ok_or("example.com must resolve")?;
-    assert!(!cfg.ticketer.enabled(), "resumption disabled ⇒ no ticketer");
-    assert!(!cfg.session_storage.can_cache(), "no server-side session cache either");
+    assert!(!cfg.config.ticketer.enabled(), "resumption disabled ⇒ no ticketer");
+    assert!(!cfg.config.session_storage.can_cache(), "no server-side session cache either");
     Ok(())
 }
 
@@ -280,8 +281,9 @@ async fn mtls_config_disables_resumption_entirely() -> TestResult {
     let cfg = map
         .select(Some("secure.example.com"))
         .ok_or("secure.example.com must resolve")?;
-    assert!(!cfg.ticketer.enabled(), "mTLS config must not issue tickets");
-    assert!(!cfg.session_storage.can_cache(), "mTLS config must not cache sessions");
+    assert!(cfg.is_mutual_tls, "a client-CA domain must be flagged as mutual TLS");
+    assert!(!cfg.config.ticketer.enabled(), "mTLS config must not issue tickets");
+    assert!(!cfg.config.session_storage.can_cache(), "mTLS config must not cache sessions");
     Ok(())
 }
 
@@ -301,12 +303,14 @@ async fn mtls_is_per_domain_not_listener_wide() -> TestResult {
     let plain = map
         .select(Some("plain.example.com"))
         .ok_or("plain domain must resolve")?;
-    assert!(plain.ticketer.enabled(), "non-mTLS domain still resumes via tickets");
+    assert!(!plain.is_mutual_tls, "plain domain is not mutual TLS");
+    assert!(plain.config.ticketer.enabled(), "non-mTLS domain still resumes via tickets");
 
     let secure = map
         .select(Some("secure.example.com"))
         .ok_or("secure domain must resolve")?;
-    assert!(!secure.ticketer.enabled(), "mTLS domain in the same map never resumes");
+    assert!(secure.is_mutual_tls, "the client-CA domain is mutual TLS");
+    assert!(!secure.config.ticketer.enabled(), "mTLS domain in the same map never resumes");
     Ok(())
 }
 
@@ -327,7 +331,7 @@ async fn ticketer_is_shared_across_rebuilds() -> TestResult {
         .select(Some("example.com"))
         .ok_or("second build resolves")?;
     assert!(
-        Arc::ptr_eq(&first_cfg.ticketer, &second_cfg.ticketer),
+        Arc::ptr_eq(&first_cfg.config.ticketer, &second_cfg.config.ticketer),
         "ticketer must be one process-wide instance so tickets survive hot-reloads"
     );
     Ok(())

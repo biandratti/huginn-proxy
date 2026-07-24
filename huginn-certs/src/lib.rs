@@ -35,4 +35,6 @@ pub mod server_crypto;
 pub use certs::{cert_chain_hash, ServerCertsKeys};
 pub use crypto_source::{read_certs_and_keys, CertEntry, CryptoFileSource, CryptoSource};
 pub use error::CertError;
-pub use server_crypto::{build_server_crypto, CertReloadReport, ServerCryptoMap, TlsBuildOptions};
+pub use server_crypto::{
+    build_server_crypto, CertReloadReport, ServerCryptoForSni, ServerCryptoMap, TlsBuildOptions,
+};

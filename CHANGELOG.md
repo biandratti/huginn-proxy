@@ -11,6 +11,11 @@ follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **Per-domain mTLS attribution in handshake-failure logs.** The `TLS accept failed` and `TLS
+  handshake timeout` warnings now include the selected `sni` and an `mtls` flag indicating whether the
+  matched domain required a client certificate. The flag comes from the per-SNI config chosen from the
+  ClientHello, so it is known even when the handshake never completes (e.g. a client that omitted a
+  required client cert).
 - **Config validation warnings + `--validate --strict`.** Config loading audits for likely mistakes
   and logs non-fatal warnings (boot, `--validate`, hot reload): duplicate/contradictory header
   manipulation, security overrides that drop parent protection, over-broad `trusted_proxies` ranges,

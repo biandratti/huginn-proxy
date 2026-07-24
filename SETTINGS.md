@@ -840,10 +840,6 @@ session cache. mTLS domains never resume regardless of this setting.
 |----------------|---------|---------|--------------------------------------------------------------------------------------------------|
 | `enabled`      | bool    | `true`  | Issue stateless session tickets so non-mTLS clients can resume without a full handshake.         |
 
-> **Removed:** `max_sessions` no longer exists. Resumption is stateless (tickets only), so there was
-> no cache left to size. A config that still declares `max_sessions` is now **rejected at load**
-> (`deny_unknown_fields`) — delete the key.
-
 <table>
 <thead>
 <tr>

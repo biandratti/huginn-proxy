@@ -59,6 +59,11 @@ pub async fn handle_tls_connection(
             };
 
         let prefixed = PrefixedStream::new(prefix, stream);
+        // SNI and whether the selected domain requires mTLS, captured at config
+        // selection so a handshake failure can be attributed per-domain (e.g. a
+        // client that omitted a required client cert). Mirrors rpxy's failure log.
+        let mut selected_sni: Option<String> = None;
+        let mut selected_mtls = false;
         // Two-phase handshake: `LazyConfigAcceptor` reads the ClientHello (replayed
         // from the prefix), then we pick the per-SNI `ServerConfig` and finish. The
         // whole exchange is bounded by the single handshake timeout.
@@ -67,21 +72,29 @@ pub async fn handle_tls_connection(
             let server_config = {
                 let client_hello = start.client_hello();
                 let sni = client_hello.server_name();
-                crypto.select(sni).unwrap_or_else(|| crypto.reject_config())
+                selected_sni = sni.map(str::to_string);
+                match crypto.select(sni) {
+                    Some(picked) => {
+                        selected_mtls = picked.is_mutual_tls;
+                        picked.config
+                    }
+                    None => crypto.reject_config(),
+                }
             };
             start.into_stream(server_config).await
         })
         .await;
 
+        let sni_field = selected_sni.as_deref().unwrap_or("-");
         let tls = match tls_accept_result {
             Ok(Ok(tls)) => tls,
             Ok(Err(e)) => {
-                warn!(?peer, error = %e, "TLS accept failed");
+                warn!(?peer, sni = sni_field, mtls = selected_mtls, error = %e, "TLS accept failed");
                 metrics.record_tls_handshake_error();
                 return;
             }
             Err(_) => {
-                warn!(?peer, "TLS handshake timeout");
+                warn!(?peer, sni = sni_field, mtls = selected_mtls, "TLS handshake timeout");
                 metrics.record_timeout("tls_handshake");
                 metrics.record_tls_handshake_error();
                 return;
