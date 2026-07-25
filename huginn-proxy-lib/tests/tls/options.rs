@@ -1,7 +1,7 @@
 use huginn_proxy_lib::config::{SessionResumptionConfig, TlsConfig, TlsOptions, TlsVersion};
-use huginn_proxy_lib::tls::cipher_suites::supported_cipher_suites;
-use huginn_proxy_lib::tls::curves::supported_curves;
-use huginn_proxy_lib::tls::{tls_build_options, validate_tls_options};
+use huginn_proxy_lib::tls::{
+    supported_cipher_suites, supported_curves, tls_build_options, validate_tls_options,
+};
 use tokio_rustls::rustls::version::{TLS12, TLS13};
 use tokio_rustls::rustls::SupportedProtocolVersion;
 

@@ -10,11 +10,34 @@
 //!
 //! Only groups the aws-lc-rs provider actually offers are mappable. Notably
 //! `secp521r1` is **not** available as a key-exchange group and is therefore not
-//! listed here (nor in the proxy's validation list).
+//! listed here. [`supported_curves`] is the validation-side twin of
+//! [`resolve_kx_groups`]; both live here so the accepted names and the resolver
+//! cannot drift apart.
 
 use tokio_rustls::rustls::crypto::aws_lc_rs::kx_group;
 use tokio_rustls::rustls::crypto::SupportedKxGroup;
 use tracing::warn;
+
+/// Curve / key-exchange group names selectable in `curve_preferences`, in a
+/// sensible preference order (post-quantum hybrids first).
+///
+/// - `X25519MLKEM768` - post-quantum hybrid (X25519 + ML-KEM-768)
+/// - `SECP256R1MLKEM768` - post-quantum hybrid (P-256 + ML-KEM-768)
+/// - `X25519` - Curve25519, fast and widely supported
+/// - `secp256r1` - NIST P-256
+/// - `secp384r1` - NIST P-384
+///
+/// This list and [`resolve_kx_groups`] must stay in sync. `secp521r1` (P-521) is
+/// intentionally absent: the aws-lc-rs provider does not expose it as a
+/// key-exchange group.
+pub fn supported_curves() -> Vec<&'static str> {
+    vec!["X25519MLKEM768", "SECP256R1MLKEM768", "X25519", "secp256r1", "secp384r1"]
+}
+
+/// Check whether a curve name is selectable with the aws-lc-rs provider.
+pub fn is_curve_supported(name: &str) -> bool {
+    supported_curves().contains(&name)
+}
 
 /// Resolve curve / key-exchange group names into `SupportedKxGroup` values, in
 /// the order given (first = most preferred).

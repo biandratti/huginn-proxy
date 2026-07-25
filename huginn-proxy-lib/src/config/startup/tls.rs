@@ -88,7 +88,7 @@ fn default_max_version() -> Option<TlsVersion> {
 }
 
 fn default_cipher_suites() -> Vec<String> {
-    crate::tls::cipher_suites::supported_cipher_suites()
+    huginn_certs::cipher_suites::supported_cipher_suites()
         .into_iter()
         .map(|s| s.to_string())
         .collect()

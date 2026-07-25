@@ -7,8 +7,8 @@ use tokio_rustls::rustls::SupportedProtocolVersion;
 
 use crate::config::{TlsConfig, TlsOptions, TlsVersion};
 use crate::error::{ProxyError, Result};
-use crate::tls::cipher_suites::{is_cipher_suite_supported, supported_cipher_suites};
-use crate::tls::curves::{is_curve_supported, supported_curves};
+use huginn_certs::cipher_suites::{is_cipher_suite_supported, supported_cipher_suites};
+use huginn_certs::kx_groups::{is_curve_supported, supported_curves};
 
 /// Hot-swappable per-SNI TLS config map.
 ///
