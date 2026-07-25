@@ -155,9 +155,6 @@ cipher_suites = [
     "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384",
     "TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256",
 ]
-# Leave empty to keep the provider defaults (recommended: they lead with the
-# post-quantum hybrid X25519MLKEM768). An explicit list applies exactly these
-# groups in order, so keep a PQ hybrid first to retain post-quantum protection.
 curve_preferences = [
     "X25519MLKEM768",
     "X25519",

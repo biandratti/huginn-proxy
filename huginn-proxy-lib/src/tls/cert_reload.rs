@@ -1,7 +1,7 @@
 //! Glue between the proxy's config/telemetry and the config-agnostic
 //! [`huginn_certs`] crate.
 //!
-//! [`huginn_certs::build_server_crypto`] takes plain [`CertEntry`] values plus
+//! [`build_server_crypto`] takes plain [`CertEntry`] values plus
 //! [`TlsBuildOptions`] and returns a [`ServerCryptoMap`] + [`CertReloadReport`]
 //! without touching metrics. This module translates configured [`Domain`]s into
 //! `CertEntry`s and records the `tls_cert_reload_*` metrics from the report,
