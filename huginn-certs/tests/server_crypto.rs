@@ -97,25 +97,17 @@ async fn restricted_protocol_version_still_builds() -> TestResult {
 }
 
 /// Explicit curve preferences (including the post-quantum hybrid) resolve to
-/// key-exchange groups and still build a resolvable config; unknown names are
-/// dropped.
+/// key-exchange groups and still build a resolvable config.
 #[tokio::test]
 async fn restricted_curve_preferences_still_build() -> TestResult {
-    use huginn_certs::kx_groups::resolve_kx_groups;
+    use huginn_certs::kx_groups::{resolve_kx_groups, KxGroupName};
 
-    // Mapping: known names resolve, unknown (and the unavailable secp521r1) are dropped.
-    let names = vec![
-        "X25519MLKEM768".to_string(),
-        "X25519".to_string(),
-        "secp256r1".to_string(),
-        "secp521r1".to_string(),
-        "bogus".to_string(),
-    ];
-    assert_eq!(resolve_kx_groups(&names).len(), 3, "only the 3 available groups map");
+    let names = [KxGroupName::X25519MlKem768, KxGroupName::X25519, KxGroupName::Secp256r1];
+    assert_eq!(resolve_kx_groups(&names).len(), 3, "all three typed groups map");
 
     let fx = fixture()?;
     let opts = TlsBuildOptions {
-        curve_preferences: vec!["X25519MLKEM768".to_string(), "X25519".to_string()],
+        curve_preferences: vec![KxGroupName::X25519MlKem768, KxGroupName::X25519],
         ..options(true, false)
     };
     let entries = vec![entry(Some("api.example.com"), &fx.cert, &fx.key)];

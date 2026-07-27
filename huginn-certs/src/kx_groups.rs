@@ -1,68 +1,120 @@
-//! Key-exchange group (elliptic curve) name ⇄ rustls type mapping for the
+//! Key-exchange group (named group) name ⇄ rustls type mapping for the
 //! aws-lc-rs provider.
 //!
-//! Analogous to [`crate::cipher_suites`]: when a config declares curve
-//! preferences by name, this resolves them into the `SupportedKxGroup` values
-//! that override the provider's default key-exchange groups. An **empty** list
-//! means callers keep the provider defaults — which include the post-quantum
-//! hybrid group `X25519MLKEM768`. Unknown names are validated away by the config
-//! layer before they reach here.
+//! Analogous to [`crate::cipher_suites`]: when a config declares
+//! `curve_preferences`, this module resolves them into the `SupportedKxGroup`
+//! values that override the provider's default key-exchange groups. An **empty**
+//! list means callers keep the provider defaults — which include the post-quantum
+//! hybrid group `X25519MLKEM768`.
 //!
-//! Only groups the aws-lc-rs provider actually offers are mappable. Notably
-//! `secp521r1` is **not** available as a key-exchange group and is therefore not
-//! listed here. [`supported_curves`] is the validation-side twin of
-//! [`resolve_kx_groups`]; both live here so the accepted names and the resolver
-//! cannot drift apart.
+//! These are TLS *named groups* (not only elliptic curves): the list includes
+//! post-quantum hybrids that combine a classical curve with ML-KEM. Config keeps
+//! the familiar Traefik/Go name `curve_preferences`; this module uses the precise
+//! rustls term.
+//!
+//! Only groups the aws-lc-rs provider actually offers are listed.
+//! `secp521r1` is **not** available as a key-exchange group and is therefore
+//! absent. [`KxGroupName`] is the single source of truth for the wire name, the
+//! rustls mapping, and config deserialization.
 
+use std::str::FromStr;
+
+use serde::{Deserialize, Serialize};
 use tokio_rustls::rustls::crypto::aws_lc_rs::kx_group;
 use tokio_rustls::rustls::crypto::SupportedKxGroup;
-use tracing::warn;
 
-/// Curve / key-exchange group names selectable in `curve_preferences`, in a
-/// sensible preference order (post-quantum hybrids first).
+/// A selectable key-exchange group in `[tls.options].curve_preferences`.
 ///
-/// - `X25519MLKEM768` - post-quantum hybrid (X25519 + ML-KEM-768)
-/// - `SECP256R1MLKEM768` - post-quantum hybrid (P-256 + ML-KEM-768)
-/// - `X25519` - Curve25519, fast and widely supported
-/// - `secp256r1` - NIST P-256
-/// - `secp384r1` - NIST P-384
-///
-/// This list and [`resolve_kx_groups`] must stay in sync. `secp521r1` (P-521) is
-/// intentionally absent: the aws-lc-rs provider does not expose it as a
-/// key-exchange group.
+/// Wire names match the config / Traefik-style strings; the enum is the typed
+/// form used after parse. Preference order for [`Self::ALL`] puts post-quantum
+/// hybrids first.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize, Serialize)]
+pub enum KxGroupName {
+    /// Post-quantum hybrid: X25519 + ML-KEM-768.
+    #[serde(rename = "X25519MLKEM768")]
+    X25519MlKem768,
+    /// Post-quantum hybrid: P-256 + ML-KEM-768.
+    #[serde(rename = "SECP256R1MLKEM768")]
+    Secp256r1MlKem768,
+    /// Curve25519.
+    X25519,
+    /// NIST P-256.
+    #[serde(rename = "secp256r1")]
+    Secp256r1,
+    /// NIST P-384.
+    #[serde(rename = "secp384r1")]
+    Secp384r1,
+}
+
+impl KxGroupName {
+    /// All selectable groups, in a sensible default preference order
+    /// (post-quantum hybrids first).
+    pub const ALL: &'static [Self] = &[
+        Self::X25519MlKem768,
+        Self::Secp256r1MlKem768,
+        Self::X25519,
+        Self::Secp256r1,
+        Self::Secp384r1,
+    ];
+
+    /// Config / documentation wire name (e.g. `"X25519MLKEM768"`).
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::X25519MlKem768 => "X25519MLKEM768",
+            Self::Secp256r1MlKem768 => "SECP256R1MLKEM768",
+            Self::X25519 => "X25519",
+            Self::Secp256r1 => "secp256r1",
+            Self::Secp384r1 => "secp384r1",
+        }
+    }
+
+    /// The aws-lc-rs rustls key-exchange group for this name.
+    #[must_use]
+    pub fn to_rustls(self) -> &'static dyn SupportedKxGroup {
+        match self {
+            Self::X25519MlKem768 => kx_group::X25519MLKEM768,
+            Self::Secp256r1MlKem768 => kx_group::SECP256R1MLKEM768,
+            Self::X25519 => kx_group::X25519,
+            Self::Secp256r1 => kx_group::SECP256R1,
+            Self::Secp384r1 => kx_group::SECP384R1,
+        }
+    }
+}
+
+impl FromStr for KxGroupName {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Self::ALL
+            .iter()
+            .copied()
+            .find(|g| g.as_str() == s)
+            .ok_or(())
+    }
+}
+
+impl std::fmt::Display for KxGroupName {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+/// Wire names of all selectable key-exchange groups (same order as [`KxGroupName::ALL`]).
 pub fn supported_curves() -> Vec<&'static str> {
-    vec!["X25519MLKEM768", "SECP256R1MLKEM768", "X25519", "secp256r1", "secp384r1"]
+    KxGroupName::ALL.iter().map(|g| g.as_str()).collect()
 }
 
-/// Check whether a curve name is selectable with the aws-lc-rs provider.
+/// Whether `name` is a selectable key-exchange group with the aws-lc-rs provider.
 pub fn is_curve_supported(name: &str) -> bool {
-    supported_curves().contains(&name)
+    KxGroupName::from_str(name).is_ok()
 }
 
-/// Resolve curve / key-exchange group names into `SupportedKxGroup` values, in
-/// the order given (first = most preferred).
+/// Resolve typed group names into rustls `SupportedKxGroup` values, in the order
+/// given (first = most preferred).
 ///
-/// Unknown names are skipped with a warning (validation should have happened
-/// earlier via the proxy's `is_curve_supported`). An empty result means callers
-/// should fall back to the provider's default key-exchange groups.
-pub fn resolve_kx_groups(names: &[String]) -> Vec<&'static dyn SupportedKxGroup> {
-    names
-        .iter()
-        .filter_map(|name| match name.as_str() {
-            // Post-quantum hybrids (classical + ML-KEM-768).
-            "X25519MLKEM768" => Some(kx_group::X25519MLKEM768),
-            "SECP256R1MLKEM768" => Some(kx_group::SECP256R1MLKEM768),
-            // Classical groups.
-            "X25519" => Some(kx_group::X25519),
-            "secp256r1" => Some(kx_group::SECP256R1),
-            "secp384r1" => Some(kx_group::SECP384R1),
-            unknown => {
-                warn!(
-                    curve = unknown,
-                    "unknown key-exchange group ignored; check the supported curve names"
-                );
-                None
-            }
-        })
-        .collect()
+/// An empty result means callers should fall back to the provider's default
+/// key-exchange groups.
+pub fn resolve_kx_groups(names: &[KxGroupName]) -> Vec<&'static dyn SupportedKxGroup> {
+    names.iter().copied().map(KxGroupName::to_rustls).collect()
 }

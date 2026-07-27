@@ -1,14 +1,13 @@
 use std::sync::Arc;
 
 use arc_swap::ArcSwap;
+use huginn_certs::cipher_suites::{is_cipher_suite_supported, supported_cipher_suites};
 use huginn_certs::{ServerCryptoMap, TlsBuildOptions};
 use tokio_rustls::rustls::version::{TLS12, TLS13};
 use tokio_rustls::rustls::SupportedProtocolVersion;
 
 use crate::config::{TlsConfig, TlsOptions, TlsVersion};
 use crate::error::{ProxyError, Result};
-use huginn_certs::cipher_suites::{is_cipher_suite_supported, supported_cipher_suites};
-use huginn_certs::kx_groups::{is_curve_supported, supported_curves};
 
 /// Hot-swappable per-SNI TLS config map.
 ///
@@ -96,20 +95,6 @@ pub fn validate_tls_options(options: &TlsOptions) -> Result<()> {
                 Supported cipher suites: {}",
                 suite_name,
                 supported_cipher_suites().join(", ")
-            )));
-        }
-    }
-
-    for curve_name in &options.curve_preferences {
-        if curve_name.is_empty() {
-            return Err(ProxyError::Tls("Curve name cannot be empty".to_string()));
-        }
-        if !is_curve_supported(curve_name) {
-            return Err(ProxyError::Tls(format!(
-                "Curve '{}' is not supported by rustls. \
-                Supported curves: {}",
-                curve_name,
-                supported_curves().join(", ")
             )));
         }
     }

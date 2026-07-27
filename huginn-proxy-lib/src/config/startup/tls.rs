@@ -1,3 +1,4 @@
+use huginn_certs::KxGroupName;
 use serde::{Deserialize, Serialize};
 
 /// TLS version configuration
@@ -43,14 +44,14 @@ pub struct TlsOptions {
     ///
     /// Specifies the order of preference for the groups used in (EC)DHE key
     /// exchange; the first entry is most preferred. Valid names are those returned
-    /// by `supported_curves()`.
+    /// by `supported_curves()` / [`KxGroupName`].
     ///
     /// Default: empty, which keeps the provider's safe defaults — including the
     /// post-quantum hybrid `X25519MLKEM768`. Setting an explicit list applies
     /// exactly those groups, so include a PQ hybrid to retain post-quantum
-    /// protection.
+    /// protection. Unknown names fail at config parse time.
     #[serde(default)]
-    pub curve_preferences: Vec<String>,
+    pub curve_preferences: Vec<KxGroupName>,
     /// Strict SNI checking.
     ///
     /// When `true`, a TLS connection whose SNI matches no configured domain cert is
@@ -159,7 +160,7 @@ struct TlsOptionsView<'a> {
     min_version: Option<&'static str>,
     max_version: Option<&'static str>,
     cipher_suites: &'a [String],
-    curve_preferences: &'a [String],
+    curve_preferences: &'a [KxGroupName],
     sni_strict: bool,
 }
 

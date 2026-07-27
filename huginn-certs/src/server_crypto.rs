@@ -101,11 +101,11 @@ pub struct TlsBuildOptions {
     pub alpn: Vec<String>,
     /// Cipher-suite names overriding the provider defaults. Empty = provider defaults.
     pub cipher_suites: Vec<String>,
-    /// Key-exchange group (curve) names overriding the provider defaults, in order
-    /// of preference. Empty = provider defaults, which include the post-quantum
+    /// Key-exchange groups overriding the provider defaults, in order of
+    /// preference. Empty = provider defaults, which include the post-quantum
     /// hybrid group `X25519MLKEM768`. A non-empty list applies exactly those groups,
     /// so include a PQ hybrid explicitly to keep post-quantum protection.
-    pub curve_preferences: Vec<String>,
+    pub curve_preferences: Vec<crate::KxGroupName>,
     /// TLS protocol versions to enforce. Empty = the provider's safe defaults
     /// (TLS 1.2 + 1.3); a non-empty list restricts the handshake to exactly those
     /// versions. The caller resolves `min/max_version` / `versions` config into this.

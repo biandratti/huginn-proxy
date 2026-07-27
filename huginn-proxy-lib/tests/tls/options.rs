@@ -1,6 +1,6 @@
 use huginn_proxy_lib::config::{SessionResumptionConfig, TlsConfig, TlsOptions, TlsVersion};
 use huginn_proxy_lib::tls::{
-    supported_cipher_suites, supported_curves, tls_build_options, validate_tls_options,
+    supported_cipher_suites, supported_curves, tls_build_options, validate_tls_options, KxGroupName,
 };
 use tokio_rustls::rustls::version::{TLS12, TLS13};
 use tokio_rustls::rustls::SupportedProtocolVersion;
@@ -122,47 +122,57 @@ fn test_validate_tls_options_cipher_suites_empty_string() {
 
 #[test]
 fn test_validate_tls_options_curve_preferences_valid() {
-    let supported = supported_curves();
-    let first_curve = supported
-        .first()
-        .unwrap_or_else(|| panic!("Should have at least one curve"));
-
     let options =
-        TlsOptions { curve_preferences: vec![first_curve.to_string()], ..Default::default() };
+        TlsOptions { curve_preferences: vec![KxGroupName::X25519MlKem768], ..Default::default() };
     assert!(validate_tls_options(&options).is_ok());
 }
 
 #[test]
 fn test_validate_tls_options_curve_preferences_multiple_valid() {
-    let supported = supported_curves();
-    let curves: Vec<String> = supported.iter().take(2).map(|s| s.to_string()).collect();
-
-    let options = TlsOptions { curve_preferences: curves, ..Default::default() };
+    let options = TlsOptions {
+        curve_preferences: vec![KxGroupName::X25519MlKem768, KxGroupName::X25519],
+        ..Default::default()
+    };
     assert!(validate_tls_options(&options).is_ok());
 }
 
 #[test]
-fn test_validate_tls_options_curve_preferences_invalid() {
-    let options =
-        TlsOptions { curve_preferences: vec!["INVALID_CURVE".to_string()], ..Default::default() };
-    assert!(validate_tls_options(&options).is_err());
+fn curve_preferences_reject_unknown_name_at_parse() {
+    let result = toml::from_str::<TlsOptions>(
+        r#"
+        curve_preferences = ["INVALID_CURVE"]
+        "#,
+    );
+    match result {
+        Ok(_) => panic!("unknown curve name must fail at parse"),
+        Err(err) => {
+            let msg = err.to_string();
+            assert!(
+                msg.contains("INVALID_CURVE") || msg.contains("did not match"),
+                "error should mention the bad value: {msg}"
+            );
+        }
+    }
 }
 
 #[test]
-fn test_validate_tls_options_curve_preferences_empty_string() {
-    let options = TlsOptions { curve_preferences: vec!["".to_string()], ..Default::default() };
-    assert!(validate_tls_options(&options).is_err());
+fn curve_preferences_reject_empty_string_at_parse() {
+    let result = toml::from_str::<TlsOptions>(
+        r#"
+        curve_preferences = [""]
+        "#,
+    );
+    assert!(result.is_err(), "empty curve name must fail at parse");
 }
 
 #[test]
 fn test_validate_tls_options_all_options_valid() {
     let supported_suites = supported_cipher_suites();
-    let supported_curves = supported_curves();
 
     let options = TlsOptions {
         versions: vec![TlsVersion::V1_2, TlsVersion::V1_3],
         cipher_suites: vec![supported_suites[0].to_string()],
-        curve_preferences: vec![supported_curves[0].to_string()],
+        curve_preferences: vec![KxGroupName::X25519],
         ..Default::default()
     };
     assert!(validate_tls_options(&options).is_ok());
@@ -257,4 +267,5 @@ fn supported_curves_include_pq_hybrid_and_exclude_secp521() {
     // Consistency: the PQ hybrid validates, the dropped curve does not.
     assert!(huginn_proxy_lib::tls::is_curve_supported("X25519MLKEM768"));
     assert!(!huginn_proxy_lib::tls::is_curve_supported("secp521r1"));
+    assert_eq!(KxGroupName::ALL.len(), supported_curves().len());
 }

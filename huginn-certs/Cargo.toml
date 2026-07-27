@@ -13,6 +13,7 @@ publish = false
 arc-swap.workspace = true
 async-trait.workspace = true
 rustls-pki-types.workspace = true
+serde.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["fs"] }
 tokio-rustls.workspace = true
