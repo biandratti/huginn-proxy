@@ -63,7 +63,8 @@ openssl req -x509 -newkey rsa:2048 -nodes \
   -subj "/CN=localhost" \
   -addext "subjectAltName=DNS:localhost,IP:127.0.0.1,IP:0:0:0:0:0:0:0:1"
 
-chmod 644 examples/certs/server.key examples/certs/server.crt
+chmod 600 examples/certs/server.key
+chmod 644 examples/certs/server.crt
 ```
 
 **Option B: Trusted local certificate (recommended for browser testing)**
@@ -83,7 +84,8 @@ mkcert -install
 # them — include every form you will type: hostname, IPv4 loopback, IPv6 loopback.
 mkcert -key-file examples/certs/server.key -cert-file examples/certs/server.crt localhost 127.0.0.1 ::1
 
-chmod 644 examples/certs/server.key examples/certs/server.crt
+chmod 600 examples/certs/server.key
+chmod 644 examples/certs/server.crt
 ```
 
 > **Note:** With self-signed certificates, browsers will show a security warning. You can either:

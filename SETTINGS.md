@@ -789,7 +789,7 @@ cipher_suites = [
     "TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256",
     "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256",
 ]
-curve_preferences = ["X25519MLKEM768", "X25519", "secp256r1", "secp384r1"]
+curve_preferences = ["X25519MLKEM768", "SECP256R1MLKEM768", "X25519", "secp256r1", "secp384r1"]
 sni_strict = false   # set true in production to reject unknown-hostname SNI
 ```
 
@@ -810,6 +810,7 @@ tls:
       - "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"
     curve_preferences:
       - "X25519MLKEM768"
+      - "SECP256R1MLKEM768"
       - "X25519"
       - "secp256r1"
       - "secp384r1"

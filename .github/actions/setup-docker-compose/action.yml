@@ -28,7 +28,7 @@ runs:
           -out ${{ inputs.compose-dir }}/certs/server.crt \
           -days 365 \
           -subj "/CN=localhost"
-        chmod 644 ${{ inputs.compose-dir }}/certs/server.key
+        chmod 600 ${{ inputs.compose-dir }}/certs/server.key
         chmod 644 ${{ inputs.compose-dir }}/certs/server.crt
 
     - name: Start Docker Compose services
