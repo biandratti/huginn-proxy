@@ -99,8 +99,9 @@ fn shared_ticketer() -> Result<Arc<dyn ProducesTickets>, CertError> {
 pub struct TlsBuildOptions {
     /// ALPN protocols to advertise (e.g. `["h2", "http/1.1"]`). Empty = none.
     pub alpn: Vec<String>,
-    /// Cipher-suite names overriding the provider defaults. Empty = provider defaults.
-    pub cipher_suites: Vec<String>,
+    /// Cipher suites overriding the provider defaults, in order of preference.
+    /// Empty = provider defaults.
+    pub cipher_suites: Vec<crate::CipherSuiteName>,
     /// Key-exchange groups overriding the provider defaults, in order of
     /// preference. Empty = provider defaults, which include the post-quantum
     /// hybrid group `X25519MLKEM768`. A non-empty list applies exactly those groups,
@@ -293,17 +294,10 @@ fn build_provider(options: &TlsBuildOptions) -> Arc<CryptoProvider> {
     } else {
         resolve_cipher_suites(&options.cipher_suites)
     };
-    // Fall back to defaults if the resolved list is empty (e.g. all names unknown),
-    // since a provider with no key-exchange groups cannot complete a handshake.
     let kx_groups = if options.curve_preferences.is_empty() {
         default.kx_groups.clone()
     } else {
-        let resolved = resolve_kx_groups(&options.curve_preferences);
-        if resolved.is_empty() {
-            default.kx_groups.clone()
-        } else {
-            resolved
-        }
+        resolve_kx_groups(&options.curve_preferences)
     };
 
     Arc::new(CryptoProvider { cipher_suites, kx_groups, ..default })

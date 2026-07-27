@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use arc_swap::ArcSwap;
-use huginn_certs::cipher_suites::{is_cipher_suite_supported, supported_cipher_suites};
 use huginn_certs::{ServerCryptoMap, TlsBuildOptions};
 use tokio_rustls::rustls::version::{TLS12, TLS13};
 use tokio_rustls::rustls::SupportedProtocolVersion;
@@ -63,9 +62,13 @@ fn resolve_protocol_versions(options: &TlsOptions) -> Vec<&'static SupportedProt
     }
 }
 
-/// Validate static TLS options at startup (version bounds, cipher-suite and curve
-/// names). Applied once before the initial [`ServerCryptoMap`] is built; these are
-/// static settings that cannot change on hot-reload.
+/// Validate static TLS options at startup (version bounds). Applied once before
+/// the initial [`ServerCryptoMap`] is built; these are static settings that cannot
+/// change on hot-reload.
+///
+/// Cipher-suite and curve names are not checked here: they are typed
+/// ([`huginn_certs::CipherSuiteName`] / [`huginn_certs::KxGroupName`]) and an
+/// unknown name already fails at config parse time.
 pub fn validate_tls_options(options: &TlsOptions) -> Result<()> {
     if let (Some(min), Some(max)) = (options.min_version, options.max_version) {
         if matches!((min, max), (TlsVersion::V1_3, TlsVersion::V1_2)) {
@@ -83,20 +86,6 @@ pub fn validate_tls_options(options: &TlsOptions) -> Result<()> {
             Use either 'versions' or 'min_version'/'max_version'."
                 .to_string(),
         ));
-    }
-
-    for suite_name in &options.cipher_suites {
-        if suite_name.is_empty() {
-            return Err(ProxyError::Tls("Cipher suite name cannot be empty".to_string()));
-        }
-        if !is_cipher_suite_supported(suite_name) {
-            return Err(ProxyError::Tls(format!(
-                "Cipher suite '{}' is not supported by rustls. \
-                Supported cipher suites: {}",
-                suite_name,
-                supported_cipher_suites().join(", ")
-            )));
-        }
     }
 
     Ok(())

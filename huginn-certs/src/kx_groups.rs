@@ -29,20 +29,17 @@ use tokio_rustls::rustls::crypto::SupportedKxGroup;
 /// form used after parse. Preference order for [`Self::ALL`] puts post-quantum
 /// hybrids first.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize, Serialize)]
+#[serde(try_from = "String", into = "&'static str")]
 pub enum KxGroupName {
     /// Post-quantum hybrid: X25519 + ML-KEM-768.
-    #[serde(rename = "X25519MLKEM768")]
     X25519MlKem768,
     /// Post-quantum hybrid: P-256 + ML-KEM-768.
-    #[serde(rename = "SECP256R1MLKEM768")]
     Secp256r1MlKem768,
     /// Curve25519.
     X25519,
     /// NIST P-256.
-    #[serde(rename = "secp256r1")]
     Secp256r1,
     /// NIST P-384.
-    #[serde(rename = "secp384r1")]
     Secp384r1,
 }
 
@@ -83,14 +80,14 @@ impl KxGroupName {
 }
 
 impl FromStr for KxGroupName {
-    type Err = ();
+    type Err = UnknownKxGroup;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Self::ALL
             .iter()
             .copied()
             .find(|g| g.as_str() == s)
-            .ok_or(())
+            .ok_or_else(|| UnknownKxGroup(s.to_owned()))
     }
 }
 
@@ -99,6 +96,40 @@ impl std::fmt::Display for KxGroupName {
         f.write_str(self.as_str())
     }
 }
+
+impl From<KxGroupName> for &'static str {
+    fn from(name: KxGroupName) -> Self {
+        name.as_str()
+    }
+}
+
+impl TryFrom<String> for KxGroupName {
+    type Error = UnknownKxGroup;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        value.parse()
+    }
+}
+
+/// A configured key-exchange group name that no aws-lc-rs group matches.
+///
+/// Surfaces as the deserialization error, so a bad `curve_preferences` entry
+/// fails at config parse time with the offending value and the valid set.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UnknownKxGroup(String);
+
+impl std::fmt::Display for UnknownKxGroup {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "unknown key-exchange group `{}`; supported: {}",
+            self.0,
+            supported_curves().join(", ")
+        )
+    }
+}
+
+impl std::error::Error for UnknownKxGroup {}
 
 /// Wire names of all selectable key-exchange groups (same order as [`KxGroupName::ALL`]).
 pub fn supported_curves() -> Vec<&'static str> {

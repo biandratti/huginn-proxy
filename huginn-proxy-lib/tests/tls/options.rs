@@ -1,6 +1,7 @@
 use huginn_proxy_lib::config::{SessionResumptionConfig, TlsConfig, TlsOptions, TlsVersion};
 use huginn_proxy_lib::tls::{
-    supported_cipher_suites, supported_curves, tls_build_options, validate_tls_options, KxGroupName,
+    supported_cipher_suites, supported_curves, tls_build_options, validate_tls_options,
+    CipherSuiteName, KxGroupName,
 };
 use tokio_rustls::rustls::version::{TLS12, TLS13};
 use tokio_rustls::rustls::SupportedProtocolVersion;
@@ -87,37 +88,47 @@ fn test_validate_tls_options_versions_conflict_with_max() {
 
 #[test]
 fn test_validate_tls_options_cipher_suites_valid() {
-    let supported = supported_cipher_suites();
-    let first_suite = supported
-        .first()
-        .unwrap_or_else(|| panic!("Should have at least one cipher suite"));
-
-    let options = TlsOptions { cipher_suites: vec![first_suite.to_string()], ..Default::default() };
+    let options = TlsOptions {
+        cipher_suites: vec![CipherSuiteName::Tls13Aes256GcmSha384],
+        ..Default::default()
+    };
     assert!(validate_tls_options(&options).is_ok());
 }
 
 #[test]
 fn test_validate_tls_options_cipher_suites_multiple_valid() {
-    let supported = supported_cipher_suites();
-    let suites: Vec<String> = supported.iter().take(3).map(|s| s.to_string()).collect();
-
-    let options = TlsOptions { cipher_suites: suites, ..Default::default() };
+    let options =
+        TlsOptions { cipher_suites: CipherSuiteName::ALL[..3].to_vec(), ..Default::default() };
     assert!(validate_tls_options(&options).is_ok());
 }
 
 #[test]
-fn test_validate_tls_options_cipher_suites_invalid() {
-    let options = TlsOptions {
-        cipher_suites: vec!["INVALID_CIPHER_SUITE".to_string()],
-        ..Default::default()
-    };
-    assert!(validate_tls_options(&options).is_err());
+fn cipher_suites_reject_unknown_name_at_parse() {
+    let result = toml::from_str::<TlsOptions>(
+        r#"
+        cipher_suites = ["INVALID_CIPHER_SUITE"]
+        "#,
+    );
+    match result {
+        Ok(_) => panic!("unknown cipher suite must fail at parse"),
+        Err(err) => {
+            let msg = err.to_string();
+            assert!(
+                msg.contains("INVALID_CIPHER_SUITE") || msg.contains("did not match"),
+                "error should mention the bad value: {msg}"
+            );
+        }
+    }
 }
 
 #[test]
-fn test_validate_tls_options_cipher_suites_empty_string() {
-    let options = TlsOptions { cipher_suites: vec!["".to_string()], ..Default::default() };
-    assert!(validate_tls_options(&options).is_err());
+fn cipher_suites_reject_empty_string_at_parse() {
+    let result = toml::from_str::<TlsOptions>(
+        r#"
+        cipher_suites = [""]
+        "#,
+    );
+    assert!(result.is_err(), "empty cipher suite name must fail at parse");
 }
 
 #[test]
@@ -167,11 +178,9 @@ fn curve_preferences_reject_empty_string_at_parse() {
 
 #[test]
 fn test_validate_tls_options_all_options_valid() {
-    let supported_suites = supported_cipher_suites();
-
     let options = TlsOptions {
         versions: vec![TlsVersion::V1_2, TlsVersion::V1_3],
-        cipher_suites: vec![supported_suites[0].to_string()],
+        cipher_suites: vec![CipherSuiteName::Tls13Aes128GcmSha256],
         curve_preferences: vec![KxGroupName::X25519],
         ..Default::default()
     };
@@ -246,8 +255,9 @@ fn test_tls_options_default_values() {
     assert!(options.versions.contains(&TlsVersion::V1_3));
     assert!(options.min_version.is_none());
     assert!(options.max_version.is_none());
-    assert!(
-        !options.cipher_suites.is_empty(),
+    assert_eq!(
+        options.cipher_suites,
+        CipherSuiteName::ALL,
         "Default cipher_suites should contain all supported suites"
     );
     assert!(
@@ -268,4 +278,13 @@ fn supported_curves_include_pq_hybrid_and_exclude_secp521() {
     assert!(huginn_proxy_lib::tls::is_curve_supported("X25519MLKEM768"));
     assert!(!huginn_proxy_lib::tls::is_curve_supported("secp521r1"));
     assert_eq!(KxGroupName::ALL.len(), supported_curves().len());
+}
+
+#[test]
+fn supported_cipher_suites_match_the_typed_set() {
+    assert_eq!(CipherSuiteName::ALL.len(), supported_cipher_suites().len());
+    for (suite, name) in CipherSuiteName::ALL.iter().zip(supported_cipher_suites()) {
+        assert_eq!(suite.to_string(), name);
+        assert!(huginn_proxy_lib::tls::is_cipher_suite_supported(name));
+    }
 }

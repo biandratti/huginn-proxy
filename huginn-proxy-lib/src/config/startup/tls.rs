@@ -1,4 +1,4 @@
-use huginn_certs::KxGroupName;
+use huginn_certs::{CipherSuiteName, KxGroupName};
 use serde::{Deserialize, Serialize};
 
 /// TLS version configuration
@@ -34,12 +34,14 @@ pub struct TlsOptions {
     /// If specified, overrides `versions` to enforce maximum version
     #[serde(default = "default_max_version")]
     pub max_version: Option<TlsVersion>,
-    /// Allowed cipher suites (by name)
+    /// Allowed cipher suites, in order of preference.
     ///
-    /// Default: uses rustls safe defaults (all supported cipher suites)
-    /// See `supported_cipher_suites()` for the complete list.
+    /// Valid names are those returned by `supported_cipher_suites()` /
+    /// [`CipherSuiteName`]; unknown names fail at config parse time.
+    ///
+    /// Default: all supported suites.
     #[serde(default = "default_cipher_suites")]
-    pub cipher_suites: Vec<String>,
+    pub cipher_suites: Vec<CipherSuiteName>,
     /// Elliptic curve / key-exchange group preferences.
     ///
     /// Specifies the order of preference for the groups used in (EC)DHE key
@@ -88,11 +90,8 @@ fn default_max_version() -> Option<TlsVersion> {
     None
 }
 
-fn default_cipher_suites() -> Vec<String> {
-    huginn_certs::cipher_suites::supported_cipher_suites()
-        .into_iter()
-        .map(|s| s.to_string())
-        .collect()
+fn default_cipher_suites() -> Vec<CipherSuiteName> {
+    CipherSuiteName::ALL.to_vec()
 }
 
 /// Session resumption configuration for TLS
@@ -159,7 +158,7 @@ struct TlsOptionsView<'a> {
     versions: Vec<&'static str>,
     min_version: Option<&'static str>,
     max_version: Option<&'static str>,
-    cipher_suites: &'a [String],
+    cipher_suites: &'a [CipherSuiteName],
     curve_preferences: &'a [KxGroupName],
     sni_strict: bool,
 }

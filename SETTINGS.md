@@ -748,7 +748,7 @@ tls:
 | `versions`          | array of strings | `["1.2", "1.3"]` | Allowed TLS versions. Values: `"1.2"`, `"1.3"`. Applied to the TLS stack. Mutually exclusive with `min_version`/`max_version`. |
 | `min_version`       | string           | `null`           | Minimum TLS version (`"1.2"` or `"1.3"`). Applied to the TLS stack. Mutually exclusive with an explicit `versions` list. |
 | `max_version`       | string           | `null`           | Maximum TLS version (`"1.2"` or `"1.3"`). Applied to the TLS stack. Mutually exclusive with an explicit `versions` list. |
-| `cipher_suites`     | array of strings | all supported    | Named cipher suites. Restrict to tighten security posture. Applied to the TLS stack. |
+| `cipher_suites`     | array of strings | all supported    | Ordered cipher suites, most preferred first. Restrict to tighten security posture. Applied to the TLS stack. Unknown names fail at config parse. |
 | `curve_preferences` | array of strings | `[]` (empty)     | Ordered key-exchange groups (curves), most preferred first. Applied to the TLS stack. Empty keeps the provider defaults — see note below. Valid: `"X25519MLKEM768"`, `"SECP256R1MLKEM768"`, `"X25519"`, `"secp256r1"`, `"secp384r1"`. Unknown names fail at config parse. |
 | `sni_strict`        | bool             | `false`          | When `true`, disable the default-cert fallback entirely (full parity with Traefik's `sniStrict`): reject (`unrecognized_name`) both a TLS connection whose SNI matches no domain cert **and** a connection that sends no SNI (IP-literal clients). When `false`, both fall back to the default cert. Production hardening against unknown-hostname / no-SNI access. |
 
