@@ -842,15 +842,14 @@ Requests coalesced under a single wildcard mTLS entry are unaffected: they were 
 that entry's own config. Rejections are counted as
 `huginn_errors_total{error_type="mutual_tls_host_inconsistency"}`.
 
-> **Set `sni_strict = true` when any domain uses `client_ca_path`.** The 421 rule above is
-> derived from the configuration, so it assumes the mTLS domain's certificate is actually
-> being served. If that certificate **fails to load at startup** (a bad or missing PEM), the
-> domain is absent from the per-SNI map and, with a catch-all default and `sni_strict = false`,
-> its handshakes fall back to the default certificate, which carries no client verifier. A
-> client that ignores certificate validation could then reach that domain without presenting a
-> certificate. `sni_strict = true` makes the same situation reject the handshake outright.
-> A certificate that fails to reload is **not** affected: the domain keeps its last-good
-> config, verifier included. Watch `tls_cert_reload_total{result="error"}` either way.
+> **A domain with `client_ca_path` never falls back to a config without a client verifier.**
+> The 421 rule above is derived from the configuration, so it assumes the domain's certificate
+> is actually being served. If that certificate fails to load (bad or missing PEM, empty
+> `client_ca_path` bundle), the domain does **not** fall back to the default certificate, which
+> carries no verifier: its handshakes are rejected with `unrecognized_name` instead. This holds
+> at startup and on reload, and does not depend on `sni_strict`. A failure that leaves a
+> last-good config with client auth already loaded keeps it, verifier included. Either way the
+> domain is reported by `tls_cert_reload_total{result="error"}` and an `error`-level log.
 
 ### `[tls.session_resumption]`
 

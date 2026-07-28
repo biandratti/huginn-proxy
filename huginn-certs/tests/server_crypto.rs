@@ -229,6 +229,104 @@ async fn failed_rebuild_keeps_previous_config() -> TestResult {
     Ok(())
 }
 
+/// An empty (but existing) client-CA bundle next to the fixture: the config loader only checks
+/// that the path exists, so this is what reaches the builder in practice.
+fn empty_client_ca(fx: &Fixture) -> Result<PathBuf, Box<dyn std::error::Error + Send + Sync>> {
+    let path = fx
+        .cert
+        .parent()
+        .ok_or("fixture cert has no parent dir")?
+        .join("empty-ca.pem");
+    std::fs::write(&path, b"")?;
+    Ok(path)
+}
+
+fn is_reject(map: &ServerCryptoMap, sni: Option<&str>) -> bool {
+    map.select(sni)
+        .is_some_and(|crypto| Arc::ptr_eq(&crypto.config, &map.reject_config()))
+}
+
+/// Turning on mTLS with a broken CA bundle must not leave the domain serving under its previous
+/// plain config, nor fall through to the catch-all: both would answer without a client
+/// certificate, which is exactly what the domain just asked to require.
+#[tokio::test]
+async fn failed_mtls_never_falls_back_to_a_plain_config() -> TestResult {
+    let fx = fixture()?;
+    let plain = vec![
+        entry(None, &fx.cert, &fx.key),
+        entry(Some("admin.example.com"), &fx.cert, &fx.key),
+    ];
+    let (first, first_report) = build(&plain, &options(true, false), None).await?;
+    assert!(first_report.failed.is_empty(), "initial plain build succeeds");
+
+    // The operator adds client_ca_path, pointing at a file that exists but holds no certificate.
+    let broken_ca = empty_client_ca(&fx)?;
+    let with_mtls = vec![
+        entry(None, &fx.cert, &fx.key),
+        mtls_entry(Some("admin.example.com"), &fx.cert, &fx.key, &broken_ca),
+    ];
+    let (second, second_report) = build(&with_mtls, &options(true, false), Some(&first)).await?;
+
+    assert_eq!(second_report.failed, vec!["admin.example.com".to_string()]);
+    assert!(
+        is_reject(&second, Some("admin.example.com")),
+        "handshakes for the domain are rejected"
+    );
+    assert!(!is_reject(&second, None), "other domains are unaffected");
+    Ok(())
+}
+
+/// Same at startup, where there is no previous config to inherit: an empty slot would fall through
+/// to the catch-all, so the domain has to be parked on the reject sentinel too.
+#[tokio::test]
+async fn failed_mtls_at_startup_rejects_instead_of_serving_the_catch_all() -> TestResult {
+    let fx = fixture()?;
+    let broken_ca = empty_client_ca(&fx)?;
+    let entries = vec![
+        entry(None, &fx.cert, &fx.key),
+        mtls_entry(Some("admin.example.com"), &fx.cert, &fx.key, &broken_ca),
+    ];
+    let (map, report) = build(&entries, &options(true, false), None).await?;
+
+    assert_eq!(report.failed, vec!["admin.example.com".to_string()]);
+    assert!(
+        is_reject(&map, Some("admin.example.com")),
+        "no catch-all fallback for an mTLS domain"
+    );
+    assert!(
+        map.resolves_for(Some("other.example.com")),
+        "unrelated SNI still gets the catch-all"
+    );
+    Ok(())
+}
+
+/// Carry-forward still applies when it cannot weaken anything: the previous config already
+/// required a client certificate, so keeping it is stale, not unauthenticated.
+#[tokio::test]
+async fn failed_mtls_keeps_a_previous_mtls_config() -> TestResult {
+    let fx = fixture()?;
+    let good = vec![mtls_entry(Some("admin.example.com"), &fx.cert, &fx.key, &fx.client_ca)];
+    let (first, first_report) = build(&good, &options(true, false), None).await?;
+    assert!(first_report.failed.is_empty(), "initial mTLS build succeeds");
+
+    let missing = Path::new("/nonexistent/huginn-test/missing.pem");
+    let bad = vec![mtls_entry(Some("admin.example.com"), missing, missing, &fx.client_ca)];
+    let (second, second_report) = build(&bad, &options(true, false), Some(&first)).await?;
+
+    assert_eq!(second_report.failed.len(), 1, "the failed cert is reported");
+    assert!(
+        !is_reject(&second, Some("admin.example.com")),
+        "the last-good mTLS config is kept"
+    );
+    assert!(
+        second
+            .select(Some("admin.example.com"))
+            .is_some_and(|crypto| crypto.is_mutual_tls),
+        "and it still enforces client authentication"
+    );
+    Ok(())
+}
+
 /// Non-mTLS + resumption on: stateless tickets, no server-side session cache.
 #[tokio::test]
 async fn non_mtls_uses_stateless_tickets_without_cache() -> TestResult {

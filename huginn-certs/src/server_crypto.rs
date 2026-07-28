@@ -36,7 +36,7 @@ use tokio_rustls::rustls::sign::CertifiedKey;
 use tokio_rustls::rustls::{
     ConfigBuilder, RootCertStore, ServerConfig, SupportedProtocolVersion, WantsVerifier,
 };
-use tracing::info;
+use tracing::{error, warn};
 
 use crate::certs::build_certified_key;
 use crate::cipher_suites::resolve_cipher_suites;
@@ -438,6 +438,13 @@ async fn build_entry_config(
 /// offline. The returned [`CertReloadReport`] lists which configs loaded (with their
 /// chain hash) vs. which failed; a non-empty `failed` is a partial build.
 ///
+/// Carrying forward must never weaken client authentication: a failing domain that
+/// requires mutual TLS gets the reject sentinel unless the config it would inherit
+/// also requires it. Leaving its slot empty would not be enough, since
+/// [`ServerCryptoMap::select`] would then fall through to the catch-all, whose
+/// `ServerConfig` has no client verifier: the domain would serve unauthenticated
+/// under a shared certificate. Rejecting its handshakes fails closed instead.
+///
 /// Returns `Err` only for process-wide setup that fails before any domain is built
 /// (ticketer or provider/version setup); per-domain failures are reported, not fatal.
 pub async fn build_server_crypto(
@@ -473,14 +480,24 @@ pub async fn build_server_crypto(
             }
             Err(e) => {
                 failed.push(label.to_string());
-                match previous.and_then(|prev| prev.get(&slot)) {
-                    Some(prev_config) => {
-                        info!(host = label, error = %e, "Cert load failed; keeping previously loaded ServerConfig");
-                        map.place(&slot, prev_config);
-                    }
-                    None => {
-                        info!(host = label, error = %e, "Cert load failed; domain has no previous config and will not serve TLS");
-                    }
+                let previous_config = previous.and_then(|prev| prev.get(&slot));
+                let weakens_mtls = entry.source.is_mutual_tls()
+                    && !previous_config
+                        .as_ref()
+                        .is_some_and(|prev| prev.is_mutual_tls);
+
+                if weakens_mtls {
+                    error!(host = label, error = %e, "Cert load failed for a domain requiring client authentication; rejecting its handshakes instead of serving it unauthenticated");
+                    let reject = ServerCryptoForSni {
+                        config: Arc::clone(&map.reject),
+                        is_mutual_tls: false,
+                    };
+                    map.place(&slot, reject);
+                } else if let Some(prev_config) = previous_config {
+                    warn!(host = label, error = %e, "Cert load failed; keeping previously loaded ServerConfig");
+                    map.place(&slot, prev_config);
+                } else {
+                    error!(host = label, error = %e, "Cert load failed; domain has no previous config and will not serve TLS");
                 }
             }
         }

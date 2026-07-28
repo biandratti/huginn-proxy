@@ -54,6 +54,10 @@ impl CryptoSource for InMemorySource {
     async fn read(&self) -> Result<ServerCertsKeys, CertError> {
         Ok(self.0.clone())
     }
+
+    fn is_mutual_tls(&self) -> bool {
+        self.0.is_mutual_tls()
+    }
 }
 
 /// A `CryptoSource` that always fails, to exercise the error path without a file.
@@ -64,6 +68,10 @@ struct FailingSource;
 impl CryptoSource for FailingSource {
     async fn read(&self) -> Result<ServerCertsKeys, CertError> {
         Err(CertError::NoCertificates)
+    }
+
+    fn is_mutual_tls(&self) -> bool {
+        false
     }
 }
 

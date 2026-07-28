@@ -192,7 +192,8 @@ process-wide instance shared across rebuilds, so tickets issued before a reload 
 
 Reloading is **best-effort and per-domain** (Traefik-style): if one domain's new certificate fails to load, the other
 domains still swap to their fresh certs, and the failing domain keeps serving its previously loaded certificate so a
-transient file issue never drops TLS for that domain.
+transient file issue never drops TLS for that domain. The one exception is client authentication: a domain requiring
+mTLS is never carried forward onto a configuration that does not require it (see below).
 
 Each successful load or rotation increments `huginn_tls_cert_reload_total{result="success", domain="…"}`, updates
 `huginn_tls_cert_last_reload_timestamp_seconds{domain="…"}`, and publishes the new certificate-chain content hash via
@@ -238,11 +239,13 @@ unless it arrives over a TLS session established for that same domain entry. Pla
 requests never faced the domain's client verifier, so connection reuse cannot be used to reach a client-auth domain
 through a public one that happens to share its certificate.
 
+An mTLS domain also never degrades into a public one: if its certificate or CA bundle fails to load, its handshakes are
+rejected with `unrecognized_name` rather than falling back to the default certificate, which carries no client
+verifier. Carrying a previous configuration forward is only allowed when that configuration also required a client
+certificate.
+
 Limitation: client auth is required-or-absent per domain (no "optional client certificate" mode), and there is no
-per-route granularity below the domain. The 421 rule is derived from the configuration, so it assumes the domain's
-certificate is actually being served; pair `client_ca_path` with `sni_strict = true` so that a certificate that fails
-to load at startup rejects the handshake instead of falling back to the default certificate. See the mTLS section of
-`SETTINGS.md`.
+per-route granularity below the domain. See the mTLS section of `SETTINGS.md`.
 
 ## Fingerprinting
 

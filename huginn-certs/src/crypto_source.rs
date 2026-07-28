@@ -29,6 +29,9 @@ use crate::error::CertError;
 pub trait CryptoSource: std::fmt::Debug + Send + Sync {
     /// Read the certificate chain and private key for one domain.
     async fn read(&self) -> Result<ServerCertsKeys, CertError>;
+
+    /// Returns true when mutual tls is enabled
+    fn is_mutual_tls(&self) -> bool;
 }
 
 /// A [`CryptoSource`] backed by PEM files on disk.
@@ -62,8 +65,14 @@ impl CryptoFileSource {
 
 #[async_trait]
 impl CryptoSource for CryptoFileSource {
+    /// read crypto materials from source
     async fn read(&self) -> Result<ServerCertsKeys, CertError> {
         read_certs_and_keys(&self.cert_path, &self.key_path, self.client_ca_path.as_deref()).await
+    }
+
+    /// Returns true when mutual tls is enabled
+    fn is_mutual_tls(&self) -> bool {
+        self.client_ca_path.is_some()
     }
 }
 
