@@ -522,14 +522,32 @@ sum by (strategy) (rate(huginn_rate_limit_allowed_total[5m]))
 
 ### 9. Error Metrics
 
-| Metric                | Type    | Description          | Labels                    |
-|-----------------------|---------|----------------------|---------------------------|
-| `huginn_errors_total` | Counter | Total errors by type | `error_type`, `component` |
+| Metric                | Type    | Description                        | Labels       |
+|-----------------------|---------|------------------------------------|--------------|
+| `huginn_errors_total` | Counter | Failed requests, by failure reason | `error_type` |
+
+Counted **once per failed request**, where the error leaves the proxy and is turned into a response, so the
+series are directly comparable to each other and to `huginn_entrypoint_requests_total`.
 
 **Labels**:
 
-- `error_type`: Error category (`config`, `tls`, `http`, `io`, `timeout`)
-- `component`: Component where error occurred (`proxy`, `backend`, `fingerprint`, etc.)
+- `error_type`: why the request failed. One of:
+
+| `error_type`                    | Status | Meaning                                                              |
+|---------------------------------|--------|----------------------------------------------------------------------|
+| `invalid_host`                  | 400    | `Host` / `:authority` missing or unparseable                          |
+| `invalid_uri`                   | 400    | Request target could not be rebuilt for the upstream                  |
+| `ip_blocked`                    | 403    | Rejected by the IP ACL                                                |
+| `no_matching_route`             | 404    | Host matched a domain, no route matched the path                      |
+| `no_upstream_candidates`        | 404    | Route matched but declares no backend                                 |
+| `misdirected_request`           | 421    | `Host` not covered by the connection's certificate (HTTP/2 coalescing)|
+| `mutual_tls_host_inconsistency` | 421    | `Host` requires client auth this session did not perform              |
+| `rate_limited`                  | 429    | Rejected by a token bucket (see §8)                                   |
+| `no_matching_backend`           | 503    | Selected backend is not a configured `[[backends]]` entry             |
+| `backend_error`                 | 502    | Upstream did not answer (connect/read failure, timeout)               |
+| `upstream_unhealthy`            | 502    | Short-circuited by the active health check gate                       |
+| `upstream_request_failed`       | 500    | Upstream request could not be built                                   |
+| `downstream_response_failed`    | 500    | Response could not be returned to the client                          |
 
 **Example queries**:
 
@@ -537,8 +555,11 @@ sum by (strategy) (rate(huginn_rate_limit_allowed_total[5m]))
 # Error rate by type
 sum by (error_type) (rate(huginn_errors_total[5m]))
 
-# Total error rate
-rate(huginn_errors_total[5m])
+# Share of requests that failed
+sum(rate(huginn_errors_total[5m])) / sum(rate(huginn_entrypoint_requests_total[5m]))
+
+# Possible mTLS bypass attempts
+rate(huginn_errors_total{error_type="mutual_tls_host_inconsistency"}[5m])
 ```
 
 ---

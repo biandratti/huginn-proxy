@@ -66,6 +66,16 @@ follows [Semantic Versioning](https://semver.org/).
   across cert hot-reloads) replaces the former server-side TLS 1.2 session-ID cache. This also turns
   on TLS 1.3 resumption, which was previously off. mTLS domains never resume.
 
+### Fixed
+
+- **`huginn_errors_total` counted some errors twice.** Requests rejected by the handler
+  (`ip_blocked`, `misdirected_request`, `no_matching_route`) were recorded both where the error was
+  built and where it was turned into a response; errors raised while forwarding were recorded once.
+  Every failed request is now counted exactly once, so the series are comparable across `error_type`.
+  **Adjust alert thresholds**: rates for the affected types drop by half. `TELEMETRY.md` §9 also
+  documented a `component` label that was never emitted and a set of `error_type` values that never
+  existed; both now match what the proxy exports.
+
 ---
 
 ## [0.0.3-beta.0]

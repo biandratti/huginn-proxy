@@ -239,7 +239,10 @@ requests never faced the domain's client verifier, so connection reuse cannot be
 through a public one that happens to share its certificate.
 
 Limitation: client auth is required-or-absent per domain (no "optional client certificate" mode), and there is no
-per-route granularity below the domain.
+per-route granularity below the domain. The 421 rule is derived from the configuration, so it assumes the domain's
+certificate is actually being served; pair `client_ca_path` with `sni_strict = true` so that a certificate that fails
+to load at startup rejects the handshake instead of falling back to the default certificate. See the mTLS section of
+`SETTINGS.md`.
 
 ## Fingerprinting
 
