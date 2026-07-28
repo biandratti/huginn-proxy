@@ -120,6 +120,26 @@ fn effective_config_summary_reports_runtime_aggregates() -> TestResult {
 }
 
 #[test]
+fn effective_config_tls_versions_are_resolved() -> TestResult {
+    let with_bound = format!("{CONFIG}\n[tls.options]\nmin_version = \"1.3\"\n");
+    let parts = TomlParser.parse(&with_bound)?.into_parts();
+    let view: Value = serde_json::from_str(
+        &EffectiveConfigView::new(&parts.static_cfg, &parts.dynamic_cfg).to_json()?,
+    )?;
+
+    assert_eq!(view["static"]["tls"]["options"]["versions"], serde_json::json!(["1.3"]));
+
+    // Nothing configured: both versions, rather than an empty list.
+    let parts = TomlParser.parse(CONFIG)?.into_parts();
+    let view: Value = serde_json::from_str(
+        &EffectiveConfigView::new(&parts.static_cfg, &parts.dynamic_cfg).to_json()?,
+    )?;
+
+    assert_eq!(view["static"]["tls"]["options"]["versions"], serde_json::json!(["1.2", "1.3"]));
+    Ok(())
+}
+
+#[test]
 fn effective_config_compact_json_is_single_line_and_redacted() -> TestResult {
     let parts = TomlParser.parse(CONFIG)?.into_parts();
     let output = EffectiveConfigView::new(&parts.static_cfg, &parts.dynamic_cfg).to_json()?;

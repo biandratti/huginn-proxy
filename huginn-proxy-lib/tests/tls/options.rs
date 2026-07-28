@@ -1,7 +1,6 @@
 use huginn_proxy_lib::config::{SessionResumptionConfig, TlsConfig, TlsOptions, TlsVersion};
 use huginn_proxy_lib::tls::{
-    supported_cipher_suites, supported_curves, tls_build_options, validate_tls_options,
-    CipherSuiteName, KxGroupName,
+    supported_cipher_suites, supported_curves, tls_build_options, CipherSuiteName, KxGroupName,
 };
 use tokio_rustls::rustls::version::{TLS12, TLS13};
 use tokio_rustls::rustls::SupportedProtocolVersion;
@@ -19,87 +18,6 @@ fn contains_version(
     want: &'static SupportedProtocolVersion,
 ) -> bool {
     versions.iter().any(|got| std::ptr::eq(*got, want))
-}
-
-#[test]
-fn test_validate_tls_options_default() {
-    let options = TlsOptions::default();
-    assert!(validate_tls_options(&options).is_ok());
-}
-
-#[test]
-fn test_validate_tls_options_versions_only() {
-    let options =
-        TlsOptions { versions: vec![TlsVersion::V1_2, TlsVersion::V1_3], ..Default::default() };
-    assert!(validate_tls_options(&options).is_ok());
-}
-
-#[test]
-fn test_validate_tls_options_min_max_version_valid() {
-    let options = TlsOptions {
-        versions: vec![], // Empty when using min/max
-        min_version: Some(TlsVersion::V1_2),
-        max_version: Some(TlsVersion::V1_3),
-        ..Default::default()
-    };
-    assert!(validate_tls_options(&options).is_ok());
-}
-
-#[test]
-fn test_validate_tls_options_min_max_version_same() {
-    let options = TlsOptions {
-        versions: vec![], // Empty when using min/max
-        min_version: Some(TlsVersion::V1_3),
-        max_version: Some(TlsVersion::V1_3),
-        ..Default::default()
-    };
-    assert!(validate_tls_options(&options).is_ok());
-}
-
-#[test]
-fn test_validate_tls_options_min_max_version_invalid() {
-    let options = TlsOptions {
-        min_version: Some(TlsVersion::V1_3),
-        max_version: Some(TlsVersion::V1_2),
-        ..Default::default()
-    };
-    assert!(validate_tls_options(&options).is_err());
-}
-
-#[test]
-fn test_validate_tls_options_versions_conflict_with_min() {
-    let options = TlsOptions {
-        versions: vec![TlsVersion::V1_2],
-        min_version: Some(TlsVersion::V1_2),
-        ..Default::default()
-    };
-    assert!(validate_tls_options(&options).is_err());
-}
-
-#[test]
-fn test_validate_tls_options_versions_conflict_with_max() {
-    let options = TlsOptions {
-        versions: vec![TlsVersion::V1_3],
-        max_version: Some(TlsVersion::V1_3),
-        ..Default::default()
-    };
-    assert!(validate_tls_options(&options).is_err());
-}
-
-#[test]
-fn test_validate_tls_options_cipher_suites_valid() {
-    let options = TlsOptions {
-        cipher_suites: vec![CipherSuiteName::Tls13Aes256GcmSha384],
-        ..Default::default()
-    };
-    assert!(validate_tls_options(&options).is_ok());
-}
-
-#[test]
-fn test_validate_tls_options_cipher_suites_multiple_valid() {
-    let options =
-        TlsOptions { cipher_suites: CipherSuiteName::ALL[..3].to_vec(), ..Default::default() };
-    assert!(validate_tls_options(&options).is_ok());
 }
 
 #[test]
@@ -132,22 +50,6 @@ fn cipher_suites_reject_empty_string_at_parse() {
 }
 
 #[test]
-fn test_validate_tls_options_curve_preferences_valid() {
-    let options =
-        TlsOptions { curve_preferences: vec![KxGroupName::X25519MlKem768], ..Default::default() };
-    assert!(validate_tls_options(&options).is_ok());
-}
-
-#[test]
-fn test_validate_tls_options_curve_preferences_multiple_valid() {
-    let options = TlsOptions {
-        curve_preferences: vec![KxGroupName::X25519MlKem768, KxGroupName::X25519],
-        ..Default::default()
-    };
-    assert!(validate_tls_options(&options).is_ok());
-}
-
-#[test]
 fn curve_preferences_reject_unknown_name_at_parse() {
     let result = toml::from_str::<TlsOptions>(
         r#"
@@ -177,19 +79,8 @@ fn curve_preferences_reject_empty_string_at_parse() {
 }
 
 #[test]
-fn test_validate_tls_options_all_options_valid() {
-    let options = TlsOptions {
-        versions: vec![TlsVersion::V1_2, TlsVersion::V1_3],
-        cipher_suites: vec![CipherSuiteName::Tls13Aes128GcmSha256],
-        curve_preferences: vec![KxGroupName::X25519],
-        ..Default::default()
-    };
-    assert!(validate_tls_options(&options).is_ok());
-}
-
-#[test]
 fn resolve_versions_default_is_safe_defaults() {
-    // Default (1.2 + 1.3) means "no restriction" → empty list → provider safe defaults.
+    // Unset means "no restriction" → empty list → provider safe defaults.
     assert!(resolved_versions(TlsOptions::default()).is_empty());
 }
 
@@ -220,7 +111,6 @@ fn resolve_versions_both_versions_is_safe_defaults() {
 fn resolve_versions_min_max_bounds() {
     // min == max == 1.3 → only 1.3.
     let pinned_13 = resolved_versions(TlsOptions {
-        versions: vec![],
         min_version: Some(TlsVersion::V1_3),
         max_version: Some(TlsVersion::V1_3),
         ..Default::default()
@@ -229,30 +119,33 @@ fn resolve_versions_min_max_bounds() {
     assert!(contains_version(&pinned_13, &TLS13));
 
     // max = 1.2 → only 1.2.
-    let capped_12 = resolved_versions(TlsOptions {
-        versions: vec![],
-        max_version: Some(TlsVersion::V1_2),
-        ..Default::default()
-    });
+    let capped_12 =
+        resolved_versions(TlsOptions { max_version: Some(TlsVersion::V1_2), ..Default::default() });
     assert_eq!(capped_12.len(), 1);
     assert!(contains_version(&capped_12, &TLS12));
 
+    // min = 1.3 (max defaults to 1.3) → only 1.3.
+    let min_only =
+        resolved_versions(TlsOptions { min_version: Some(TlsVersion::V1_3), ..Default::default() });
+    assert_eq!(min_only.len(), 1);
+    assert!(contains_version(&min_only, &TLS13));
+
     // min = 1.2 (max defaults to 1.3) → both → no restriction.
-    let min_only = resolved_versions(TlsOptions {
-        versions: vec![],
-        min_version: Some(TlsVersion::V1_2),
-        ..Default::default()
-    });
-    assert!(min_only.is_empty());
+    let unbounded =
+        resolved_versions(TlsOptions { min_version: Some(TlsVersion::V1_2), ..Default::default() });
+    assert!(unbounded.is_empty());
 }
 
 #[test]
 fn test_tls_options_default_values() {
     let options = TlsOptions::default();
 
-    assert_eq!(options.versions.len(), 2, "Default versions should contain TLS 1.2 and 1.3");
-    assert!(options.versions.contains(&TlsVersion::V1_2));
-    assert!(options.versions.contains(&TlsVersion::V1_3));
+    assert!(options.versions.is_empty(), "Default versions is unset (no restriction)");
+    assert_eq!(
+        options.resolved_versions(),
+        vec![TlsVersion::V1_2, TlsVersion::V1_3],
+        "Unset resolves to both supported versions"
+    );
     assert!(options.min_version.is_none());
     assert!(options.max_version.is_none());
     assert_eq!(

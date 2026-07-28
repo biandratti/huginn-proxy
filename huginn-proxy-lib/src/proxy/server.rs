@@ -16,7 +16,7 @@ use crate::proxy::shutdown::{wait_for_drain, ServiceHandle, ShutdownSender};
 pub use crate::proxy::watch::WatchOptions;
 use crate::telemetry::{Metrics, Readiness};
 use crate::tls::setup::SharedServerCrypto;
-use crate::tls::{build_server_crypto_map, tls_build_options, validate_tls_options};
+use crate::tls::{build_server_crypto_map, tls_build_options};
 use arc_swap::ArcSwap;
 use hyper_util::rt::{TokioExecutor, TokioTimer};
 use hyper_util::server::conn::auto::Builder as ConnBuilder;
@@ -70,7 +70,6 @@ pub async fn run(
     // Build the per-SNI TLS config map from the current dynamic config.
     // `None` when TLS is not configured (plain HTTP mode).
     let server_crypto: Option<SharedServerCrypto> = if let Some(tls) = &static_cfg.tls {
-        validate_tls_options(&tls.options)?;
         let options = tls_build_options(tls);
         let (map, report) =
             build_server_crypto_map(&dynamic_cfg.load().domains, &options, None, &metrics).await?;

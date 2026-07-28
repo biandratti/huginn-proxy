@@ -9,4 +9,4 @@ pub use huginn_certs::{
     ServerCryptoMap, TlsBuildOptions,
 };
 pub use metrics::{extract_tls_info, record_tls_handshake_metrics};
-pub use setup::{tls_build_options, validate_tls_options, SharedServerCrypto};
+pub use setup::{tls_build_options, SharedServerCrypto};

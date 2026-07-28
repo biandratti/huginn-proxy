@@ -17,10 +17,14 @@ pub enum TlsVersion {
 #[derive(Debug, Deserialize, Clone, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct TlsOptions {
-    /// Allowed TLS versions
-    /// Options: ["1.2"], ["1.3"], or ["1.2", "1.3"]
-    /// Default: ["1.2", "1.3"] (all supported versions)
-    #[serde(default = "default_tls_versions")]
+    /// Allowed TLS versions.
+    ///
+    /// Options: `["1.2"]`, `["1.3"]`, or `["1.2", "1.3"]`.
+    ///
+    /// Default: empty, meaning no restriction (both versions). Empty is what makes
+    /// "unset" distinguishable from an explicit list, so `min_version` /
+    /// `max_version` can be used on their own; the two forms are mutually exclusive.
+    #[serde(default)]
     pub versions: Vec<TlsVersion>,
     /// Minimum TLS version
     /// Options: "1.2" or "1.3"
@@ -65,10 +69,63 @@ pub struct TlsOptions {
     pub sni_strict: bool,
 }
 
+impl TlsOptions {
+    /// Reject contradictory version settings.
+    pub fn validate(&self) -> crate::error::Result<()> {
+        if matches!(
+            (self.min_version, self.max_version),
+            (Some(TlsVersion::V1_3), Some(TlsVersion::V1_2))
+        ) {
+            return Err(crate::error::ProxyError::Tls(
+                "min_version (1.3) cannot be greater than max_version (1.2)".to_string(),
+            ));
+        }
+
+        if !self.versions.is_empty() && (self.min_version.is_some() || self.max_version.is_some()) {
+            return Err(crate::error::ProxyError::Tls(
+                "Cannot specify both 'versions' and 'min_version'/'max_version'. \
+                Use either 'versions' or 'min_version'/'max_version'."
+                    .to_string(),
+            ));
+        }
+
+        Ok(())
+    }
+
+    /// The TLS versions the handshake will actually accept, in ascending order.
+    ///
+    /// `min_version` / `max_version` take precedence over `versions`, and an unset
+    /// `versions` means both. Empty only for the contradictory `min > max`, which
+    /// [`crate::config::Config::validate_cross_refs`] rejects before it reaches here.
+    pub fn resolved_versions(&self) -> Vec<TlsVersion> {
+        let (v1_2, v1_3) = if self.min_version.is_some() || self.max_version.is_some() {
+            let min = self.min_version.unwrap_or(TlsVersion::V1_2);
+            let max = self.max_version.unwrap_or(TlsVersion::V1_3);
+            (min == TlsVersion::V1_2, max == TlsVersion::V1_3)
+        } else if self.versions.is_empty() {
+            (true, true)
+        } else {
+            (
+                self.versions.contains(&TlsVersion::V1_2),
+                self.versions.contains(&TlsVersion::V1_3),
+            )
+        };
+
+        let mut resolved = Vec::with_capacity(2);
+        if v1_2 {
+            resolved.push(TlsVersion::V1_2);
+        }
+        if v1_3 {
+            resolved.push(TlsVersion::V1_3);
+        }
+        resolved
+    }
+}
+
 impl Default for TlsOptions {
     fn default() -> Self {
         Self {
-            versions: default_tls_versions(),
+            versions: Vec::new(),
             min_version: default_min_version(),
             max_version: default_max_version(),
             cipher_suites: default_cipher_suites(),
@@ -76,10 +133,6 @@ impl Default for TlsOptions {
             sni_strict: false,
         }
     }
-}
-
-fn default_tls_versions() -> Vec<TlsVersion> {
-    vec![TlsVersion::V1_2, TlsVersion::V1_3]
 }
 
 fn default_min_version() -> Option<TlsVersion> {
@@ -180,7 +233,7 @@ pub(crate) fn effective_tls_view(config: Option<&TlsConfig>) -> TlsView<'_> {
         options: TlsOptionsView {
             versions: config
                 .options
-                .versions
+                .resolved_versions()
                 .iter()
                 .map(|version| version.as_str())
                 .collect(),

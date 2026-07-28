@@ -10,7 +10,6 @@ homepage.workspace = true
 publish = false
 
 [dependencies]
-arc-swap.workspace = true
 async-trait.workspace = true
 rustls-pki-types.workspace = true
 serde.workspace = true

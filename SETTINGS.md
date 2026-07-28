@@ -745,7 +745,7 @@ tls:
 
 | Key                 | Type             | Default          | Description                                                |
 |---------------------|------------------|------------------|------------------------------------------------------------|
-| `versions`          | array of strings | `["1.2", "1.3"]` | Allowed TLS versions. Values: `"1.2"`, `"1.3"`. Applied to the TLS stack. Mutually exclusive with `min_version`/`max_version`. |
+| `versions`          | array of strings | `[]` (empty)     | Allowed TLS versions. Values: `"1.2"`, `"1.3"`. Applied to the TLS stack. Empty means no restriction (both). Mutually exclusive with `min_version`/`max_version`. |
 | `min_version`       | string           | `null`           | Minimum TLS version (`"1.2"` or `"1.3"`). Applied to the TLS stack. Mutually exclusive with an explicit `versions` list. |
 | `max_version`       | string           | `null`           | Maximum TLS version (`"1.2"` or `"1.3"`). Applied to the TLS stack. Mutually exclusive with an explicit `versions` list. |
 | `cipher_suites`     | array of strings | all supported    | Ordered cipher suites, most preferred first. Restrict to tighten security posture. Applied to the TLS stack. Unknown names fail at config parse. |
@@ -753,8 +753,9 @@ tls:
 | `sni_strict`        | bool             | `false`          | When `true`, disable the default-cert fallback entirely (full parity with Traefik's `sniStrict`): reject (`unrecognized_name`) both a TLS connection whose SNI matches no domain cert **and** a connection that sends no SNI (IP-literal clients). When `false`, both fall back to the default cert. Production hardening against unknown-hostname / no-SNI access. |
 
 > **TLS versions are enforced.** `versions` (or `min_version`/`max_version`) restrict the versions
-> the acceptor offers: e.g. `min_version = "1.3"` refuses TLS 1.2 handshakes. The default (1.2 **and**
-> 1.3) leaves rustls' safe defaults in place.
+> the acceptor offers: e.g. `min_version = "1.3"` refuses TLS 1.2 handshakes. Leaving all three unset
+> (the default) allows 1.2 **and** 1.3, i.e. rustls' safe defaults. Pick **one** of the two forms: a
+> config that sets both an explicit `versions` list and a bound is rejected at load.
 
 > **Note on `curve_preferences`:** leaving it **empty** (the default) keeps the provider's safe
 > defaults, which lead with the post-quantum hybrid group `X25519MLKEM768`. A non-empty list applies

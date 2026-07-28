@@ -6,7 +6,6 @@ use tokio_rustls::rustls::version::{TLS12, TLS13};
 use tokio_rustls::rustls::SupportedProtocolVersion;
 
 use crate::config::{TlsConfig, TlsOptions, TlsVersion};
-use crate::error::{ProxyError, Result};
 
 /// Hot-swappable per-SNI TLS config map.
 ///
@@ -35,58 +34,16 @@ pub fn tls_build_options(tls: &TlsConfig) -> TlsBuildOptions {
     }
 }
 
-/// Resolve the effective TLS protocol versions to enforce from `min_version` /
-/// `max_version` (which take precedence) or the `versions` list.
+/// Map the config's effective TLS versions onto the rustls values to enforce.
 ///
-/// Returns an empty vec when no real restriction applies (both versions allowed,
-/// or a degenerate empty `versions` with no bounds) so the build falls back to
-/// rustls' safe defaults; a single allowed version yields a one-element list.
-/// [`validate_tls_options`] guarantees `versions` and `min/max_version` are not
-/// combined and that `min <= max`.
+/// An empty result means "no restriction", so the build keeps rustls' safe
+/// defaults; that covers both versions being allowed (the common case) and the
+/// degenerate `min > max` that `TlsOptions::validate` rejects at load anyway.
 fn resolve_protocol_versions(options: &TlsOptions) -> Vec<&'static SupportedProtocolVersion> {
-    let (allow_12, allow_13) = if options.min_version.is_some() || options.max_version.is_some() {
-        let min = options.min_version.unwrap_or(TlsVersion::V1_2);
-        let max = options.max_version.unwrap_or(TlsVersion::V1_3);
-        (min == TlsVersion::V1_2, max == TlsVersion::V1_3)
-    } else {
-        (
-            options.versions.contains(&TlsVersion::V1_2),
-            options.versions.contains(&TlsVersion::V1_3),
-        )
-    };
-
-    match (allow_12, allow_13) {
-        (true, true) | (false, false) => Vec::new(),
-        (true, false) => vec![&TLS12],
-        (false, true) => vec![&TLS13],
+    let resolved = options.resolved_versions();
+    match resolved.as_slice() {
+        [TlsVersion::V1_2] => vec![&TLS12],
+        [TlsVersion::V1_3] => vec![&TLS13],
+        _ => Vec::new(),
     }
-}
-
-/// Validate static TLS options at startup (version bounds). Applied once before
-/// the initial [`ServerCryptoMap`] is built; these are static settings that cannot
-/// change on hot-reload.
-///
-/// Cipher-suite and curve names are not checked here: they are typed
-/// ([`huginn_certs::CipherSuiteName`] / [`huginn_certs::KxGroupName`]) and an
-/// unknown name already fails at config parse time.
-pub fn validate_tls_options(options: &TlsOptions) -> Result<()> {
-    if let (Some(min), Some(max)) = (options.min_version, options.max_version) {
-        if matches!((min, max), (TlsVersion::V1_3, TlsVersion::V1_2)) {
-            return Err(ProxyError::Tls(
-                "min_version (1.3) cannot be greater than max_version (1.2)".to_string(),
-            ));
-        }
-    }
-
-    if !options.versions.is_empty()
-        && (options.min_version.is_some() || options.max_version.is_some())
-    {
-        return Err(ProxyError::Tls(
-            "Cannot specify both 'versions' and 'min_version'/'max_version'. \
-            Use either 'versions' or 'min_version'/'max_version'."
-                .to_string(),
-        ));
-    }
-
-    Ok(())
 }
