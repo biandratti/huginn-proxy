@@ -298,6 +298,11 @@ fn drain_removed_backends(
 
 /// Hash of a `DynamicConfig` for the `huginn_config_hash` Prometheus gauge: changes whenever the
 /// config changes, and is the same value on every replica running that config.
+///
+/// Hashing `Debug` is deliberate. It covers every field for free, so a field added later cannot
+/// silently drop out of the fingerprint, and it keeps [`Secret`](crate::config::Secret) values in
+/// scope (their `Debug` is transparent for exactly this reason) where the serialized effective
+/// view would redact them and leave a rotated secret looking like no change at all.
 fn config_hash(dynamic: &DynamicConfig) -> u64 {
     huginn_certs::fnv1a_hash(format!("{:?}", dynamic).as_bytes())
 }
