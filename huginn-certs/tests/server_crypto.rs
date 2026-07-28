@@ -354,7 +354,7 @@ fn client_root_store_dedups_identical_der() -> TestResult {
 }
 
 /// Two distinct DER encodings of the *same* CA key share a Subject Key Identifier,
-/// so SKID dedup collapses them to one anchor — something byte dedup alone cannot do.
+/// so SKID dedup collapses them to one anchor, something byte dedup alone cannot do.
 #[test]
 fn client_root_store_dedups_same_key_across_different_der() -> TestResult {
     let key = KeyPair::generate()?;

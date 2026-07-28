@@ -1,10 +1,10 @@
-//! Per-SNI `ServerConfig` construction — huginn's take on rpxy's `server_crypto`.
+//! Per-SNI `ServerConfig` construction: huginn's take on rpxy's `server_crypto`.
 //!
 //! [`build_server_crypto`] turns a list of [`CertEntry`] into a
 //! [`ServerCryptoMap`]: one rustls [`ServerConfig`] per domain, selected at
 //! handshake time by SNI. Unlike rpxy's exact-match-only `HashMap<SNI, config>`,
-//! the map keeps huginn's resolution model — `exact → wildcard → catch-all` with
-//! `sni_strict` — in [`ServerCryptoMap::select`].
+//! the map keeps huginn's resolution model (`exact → wildcard → catch-all` with
+//! `sni_strict`) in [`ServerCryptoMap::select`].
 //!
 //! ## Client auth is per-domain
 //!
@@ -20,7 +20,7 @@
 //! the ticket keys are a single process-wide `shared_ticketer` instance shared
 //! across every non-mTLS config and across hot-reloads, so outstanding tickets stay
 //! decryptable when the map is rebuilt. **mTLS domains never resume** (no ticketer
-//! and no cache) so the client certificate is verified on every connection —
+//! and no cache) so the client certificate is verified on every connection:
 //! a resumed handshake would otherwise restore the stored client identity without
 //! re-running the verifier.
 
@@ -161,8 +161,8 @@ fn classify(host: Option<&str>) -> Slot<'_> {
 /// A per-SNI `ServerConfig` paired with whether its domain enforces mutual TLS.
 ///
 /// Mirrors rpxy's `ServerCryptoForSni`. The accept path selects this by SNI after
-/// reading the ClientHello; `is_mutual_tls` is known at that point — even when the
-/// handshake later fails — so it can tag handshake-failure logs with whether the
+/// reading the ClientHello; `is_mutual_tls` is known at that point, even when the
+/// handshake later fails, so it can tag handshake-failure logs with whether the
 /// selected domain required a client certificate.
 #[derive(Clone)]
 pub struct ServerCryptoForSni {
@@ -281,7 +281,7 @@ impl ServerCryptoMap {
 
 /// Build the aws-lc-rs crypto provider, overriding the cipher-suite list and/or
 /// key-exchange groups only when the config specifies them. Anything left empty
-/// keeps the provider defaults — which include the post-quantum hybrid group
+/// keeps the provider defaults, which include the post-quantum hybrid group
 /// `X25519MLKEM768` for key exchange.
 fn build_provider(options: &TlsBuildOptions) -> Arc<CryptoProvider> {
     if options.cipher_suites.is_empty() && options.curve_preferences.is_empty() {
@@ -325,8 +325,8 @@ fn config_builder_with_versions(
 /// (SKID) when present, otherwise the raw DER bytes.
 ///
 /// Mirrors rpxy, which keys trust anchors by SKID so re-encodings of the same CA
-/// key collapse to one anchor. Unlike rpxy — which drops a CA that has no SKID
-/// extension — we fall back to DER identity so such a CA is still trusted rather
+/// key collapse to one anchor. Unlike rpxy, which drops a CA that has no SKID
+/// extension, we fall back to DER identity so such a CA is still trusted rather
 /// than silently discarded.
 fn anchor_dedup_key(der: &[u8]) -> Vec<u8> {
     if let Ok((_, cert)) = x509_parser::parse_x509_certificate(der) {
@@ -344,8 +344,8 @@ fn anchor_dedup_key(der: &[u8]) -> Vec<u8> {
 /// Build a client-CA [`RootCertStore`] for mutual TLS, deduplicating anchors that
 /// share a Subject Key Identifier (see `anchor_dedup_key`).
 ///
-/// A client-CA bundle that repeats a CA — the same PEM twice, or the same CA key
-/// re-issued/re-encoded — would otherwise add redundant trust anchors.
+/// A client-CA bundle that repeats a CA (the same PEM twice, or the same CA key
+/// re-issued/re-encoded) would otherwise add redundant trust anchors.
 ///
 /// Exposed (rather than private) so the SKID dedup can be asserted directly from the
 /// crate's integration tests, where the collapsed anchor count is observable but the

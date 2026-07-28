@@ -1,5 +1,5 @@
 use huginn_proxy_lib::config::Domain;
-use huginn_proxy_lib::proxy::handler::authority_matches_sni;
+use huginn_proxy_lib::proxy::handler::{authority_matches_sni, mutual_tls_session_matches};
 
 fn domain(host: &str) -> Domain {
     Domain {
@@ -122,4 +122,82 @@ fn authority_matches_sni_certless_host_uses_default_cert() {
     let domains = vec![domain("api.example.com"), catch_all_with_cert];
     // SNI=api.example.com -> certless -> default cert; authority=other -> catch-all -> default cert.
     assert!(authority_matches_sni(&domains, "api.example.com", "other.com"));
+}
+
+fn mtls_domain(host: &str, cert_path: &str) -> Domain {
+    Domain {
+        client_ca_path: Some("/certs/client-ca.pem".to_string()),
+        ..domain_with_cert(host, cert_path)
+    }
+}
+
+/// `public` (no client auth) and `admin` (client auth) sharing one SAN certificate.
+fn shared_cert_domains() -> Vec<Domain> {
+    vec![
+        domain_with_cert("public.example.com", "/certs/san.pem"),
+        mtls_domain("admin.example.com", "/certs/san.pem"),
+    ]
+}
+
+fn resolve<'a>(domains: &'a [Domain], host: &str) -> &'a Domain {
+    huginn_proxy_lib::proxy::router::pick_domain(domains, host)
+        .unwrap_or_else(|| panic!("{host} must resolve to a domain"))
+}
+
+/// The bypass: a session opened with the non-mTLS domain's SNI must not reach the
+/// mTLS domain just because both are served by the same certificate.
+#[test]
+fn mtls_rejects_foreign_sni_on_shared_certificate() {
+    let domains = shared_cert_domains();
+    let admin = resolve(&domains, "admin.example.com");
+
+    // Same certificate, so the coalescing check alone would let this through.
+    assert!(authority_matches_sni(&domains, "public.example.com", "admin.example.com"));
+    assert!(!mutual_tls_session_matches(&domains, admin, true, Some("public.example.com")));
+}
+
+/// A TLS session without SNI (IP-literal client under `sni_strict = false`) never
+/// passed the domain's client verifier.
+#[test]
+fn mtls_rejects_missing_sni() {
+    let domains = shared_cert_domains();
+    let admin = resolve(&domains, "admin.example.com");
+    assert!(!mutual_tls_session_matches(&domains, admin, true, None));
+}
+
+/// Plaintext cannot have performed client authentication at all.
+#[test]
+fn mtls_rejects_plaintext() {
+    let domains = shared_cert_domains();
+    let admin = resolve(&domains, "admin.example.com");
+    assert!(!mutual_tls_session_matches(&domains, admin, false, Some("admin.example.com")));
+}
+
+#[test]
+fn mtls_allows_its_own_sni() {
+    let domains = shared_cert_domains();
+    let admin = resolve(&domains, "admin.example.com");
+    assert!(mutual_tls_session_matches(&domains, admin, true, Some("admin.example.com")));
+    // The SNI is lowercased before matching, like in `authority_matches_sni`.
+    assert!(mutual_tls_session_matches(&domains, admin, true, Some("Admin.Example.COM")));
+}
+
+/// Coalescing under a single wildcard mTLS entry stays allowed: both hosts were served
+/// by that entry's own `ServerConfig`, so the client did authenticate against its CA.
+#[test]
+fn mtls_allows_coalescing_within_one_wildcard_entry() {
+    let domains = vec![mtls_domain("*.example.com", "/certs/wildcard.pem")];
+    let docs = resolve(&domains, "docs.example.com");
+    assert!(mutual_tls_session_matches(&domains, docs, true, Some("api.example.com")));
+}
+
+/// Domains without client auth are untouched: the shared-certificate relaxation still
+/// applies to them, so no new 421s for legitimate coalescing.
+#[test]
+fn non_mtls_domains_are_unaffected() {
+    let domains = shared_cert_domains();
+    let public = resolve(&domains, "public.example.com");
+    assert!(mutual_tls_session_matches(&domains, public, true, Some("admin.example.com")));
+    assert!(mutual_tls_session_matches(&domains, public, true, None));
+    assert!(mutual_tls_session_matches(&domains, public, false, None));
 }

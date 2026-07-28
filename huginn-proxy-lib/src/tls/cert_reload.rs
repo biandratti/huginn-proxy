@@ -26,7 +26,7 @@ use crate::tls::setup::SharedServerCrypto;
 /// the catch-all default cert) with an informational log.
 ///
 /// A domain that also sets `client_ca_path` gets that CA attached to its source,
-/// so its per-SNI `ServerConfig` enforces mutual TLS while other domains do not —
+/// so its per-SNI `ServerConfig` enforces mutual TLS while other domains do not:
 /// client authentication is per-domain, not listener-wide.
 pub fn cert_entries_from_domains(domains: &[Domain]) -> Vec<CertEntry> {
     let mut entries = Vec::with_capacity(domains.len());

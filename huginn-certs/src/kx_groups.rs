@@ -4,7 +4,7 @@
 //! Analogous to [`crate::cipher_suites`]: when a config declares
 //! `curve_preferences`, this module resolves them into the `SupportedKxGroup`
 //! values that override the provider's default key-exchange groups. An **empty**
-//! list means callers keep the provider defaults — which include the post-quantum
+//! list means callers keep the provider defaults, which include the post-quantum
 //! hybrid group `X25519MLKEM768`.
 //!
 //! These are TLS *named groups* (not only elliptic curves): the list includes

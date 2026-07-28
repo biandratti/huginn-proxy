@@ -233,6 +233,11 @@ CAs in that bundle (multiple CA certificates per file supported). Because the cl
 own TLS `ServerConfig`, mTLS is **per-domain**: one listener can freely mix domains that require client certs with
 public ones. An mTLS domain never resumes a TLS session, so the client certificate is re-verified on every connection.
 
+That binding is also enforced at the HTTP layer: a request whose `Host` names an mTLS domain is rejected with **421**
+unless it arrives over a TLS session established for that same domain entry. Plaintext, no-SNI, and foreign-SNI
+requests never faced the domain's client verifier, so connection reuse cannot be used to reach a client-auth domain
+through a public one that happens to share its certificate.
+
 Limitation: client auth is required-or-absent per domain (no "optional client certificate" mode), and there is no
 per-route granularity below the domain.
 

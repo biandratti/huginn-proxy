@@ -57,3 +57,39 @@ pub fn authority_matches_sni(domains: &[Domain], sni: &str, host: &str) -> bool 
         _ => false,
     }
 }
+
+/// Whether the connection that carried a request is authenticated for `domain`.
+///
+/// Client authentication is per-domain: the verifier is bound to the `ServerConfig`
+/// that the SNI selected (`ServerCryptoMap::select`), never to the listener. A domain
+/// with `client_ca_path` can therefore only be reached over a session established for
+/// that same domain entry; anything else never passed its client verifier.
+///
+/// This rule **cannot be relaxed** the way [`authority_matches_sni`] is: its
+/// shared-certificate allowance does not apply here, because two domains sharing one
+/// certificate can differ in whether they require a client certificate. Without this,
+/// a session opened with the SNI of the non-mTLS domain could carry requests for the
+/// mTLS one.
+///
+/// Fails closed on plaintext, on a missing SNI, and on a foreign SNI. Domains without
+/// client auth are unaffected. Comparison is by domain *entry*, so requests coalesced
+/// under one wildcard mTLS entry (verified by that entry's own `ServerConfig`) stay
+/// allowed.
+pub fn mutual_tls_session_matches(
+    domains: &[Domain],
+    domain: &Domain,
+    is_https: bool,
+    sni: Option<&str>,
+) -> bool {
+    if domain.client_ca_path.is_none() {
+        return true;
+    }
+    if !is_https {
+        return false;
+    }
+    let Some(sni) = sni else {
+        return false;
+    };
+    pick_domain(domains, &sni.to_ascii_lowercase())
+        .is_some_and(|selected| std::ptr::eq(selected, domain))
+}

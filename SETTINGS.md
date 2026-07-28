@@ -832,6 +832,15 @@ client verifier is bound to each domain's own TLS config, one listener can mix m
 and public domains. mTLS domains never resume a session (the client certificate is
 re-verified on every connection).
 
+Because the verifier belongs to the domain that the **SNI** selected, an mTLS domain is
+only reachable over a TLS session established for that same `[[domains]]` entry. A request
+whose `Host` names an mTLS domain is rejected with **421** when it arrives over plaintext,
+without SNI, or over a session opened with another domain's SNI — even if both domains
+share the same certificate file, since that session never faced the client verifier.
+Requests coalesced under a single wildcard mTLS entry are unaffected: they were verified by
+that entry's own config. Rejections are counted as
+`huginn_errors_total{error_type="mutual_tls_host_inconsistency"}`.
+
 ### `[tls.session_resumption]`
 
 Resumption uses **stateless TLS session tickets only** — there is no server-side

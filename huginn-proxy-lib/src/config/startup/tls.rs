@@ -48,7 +48,7 @@ pub struct TlsOptions {
     /// exchange; the first entry is most preferred. Valid names are those returned
     /// by `supported_curves()` / [`KxGroupName`].
     ///
-    /// Default: empty, which keeps the provider's safe defaults — including the
+    /// Default: empty, which keeps the provider's safe defaults, including the
     /// post-quantum hybrid `X25519MLKEM768`. Setting an explicit list applies
     /// exactly those groups, so include a PQ hybrid to retain post-quantum
     /// protection. Unknown names fail at config parse time.

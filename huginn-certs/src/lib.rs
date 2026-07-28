@@ -12,8 +12,8 @@
 //! for side-by-side navigation. Like rpxy, the crate builds **one rustls
 //! `ServerConfig` per domain** ([`server_crypto::build_server_crypto`]), selected at
 //! handshake time by SNI. Unlike rpxy's exact-match-only `HashMap<SNI, config>`,
-//! the [`ServerCryptoMap`] keeps huginn's resolution model — `exact → wildcard →
-//! catch-all` with `sni_strict` — and is swapped atomically by the proxy's config
+//! the [`ServerCryptoMap`] keeps huginn's resolution model (`exact → wildcard →
+//! catch-all` with `sni_strict`) and is swapped atomically by the proxy's config
 //! hot-reload path.
 //!
 //! | File | Responsibility |
