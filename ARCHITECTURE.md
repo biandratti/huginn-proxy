@@ -11,6 +11,8 @@ before the binary calls `run()`.
 
 **`huginn-ebpf-common`** - Shared `no_std` crate for TCP SYN fingerprinting. Defines `SynRawDataV4` / `SynRawDataV6` layout, `quirk_bits` constants, and `make_key(src_ip, src_port)` encoding. Used by both `huginn-ebpf-programs` (kernel) and `huginn-ebpf` (userspace) so map layout and key encoding stay in sync. Optional feature `aya` enables `aya::Pod` for those types in userspace only.
 
+**`huginn-ebpf-rate-limit`** - Shared `no_std` crate implementing the per-source-IP SYN rate limiter: a dual-buffer sliding-window Count-Min Sketch (`Sketch`). Used only by `huginn-ebpf-programs` (kernel), which calls `Sketch::observe_over_limit()` on a BPF-map-backed `Sketch` before capturing a SYN, to skip capturing floods from a single source IP (the packet still passes; it is just not fingerprinted) without letting them saturate the `tcp_syn_map_v4`/`v6` LRU maps.
+
 **`huginn-ebpf`** - eBPF loader. Linux-only, gated behind the `ebpf-tcp` feature. Opens pinned BPF maps (or loads the capture program when embedded), reads `SynRawDataV4` / `SynRawDataV6` from the map, and exposes `parse_syn_v4()` / `parse_syn_v6()` to turn raw captured data into a `TcpObservation`. Depends on `huginn-ebpf-common` for types and `quirk_bits`.
 
 **`huginn-ebpf-programs`** - BPF kernel programs. Compiled with nightly for `bpfel-unknown-none`, embedded into `huginn-ebpf` at build time. Ships two hooks in one object that share maps, key encoding, and value layout: `huginn_xdp_syn` (XDP) and `huginn_tc_syn` (TC `clsact` ingress, GRO-safe). Depends on `huginn-ebpf-common` for types, `quirk_bits`, and `make_key`.

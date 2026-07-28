@@ -12,6 +12,7 @@ use crate::pin;
 use crate::CaptureBackend;
 use crate::EbpfError;
 use crate::EbpfLogLevel;
+use crate::SynRateLimit;
 
 mod attach;
 mod counters;
@@ -20,9 +21,11 @@ mod lookup;
 mod maps;
 
 pub use counters::{
-    is_stale, syn_captured_count_from_path, syn_captured_v6_count_from_path,
-    syn_insert_failures_count_from_path, syn_insert_failures_v6_count_from_path,
-    syn_malformed_count_from_path, syn_malformed_v6_count_from_path,
+    is_stale, syn_captured_v4_count_from_path, syn_captured_v6_count_from_path,
+    syn_insert_failures_v4_count_from_path, syn_insert_failures_v6_count_from_path,
+    syn_malformed_v4_count_from_path, syn_malformed_v6_count_from_path,
+    syn_rate_allowed_v4_count_from_path, syn_rate_allowed_v6_count_from_path,
+    syn_rate_skipped_v4_count_from_path, syn_rate_skipped_v6_count_from_path,
 };
 pub use keys::{make_bpf_key_v4, make_bpf_key_v6};
 
@@ -117,6 +120,8 @@ impl EbpfProbe {
     ///   When non-off, drain the records via [`take_debug_log_poller`](Self::take_debug_log_poller).
     /// - `pin_base`: bpffs directory where maps are pinned (e.g. `/sys/fs/bpf/huginn`). Reuses
     ///   existing pins on restart; drops them first when `syn_map_max_entries` changed.
+    /// - `rate_limit`: per-source-IP SYN rate limit. Use [`SynRateLimit::disabled`] to capture
+    ///   every SYN. Over-limit SYNs are skipped (not captured); the packet is never dropped.
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         interface: &str,
@@ -127,6 +132,7 @@ impl EbpfProbe {
         capture: CaptureBackend,
         log_level: EbpfLogLevel,
         pin_base: &str,
+        rate_limit: SynRateLimit,
     ) -> Result<Self, EbpfError> {
         // The BPF program compares ip->daddr and tcp->dest (both network-byte-order fields)
         // against these globals. On a little-endian CPU, network-order bytes [a,b,c,d] in the
@@ -149,6 +155,13 @@ impl EbpfProbe {
         // 0 = logging off (default); higher = more verbose (log::LevelFilter encoding).
         let bpf_log_level: u8 = log_level.as_u8();
 
+        // Rate-limit settings for the kernel program. Over-limit SYNs are skipped (not captured),
+        // never dropped. The sketch is a per-CPU map, so the threshold is enforced per CPU
+        // (see `SynRateLimit`).
+        let bpf_rate_enabled: u8 = u8::from(rate_limit.enabled);
+        let bpf_rate_threshold: u32 = rate_limit.threshold;
+        let bpf_rate_window_ns: u64 = rate_limit.window_ns;
+
         // Create the pin directory and drop any pins left over from an
         // incompatible capacity before the loader touches them.
         maps::prepare_pins(pin_base, syn_map_max_entries)?;
@@ -166,6 +179,9 @@ impl EbpfProbe {
             .override_global("dst_ip_v6", &bpf_dst_ip_v6, false)
             .override_global("dst_port", &bpf_dst_port, false)
             .override_global("log_level", &bpf_log_level, false)
+            .override_global("syn_rate_enabled", &bpf_rate_enabled, false)
+            .override_global("syn_rate_threshold", &bpf_rate_threshold, false)
+            .override_global("syn_rate_window_ns", &bpf_rate_window_ns, false)
             .map_max_entries(pin::SYN_MAP_V4_NAME, syn_map_max_entries)
             .map_max_entries(pin::SYN_MAP_V6_NAME, syn_map_max_entries);
         for (name, path) in &pin_paths {
@@ -201,6 +217,9 @@ impl EbpfProbe {
             filter_ip_v6,
             dst_port,
             mode = mode_str,
+            rate_limit_enabled = rate_limit.enabled,
+            rate_limit_threshold = rate_limit.threshold,
+            rate_limit_window_ns = rate_limit.window_ns,
             "eBPF TCP SYN fingerprinting attached"
         );
 

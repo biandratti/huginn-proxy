@@ -109,6 +109,21 @@ No `seccomp:unconfined` or `apparmor:unconfined` needed.
 | `HUGINN_EBPF_SYN_MAP_MAX_ENTRIES` | `8192` | LRU map capacity (default shown). Agent-only: the agent publishes this value into the family-agnostic `syn_meta` map, and the proxy reads it from there for its staleness threshold — so it must not be set on the proxy. |
 | `HUGINN_EBPF_CAPTURE` | `xdp-native` | Capture backend: `xdp-native` (driver XDP, default), `xdp-skb` (generic XDP, veth/loopback/VMs), or `tc` (clsact ingress; GRO-safe when native XDP is unavailable, e.g. VLAN/bond on generic XDP). Same BPF maps either way. |
 | `HUGINN_EBPF_LOG_LEVEL` | `off` | Verbosity of in-kernel `aya-log` datapath logging: `off` (default), `error`, `warn`, `info`, `debug`, `trace`. The kernel emits only records at/above the level (`debug` = per-capture, `warn` = map-insert failures), so the level gate runs in-kernel and `off` is zero-cost on the hot path. When non-`off` and `RUST_LOG` is unset, the agent defaults its filter to that level so records are shown. For diagnostics only. |
+| `HUGINN_EBPF_RATE_LIMIT_ENABLED` | `false` | Enable the in-kernel per-source-IP SYN rate limiter. When on, SYNs from an IP exceeding the threshold are skipped (not captured/fingerprinted); the packet still passes to the stack (never dropped). Uses a dual-buffer sliding-window Count-Min Sketch. |
+| `HUGINN_EBPF_RATE_LIMIT_BURST` | `2000` | Max SYNs per window per source IP before its SYNs stop being captured (skipped, not dropped). Required when enabled. Mirror the proxy's global `[security.rate_limit] burst` (default `2000`). |
+| `HUGINN_EBPF_RATE_LIMIT_WINDOW_SECONDS` | `1` | Sliding-window length in seconds. Mirror the proxy's global `[security.rate_limit] window_seconds`. |
+
+> **What the rate limiter protects.** Over-limit SYNs are *skipped* (not fingerprinted into the
+> `tcp_syn_map_v4/v6` capture LRU), never dropped - the packet always reaches the TCP stack. So
+> this shields the capture LRU from a single loud source IP; it is **not** a network-level DoS
+> defense. It also does nothing against a spoofed/distributed flood where each source sends only a
+> few SYNs (each stays under the threshold), so the capture LRU can still saturate under that
+> pattern. The threshold is enforced **per CPU** (the sketch is a per-CPU map), so an IP whose SYNs
+> spread across RX queues can send up to roughly `burst × num_cpus` per window before being skipped.
+>
+> The counting sketch (`syn_rate_sketch_v4/v6`) is **not pinned** — it is ephemeral per-CPU state
+> and resets to empty on every agent (re)load. The cumulative `syn_rate_skipped_*` /
+> `syn_rate_allowed_*` counters **are** pinned, so their totals survive agent restarts.
 
 #### Choosing a capture backend
 

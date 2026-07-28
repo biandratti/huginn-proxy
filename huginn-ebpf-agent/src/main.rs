@@ -82,6 +82,7 @@ async fn main() -> Result<()> {
         cfg.capture,
         cfg.log_level,
         &cfg.pin_path,
+        cfg.rate_limit,
     )?;
 
     if let Some(poller) = probe.take_debug_log_poller()? {
@@ -91,6 +92,7 @@ async fn main() -> Result<()> {
     let pin_path = Arc::new(cfg.pin_path.clone());
     let (registry, metrics) = huginn_ebpf_agent::telemetry::init_metrics(pin_path)?;
     metrics.set_ready();
+    metrics.set_rate_limit_enabled(cfg.rate_limit.enabled);
 
     let registry = Arc::new(registry);
     let pin_path_str = cfg.pin_path.clone();

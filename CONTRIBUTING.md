@@ -22,6 +22,7 @@ Requires Rust stable. Install from [rustup.rs](https://rustup.rs/).
 | `huginn-ebpf/` | reads pinned BPF maps |
 | `huginn-ebpf-agent/` | XDP agent binary |
 | `huginn-ebpf-common/` | shared types |
+| `huginn-ebpf-rate-limit/` | per-source-IP SYN rate limiter (shared, no_std) |
 | `huginn-ebpf-programs/` | BPF kernel programs (XDP + TC, nightly, outside workspace) |
 | `examples/` | Docker Compose stacks and configs |
 | `src/` | documentation site (Astro Starlight) |

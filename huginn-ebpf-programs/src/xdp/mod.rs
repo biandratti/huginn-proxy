@@ -10,25 +10,31 @@ use huginn_ebpf_common::constants::*;
 use huginn_ebpf_common::headers::{EthHdr, Ip4Hdr, Ip6Hdr, TcpHdr, VlanHdr};
 use packet::ptr_at;
 
-use crate::signals::tcp_syn;
+use crate::signals::{rate_limit, tcp_syn};
 
 #[allow(unsafe_code)]
-pub fn try_xdp_syn(ctx: &XdpContext) -> Result<(), ()> {
+pub fn try_xdp_syn(ctx: &XdpContext) {
     let mut offset = 0usize;
 
     // SAFETY: ptr_at checked bounds; we only deref when Some.
-    let eth = unsafe { ptr_at::<EthHdr>(ctx, offset).ok_or(())? };
+    let Some(eth) = (unsafe { ptr_at::<EthHdr>(ctx, offset) }) else {
+        return;
+    };
     offset = offset.saturating_add(mem::size_of::<EthHdr>());
 
     let mut eth_type = unsafe { (*eth).h_proto };
 
     if eth_type == ETH_P_8021Q || eth_type == ETH_P_8021AD {
-        let vlan = unsafe { ptr_at::<VlanHdr>(ctx, offset).ok_or(())? };
+        let Some(vlan) = (unsafe { ptr_at::<VlanHdr>(ctx, offset) }) else {
+            return;
+        };
         offset = offset.saturating_add(mem::size_of::<VlanHdr>());
         eth_type = unsafe { (*vlan).encapsulated_proto };
     }
     if eth_type == ETH_P_8021Q || eth_type == ETH_P_8021AD {
-        let vlan = unsafe { ptr_at::<VlanHdr>(ctx, offset).ok_or(())? };
+        let Some(vlan) = (unsafe { ptr_at::<VlanHdr>(ctx, offset) }) else {
+            return;
+        };
         offset = offset.saturating_add(mem::size_of::<VlanHdr>());
         eth_type = unsafe { (*vlan).encapsulated_proto };
     }
@@ -37,55 +43,63 @@ pub fn try_xdp_syn(ctx: &XdpContext) -> Result<(), ()> {
         return handle_ipv4(ctx, offset);
     }
     if eth_type == ETH_P_IPV6 {
-        return handle_ipv6(ctx, offset);
+        handle_ipv6(ctx, offset);
     }
 
-    Ok(())
 }
 
 #[allow(unsafe_code)]
-fn handle_ipv4(ctx: &XdpContext, mut offset: usize) -> Result<(), ()> {
+fn handle_ipv4(ctx: &XdpContext, mut offset: usize) {
     // SAFETY: ptr_at checked bounds.
-    let ip = unsafe { ptr_at::<Ip4Hdr>(ctx, offset).ok_or(())? };
+    let Some(ip) = (unsafe { ptr_at::<Ip4Hdr>(ctx, offset) }) else {
+        return;
+    };
 
     let ip_hdr_len = unsafe { usize::from((*ip).ihl()).saturating_mul(4) };
     if ip_hdr_len < mem::size_of::<Ip4Hdr>() {
-        return Ok(());
+        return;
     }
     offset = offset.saturating_add(mem::size_of::<Ip4Hdr>());
 
     let frag_off = unsafe { (*ip).frag_off };
     if frag_off & (IP_MF | IP_OFFSET) != 0 {
-        return Ok(());
+        return;
     }
 
     if unsafe { (*ip).protocol } != IPPROTO_TCP {
-        return Ok(());
+        return;
     }
 
     let dst_ip_v4_val = tcp_syn::dst_ip_v4();
     if dst_ip_v4_val != 0 && unsafe { (*ip).daddr } != dst_ip_v4_val {
-        return Ok(());
+        return;
     }
 
     offset = offset.saturating_add(ip_hdr_len.saturating_sub(mem::size_of::<Ip4Hdr>()));
 
     // SAFETY: ptr_at checked bounds.
-    let tcp = unsafe { ptr_at::<TcpHdr>(ctx, offset).ok_or(())? };
+    let Some(tcp) = (unsafe { ptr_at::<TcpHdr>(ctx, offset) }) else {
+        return;
+    };
 
     let tcp_hdr_len = unsafe { usize::from((*tcp).doff()).saturating_mul(4) };
     if tcp_hdr_len < mem::size_of::<TcpHdr>() {
         tcp_syn::increment_syn_malformed_v4();
-        return Ok(());
+        return;
     }
 
     let dst_port_val = tcp_syn::dst_port();
     if dst_port_val != 0 && unsafe { (*tcp).dest } != dst_port_val {
-        return Ok(());
+        return;
     }
 
     if unsafe { !(*tcp).syn() || (*tcp).ack() } {
-        return Ok(());
+        return;
+    }
+
+    // Per-source-IP SYN rate limit: over limit -> skip capture, but still pass the packet.
+    if rate_limit::should_skip_v4(unsafe { (*ip).saddr }) {
+        return;
     }
 
     // SAFETY: ip and tcp validated by ptr_at; valid for the duration of this call.
@@ -105,18 +119,19 @@ fn handle_ipv4(ctx: &XdpContext, mut offset: usize) -> Result<(), ()> {
         }
         _ => {}
     }
-    result.map_err(|_| ())
 }
 
 // Only fixed-header nexthdr == TCP is fingerprinted; extension headers before TCP can bypass capture.
 #[allow(unsafe_code)]
-fn handle_ipv6(ctx: &XdpContext, mut offset: usize) -> Result<(), ()> {
+fn handle_ipv6(ctx: &XdpContext, mut offset: usize) {
     // SAFETY: ptr_at checked bounds.
-    let ip6 = unsafe { ptr_at::<Ip6Hdr>(ctx, offset).ok_or(())? };
+    let Some(ip6) = (unsafe { ptr_at::<Ip6Hdr>(ctx, offset) }) else {
+        return;
+    };
     offset = offset.saturating_add(mem::size_of::<Ip6Hdr>());
 
     if unsafe { (*ip6).nexthdr } != IPPROTO_TCP {
-        return Ok(());
+        return;
     }
 
     let dst_ip_v6_val = tcp_syn::dst_ip_v6();
@@ -124,26 +139,33 @@ fn handle_ipv6(ctx: &XdpContext, mut offset: usize) -> Result<(), ()> {
     if !is_zero {
         let daddr = unsafe { (*ip6).daddr };
         if daddr != dst_ip_v6_val {
-            return Ok(());
+            return;
         }
     }
 
     // SAFETY: ptr_at checked bounds.
-    let tcp = unsafe { ptr_at::<TcpHdr>(ctx, offset).ok_or(())? };
+    let Some(tcp) = (unsafe { ptr_at::<TcpHdr>(ctx, offset) }) else {
+        return;
+    };
 
     let tcp_hdr_len = unsafe { usize::from((*tcp).doff()).saturating_mul(4) };
     if tcp_hdr_len < mem::size_of::<TcpHdr>() {
         tcp_syn::increment_syn_malformed_v6();
-        return Ok(());
+        return;
     }
 
     let dst_port_val = tcp_syn::dst_port();
     if dst_port_val != 0 && unsafe { (*tcp).dest } != dst_port_val {
-        return Ok(());
+        return;
     }
 
     if unsafe { !(*tcp).syn() || (*tcp).ack() } {
-        return Ok(());
+        return;
+    }
+
+    // Per-source-IP SYN rate limit: over limit -> skip capture, but still pass the packet.
+    if rate_limit::should_skip_v6(unsafe { (*ip6).saddr }) {
+        return;
     }
 
     // SAFETY: ip6 and tcp validated by ptr_at; valid for the duration of this call.
@@ -163,5 +185,4 @@ fn handle_ipv6(ctx: &XdpContext, mut offset: usize) -> Result<(), ()> {
         }
         _ => {}
     }
-    result.map_err(|_| ())
 }

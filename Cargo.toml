@@ -3,6 +3,7 @@ members = [
     "huginn-ebpf",
     "huginn-ebpf-agent",
     "huginn-ebpf-common",
+    "huginn-ebpf-rate-limit",
     "huginn-proxy",
     "huginn-proxy-lib",
     "tests-browsers",

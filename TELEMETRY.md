@@ -27,7 +27,8 @@ Prometheus metrics:
 
 - **Endpoints** - `/health`, `/ready`, `/live`, `/metrics` (same JSON format as proxy; `/ready` returns 503 when BPF map
   pins are missing)
-- **Metrics** - `tcp_syn_captured_total`, `tcp_syn_insert_failures_total`, `tcp_syn_malformed_total`, `agent_up`,
+- **Metrics** - `tcp_syn_captured_total`, `tcp_syn_insert_failures_total`, `tcp_syn_malformed_total`,
+  `tcp_syn_rate_skipped_total`, `tcp_syn_rate_allowed_total`, `tcp_syn_rate_limit_enabled`, `agent_up`,
   `huginn_ebpf_agent_build_info`
 
 ---
@@ -740,12 +741,18 @@ same health endpoints as the proxy.
 | `tcp_syn_captured_total`        | Observable counter | Number of TCP SYN signatures successfully captured                     | `family`                  |
 | `tcp_syn_insert_failures_total` | Observable counter | Number of TCP SYN map insert failures (e.g. LRU full)                  | `family`                  |
 | `tcp_syn_malformed_total`       | Observable counter | Number of malformed TCP packets (e.g. doff too short) that matched dst | `family`                  |
+| `tcp_syn_rate_skipped_total`    | Observable counter | Number of SYNs skipped (not captured/fingerprinted) by the per-source-IP eBPF rate limiter when over the limit; the packet still passes to the stack. 0 while the limiter is disabled | `family` |
+| `tcp_syn_rate_allowed_total`    | Observable counter | Number of SYNs let through and captured by the rate limiter (under the per-source-IP limit); 0 while the limiter is disabled | `family` |
+| `tcp_syn_rate_limit_enabled`    | Gauge              | 1 if the in-kernel per-source-IP SYN rate limiter is enabled (`HUGINN_EBPF_RATE_LIMIT_ENABLED`), 0 otherwise | -    |
 | `agent_up`                      | Gauge              | 1 if the agent has pinned maps and is running                          | -                         |
 | `huginn_ebpf_agent_build_info`  | Gauge              | Build information (always 1)                                           | `version`, `rust_version` |
 
-- `family` (on the three `tcp_syn_*_total` counters): `ipv4` or `ipv6`, the IP version of the
-  captured/failed/malformed SYN. Sum across both for a protocol-agnostic total
+- `family` (on the six `tcp_syn_*_total` counters): `ipv4` or `ipv6`, the IP version of the
+  captured/failed/malformed/skipped/allowed SYN. Sum across both for a protocol-agnostic total
   (e.g. `sum(rate(tcp_syn_captured_total[$__rate_interval]))`).
+- `tcp_syn_rate_skipped_total` and `tcp_syn_rate_allowed_total` are mutually exclusive per SYN
+  evaluated by the limiter — every SYN it sees increments exactly one of the two. "Skipped" means
+  not captured (still forwarded); the limiter never drops the packet.
 
 ## Grafana Dashboard Suggestions
 
@@ -815,6 +822,9 @@ TLS certificate row (each panel aligned column-wise under its config counterpart
 - TCP SYN signatures captured: `tcp_syn_captured_total`
 - TCP SYN insert failures: `tcp_syn_insert_failures_total`
 - TCP SYN malformed: `tcp_syn_malformed_total`
+- Rate limiter enabled: `tcp_syn_rate_limit_enabled`
+- TCP SYN skipped (not captured) by rate limiter: `tcp_syn_rate_skipped_total`
+- TCP SYN allowed (captured) by rate limiter: `tcp_syn_rate_allowed_total`
 - Agent version: `huginn_ebpf_agent_build_info`
 
 ---

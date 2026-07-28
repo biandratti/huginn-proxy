@@ -17,6 +17,16 @@ follows [Semantic Versioning](https://semver.org/).
   a self-defeating `rate_limit` (`window_seconds = 0`, or `limit_by = "header"` with no
   `limit_by_header`), and `proxy_protocol` with no trusted peer. `--validate` prints a warning count;
   `--strict` exits non-zero on any warning. See `SETTINGS.md`.
+- **In-kernel per-source-IP SYN rate limiter (eBPF).** New agent env vars
+  `HUGINN_EBPF_RATE_LIMIT_ENABLED` (default `false`), `HUGINN_EBPF_RATE_LIMIT_BURST`, and
+  `HUGINN_EBPF_RATE_LIMIT_WINDOW_SECONDS`. When enabled, the XDP/TC datapath counts each source
+  IP's SYNs with a sliding-window Count-Min Sketch and, for those over the threshold, skips
+  capture (does not fingerprint them; the packet still passes through), protecting the
+  `tcp_syn_map` LRU from floods.
+  Constant memory regardless of the number of (even spoofed) source IPs. The sketch is per-CPU,
+  so the threshold is enforced per CPU — size `BURST` accordingly. Exported as
+  `tcp_syn_rate_skipped_total` / `tcp_syn_rate_allowed_total` (by `family`) and
+  `tcp_syn_rate_limit_enabled`. See `EBPF-SETUP.md` and `TELEMETRY.md`.
 
 ### Breaking changes
 

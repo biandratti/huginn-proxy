@@ -1,8 +1,15 @@
 use huginn_ebpf::pin;
 use std::net::{Ipv4Addr, Ipv6Addr};
 
+mod capture;
+mod log_level;
+mod rate_limit;
+pub use capture::resolve_capture_backend;
+use log_level::resolve_log_level;
+use rate_limit::resolve_rate_limit;
+
 pub const DEFAULT_PIN_PATH: &str = pin::DEFAULT_PIN_BASE;
-pub use huginn_ebpf::{CaptureBackend, EbpfLogLevel, XdpAttachMode};
+pub use huginn_ebpf::{CaptureBackend, EbpfLogLevel, SynRateLimit, XdpAttachMode};
 
 #[derive(Debug, Clone)]
 pub struct Config {
@@ -16,6 +23,7 @@ pub struct Config {
     pub metrics_listen_addr: String,
     pub metrics_port: u16,
     pub log_level: EbpfLogLevel,
+    pub rate_limit: SynRateLimit,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -88,6 +96,8 @@ pub fn from_env(get_var: impl Fn(&str) -> Option<String>) -> Result<Config, Conf
 
     let log_level = resolve_log_level(&get_var)?;
 
+    let rate_limit = resolve_rate_limit(&get_var)?;
+
     Ok(Config {
         interface,
         dst_ip_v4,
@@ -99,42 +109,6 @@ pub fn from_env(get_var: impl Fn(&str) -> Option<String>) -> Result<Config, Conf
         metrics_listen_addr,
         metrics_port,
         log_level,
+        rate_limit,
     })
-}
-
-fn resolve_log_level(
-    get_var: &impl Fn(&str) -> Option<String>,
-) -> Result<EbpfLogLevel, ConfigError> {
-    let Some(raw) = get_var("HUGINN_EBPF_LOG_LEVEL") else {
-        return Ok(EbpfLogLevel::Off);
-    };
-    EbpfLogLevel::parse(&raw).ok_or_else(|| ConfigError::Invalid {
-        name: "HUGINN_EBPF_LOG_LEVEL".to_string(),
-        value: raw,
-        reason: "must be one of: off, error, warn, info, debug, trace (case-insensitive)"
-            .to_string(),
-    })
-}
-
-/// Resolve `HUGINN_EBPF_CAPTURE` (`xdp-native` | `xdp-skb` | `tc`). Default: `xdp-native`.
-///
-/// On VLAN/bond edges prefer `tc`: generic XDP drops GRO-merged packets; TC never drops.
-pub fn resolve_capture_backend(
-    get_var: &impl Fn(&str) -> Option<String>,
-) -> Result<CaptureBackend, ConfigError> {
-    let Some(raw) = get_var("HUGINN_EBPF_CAPTURE") else {
-        return Ok(CaptureBackend::Xdp(XdpAttachMode::Native));
-    };
-
-    let v = raw.trim().to_ascii_lowercase();
-    match v.as_str() {
-        "xdp-native" => Ok(CaptureBackend::Xdp(XdpAttachMode::Native)),
-        "xdp-skb" => Ok(CaptureBackend::Xdp(XdpAttachMode::Skb)),
-        "tc" => Ok(CaptureBackend::Tc),
-        _ => Err(ConfigError::Invalid {
-            name: "HUGINN_EBPF_CAPTURE".to_string(),
-            value: raw,
-            reason: "must be 'xdp-native', 'xdp-skb', or 'tc' (case-insensitive)".to_string(),
-        }),
-    }
 }

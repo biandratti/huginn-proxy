@@ -1,0 +1,13 @@
+# Shared no_std rate-limiting algorithm for eBPF SYN capture.
+# Used by huginn-ebpf-programs (BPF kernel programs).
+# Must compile for bpfel-unknown-none and for host (tests).
+
+[package]
+name = "huginn-ebpf-rate-limit"
+version = "0.0.3-beta.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+publish = false
+
+[lib]
+path = "src/lib.rs"

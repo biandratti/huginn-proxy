@@ -17,3 +17,4 @@ tracing.workspace = true
 
 [dev-dependencies]
 huginn-ebpf-common = { workspace = true }
+libc = "0.2.186"

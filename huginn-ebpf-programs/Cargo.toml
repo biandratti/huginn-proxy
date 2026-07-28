@@ -14,6 +14,7 @@ publish = false
 aya-ebpf = "0.2.1"
 aya-log-ebpf = "0.2.0"
 huginn-ebpf-common = { path = "../huginn-ebpf-common" }
+huginn-ebpf-rate-limit = { path = "../huginn-ebpf-rate-limit" }
 
 [[bin]]
 name = "huginn-ebpf-programs"

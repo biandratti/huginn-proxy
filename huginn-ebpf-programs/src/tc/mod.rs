@@ -4,25 +4,31 @@ use aya_ebpf::programs::TcContext;
 use aya_log_ebpf::{debug, warn};
 use core::mem;
 
-use crate::signals::tcp_syn;
+use crate::signals::{rate_limit, tcp_syn};
 use huginn_ebpf_common::constants::*;
 use huginn_ebpf_common::headers::{EthHdr, Ip4Hdr, Ip6Hdr, TcpHdr, VlanHdr};
 
-pub fn try_tc_syn(ctx: &TcContext) -> Result<(), ()> {
+pub fn try_tc_syn(ctx: &TcContext) {
     let mut offset = 0usize;
 
-    let eth: EthHdr = ctx.load(offset).map_err(|_| ())?;
+    let Ok(eth) = ctx.load::<EthHdr>(offset) else {
+        return;
+    };
     offset = offset.saturating_add(mem::size_of::<EthHdr>());
 
     let mut eth_type = eth.h_proto;
 
     if eth_type == ETH_P_8021Q || eth_type == ETH_P_8021AD {
-        let vlan: VlanHdr = ctx.load(offset).map_err(|_| ())?;
+        let Ok(vlan) = ctx.load::<VlanHdr>(offset) else {
+            return;
+        };
         offset = offset.saturating_add(mem::size_of::<VlanHdr>());
         eth_type = vlan.encapsulated_proto;
     }
     if eth_type == ETH_P_8021Q || eth_type == ETH_P_8021AD {
-        let vlan: VlanHdr = ctx.load(offset).map_err(|_| ())?;
+        let Ok(vlan) = ctx.load::<VlanHdr>(offset) else {
+            return;
+        };
         offset = offset.saturating_add(mem::size_of::<VlanHdr>());
         eth_type = vlan.encapsulated_proto;
     }
@@ -31,50 +37,58 @@ pub fn try_tc_syn(ctx: &TcContext) -> Result<(), ()> {
         return handle_ipv4(ctx, offset);
     }
     if eth_type == ETH_P_IPV6 {
-        return handle_ipv6(ctx, offset);
+        handle_ipv6(ctx, offset);
     }
 
-    Ok(())
 }
 
-fn handle_ipv4(ctx: &TcContext, offset: usize) -> Result<(), ()> {
-    let ip: Ip4Hdr = ctx.load(offset).map_err(|_| ())?;
+fn handle_ipv4(ctx: &TcContext, offset: usize) {
+    let Ok(ip) = ctx.load::<Ip4Hdr>(offset) else {
+        return;
+    };
 
     let ip_hdr_len = usize::from(ip.ihl()).saturating_mul(4);
     if ip_hdr_len < mem::size_of::<Ip4Hdr>() {
-        return Ok(());
+        return;
     }
 
     let frag_off = ip.frag_off;
     if frag_off & (IP_MF | IP_OFFSET) != 0 {
-        return Ok(());
+        return;
     }
 
     if ip.protocol != IPPROTO_TCP {
-        return Ok(());
+        return;
     }
 
     let dst_ip_v4_val = tcp_syn::dst_ip_v4();
     if dst_ip_v4_val != 0 && ip.daddr != dst_ip_v4_val {
-        return Ok(());
+        return;
     }
 
     let tcp_offset = offset.saturating_add(ip_hdr_len);
-    let tcp: TcpHdr = ctx.load(tcp_offset).map_err(|_| ())?;
+    let Ok(tcp) = ctx.load::<TcpHdr>(tcp_offset) else {
+        return;
+    };
 
     let tcp_hdr_len = usize::from(tcp.doff()).saturating_mul(4);
     if tcp_hdr_len < mem::size_of::<TcpHdr>() {
         tcp_syn::increment_syn_malformed_v4();
-        return Ok(());
+        return;
     }
 
     let dst_port_val = tcp_syn::dst_port();
     if dst_port_val != 0 && tcp.dest != dst_port_val {
-        return Ok(());
+        return;
     }
 
     if !tcp.syn() || tcp.ack() {
-        return Ok(());
+        return;
+    }
+
+    // Per-source-IP SYN rate limit: over limit -> skip capture, but still pass the packet.
+    if rate_limit::should_skip_v4(ip.saddr) {
+        return;
     }
 
     let opts_offset = tcp_offset.saturating_add(mem::size_of::<TcpHdr>());
@@ -93,39 +107,47 @@ fn handle_ipv4(ctx: &TcContext, offset: usize) -> Result<(), ()> {
         }
         _ => {}
     }
-    result.map_err(|_| ())
 }
 
 // Only fixed-header nexthdr == TCP is fingerprinted; extension headers before TCP are skipped.
-fn handle_ipv6(ctx: &TcContext, offset: usize) -> Result<(), ()> {
-    let ip6: Ip6Hdr = ctx.load(offset).map_err(|_| ())?;
+fn handle_ipv6(ctx: &TcContext, offset: usize) {
+    let Ok(ip6) = ctx.load::<Ip6Hdr>(offset) else {
+        return;
+    };
 
     if ip6.nexthdr != IPPROTO_TCP {
-        return Ok(());
+        return;
     }
 
     let dst_ip_v6_val = tcp_syn::dst_ip_v6();
     let is_zero = dst_ip_v6_val.iter().all(|&b| b == 0);
     if !is_zero && ip6.daddr != dst_ip_v6_val {
-        return Ok(());
+        return;
     }
 
     let tcp_offset = offset.saturating_add(mem::size_of::<Ip6Hdr>());
-    let tcp: TcpHdr = ctx.load(tcp_offset).map_err(|_| ())?;
+    let Ok(tcp) = ctx.load::<TcpHdr>(tcp_offset) else {
+        return;
+    };
 
     let tcp_hdr_len = usize::from(tcp.doff()).saturating_mul(4);
     if tcp_hdr_len < mem::size_of::<TcpHdr>() {
         tcp_syn::increment_syn_malformed_v6();
-        return Ok(());
+        return;
     }
 
     let dst_port_val = tcp_syn::dst_port();
     if dst_port_val != 0 && tcp.dest != dst_port_val {
-        return Ok(());
+        return;
     }
 
     if !tcp.syn() || tcp.ack() {
-        return Ok(());
+        return;
+    }
+
+    // Per-source-IP SYN rate limit: over limit -> skip capture, but still pass the packet.
+    if rate_limit::should_skip_v6(ip6.saddr) {
+        return;
     }
 
     let opts_offset = tcp_offset.saturating_add(mem::size_of::<TcpHdr>());
@@ -144,7 +166,6 @@ fn handle_ipv6(ctx: &TcContext, offset: usize) -> Result<(), ()> {
         }
         _ => {}
     }
-    result.map_err(|_| ())
 }
 
 // load::<u8> per byte: bpf_skb_load_bytes rejects zero-length reads; the verifier accepts constant 1-byte loads.
