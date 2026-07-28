@@ -48,6 +48,25 @@ follows [Semantic Versioning](https://semver.org/).
   debounce_secs = 60
   ```
 
+- **`[tls.client_auth]` removed; mTLS is now per-domain via `[[domains]].client_ca_path`.** Client
+  authentication used to be listener-wide: one CA, applied to every domain served by the proxy. It is
+  now a property of each domain, so you can require client certificates on an admin host while the
+  rest stay public. A config that still declares `[tls.client_auth]` is **rejected at load**
+  (`unknown field 'client_auth'`). Move the CA path to each domain that needs it.
+
+  ```toml
+  # before: every domain required a client cert
+  [tls.client_auth]
+  required = { ca_cert_path = "/config/certs/ca.crt" }
+
+  # after: only this domain does
+  [[domains]]
+  host = "admin.example.com"
+  cert_path = "/config/certs/admin.crt"
+  key_path = "/config/certs/admin.key"
+  client_ca_path = "/config/certs/ca.crt"
+  ```
+
 - **`[tls.session_resumption].max_sessions` removed.** Resumption is stateless (session tickets only),
   so there is no server-side session cache to size. The key had already become a no-op; it is now
   gone, and a config that still declares it is **rejected at load** (`deny_unknown_fields`). Delete the
@@ -65,6 +84,10 @@ follows [Semantic Versioning](https://semver.org/).
 - **TLS session resumption is now stateless tickets only.** A process-wide shared ticketer (kept
   across cert hot-reloads) replaces the former server-side TLS 1.2 session-ID cache. This also turns
   on TLS 1.3 resumption, which was previously off. mTLS domains never resume.
+- **`huginn_config_hash` and `huginn_tls_cert_hash` now use a fixed FNV-1a**, replacing `std`'s
+  `DefaultHasher`, whose algorithm can change between Rust releases and move a hash that should only
+  change with the content. The values are now comparable across replicas and upgrades, but **change
+  once** with this release; `changes()` queries are unaffected.
 
 ### Fixed
 

@@ -10,7 +10,6 @@ use crate::telemetry::Metrics;
 use crate::tls::setup::SharedServerCrypto;
 use arc_swap::ArcSwap;
 use std::collections::{BTreeMap, HashSet};
-use std::hash::{Hash, Hasher};
 use std::path::Path;
 use std::sync::Arc;
 use tokio::runtime::Handle;
@@ -91,8 +90,8 @@ pub async fn try_reload(
         &new_dynamic.security.trusted_proxies,
     );
 
-    let hash = fnv1a_hash(&new_dynamic);
-    let old_hash = fnv1a_hash(&old_dynamic);
+    let hash = config_hash(&new_dynamic);
+    let old_hash = config_hash(&old_dynamic);
 
     let cert_report = match (server_crypto, static_cfg.tls.as_ref()) {
         (Some(shared), Some(tls)) => {
@@ -297,13 +296,10 @@ fn drain_removed_backends(
     client_pool.store(Arc::new(new_pool));
 }
 
-/// Fast hash of a `DynamicConfig` for the `huginn_config_hash` Prometheus gauge: only needs to be
-/// stable within a process run and change whenever the config changes.
-fn fnv1a_hash(dynamic: &DynamicConfig) -> u64 {
-    use std::collections::hash_map::DefaultHasher;
-    let mut hasher = DefaultHasher::new();
-    format!("{:?}", dynamic).hash(&mut hasher);
-    hasher.finish()
+/// Hash of a `DynamicConfig` for the `huginn_config_hash` Prometheus gauge: changes whenever the
+/// config changes, and is the same value on every replica running that config.
+fn config_hash(dynamic: &DynamicConfig) -> u64 {
+    huginn_certs::fnv1a_hash(format!("{:?}", dynamic).as_bytes())
 }
 
 pub fn initial_rate_limiter(dynamic: &DynamicConfig) -> SharedRateLimiter {

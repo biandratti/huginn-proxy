@@ -32,7 +32,7 @@ pub mod error;
 pub mod kx_groups;
 pub mod server_crypto;
 
-pub use certs::{cert_chain_hash, ServerCertsKeys};
+pub use certs::{cert_chain_hash, fnv1a_hash, ServerCertsKeys};
 pub use cipher_suites::{CipherSuiteName, UnknownCipherSuite};
 pub use crypto_source::{read_certs_and_keys, CertEntry, CryptoFileSource, CryptoSource};
 pub use error::CertError;

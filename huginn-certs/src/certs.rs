@@ -5,7 +5,6 @@
 //! [`build_server_crypto`](crate::server_crypto::build_server_crypto) which turns it into a
 //! per-SNI rustls `ServerConfig`.
 
-use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 
 use rustls_pki_types::{CertificateDer, PrivateKeyDer};
@@ -50,14 +49,36 @@ impl Clone for ServerCertsKeys {
     }
 }
 
-/// FNV-1a-style hash of the entire certificate chain (DER bytes, in order).
-pub fn cert_chain_hash(certs: &[CertificateDer<'static>]) -> u64 {
-    use std::collections::hash_map::DefaultHasher;
-    let mut hasher = DefaultHasher::new();
-    for cert in certs {
-        cert.as_ref().hash(&mut hasher);
+/// The two FNV-1a 64-bit parameters, fixed by the spec.
+const FNV_OFFSET_BASIS: u64 = 0xcbf2_9ce4_8422_2325;
+const FNV_PRIME: u64 = 0x0000_0100_0000_01b3;
+
+/// FNV-1a (64-bit) over `bytes`.
+///
+/// These hashes are exported as metrics, so the algorithm has to be a frozen spec:
+/// `std`'s `DefaultHasher` is not, and a toolchain upgrade could move a value that
+/// is supposed to change only when the content does. Not collision-resistant.
+pub fn fnv1a_hash(bytes: &[u8]) -> u64 {
+    fnv1a_fold(FNV_OFFSET_BASIS, bytes)
+}
+
+/// Fold `bytes` into an in-progress hash, so one value can span several slices.
+fn fnv1a_fold(mut hash: u64, bytes: &[u8]) -> u64 {
+    for byte in bytes {
+        hash ^= u64::from(*byte);
+        hash = hash.wrapping_mul(FNV_PRIME);
     }
-    hasher.finish()
+    hash
+}
+
+/// FNV-1a hash of the whole certificate chain (DER bytes, in order).
+///
+/// One running hash over the concatenation: DER is self-delimiting, so no separator
+/// between certs is needed.
+pub fn cert_chain_hash(certs: &[CertificateDer<'static>]) -> u64 {
+    certs
+        .iter()
+        .fold(FNV_OFFSET_BASIS, |hash, cert| fnv1a_fold(hash, cert.as_ref()))
 }
 
 /// Build a rustls [`CertifiedKey`] from parsed material, returning it with the

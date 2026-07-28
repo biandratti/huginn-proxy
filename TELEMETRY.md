@@ -679,6 +679,8 @@ sum by (protocol) (rate(huginn_mtls_connections_total[5m]))
   `success`; the bad cert surfaces as `huginn_tls_cert_reload_total{result="error", domain="..."}` (see §13).
 - `huginn_config_hash` changes whenever the deserialized `DynamicConfig` changes. It is unaffected by TOML formatting
   changes (whitespace, comments, field ordering within a table) since it hashes the parsed struct, not the raw file.
+- The hash is FNV-1a, a fixed algorithm, so the same config yields the same value on every replica and across proxy
+  upgrades: `count(count by (huginn_config_hash)(huginn_config_hash)) > 1` catches replicas running a stale config.
 
 ---
 
@@ -708,6 +710,8 @@ sum by (protocol) (rate(huginn_mtls_connections_total[5m]))
 - `huginn_tls_cert_hash` hashes the certificate chain DER bytes. Private key material is intentionally excluded.
   The value is a `u64`; over the Prometheus exposition format (float64) hashes above 2^53 lose low-bit precision,
   so use `changes()` for rotation detection rather than comparing the literal value.
+- FNV-1a is a fixed algorithm, so the same chain yields the same value on every replica and across proxy upgrades:
+  a hash that differs between replicas means they really are serving different certificates.
 - Success metrics are emitted only **after** the new cert map goes live (atomic swap). A failing domain bumps
   `result="error"` and emits no success for that reload, so the hash/timestamp gauges always reflect the
   certificate actually serving traffic.
