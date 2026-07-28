@@ -149,7 +149,7 @@ pub async fn handle_proxy_request(
     // fires on TLS connections that presented an SNI; runs after the IP filter so a blocked
     // client never learns whether a host exists.
     if let Some(sni) = connection_sni {
-        if !crate::proxy::router::authority_matches_sni(&domains, sni, &host) {
+        if !crate::proxy::handler::authority_matches_sni(&domains, sni, &host) {
             debug!(
                 ?peer,
                 sni,
