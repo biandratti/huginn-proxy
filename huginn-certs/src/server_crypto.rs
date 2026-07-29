@@ -398,6 +398,10 @@ async fn build_entry_config(
     let mut config = if material.is_mutual_tls() {
         let roots =
             build_client_root_store(material.client_ca_certs.as_deref().unwrap_or(&[]), label)?;
+        // No CRLs are handed to the builder, so the chain, the validity dates and the name
+        // constraints are checked but revocation is not: a revoked client certificate is
+        // accepted until it expires. Revoking means dropping the issuing CA from the bundle
+        // and reloading, which bites on the next connection because mTLS never resumes.
         let verifier =
             WebPkiClientVerifier::builder_with_provider(Arc::new(roots), Arc::clone(provider))
                 .build()

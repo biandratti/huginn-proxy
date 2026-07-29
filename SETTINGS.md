@@ -856,6 +856,13 @@ that entry's own config. Rejections are counted as
 > last-good config with client auth already loaded keeps it, verifier included. Either way the
 > domain is reported by `tls_cert_reload_total{result="error"}` and an `error`-level log.
 
+> **Client certificates are not checked for revocation.** There is no CRL or OCSP support: a
+> client certificate is accepted while its chain verifies and it has not expired, even if its
+> CA revoked it. Keep client certificates short-lived. To cut access off now, remove the issuing
+> CA from the domain's `client_ca_path` bundle and reload — it takes effect on the next
+> connection, since mTLS domains never resume a session, though it revokes every client under
+> that CA.
+
 ### `[tls.session_resumption]`
 
 Resumption uses **stateless TLS session tickets only** — there is no server-side

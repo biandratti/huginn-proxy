@@ -24,8 +24,8 @@ use crate::error::CertError;
 pub struct ServerCertsKeys {
     pub certs: Vec<CertificateDer<'static>>,
     /// Every private key the source yielded, in the order it produced them.
-    /// Which one goes with `certs` is decided in [`build_certified_key`], since
-    /// only a comparison against the chain can tell them apart.
+    /// Which one goes with `certs` is decided when the config is built, since only
+    /// a comparison against the chain can tell them apart.
     pub keys: Vec<PrivateKeyDer<'static>>,
     /// Client-CA trust anchors for mutual TLS. `None` (or empty) = this domain
     /// does not require client certificates.
