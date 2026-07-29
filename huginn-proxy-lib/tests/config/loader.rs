@@ -88,6 +88,8 @@ fn loads_domain_client_ca_path() -> Result<(), Box<dyn std::error::Error + Send 
 listen = {{ addrs = ["127.0.0.1:0"] }}
 backends = [{{ address = "backend:9000" }}]
 
+[tls]
+
 [[domains]]
 host = "secure.example.com"
 cert_path = "{}"
@@ -126,6 +128,8 @@ fn rejects_client_ca_without_cert() -> Result<(), Box<dyn std::error::Error + Se
 listen = {{ addrs = ["127.0.0.1:0"] }}
 backends = [{{ address = "backend:9000" }}]
 
+[tls]
+
 [[domains]]
 host = "secure.example.com"
 client_ca_path = "{}"
@@ -157,6 +161,8 @@ fn rejects_missing_client_ca_file() -> Result<(), Box<dyn std::error::Error + Se
         r#"
 listen = {{ addrs = ["127.0.0.1:0"] }}
 backends = [{{ address = "backend:9000" }}]
+
+[tls]
 
 [[domains]]
 host = "secure.example.com"
@@ -384,6 +390,64 @@ policy = "default-src 'none'"
         .ok_or("route headers should be present")?;
     assert!(headers.csp.enabled);
     assert_eq!(headers.csp.policy.expose(), "default-src 'none'");
+
+    let _ = fs::remove_file(&path);
+    Ok(())
+}
+
+#[test]
+fn rejects_domain_certs_without_a_tls_section(
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let cert_path = tmp_path("no-tls.crt");
+    let key_path = tmp_path("no-tls.key");
+    fs::write(&cert_path, "dummy cert")?;
+    fs::write(&key_path, "dummy key")?;
+
+    let path = tmp_path("no-tls");
+    let toml = format!(
+        r#"
+listen = {{ addrs = ["127.0.0.1:0"] }}
+backends = [{{ address = "b:9000" }}]
+
+[[domains]]
+host = "api.example.com"
+cert_path = "{}"
+key_path  = "{}"
+"#,
+        cert_path.display(),
+        key_path.display()
+    );
+    fs::write(&path, toml)?;
+
+    let err = match load_from_path(&path) {
+        Ok(_) => panic!("a domain cert without a [tls] section should be rejected"),
+        Err(e) => e.to_string(),
+    };
+    assert!(err.contains("[tls]"), "the error must point at the missing section: {err}");
+
+    let _ = fs::remove_file(&path);
+    let _ = fs::remove_file(&cert_path);
+    let _ = fs::remove_file(&key_path);
+    Ok(())
+}
+
+#[test]
+fn accepts_a_plain_domain_without_a_tls_section(
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let path = tmp_path("plain-domain");
+    let toml = r#"
+listen = { addrs = ["127.0.0.1:0"] }
+backends = [{ address = "b:9000" }]
+
+[[domains]]
+host = "api.example.com"
+routes = [{ prefix = "/", backend = "b:9000" }]
+"#;
+    fs::write(&path, toml)?;
+
+    let cfg = load_from_path(&path)?;
+    assert!(cfg.tls.is_none());
+    assert_eq!(cfg.domains.len(), 1);
 
     let _ = fs::remove_file(&path);
     Ok(())

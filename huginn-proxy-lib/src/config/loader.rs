@@ -67,6 +67,19 @@ fn validate_config(cfg: &Config) -> Result<()> {
 
     for domain in &cfg.domains {
         let host = domain.label();
+
+        if cfg.tls.is_none()
+            && (domain.cert_path.is_some()
+                || domain.key_path.is_some()
+                || domain.client_ca_path.is_some())
+        {
+            return Err(ProxyError::Config(format!(
+                "Domain '{host}': TLS material is configured but there is no [tls] section, \
+                 so the listener would serve plaintext and ignore it; add [tls] or drop \
+                 cert_path/key_path/client_ca_path"
+            )));
+        }
+
         match (&domain.cert_path, &domain.key_path) {
             (Some(cert), Some(key)) => {
                 if !Path::new(cert).exists() {
