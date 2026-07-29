@@ -131,21 +131,25 @@ pub async fn read_certs_and_keys(
         source,
     })?;
 
-    let mut keys: Vec<PrivateKeyDer<'static>> = PrivateKeyDer::pem_slice_iter(&key_bytes)
+    // Every key in the file is kept: picking the one that goes with `certs` needs the
+    // chain, so `build_certified_key` decides.
+    let keys: Vec<PrivateKeyDer<'static>> = PrivateKeyDer::pem_slice_iter(&key_bytes)
         .collect::<Result<Vec<_>, rustls_pki_types::pem::Error>>()
         .map_err(|e| CertError::Parse(format!("private keys: {e}")))?
         .into_iter()
         .map(|k| k.clone_key())
         .collect();
 
-    let key = keys.pop().ok_or(CertError::NoPrivateKey)?;
+    if keys.is_empty() {
+        return Err(CertError::NoPrivateKey);
+    }
 
     let client_ca_certs = match client_ca_path {
         Some(path) => Some(read_client_ca_certs(path).await?),
         None => None,
     };
 
-    Ok(ServerCertsKeys { certs, key, client_ca_certs })
+    Ok(ServerCertsKeys { certs, keys, client_ca_certs })
 }
 
 /// Read and parse a client-CA bundle PEM file into trust anchors for mTLS.

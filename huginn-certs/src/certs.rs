@@ -23,7 +23,10 @@ use crate::error::CertError;
 #[derive(Debug, PartialEq, Eq)]
 pub struct ServerCertsKeys {
     pub certs: Vec<CertificateDer<'static>>,
-    pub key: PrivateKeyDer<'static>,
+    /// Every private key the source yielded, in the order it produced them.
+    /// Which one goes with `certs` is decided in [`build_certified_key`], since
+    /// only a comparison against the chain can tell them apart.
+    pub keys: Vec<PrivateKeyDer<'static>>,
     /// Client-CA trust anchors for mutual TLS. `None` (or empty) = this domain
     /// does not require client certificates.
     pub client_ca_certs: Option<Vec<CertificateDer<'static>>>,
@@ -43,7 +46,7 @@ impl Clone for ServerCertsKeys {
     fn clone(&self) -> Self {
         Self {
             certs: self.certs.to_vec(),
-            key: self.key.clone_key(),
+            keys: self.keys.iter().map(|k| k.clone_key()).collect(),
             client_ca_certs: self.client_ca_certs.clone(),
         }
     }
@@ -85,37 +88,66 @@ pub fn cert_chain_hash(certs: &[CertificateDer<'static>]) -> u64 {
 /// chain hash.
 ///
 /// Shared by the SNI resolver and the per-SNI `ServerConfig` builder. `label`
-/// only tags errors. A key that cannot be *proven* to match the cert
-/// (`InconsistentKeys::Unknown`, e.g. some PSS/EC combinations) is accepted with
-/// a warning, matching rustls' own leniency; a proven mismatch is rejected.
+/// only tags errors.
+///
+/// A key file may hold more than one key, so the candidates are tried in order and
+/// the first one that provably matches the chain wins. A key that cannot be
+/// *proven* to match (`InconsistentKeys::Unknown`, e.g. some PSS/EC combinations)
+/// is only used when no other key proves itself, and then with a warning, matching
+/// rustls' own leniency. Keys the provider rejects, and keys that provably belong
+/// to a different certificate, are skipped; if that leaves nothing, the proven
+/// mismatch is the more actionable error to report.
 pub(crate) fn build_certified_key(
     material: &ServerCertsKeys,
     label: &str,
 ) -> Result<(Arc<CertifiedKey>, u64), CertError> {
-    let signing_key = tokio_rustls::rustls::crypto::aws_lc_rs::sign::any_supported_type(
-        &material.key,
-    )
-    .map_err(|e| CertError::SigningKey { label: label.to_string(), message: e.to_string() })?;
+    if material.keys.is_empty() {
+        return Err(CertError::NoPrivateKey);
+    }
     let cert_hash = cert_chain_hash(&material.certs);
-    let certified_key = Arc::new(CertifiedKey::new(material.certs.clone(), signing_key));
 
-    match certified_key.keys_match() {
-        Ok(()) => {}
-        Err(tokio_rustls::rustls::Error::InconsistentKeys(
-            tokio_rustls::rustls::InconsistentKeys::Unknown,
-        )) => {
-            warn!(
-                host = label,
-                "could not verify that the private key matches the certificate; proceeding"
-            );
-        }
-        Err(e) => {
-            return Err(CertError::KeyMismatch {
-                label: label.to_string(),
-                message: e.to_string(),
-            });
+    let mut unproven: Option<Arc<CertifiedKey>> = None;
+    let mut mismatch: Option<String> = None;
+    let mut unsupported: Option<String> = None;
+
+    for key in &material.keys {
+        let signing_key =
+            match tokio_rustls::rustls::crypto::aws_lc_rs::sign::any_supported_type(key) {
+                Ok(signing_key) => signing_key,
+                Err(e) => {
+                    unsupported.get_or_insert_with(|| e.to_string());
+                    continue;
+                }
+            };
+        let certified_key = Arc::new(CertifiedKey::new(material.certs.clone(), signing_key));
+
+        match certified_key.keys_match() {
+            Ok(()) => return Ok((certified_key, cert_hash)),
+            Err(tokio_rustls::rustls::Error::InconsistentKeys(
+                tokio_rustls::rustls::InconsistentKeys::Unknown,
+            )) => {
+                if unproven.is_none() {
+                    unproven = Some(certified_key);
+                }
+            }
+            Err(e) => {
+                mismatch.get_or_insert_with(|| e.to_string());
+            }
         }
     }
 
-    Ok((certified_key, cert_hash))
+    if let Some(certified_key) = unproven {
+        warn!(
+            host = label,
+            "could not verify that the private key matches the certificate; proceeding"
+        );
+        return Ok((certified_key, cert_hash));
+    }
+    if let Some(message) = mismatch {
+        return Err(CertError::KeyMismatch { label: label.to_string(), message });
+    }
+    Err(CertError::SigningKey {
+        label: label.to_string(),
+        message: unsupported.unwrap_or_else(|| "no usable private key".to_string()),
+    })
 }

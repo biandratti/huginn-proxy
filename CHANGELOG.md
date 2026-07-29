@@ -98,6 +98,11 @@ follows [Semantic Versioning](https://semver.org/).
   **Adjust alert thresholds**: rates for the affected types drop by half. `TELEMETRY.md` §9 also
   documented a `component` label that was never emitted and a set of `error_type` values that never
   existed; both now match what the proxy exports.
+- **A `key_path` file holding several private keys used only the last one.** Every key in the file is
+  now tried and the one that matches the certificate is used, whatever its position. Domains that
+  failed to load with `certificate/key mismatch` despite the right key being present in the file now
+  start. Files with a single key (the usual case) are unaffected, and a file whose keys all belong to
+  another certificate is still rejected.
 
 ---
 

@@ -210,6 +210,49 @@ async fn bad_cert_does_not_block_other_domains() -> TestResult {
     Ok(())
 }
 
+/// PEM for a private key belonging to some *other* certificate.
+fn foreign_key_pem() -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+    Ok(rcgen::generate_simple_self_signed(vec!["other.example.com".to_string()])?
+        .signing_key
+        .serialize_pem())
+}
+
+#[tokio::test]
+async fn several_keys_in_one_file_picks_the_matching_one() -> TestResult {
+    let fx = fixture()?;
+    let foreign = foreign_key_pem()?;
+    let matching = std::fs::read_to_string(&fx.key)?;
+
+    for (name, contents) in [
+        ("matching-first.key", format!("{matching}{foreign}")),
+        ("matching-last.key", format!("{foreign}{matching}")),
+    ] {
+        let key_path = fx.key.with_file_name(name);
+        std::fs::write(&key_path, contents)?;
+        let entries = vec![entry(Some("api.example.com"), &fx.cert, &key_path)];
+        let (map, report) = build(&entries, &options(true, false), None).await?;
+
+        assert!(report.failed.is_empty(), "{name}: the matching key must be found");
+        assert!(map.resolves_for(Some("api.example.com")), "{name}: the config must resolve");
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_key_file_without_the_matching_key_is_rejected() -> TestResult {
+    let fx = fixture()?;
+    let key_path = fx.key.with_file_name("foreign-only.key");
+    std::fs::write(&key_path, foreign_key_pem()?)?;
+
+    let entries = vec![entry(Some("api.example.com"), &fx.cert, &key_path)];
+    let (map, report) = build(&entries, &options(true, false), None).await?;
+
+    assert_eq!(report.failed.len(), 1, "a key from another cert must not be accepted");
+    assert!(report.loaded.is_empty(), "nothing should load");
+    assert!(!map.resolves_for(Some("api.example.com")), "the domain must not serve");
+    Ok(())
+}
+
 /// Carry-forward: a domain that loaded, then fails on rebuild, keeps its old config.
 #[tokio::test]
 async fn failed_rebuild_keeps_previous_config() -> TestResult {
