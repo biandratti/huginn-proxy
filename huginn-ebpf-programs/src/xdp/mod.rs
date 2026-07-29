@@ -45,7 +45,6 @@ pub fn try_xdp_syn(ctx: &XdpContext) {
     if eth_type == ETH_P_IPV6 {
         handle_ipv6(ctx, offset);
     }
-
 }
 
 #[allow(unsafe_code)]

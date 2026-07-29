@@ -66,6 +66,14 @@ jobs:
           components: rustfmt
       - name: Check code formatting
         run: cargo fmt --all -- --check
+      - name: Check code formatting (huginn-ebpf-programs)
+        # huginn-ebpf-programs is intentionally outside the workspace (nightly + bpfel-unknown-none),
+        # so `cargo fmt --all` above does not cover it.
+        # `+stable` overrides its rust-toolchain.toml nightly pin: formatting only needs
+        # the stable options in .rustfmt.toml, and pinning keeps it identical to the workspace.
+        run: |
+          cd huginn-ebpf-programs
+          cargo +stable fmt --all -- --check
 
   cargo-sort:
     runs-on: ubuntu-latest
@@ -90,6 +98,13 @@ jobs:
         run: cargo install cargo-sort
       - name: Check Cargo.toml sorting
         run: cargo sort --workspace --check
+      - name: Check Cargo.toml sorting (huginn-ebpf-programs)
+        # huginn-ebpf-programs is intentionally outside the workspace,
+        # so --workspace above does not cover its Cargo.toml.
+        # `+stable` avoids pulling nightly just to satisfy its rust-toolchain.toml pin.
+        run: |
+          cd huginn-ebpf-programs
+          cargo +stable sort --check
   
   lint:
     runs-on: ubuntu-latest

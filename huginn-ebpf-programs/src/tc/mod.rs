@@ -39,7 +39,6 @@ pub fn try_tc_syn(ctx: &TcContext) {
     if eth_type == ETH_P_IPV6 {
         handle_ipv6(ctx, offset);
     }
-
 }
 
 fn handle_ipv4(ctx: &TcContext, offset: usize) {
