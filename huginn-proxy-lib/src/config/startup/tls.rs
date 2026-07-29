@@ -1,5 +1,6 @@
 use huginn_certs::{CipherSuiteName, KxGroupName};
 use serde::{Deserialize, Serialize};
+use tokio_rustls::rustls::ProtocolVersion;
 
 /// TLS version configuration
 #[derive(Debug, Deserialize, Clone, Copy, PartialEq, Eq)]
@@ -87,6 +88,26 @@ impl TlsOptions {
                 Use either 'versions' or 'min_version'/'max_version'."
                     .to_string(),
             ));
+        }
+
+        // A non-empty `cipher_suites` replaces the provider defaults outright, so an enabled
+        // version left without a suite is advertised and can never be negotiated. rustls only
+        // rejects the case where no suite matches *any* enabled version, and it does so while
+        // building each domain's config, where it reads as a certificate failure.
+        if !self.cipher_suites.is_empty() {
+            for version in self.resolved_versions() {
+                if !self
+                    .cipher_suites
+                    .iter()
+                    .any(|suite| suite.protocol_version() == version.protocol_version())
+                {
+                    return Err(crate::error::ProxyError::Tls(format!(
+                        "TLS {} is enabled but no configured cipher suite supports it; \
+                         add one for that version or exclude it via min_version/max_version",
+                        version.as_str()
+                    )));
+                }
+            }
         }
 
         Ok(())
@@ -252,6 +273,15 @@ impl TlsVersion {
         match self {
             TlsVersion::V1_2 => "1.2",
             TlsVersion::V1_3 => "1.3",
+        }
+    }
+
+    /// The rustls enumeration naming this version, to compare against the version a
+    /// cipher suite reports for itself.
+    fn protocol_version(self) -> ProtocolVersion {
+        match self {
+            TlsVersion::V1_2 => ProtocolVersion::TLSv1_2,
+            TlsVersion::V1_3 => ProtocolVersion::TLSv1_3,
         }
     }
 }

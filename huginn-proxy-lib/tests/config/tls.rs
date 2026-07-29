@@ -1,3 +1,4 @@
+use huginn_certs::CipherSuiteName;
 use huginn_proxy_lib::config::{ConfigParser, TlsOptions, TlsVersion, TomlParser};
 
 type TestResult = Result<(), Box<dyn std::error::Error + Send + Sync>>;
@@ -92,6 +93,52 @@ fn rejects_an_explicit_list_combined_with_a_bound() {
         ..Default::default()
     };
     assert!(with_max.validate().is_err());
+}
+
+#[test]
+fn accepts_the_default_suites_for_any_version_range() {
+    for options in [
+        TlsOptions::default(),
+        TlsOptions { min_version: Some(TlsVersion::V1_3), ..Default::default() },
+        TlsOptions { versions: vec![TlsVersion::V1_2], ..Default::default() },
+    ] {
+        assert!(options.validate().is_ok(), "default suites must satisfy {:?}", options.versions);
+    }
+}
+
+#[test]
+fn rejects_suites_that_exclude_the_only_enabled_version() {
+    let options = TlsOptions {
+        min_version: Some(TlsVersion::V1_3),
+        cipher_suites: vec![CipherSuiteName::TlsEcdheRsaWithAes128GcmSha256],
+        ..Default::default()
+    };
+    match options.validate() {
+        Ok(()) => panic!("TLS 1.3 only with a 1.2-only suite list must be rejected"),
+        Err(e) => assert!(e.to_string().contains("TLS 1.3"), "expected the 1.3 error, got: {e}"),
+    }
+}
+
+#[test]
+fn rejects_a_version_left_without_any_suite() {
+    let options = TlsOptions {
+        cipher_suites: vec![CipherSuiteName::Tls13Aes128GcmSha256],
+        ..Default::default()
+    };
+    match options.validate() {
+        Ok(()) => panic!("TLS 1.2 enabled with only 1.3 suites must be rejected"),
+        Err(e) => assert!(e.to_string().contains("TLS 1.2"), "expected the 1.2 error, got: {e}"),
+    }
+}
+
+#[test]
+fn accepts_tls13_only_suites_when_tls12_is_excluded() {
+    let options = TlsOptions {
+        min_version: Some(TlsVersion::V1_3),
+        cipher_suites: vec![CipherSuiteName::Tls13Aes128GcmSha256],
+        ..Default::default()
+    };
+    assert!(options.validate().is_ok());
 }
 
 #[test]

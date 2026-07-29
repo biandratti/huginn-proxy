@@ -748,7 +748,7 @@ tls:
 | `versions`          | array of strings | `[]` (empty)     | Allowed TLS versions. Values: `"1.2"`, `"1.3"`. Applied to the TLS stack. Empty means no restriction (both). Mutually exclusive with `min_version`/`max_version`. |
 | `min_version`       | string           | `null`           | Minimum TLS version (`"1.2"` or `"1.3"`). Applied to the TLS stack. Mutually exclusive with an explicit `versions` list. |
 | `max_version`       | string           | `null`           | Maximum TLS version (`"1.2"` or `"1.3"`). Applied to the TLS stack. Mutually exclusive with an explicit `versions` list. |
-| `cipher_suites`     | array of strings | all supported    | Ordered cipher suites, most preferred first. Restrict to tighten security posture. Applied to the TLS stack. Unknown names fail at config parse. |
+| `cipher_suites`     | array of strings | all supported    | Ordered cipher suites, most preferred first. Restrict to tighten security posture. Applied to the TLS stack. A list replaces the defaults, so it must cover every enabled TLS version — see note below. Unknown names fail at config parse. |
 | `curve_preferences` | array of strings | `[]` (empty)     | Ordered key-exchange groups (curves), most preferred first. Applied to the TLS stack. Empty keeps the provider defaults — see note below. Valid: `"X25519MLKEM768"`, `"SECP256R1MLKEM768"`, `"X25519"`, `"secp256r1"`, `"secp384r1"`. Unknown names fail at config parse. |
 | `sni_strict`        | bool             | `false`          | When `true`, disable the default-cert fallback entirely (full parity with Traefik's `sniStrict`): reject (`unrecognized_name`) both a TLS connection whose SNI matches no domain cert **and** a connection that sends no SNI (IP-literal clients). When `false`, both fall back to the default cert. Production hardening against unknown-hostname / no-SNI access. |
 
@@ -756,6 +756,11 @@ tls:
 > the acceptor offers: e.g. `min_version = "1.3"` refuses TLS 1.2 handshakes. Leaving all three unset
 > (the default) allows 1.2 **and** 1.3, i.e. rustls' safe defaults. Pick **one** of the two forms: a
 > config that sets both an explicit `versions` list and a bound is rejected at load.
+
+> **Cipher suites must cover every enabled version.** An explicit `cipher_suites` list replaces the
+> defaults instead of narrowing them, so listing only `TLS13_*` suites while TLS 1.2 is still enabled
+> would advertise 1.2 with nothing to negotiate and fail every 1.2 handshake. That config is rejected
+> at load: either add a `TLS_ECDHE_*` suite or exclude 1.2 with `min_version = "1.3"`.
 
 > **Note on `curve_preferences`:** leaving it **empty** (the default) keeps the provider's safe
 > defaults, which lead with the post-quantum hybrid group `X25519MLKEM768`. A non-empty list applies

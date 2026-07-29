@@ -14,7 +14,7 @@ use std::str::FromStr;
 
 use serde::{Deserialize, Serialize};
 use tokio_rustls::rustls::crypto::aws_lc_rs::cipher_suite as cs;
-use tokio_rustls::rustls::SupportedCipherSuite;
+use tokio_rustls::rustls::{ProtocolVersion, SupportedCipherSuite};
 
 /// A selectable cipher suite in `[tls.options].cipher_suites`.
 ///
@@ -75,6 +75,16 @@ impl CipherSuiteName {
                 "TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256"
             }
         }
+    }
+
+    /// The TLS protocol version this suite belongs to, as rustls reports it.
+    ///
+    /// Taken from the suite itself rather than from the name, so the mapping cannot
+    /// drift from the one rustls applies when it matches suites against the enabled
+    /// versions.
+    #[must_use]
+    pub fn protocol_version(self) -> ProtocolVersion {
+        self.to_rustls().version().version
     }
 
     /// The aws-lc-rs rustls cipher suite for this name.
