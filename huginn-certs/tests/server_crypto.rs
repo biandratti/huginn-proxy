@@ -12,7 +12,13 @@ use huginn_certs::server_crypto::build_client_root_store;
 use huginn_certs::{
     build_server_crypto, CertEntry, CryptoFileSource, ServerCryptoMap, TlsBuildOptions,
 };
-use rcgen::{BasicConstraints, CertificateParams, IsCa, KeyPair};
+use rcgen::{
+    BasicConstraints, CertificateParams, ExtendedKeyUsagePurpose, IsCa, Issuer, KeyPair,
+    KeyUsagePurpose,
+};
+use rustls_pki_types::{CertificateDer, PrivateKeyDer, ServerName};
+use tokio_rustls::rustls::{ClientConfig, RootCertStore, ServerConfig};
+use tokio_rustls::{TlsAcceptor, TlsConnector};
 
 type TestResult = Result<(), Box<dyn std::error::Error + Send + Sync>>;
 
@@ -78,9 +84,6 @@ async fn build(
     Ok(build_server_crypto(entries, opts, previous).await?)
 }
 
-/// A restricted protocol-version list is accepted by the builder and still yields a
-/// resolvable config (the build path applies `with_protocol_versions` instead of the
-/// safe defaults).
 #[tokio::test]
 async fn restricted_protocol_version_still_builds() -> TestResult {
     let fx = fixture()?;
@@ -96,8 +99,6 @@ async fn restricted_protocol_version_still_builds() -> TestResult {
     Ok(())
 }
 
-/// Explicit curve preferences (including the post-quantum hybrid) resolve to
-/// key-exchange groups and still build a resolvable config.
 #[tokio::test]
 async fn restricted_curve_preferences_still_build() -> TestResult {
     use huginn_certs::kx_groups::{resolve_kx_groups, KxGroupName};
@@ -118,7 +119,6 @@ async fn restricted_curve_preferences_still_build() -> TestResult {
     Ok(())
 }
 
-/// Named + wildcard + catch-all land in exact / wildcard / default respectively.
 #[tokio::test]
 async fn configs_routed_by_host_shape() -> TestResult {
     let fx = fixture()?;
@@ -134,7 +134,6 @@ async fn configs_routed_by_host_shape() -> TestResult {
     Ok(())
 }
 
-/// Lenient: exact match, unmatched SNI, and no-SNI all resolve (to default).
 #[tokio::test]
 async fn lenient_serves_default_for_unmatched_sni() -> TestResult {
     let fx = fixture()?;
@@ -150,7 +149,6 @@ async fn lenient_serves_default_for_unmatched_sni() -> TestResult {
     Ok(())
 }
 
-/// Strict: exact match resolves; unmatched SNI and no-SNI are rejected (no fallback).
 #[tokio::test]
 async fn strict_rejects_unmatched_and_no_sni() -> TestResult {
     let fx = fixture()?;
@@ -166,7 +164,6 @@ async fn strict_rejects_unmatched_and_no_sni() -> TestResult {
     Ok(())
 }
 
-/// Wildcard covers exactly one label: not the apex, not multi-level, not unrelated hosts.
 #[tokio::test]
 async fn wildcard_matches_only_single_label_subdomain() -> TestResult {
     let fx = fixture()?;
@@ -180,7 +177,6 @@ async fn wildcard_matches_only_single_label_subdomain() -> TestResult {
     Ok(())
 }
 
-/// No catch-all ⇒ no default; a strict/no-match still yields the reject sentinel config.
 #[tokio::test]
 async fn reject_config_available_without_default() -> TestResult {
     let fx = fixture()?;
@@ -194,7 +190,6 @@ async fn reject_config_available_without_default() -> TestResult {
     Ok(())
 }
 
-/// Best-effort: one domain's unreadable cert is reported failed; the others still load.
 #[tokio::test]
 async fn bad_cert_does_not_block_other_domains() -> TestResult {
     let fx = fixture()?;
@@ -253,7 +248,6 @@ async fn a_key_file_without_the_matching_key_is_rejected() -> TestResult {
     Ok(())
 }
 
-/// Carry-forward: a domain that loaded, then fails on rebuild, keeps its old config.
 #[tokio::test]
 async fn failed_rebuild_keeps_previous_config() -> TestResult {
     let fx = fixture()?;
@@ -289,9 +283,8 @@ fn is_reject(map: &ServerCryptoMap, sni: Option<&str>) -> bool {
         .is_some_and(|crypto| Arc::ptr_eq(&crypto.config, &map.reject_config()))
 }
 
-/// Turning on mTLS with a broken CA bundle must not leave the domain serving under its previous
-/// plain config, nor fall through to the catch-all: both would answer without a client
-/// certificate, which is exactly what the domain just asked to require.
+/// Both the previous plain config and the catch-all would answer without a client
+/// certificate, which is what the domain just asked to require.
 #[tokio::test]
 async fn failed_mtls_never_falls_back_to_a_plain_config() -> TestResult {
     let fx = fixture()?;
@@ -319,8 +312,8 @@ async fn failed_mtls_never_falls_back_to_a_plain_config() -> TestResult {
     Ok(())
 }
 
-/// Same at startup, where there is no previous config to inherit: an empty slot would fall through
-/// to the catch-all, so the domain has to be parked on the reject sentinel too.
+/// At startup there is nothing to inherit, and an empty slot falls through to the
+/// catch-all, so the domain has to be parked on the reject sentinel.
 #[tokio::test]
 async fn failed_mtls_at_startup_rejects_instead_of_serving_the_catch_all() -> TestResult {
     let fx = fixture()?;
@@ -343,8 +336,8 @@ async fn failed_mtls_at_startup_rejects_instead_of_serving_the_catch_all() -> Te
     Ok(())
 }
 
-/// Carry-forward still applies when it cannot weaken anything: the previous config already
-/// required a client certificate, so keeping it is stale, not unauthenticated.
+/// Carry-forward still applies when it cannot weaken anything: keeping a config that
+/// already required a client certificate is stale, not unauthenticated.
 #[tokio::test]
 async fn failed_mtls_keeps_a_previous_mtls_config() -> TestResult {
     let fx = fixture()?;
@@ -370,7 +363,6 @@ async fn failed_mtls_keeps_a_previous_mtls_config() -> TestResult {
     Ok(())
 }
 
-/// Non-mTLS + resumption on: stateless tickets, no server-side session cache.
 #[tokio::test]
 async fn non_mtls_uses_stateless_tickets_without_cache() -> TestResult {
     let fx = fixture()?;
@@ -389,7 +381,6 @@ async fn non_mtls_uses_stateless_tickets_without_cache() -> TestResult {
     Ok(())
 }
 
-/// Resumption disabled: no ticketer anywhere.
 #[tokio::test]
 async fn resumption_disabled_means_no_ticketer() -> TestResult {
     let fx = fixture()?;
@@ -404,8 +395,7 @@ async fn resumption_disabled_means_no_ticketer() -> TestResult {
     Ok(())
 }
 
-/// mTLS domain never resumes, even with resumption enabled: no ticketer, no cache, so the
-/// client certificate is verified on every connection.
+/// Even with resumption enabled, so the client certificate is verified on every connection.
 #[tokio::test]
 async fn mtls_config_disables_resumption_entirely() -> TestResult {
     let fx = fixture()?;
@@ -422,8 +412,6 @@ async fn mtls_config_disables_resumption_entirely() -> TestResult {
     Ok(())
 }
 
-/// Client auth is per-domain, not listener-wide: in one map, only the mTLS domain
-/// disables resumption while a plain domain alongside it still issues tickets.
 #[tokio::test]
 async fn mtls_is_per_domain_not_listener_wide() -> TestResult {
     let fx = fixture()?;
@@ -449,8 +437,6 @@ async fn mtls_is_per_domain_not_listener_wide() -> TestResult {
     Ok(())
 }
 
-/// The stateless ticketer is one process-wide instance, so tickets stay decryptable
-/// after a rebuild (certificate hot-reload).
 #[tokio::test]
 async fn ticketer_is_shared_across_rebuilds() -> TestResult {
     let fx = fixture()?;
@@ -472,6 +458,156 @@ async fn ticketer_is_shared_across_rebuilds() -> TestResult {
     Ok(())
 }
 
+/// A CA and one leaf it signed, in the shapes the handshake tests need: PEM to write out
+/// as config material, DER to hand straight to rustls.
+struct SignedPair {
+    ca_pem: String,
+    ca_der: CertificateDer<'static>,
+    leaf_pem: String,
+    leaf_key_pem: String,
+    leaf_der: CertificateDer<'static>,
+    leaf_key: PrivateKeyDer<'static>,
+}
+
+fn signed_pair(
+    ca_name: &str,
+    leaf_name: &str,
+    purpose: ExtendedKeyUsagePurpose,
+) -> Result<SignedPair, Box<dyn std::error::Error + Send + Sync>> {
+    let ca_key = KeyPair::generate()?;
+    let mut ca_params = CertificateParams::new(vec![ca_name.to_string()])?;
+    ca_params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
+    ca_params.key_usages = vec![KeyUsagePurpose::KeyCertSign, KeyUsagePurpose::CrlSign];
+    let ca = ca_params.self_signed(&ca_key)?;
+
+    let leaf_key = KeyPair::generate()?;
+    let mut leaf_params = CertificateParams::new(vec![leaf_name.to_string()])?;
+    leaf_params.extended_key_usages = vec![purpose];
+    let leaf = leaf_params.signed_by(&leaf_key, &Issuer::from_params(&ca_params, &ca_key))?;
+
+    Ok(SignedPair {
+        ca_pem: ca.pem(),
+        ca_der: ca.der().clone(),
+        leaf_pem: leaf.pem(),
+        leaf_key_pem: leaf_key.serialize_pem(),
+        leaf_der: leaf.der().clone(),
+        leaf_key: PrivateKeyDer::Pkcs8(leaf_key.serialize_der().into()),
+    })
+}
+
+/// One domain served twice: with and without a client verifier, from the same server
+/// certificate, so the two handshakes differ only in client authentication.
+struct HandshakeFixture {
+    _dir: tempfile::TempDir,
+    mtls: Arc<ServerConfig>,
+    plain: Arc<ServerConfig>,
+    /// The CA the client must trust to accept the server certificate.
+    server_ca: CertificateDer<'static>,
+    /// A client identity signed by the CA the mTLS domain was configured with.
+    client: SignedPair,
+}
+
+async fn handshake_fixture() -> Result<HandshakeFixture, Box<dyn std::error::Error + Send + Sync>> {
+    ensure_crypto_provider();
+    let dir = tempfile::tempdir()?;
+    let server = signed_pair("server-ca", "localhost", ExtendedKeyUsagePurpose::ServerAuth)?;
+    let client = signed_pair("client-ca", "client.example", ExtendedKeyUsagePurpose::ClientAuth)?;
+
+    let cert = dir.path().join("server.crt");
+    let key = dir.path().join("server.key");
+    let client_ca = dir.path().join("client-ca.crt");
+    std::fs::write(&cert, &server.leaf_pem)?;
+    std::fs::write(&key, &server.leaf_key_pem)?;
+    std::fs::write(&client_ca, &client.ca_pem)?;
+
+    let opts = options(true, false);
+    let (with_mtls, mtls_report) =
+        build(&[mtls_entry(Some("localhost"), &cert, &key, &client_ca)], &opts, None).await?;
+    let (without_mtls, plain_report) =
+        build(&[entry(Some("localhost"), &cert, &key)], &opts, None).await?;
+    if !mtls_report.failed.is_empty() || !plain_report.failed.is_empty() {
+        return Err("both configs must build".into());
+    }
+
+    Ok(HandshakeFixture {
+        _dir: dir,
+        mtls: with_mtls
+            .select(Some("localhost"))
+            .ok_or("the mTLS domain must resolve")?
+            .config,
+        plain: without_mtls
+            .select(Some("localhost"))
+            .ok_or("the plain domain must resolve")?
+            .config,
+        server_ca: server.ca_der,
+        client,
+    })
+}
+
+fn client_config(
+    trusted: &CertificateDer<'static>,
+    identity: Option<(CertificateDer<'static>, PrivateKeyDer<'static>)>,
+) -> Result<ClientConfig, Box<dyn std::error::Error + Send + Sync>> {
+    let mut roots = RootCertStore::empty();
+    roots.add(trusted.clone())?;
+    let builder = ClientConfig::builder().with_root_certificates(roots);
+    Ok(match identity {
+        Some((cert, key)) => builder.with_client_auth_cert(vec![cert], key)?,
+        None => builder.with_no_client_auth(),
+    })
+}
+
+/// Run one handshake over an in-memory pipe and report how the *server* saw it, which is
+/// where client authentication is decided: under TLS 1.3 the client finishes before the
+/// server's verdict reaches it, so only this side is conclusive.
+async fn handshake(server: Arc<ServerConfig>, client: ClientConfig) -> std::io::Result<()> {
+    let (client_io, server_io) = tokio::io::duplex(16 * 1024);
+    let acceptor = TlsAcceptor::from(server);
+    let connector = TlsConnector::from(Arc::new(client));
+    let name = ServerName::try_from("localhost").map_err(std::io::Error::other)?;
+
+    let (accepted, _connected) =
+        tokio::join!(acceptor.accept(server_io), connector.connect(name, client_io));
+    accepted.map(|_| ())
+}
+
+/// `is_mutual_tls` is read off the configuration, so it keeps saying `true` even if the
+/// verifier stops being attached. Only a handshake tells the two apart.
+#[tokio::test]
+async fn mtls_config_turns_away_a_client_without_a_certificate() -> TestResult {
+    let fx = handshake_fixture().await?;
+
+    let rejected = handshake(fx.mtls, client_config(&fx.server_ca, None)?).await;
+    assert!(rejected.is_err(), "no client certificate must not complete the handshake");
+
+    // Control: the same client against the same server certificate, minus the verifier.
+    handshake(fx.plain, client_config(&fx.server_ca, None)?).await?;
+    Ok(())
+}
+
+#[tokio::test]
+async fn mtls_config_admits_a_client_signed_by_the_configured_ca() -> TestResult {
+    let fx = handshake_fixture().await?;
+    let identity = (fx.client.leaf_der.clone(), fx.client.leaf_key.clone_key());
+
+    handshake(fx.mtls, client_config(&fx.server_ca, Some(identity))?).await?;
+    Ok(())
+}
+
+/// The verifier honours the configured trust anchors, rather than accepting whatever
+/// certificate is presented.
+#[tokio::test]
+async fn mtls_config_turns_away_a_client_signed_by_another_ca() -> TestResult {
+    let fx = handshake_fixture().await?;
+    let stranger =
+        signed_pair("other-ca", "intruder.example", ExtendedKeyUsagePurpose::ClientAuth)?;
+    let identity = (stranger.leaf_der, stranger.leaf_key);
+
+    let rejected = handshake(fx.mtls, client_config(&fx.server_ca, Some(identity))?).await;
+    assert!(rejected.is_err(), "a certificate from an untrusted CA must be refused");
+    Ok(())
+}
+
 /// A CA cert whose Subject Key Identifier extension is emitted (rcgen writes it for
 /// `IsCa::Ca`), so the client-CA dedup keys on SKID rather than falling back to DER.
 fn ca_cert(name: &str, key: &KeyPair) -> Result<rcgen::Certificate, rcgen::Error> {
@@ -480,7 +616,6 @@ fn ca_cert(name: &str, key: &KeyPair) -> Result<rcgen::Certificate, rcgen::Error
     params.self_signed(key)
 }
 
-/// A client-CA bundle listing the same certificate twice collapses to one anchor.
 #[test]
 fn client_root_store_dedups_identical_der() -> TestResult {
     let key = KeyPair::generate()?;
@@ -494,8 +629,8 @@ fn client_root_store_dedups_identical_der() -> TestResult {
     Ok(())
 }
 
-/// Two distinct DER encodings of the *same* CA key share a Subject Key Identifier,
-/// so SKID dedup collapses them to one anchor, something byte dedup alone cannot do.
+/// Two encodings of the same CA key share a Subject Key Identifier, so they collapse to
+/// one anchor: something byte dedup alone cannot do.
 #[test]
 fn client_root_store_dedups_same_key_across_different_der() -> TestResult {
     let key = KeyPair::generate()?;
