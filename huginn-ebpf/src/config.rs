@@ -64,10 +64,9 @@ impl SynRateLimit {
     /// current window's count past the threshold, so the limiter stops being reliable.
     pub const MAX_THRESHOLD: u32 = huginn_ebpf_rate_limit::MAX_THRESHOLD;
 
-    /// Largest usable `window_seconds` (one hour). Counts only age out when the window rotates,
-    /// and the sketch's `u16` counters saturate well before that on a long window, so a source
-    /// that reaches `burst` stays pinned at the ceiling and uncaptured for the rest of it. Past an
-    /// hour that makes the limiter a blocklist rather than a rate limit.
+    /// Largest usable `window_seconds` (one hour). Counts never decay inside a window, only when it
+    /// rotates, so a source that crosses `burst` has its SYNs skipped until the window ends. The
+    /// window length is therefore how long one burst costs a source its fingerprints.
     pub const MAX_WINDOW_SECONDS: u64 = 3600;
 
     /// A disabled rate limiter (data path gate is a no-op).

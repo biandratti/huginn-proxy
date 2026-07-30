@@ -22,8 +22,6 @@ pub(super) fn resolve_rate_limit(get_var: &impl Fn(&str) -> Option<String>) -> S
         return SynRateLimit::disabled();
     }
 
-    // The sketch's u16 counters saturate at 65535, so a larger burst can never be crossed by the
-    // window's own count and every SYN passes.
     let max_burst = SynRateLimit::MAX_THRESHOLD;
     let burst = or_default(
         get_var,
@@ -32,9 +30,6 @@ pub(super) fn resolve_rate_limit(get_var: &impl Fn(&str) -> Option<String>) -> S
         &format!("an integer between 1 and {max_burst}"),
         |b| b > 0 && b <= max_burst,
     );
-    // Counts only age out when the window rotates, and the u16 counters saturate long before that
-    // on a long window. Past an hour a source that reaches `burst` stays pinned at the ceiling and
-    // uncaptured for the rest of the window, turning the limiter into a blocklist.
     let max_window = SynRateLimit::MAX_WINDOW_SECONDS;
     let window_seconds = or_default(
         get_var,
@@ -47,12 +42,6 @@ pub(super) fn resolve_rate_limit(get_var: &impl Fn(&str) -> Option<String>) -> S
     SynRateLimit::from_burst_window(true, burst, window_seconds)
 }
 
-/// Read `name`, or log what was wrong with it and fall back to `default`.
-///
-/// Trimmed and lowercased before parsing, like `HUGINN_EBPF_CAPTURE` and `HUGINN_EBPF_LOG_LEVEL`:
-/// `bool`'s own `FromStr` takes only exact `true`/`false`, so without this a `TRUE` or a stray
-/// space from a compose/`.env` file would silently disable the limiter. Lowercasing is a no-op for
-/// the numeric values.
 fn or_default<T: FromStr + Display + Copy>(
     get_var: &impl Fn(&str) -> Option<String>,
     name: &str,

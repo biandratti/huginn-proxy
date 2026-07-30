@@ -111,85 +111,66 @@ No `seccomp:unconfined` or `apparmor:unconfined` needed.
 | `HUGINN_EBPF_SYN_MAP_MAX_ENTRIES` | `8192` | LRU map capacity (default shown). Agent-only: the agent publishes this value into the family-agnostic `syn_meta` map, and the proxy reads it from there for its staleness threshold — so it must not be set on the proxy. |
 | `HUGINN_EBPF_CAPTURE` | `xdp-native` | Capture backend: `xdp-native` (driver XDP, default), `xdp-skb` (generic XDP, veth/loopback/VMs), or `tc` (clsact ingress; GRO-safe when native XDP is unavailable, e.g. VLAN/bond on generic XDP). Same BPF maps either way. |
 | `HUGINN_EBPF_LOG_LEVEL` | `off` | Verbosity of in-kernel `aya-log` datapath logging: `off` (default), `error`, `warn`, `info`, `debug`, `trace`. The kernel emits only records at/above the level (`debug` = per-capture, `warn` = map-insert failures), so the level gate runs in-kernel and `off` is zero-cost on the hot path. When non-`off` and `RUST_LOG` is unset, the agent defaults its filter to that level so records are shown. For diagnostics only. |
-| `HUGINN_EBPF_RATE_LIMIT_ENABLED` | `false` | Enable the in-kernel per-source-IP SYN rate limiter (`true`/`false`). When on, SYNs from an IP exceeding the threshold are skipped (not captured/fingerprinted); the packet still passes to the stack (never dropped). Uses a dual-buffer sliding-window Count-Min Sketch. |
-| `HUGINN_EBPF_RATE_LIMIT_BURST` | `2000` | Max SYNs per window per source IP before its SYNs stop being captured (skipped, not dropped). Counted **per CPU**, see [Sizing the SYN rate limiter](#sizing-the-syn-rate-limiter). The default is only sensible on a low-core host, and this is *not* the proxy's `[security.rate_limit] burst`. Must be `1..=65534`, because the sketch counts in `u16`: a window's own count cannot cross a larger threshold, so the limiter stops firing. |
-| `HUGINN_EBPF_RATE_LIMIT_WINDOW_SECONDS` | `1` | Sliding-window length in seconds. Must be `1..=3600`. Counts only age out when the window rotates, and the `u16` counters saturate long before that on a long window, so a source that reaches `burst` stays uncaptured for the rest of it: past an hour the limiter is a blocklist, not a rate limit. |
+| `HUGINN_EBPF_RATE_LIMIT_ENABLED` | `false` | Enable the in-kernel per-source-IP SYN rate limiter. When on, SYNs from an IP exceeding the threshold are skipped (not captured/fingerprinted); the packet still passes to the stack (never dropped). Uses a dual-buffer sliding-window Count-Min Sketch. |
+| `HUGINN_EBPF_RATE_LIMIT_BURST` | `2000` | Max SYNs per window per source IP before its SYNs stop being captured. Range `1..=65534`. Counted **per CPU**, and *not* the proxy's `[security.rate_limit] burst`: size it with [Sizing the SYN rate limiter](#sizing-the-syn-rate-limiter). |
+| `HUGINN_EBPF_RATE_LIMIT_WINDOW_SECONDS` | `1` | Sliding-window length in seconds. Range `1..=3600`. Once a source crosses `burst`, its SYNs are skipped until the window ends, so a long window means a long gap in that source's fingerprints. |
 
-> **Bad rate-limit values are not fatal.** All three are trimmed and lowercased first, so `TRUE` or
-> a stray newline out of a `.env` file parses fine. An unusable `ENABLED`, `BURST` or
-> `WINDOW_SECONDS` is logged at `ERROR`, naming the variable, the rejected value, the accepted range
-> and the default used in its place.
-> The agent starts anyway. Exiting would leave the proxy blocked waiting for pinned maps that
-> never appear, so one bad value would also take down HTTP and TLS fingerprinting. Grep the agent
-> log for `invalid eBPF rate-limit configuration` after a config change: a rejected `BURST` or
-> `WINDOW_SECONDS` means the limiter is running with the default, not what you asked for, and a
-> rejected `ENABLED` means it is off entirely.
+> **Bad rate-limit values are not fatal.** An unusable `ENABLED`, `BURST` or `WINDOW_SECONDS` is
+> logged at `ERROR` and replaced with its default; the agent still starts and pins its maps. After a
+> config change, grep the agent log for `invalid eBPF rate-limit configuration`: a rejected `BURST`
+> or `WINDOW_SECONDS` leaves the limiter running with the default, a rejected `ENABLED` leaves it
+> off.
 
-> **What the rate limiter protects.** Over-limit SYNs are *skipped* (not fingerprinted into the
-> `tcp_syn_map_v4/v6` capture LRU), never dropped - the packet always reaches the TCP stack. So
-> this shields the capture LRU from a single loud source IP; it is **not** a network-level DoS
-> defense. It also does nothing against a spoofed/distributed flood where each source sends only a
-> few SYNs (each stays under the threshold), so the capture LRU can still saturate under that
-> pattern. The threshold is enforced **per CPU** (the sketch is a per-CPU map), so the real ceiling
-> for one source is roughly `burst × num_cpus` per window. See
-> [Sizing the SYN rate limiter](#sizing-the-syn-rate-limiter).
->
-> The counting sketch (`syn_rate_sketch_v4/v6`) is **not pinned**: it is ephemeral per-CPU state
-> and resets to empty on every agent (re)load. The cumulative `syn_rate_skipped_*` /
-> `syn_rate_allowed_*` counters **are** pinned, so their totals survive agent restarts.
->
-> **The sketch maps are allocated even with the limiter off.** They are part of the single BPF
-> object the agent loads, so the kernel reserves them regardless of `ENABLED`: 16400 bytes per CPU
-> per family, i.e. `16400 × cpus × 2`. Per-CPU maps are sized by *possible* CPUs, not online ones,
-> so read `cpus` from `/sys/devices/system/cpu/possible`: roughly 260 KiB at 8, 2 MiB at 64. A VM
-> reporting many more possible than online CPUs pays for the possible ones. Turning the limiter off
-> costs nothing on the packet path (one global read and an early return) but does not give this
-> memory back.
+> **Scope and limits.** This shields the capture LRU from one loud source IP. It is **not** a
+> network-level DoS defense, and it does nothing against a distributed flood where each source stays
+> under the threshold, so the LRU can still saturate. The `syn_rate_skipped_*` /
+> `syn_rate_allowed_*` counters are pinned, so their totals survive agent restarts; the counting
+> sketch is not pinned and resets on every agent load. Its maps are allocated even with
+> `ENABLED=false`.
 
 #### Sizing the SYN rate limiter
 
-Size `burst` against the capture LRU, not against a request rate:
+`burst` caps how much of the capture LRU one source IP can claim, so size it against
+`HUGINN_EBPF_SYN_MAP_MAX_ENTRIES`, never against a request rate. The map is shared by every client
+and keyed `(source IP, source port)`, so one IP claims one entry per source port. Once it is full,
+each insert evicts the least recently used entry, and the victim is whoever loses their entry before
+the proxy reads it at accept time.
 
 ```
 burst = HUGINN_EBPF_SYN_MAP_MAX_ENTRIES / (4 × cpus)
 ```
 
-`burst` is enforced **per CPU** (each core has its own sketch, which is what keeps the datapath
-lock-free), so the real ceiling for one source is `burst × cpus`. The formula holds that ceiling at
-~25 % of the LRU whatever the core count: you are sizing `burst × cpus`, not `burst`.
+1. **Find `cpus`**, the number of CPUs one source's SYNs can reach. With a multi-queue NIC and the
+   usual 4-tuple RSS hash, an IP varying its source ports lands on every RX queue, so use the
+   interface's combined RX queue count. Fall back to the CPU count where there are no queues (veth,
+   loopback, single-queue virtio).
+2. **Divide, then clamp to `1..=65534`.** Above that the agent logs an `ERROR` and uses the default.
+3. **Verify against real traffic.** `tcp_syn_rate_skipped_total` should not increase under normal
+   load; watch its rate, not its total, since the counter is pinned across restarts. If it climbs
+   with no attack in progress, `burst` is too tight, usually a NAT gateway behind one IP (the sketch
+   over-counts on hash collisions, never under-counts, so a gateway sharing cells with a flooder
+   loses its signature early).
 
-| `cpus` | `burst` (8192-entry LRU) | Ceiling per source IP |
-|---|---|---|
-| 1 | `2048` | 2048 per window |
-| 8 | `256` | 2048 per window |
-| 64 | `32` | 2048 per window |
+`burst` is enforced **per CPU** (each core has its own sketch, which keeps the datapath lock-free),
+so one source's real ceiling is `burst × cpus`. That product is what you are sizing: as cores grow,
+`burst` shrinks and the ceiling stays put.
 
-Capping the share matters because the capture map is a fixed-size LRU shared by every client, keyed
-`(source IP, source port)`. One IP claims one entry per source port, and once the map is full each
-insert evicts the least recently used entry. The proxy reads an entry once, at accept time, so a
-flood that evicts other clients' entries first strips *their* fingerprints, not its own. The `4 ×`
-in the formula is the headroom choice: one source may claim a quarter of the map, leaving the rest
-for everyone else.
+| LRU | `cpus` | `burst` | Ceiling per source IP |
+|---|---|---|---|
+| 8192 (default) | 1 (veth in a VM) | `2048` | 2048, a quarter of the map |
+| 8192 | 4 queues | `512` | 2048, a quarter of the map |
+| 8192 | 32 queues | `64` | 2048, a quarter of the map |
+| 32768 | 8 queues | `1024` | 8192, a quarter of the map |
 
-Take `cpus` from the combined queue count in `ethtool -l`: with a multi-queue NIC and the usual
-4-tuple RSS hash, one IP varying source ports reaches every queue. Use the CPU count if there are no
-queues to read. Cap the result at 65534; above that the agent logs an `ERROR` and falls back to the
-default.
-
-Err on the low side. Going over only skips *fingerprint capture*: the SYN still reaches the TCP
-stack and the connection completes, so a tight `burst` costs TCP signatures for that source, not its
-traffic. A loose one costs the protection entirely. The sketch also over-counts on hash collisions
-(never under-counts), so a busy NAT gateway sharing cells with a flooder can lose its signature
-early, which is the same mild failure.
-
-Then check against real traffic: `tcp_syn_rate_skipped_total` should not increase under normal load.
-Watch its rate, not its absolute value, since the counter is pinned and keeps earlier totals. If it
-climbs with no attack in progress, `burst` is too tight, usually a NAT gateway behind one IP.
+The `4 ×` is a conservative default, not a measured one: it caps one source at a quarter of the map
+and leaves the rest for everyone else. Err on the low side. Going over only skips fingerprint
+capture, so a tight `burst` costs TCP signatures for that source, not its traffic; a loose one costs
+the protection entirely.
 
 > The default `2000` is **not** a sized value, here or in `examples/docker-compose.ebpf.yml`. It is
-> roughly right on a single-core host and too loose everywhere else: on 8 cores it allows 16000 SYNs
-> per window against an 8192-entry LRU, so the limiter is on while one IP can still evict the whole
-> map nearly twice over. Compute your own from the formula above.
+> roughly right on a single-core host and too loose as soon as the host has several cores: on 8
+> cores it allows 16000 SYNs per window against an 8192-entry LRU, so the limiter is on while one IP
+> can still evict the whole map nearly twice over. Compute your own from the formula above.
 
 #### Choosing a capture backend
 
