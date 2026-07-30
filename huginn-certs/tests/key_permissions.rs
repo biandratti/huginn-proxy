@@ -8,33 +8,18 @@
 
 #![cfg(unix)]
 
+mod common;
+
 use std::io::Write;
 use std::os::unix::fs::PermissionsExt;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::{Arc, Mutex};
 
+use common::{CertFixture, TestResult};
 use huginn_certs::read_certs_and_keys;
 
-type TestResult = Result<(), Box<dyn std::error::Error + Send + Sync>>;
-
-/// A self-signed cert/key pair written to a temp dir kept alive by `_dir`.
-struct TestCert {
-    _dir: tempfile::TempDir,
-    cert: PathBuf,
-    key: PathBuf,
-}
-
-fn make_cert() -> Result<TestCert, Box<dyn std::error::Error + Send + Sync>> {
-    let dir = tempfile::tempdir()?;
-    let cert = dir.path().join("test.crt");
-    let key = dir.path().join("test.key");
-
-    let rcgen::CertifiedKey { cert: c, signing_key } =
-        rcgen::generate_simple_self_signed(vec!["localhost".to_string()])?;
-    std::fs::write(&cert, c.pem())?;
-    std::fs::write(&key, signing_key.serialize_pem())?;
-
-    Ok(TestCert { _dir: dir, cert, key })
+fn make_cert() -> Result<CertFixture, Box<dyn std::error::Error + Send + Sync>> {
+    CertFixture::new("localhost")
 }
 
 fn set_mode(path: &Path, mode: u32) -> std::io::Result<()> {

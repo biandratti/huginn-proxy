@@ -3,21 +3,17 @@
 //! (and a deliberately failing one) through `build_server_crypto` to show the
 //! origin of the material is decoupled from per-SNI config construction.
 
+mod common;
+
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use common::{ensure_crypto_provider, TestResult};
 use huginn_certs::{
     build_server_crypto, CertEntry, CertError, CryptoSource, ServerCertsKeys, TlsBuildOptions,
 };
 use rustls_pki_types::pem::PemObject;
 use rustls_pki_types::{CertificateDer, PrivateKeyDer};
-
-type TestResult = Result<(), Box<dyn std::error::Error + Send + Sync>>;
-
-/// Install the aws-lc-rs default crypto provider once (idempotent across tests).
-fn ensure_crypto_provider() {
-    let _ = tokio_rustls::rustls::crypto::aws_lc_rs::default_provider().install_default();
-}
 
 fn options() -> TlsBuildOptions {
     ensure_crypto_provider();

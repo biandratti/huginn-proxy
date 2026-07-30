@@ -5,9 +5,12 @@
 //! policy: non-mTLS configs issue stateless tickets from one shared ticketer while
 //! mTLS configs never resume so the client cert is verified on every connection.
 
+mod common;
+
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use common::{ensure_crypto_provider, CertFixture, TestResult};
 use huginn_certs::server_crypto::build_client_root_store;
 use huginn_certs::{
     build_server_crypto, CertEntry, CryptoFileSource, ServerCryptoMap, TlsBuildOptions,
@@ -20,37 +23,8 @@ use rustls_pki_types::{CertificateDer, PrivateKeyDer, ServerName};
 use tokio_rustls::rustls::{ClientConfig, RootCertStore, ServerConfig};
 use tokio_rustls::{TlsAcceptor, TlsConnector};
 
-type TestResult = Result<(), Box<dyn std::error::Error + Send + Sync>>;
-
-/// Install the aws-lc-rs default crypto provider once (idempotent across tests).
-fn ensure_crypto_provider() {
-    let _ = tokio_rustls::rustls::crypto::aws_lc_rs::default_provider().install_default();
-}
-
-/// A self-signed server pair plus a stand-in client-CA bundle, under a temp dir
-/// kept alive by `_dir`.
-struct Fixture {
-    _dir: tempfile::TempDir,
-    cert: PathBuf,
-    key: PathBuf,
-    client_ca: PathBuf,
-}
-
-fn fixture() -> Result<Fixture, Box<dyn std::error::Error + Send + Sync>> {
-    ensure_crypto_provider();
-    let dir = tempfile::tempdir()?;
-    let cert = dir.path().join("server.crt");
-    let key = dir.path().join("server.key");
-    let client_ca = dir.path().join("client-ca.crt");
-
-    let server = rcgen::generate_simple_self_signed(vec!["localhost".to_string()])?;
-    std::fs::write(&cert, server.cert.pem())?;
-    std::fs::write(&key, server.signing_key.serialize_pem())?;
-
-    let ca = rcgen::generate_simple_self_signed(vec!["client-ca".to_string()])?;
-    std::fs::write(&client_ca, ca.cert.pem())?;
-
-    Ok(Fixture { _dir: dir, cert, key, client_ca })
+fn fixture() -> Result<CertFixture, Box<dyn std::error::Error + Send + Sync>> {
+    CertFixture::new("localhost")
 }
 
 fn options(resumption_enabled: bool, sni_strict: bool) -> TlsBuildOptions {
@@ -268,7 +242,7 @@ async fn failed_rebuild_keeps_previous_config() -> TestResult {
 
 /// An empty (but existing) client-CA bundle next to the fixture: the config loader only checks
 /// that the path exists, so this is what reaches the builder in practice.
-fn empty_client_ca(fx: &Fixture) -> Result<PathBuf, Box<dyn std::error::Error + Send + Sync>> {
+fn empty_client_ca(fx: &CertFixture) -> Result<PathBuf, Box<dyn std::error::Error + Send + Sync>> {
     let path = fx
         .cert
         .parent()
@@ -626,6 +600,21 @@ fn client_root_store_dedups_identical_der() -> TestResult {
 
     assert_eq!(single.roots.len(), 1, "one anchor stays one");
     assert_eq!(duplicated.roots.len(), 1, "a repeated DER anchor must dedup to one");
+    Ok(())
+}
+
+#[test]
+fn a_broken_client_ca_is_reported_by_position() -> TestResult {
+    let key = KeyPair::generate()?;
+    let good = ca_cert("client-ca", &key)?.der().clone();
+    let broken = CertificateDer::from(vec![0x30, 0x03, 0x02, 0x01, 0x00]);
+
+    let message = match build_client_root_store(&[good, broken], "admin.example.com") {
+        Ok(_) => panic!("a CA that is not a usable trust anchor must fail the domain"),
+        Err(e) => e.to_string(),
+    };
+    assert!(message.contains("admin.example.com"), "the domain must be named: {message}");
+    assert!(message.contains("2 of 2"), "the offending entry must be located: {message}");
     Ok(())
 }
 

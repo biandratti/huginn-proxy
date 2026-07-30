@@ -341,11 +341,25 @@ fn anchor_dedup_key(der: &[u8]) -> Vec<u8> {
     der.to_vec()
 }
 
+/// Best-effort subject of a CA rustls refused, so a multi-CA bundle says which entry to
+/// look at. x509-parser is the more lenient of the two, so it often reads a certificate
+/// webpki rejected; when it cannot either, the position has to carry the message.
+fn anchor_subject(der: &[u8]) -> Option<String> {
+    x509_parser::parse_x509_certificate(der)
+        .ok()
+        .map(|(_, cert)| cert.subject().to_string())
+}
+
 /// Build a client-CA [`RootCertStore`] for mutual TLS, deduplicating anchors that
 /// share a Subject Key Identifier (see `anchor_dedup_key`).
 ///
 /// A client-CA bundle that repeats a CA (the same PEM twice, or the same CA key
 /// re-issued/re-encoded) would otherwise add redundant trust anchors.
+///
+/// A CA rustls cannot turn into a trust anchor fails the whole domain instead of being
+/// dropped from the set (rpxy drops it). Dropping the one CA that issues the client
+/// certificates leaves the domain up while turning every legitimate client away as an
+/// unknown issuer, with nothing on the server side saying why.
 ///
 /// Exposed (rather than private) so the SKID dedup can be asserted directly from the
 /// crate's integration tests, where the collapsed anchor count is observable but the
@@ -356,13 +370,21 @@ pub fn build_client_root_store(
 ) -> Result<RootCertStore, CertError> {
     let mut store = RootCertStore::empty();
     let mut seen: HashSet<Vec<u8>> = HashSet::new();
-    for ca in cas {
+    for (index, ca) in cas.iter().enumerate() {
         if !seen.insert(anchor_dedup_key(ca.as_ref())) {
             continue;
         }
-        store.add(ca.clone()).map_err(|e| CertError::ServerConfig {
-            label: label.to_string(),
-            message: e.to_string(),
+        store.add(ca.clone()).map_err(|e| {
+            let position = index.saturating_add(1);
+            let subject =
+                anchor_subject(ca.as_ref()).unwrap_or_else(|| "unreadable subject".to_string());
+            CertError::ServerConfig {
+                label: label.to_string(),
+                message: format!(
+                    "client CA {position} of {} ({subject}) is not a usable trust anchor: {e}",
+                    cas.len()
+                ),
+            }
         })?;
     }
     Ok(store)

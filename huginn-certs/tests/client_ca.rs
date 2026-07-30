@@ -6,37 +6,13 @@
 //! domain without client auth. Missing or empty bundles fail loudly instead of
 //! silently disabling client auth.
 
-use std::path::PathBuf;
+mod common;
 
+use common::{CertFixture, TestResult};
 use huginn_certs::{CertError, CryptoFileSource, CryptoSource};
 
-type TestResult = Result<(), Box<dyn std::error::Error + Send + Sync>>;
-
-/// A self-signed server pair plus a separate self-signed cert used as a client-CA
-/// bundle, all under a temp dir kept alive by `_dir`.
-struct Fixture {
-    _dir: tempfile::TempDir,
-    cert: PathBuf,
-    key: PathBuf,
-    client_ca: PathBuf,
-}
-
-fn fixture() -> Result<Fixture, Box<dyn std::error::Error + Send + Sync>> {
-    let dir = tempfile::tempdir()?;
-    let cert = dir.path().join("server.crt");
-    let key = dir.path().join("server.key");
-    let client_ca = dir.path().join("client-ca.crt");
-
-    let server = rcgen::generate_simple_self_signed(vec!["example.com".to_string()])?;
-    std::fs::write(&cert, server.cert.pem())?;
-    std::fs::write(&key, server.signing_key.serialize_pem())?;
-
-    // A self-signed cert stands in as the client-CA bundle: loading only parses
-    // the PEM into trust anchors, it does not validate CA-ness.
-    let ca = rcgen::generate_simple_self_signed(vec!["client-ca".to_string()])?;
-    std::fs::write(&client_ca, ca.cert.pem())?;
-
-    Ok(Fixture { _dir: dir, cert, key, client_ca })
+fn fixture() -> Result<CertFixture, Box<dyn std::error::Error + Send + Sync>> {
+    CertFixture::new("example.com")
 }
 
 /// Without a client-CA bundle the material carries no anchors and is not mTLS.
