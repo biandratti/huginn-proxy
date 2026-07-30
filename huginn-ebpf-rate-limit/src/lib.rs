@@ -47,8 +47,8 @@ pub const SLOTS: usize = 1024;
 // verifier-friendly index masks all depend on it.
 const _: () = assert!(SLOTS.is_power_of_two(), "SLOTS must be a power of two");
 
-/// `log2(SLOTS)` — how many top bits of the hash we use to pick a column. Derived from
-/// `SLOTS` (valid because `SLOTS` is a power of two), so it can never drift out of sync.
+/// `log2(SLOTS)`: how many top bits of the hash pick a column. Derived from `SLOTS` (valid because
+/// `SLOTS` is a power of two), so it can never drift out of sync.
 const SLOTS_BITS: u32 = SLOTS.trailing_zeros();
 
 /// Counters in one grid (`HASHES * SLOTS`).
@@ -56,6 +56,20 @@ pub const SLOT_LEN: usize = HASHES * SLOTS;
 
 /// Counters across both grids combined.
 pub const TOTAL_COUNTERS: usize = SLOT_LEN * 2;
+
+// The index masks below (`& (TOTAL_COUNTERS - 1)`) only *bound* an index while TOTAL_COUNTERS is a
+// power of two; otherwise they silently alias one grid's cells onto the other's. That holds via
+// SLOTS being a power of two and HASHES being one too, so assert it directly rather than relying
+// on both.
+const _: () =
+    assert!(TOTAL_COUNTERS.is_power_of_two(), "the index masks require a power-of-two size");
+
+/// Largest `threshold` [`Sketch::observe_over_limit`] can enforce.
+///
+/// Counters saturate at [`u16::MAX`], so one window's own count can never exceed a threshold at or
+/// above that, and callers must reject larger values. Derived from the counter width, so widening
+/// `counters` lifts it automatically.
+pub const MAX_THRESHOLD: u32 = (u16::MAX as u32).saturating_sub(1);
 
 /// One salt number per row, used to turn an IP into a column index. Each is a well-known
 /// constant borrowed from other hash functions, chosen only because it mixes bits well.
@@ -99,7 +113,7 @@ pub fn cell_indices(key: u64) -> [usize; HASHES] {
 /// The counter grid, in two copies so we can swap between them each window.
 /// `#[repr(C)]` gives it a fixed, predictable memory layout so it can be stored directly as
 /// the value of a single-entry BPF `PerCpuArray` map and edited in place through a raw pointer.
-/// Each CPU owns its own copy, so plain (non-atomic) fields are safe — no CPU ever touches
+/// Each CPU owns its own copy, so plain (non-atomic) fields are safe: no CPU ever touches
 /// another CPU's grid.
 #[repr(C)]
 pub struct Sketch {
@@ -145,7 +159,7 @@ impl Sketch {
 
     /// Advance the window once `window_ns` has elapsed: flip grids so the old current becomes the
     /// previous window, clearing the grid we flip into (it's two windows old). If 2+ windows
-    /// elapsed, the grid we leave is stale too — clear both and start fresh.
+    /// elapsed, the grid we leave is stale too, so clear both and start fresh.
     ///
     /// `window_ns == 0` means "never rotate" (tests).
     #[inline(always)]
@@ -159,10 +173,10 @@ impl Sketch {
         }
         let next = self.active_slot ^ 1;
         self.clear_slot(next);
-        // Idle for 2+ windows: the grid we are leaving is stale too, so don't let it decay in as
-        // "previous" — clear it and start clean. `elapsed - window >= window` is the same as
-        // `elapsed >= 2*window` but avoids a multiply (a runtime `* 2` lowers to a 128-bit
-        // overflow-checked multiply → `__multi3`, unlinkable on BPF); `elapsed >= window` holds here.
+        // Idle for 2+ windows: the grid we are leaving is stale too, so clear it instead of letting
+        // it decay in as "previous". `elapsed - window >= window` is the same test as
+        // `elapsed >= 2*window` (`elapsed >= window` holds here), but avoids a runtime `* 2`, which
+        // lowers to a 128-bit checked multiply calling `__multi3`, unlinkable on BPF.
         if elapsed.saturating_sub(window_ns) >= window_ns {
             self.clear_slot(self.active_slot);
         }
@@ -244,7 +258,7 @@ impl Sketch {
             .wrapping_shl(8)
             .checked_div(w as u32)
             .unwrap_or(0);
-        // prev_min (<= u32::MAX) * frac (<= 256) fits in u64; `>> 8` undoes the fixed-point scale.
+        // prev_min (<= u16::MAX) * frac (<= 256) fits in u64; `>> 8` undoes the fixed-point scale.
         let prev_contrib = (prev_min as u64).wrapping_mul(frac as u64).wrapping_shr(8);
         let estimate = (curr_min as u64).saturating_add(prev_contrib);
         estimate > threshold as u64

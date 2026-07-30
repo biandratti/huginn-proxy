@@ -18,15 +18,19 @@ follows [Semantic Versioning](https://semver.org/).
   `limit_by_header`), and `proxy_protocol` with no trusted peer. `--validate` prints a warning count;
   `--strict` exits non-zero on any warning. See `SETTINGS.md`.
 - **In-kernel per-source-IP SYN rate limiter (eBPF).** New agent env vars
-  `HUGINN_EBPF_RATE_LIMIT_ENABLED` (default `false`), `HUGINN_EBPF_RATE_LIMIT_BURST`, and
-  `HUGINN_EBPF_RATE_LIMIT_WINDOW_SECONDS`. When enabled, the XDP/TC datapath counts each source
-  IP's SYNs with a sliding-window Count-Min Sketch and, for those over the threshold, skips
-  capture (does not fingerprint them; the packet still passes through), protecting the
-  `tcp_syn_map` LRU from floods.
-  Constant memory regardless of the number of (even spoofed) source IPs. The sketch is per-CPU,
-  so the threshold is enforced per CPU — size `BURST` accordingly. Exported as
-  `tcp_syn_rate_skipped_total` / `tcp_syn_rate_allowed_total` (by `family`) and
-  `tcp_syn_rate_limit_enabled`. See `EBPF-SETUP.md` and `TELEMETRY.md`.
+  `HUGINN_EBPF_RATE_LIMIT_ENABLED` (default `false`), `HUGINN_EBPF_RATE_LIMIT_BURST`
+  (`1..=65534`, default `2000`) and `HUGINN_EBPF_RATE_LIMIT_WINDOW_SECONDS` (`1..=3600`,
+  default `1`). When enabled, the XDP/TC datapath counts each source IP's SYNs with a
+  sliding-window Count-Min Sketch and skips capture for those over the threshold, protecting the
+  `tcp_syn_map` LRU from floods. The packet still reaches the TCP stack; only the fingerprint is
+  lost. Constant memory whatever the number of (even spoofed) source IPs. The sketch is per-CPU, so
+  the threshold is too: size `BURST` against `HUGINN_EBPF_SYN_MAP_MAX_ENTRIES`, not against the
+  proxy's `[security.rate_limit]`. Unusable values are logged at `ERROR` and replaced with defaults
+  instead of aborting startup. Adds `tcp_syn_rate_skipped_total` / `tcp_syn_rate_allowed_total`
+  (by `family`), `tcp_syn_rate_limit_enabled`, and four pinned maps under `HUGINN_EBPF_PIN_PATH`
+  (`syn_rate_skipped_v4/v6`, `syn_rate_allowed_v4/v6`). The sketch itself is not pinned, but its
+  maps are allocated on every agent load even with the limiter off (~260 KiB on 8 CPUs, ~2 MiB on
+  64). See `EBPF-SETUP.md` and `TELEMETRY.md`.
 
 ### Breaking changes
 

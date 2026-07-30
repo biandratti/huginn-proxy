@@ -7,6 +7,7 @@ mod rate_limit;
 pub use capture::resolve_capture_backend;
 use log_level::resolve_log_level;
 use rate_limit::resolve_rate_limit;
+pub use rate_limit::{DEFAULT_BURST, DEFAULT_WINDOW_SECONDS};
 
 pub const DEFAULT_PIN_PATH: &str = pin::DEFAULT_PIN_BASE;
 pub use huginn_ebpf::{CaptureBackend, EbpfLogLevel, SynRateLimit, XdpAttachMode};
@@ -96,7 +97,8 @@ pub fn from_env(get_var: impl Fn(&str) -> Option<String>) -> Result<Config, Conf
 
     let log_level = resolve_log_level(&get_var)?;
 
-    let rate_limit = resolve_rate_limit(&get_var)?;
+    // Never fails. Bad values are logged and defaulted so the agent still publishes its maps.
+    let rate_limit = resolve_rate_limit(&get_var);
 
     Ok(Config {
         interface,

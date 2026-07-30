@@ -1011,6 +1011,7 @@ dependencies = [
  "aya",
  "aya-log",
  "huginn-ebpf-common",
+ "huginn-ebpf-rate-limit",
  "huginn-net-tcp",
  "libc",
  "log 0.4.33",

@@ -10,6 +10,7 @@ build = "src/build.rs"
 aya.workspace = true
 aya-log.workspace = true
 huginn-ebpf-common = { workspace = true, features = ["aya"] }
+huginn-ebpf-rate-limit.workspace = true
 huginn-net-tcp.workspace = true
 log.workspace = true
 thiserror.workspace = true
@@ -17,4 +18,4 @@ tracing.workspace = true
 
 [dev-dependencies]
 huginn-ebpf-common = { workspace = true }
-libc = "0.2.186"
+libc.workspace = true

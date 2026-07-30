@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use huginn_ebpf_agent::config::{from_env, ConfigError};
+use huginn_ebpf_agent::config::{from_env, SynRateLimit, DEFAULT_BURST, DEFAULT_WINDOW_SECONDS};
 
 /// Build a `get_var` closure from a list of (name, value) pairs.
 fn env_of(pairs: &[(&'static str, &'static str)]) -> impl Fn(&str) -> Option<String> {
@@ -72,53 +72,118 @@ fn rate_limit_enabled_defaults_window_to_one_second() {
 }
 
 #[test]
-fn rate_limit_enabled_without_burst_is_missing() {
-    let result = from_env(required_with(&[("HUGINN_EBPF_RATE_LIMIT_ENABLED", "true")]));
-    assert!(
-        matches!(result, Err(ConfigError::Missing { ref name }) if name == "HUGINN_EBPF_RATE_LIMIT_BURST"),
-        "enabling without a burst should report it missing, got {result:?}"
-    );
+fn rate_limit_enabled_without_burst_falls_back_to_the_default() {
+    let cfg = parse_ok(required_with(&[("HUGINN_EBPF_RATE_LIMIT_ENABLED", "true")]));
+    assert!(cfg.rate_limit.enabled);
+    assert_eq!(cfg.rate_limit.threshold, DEFAULT_BURST);
 }
 
 #[test]
-fn rate_limit_burst_zero_is_rejected() {
-    let result = from_env(required_with(&[
+fn rate_limit_unusable_burst_falls_back_to_the_default() {
+    // A burst at or above 65535 is never crossed (the sketch counts in u16), so the limiter
+    // would pass every SYN. Zero would skip every SYN. Both are logged at ERROR and replaced
+    // with the default so the agent still publishes its maps.
+    for burst in ["0", "65535", "131070", "5000000000", "not-a-number", "-1"] {
+        let cfg = parse_ok(required_with(&[
+            ("HUGINN_EBPF_RATE_LIMIT_ENABLED", "true"),
+            ("HUGINN_EBPF_RATE_LIMIT_BURST", burst),
+        ]));
+        assert_eq!(
+            cfg.rate_limit.threshold, DEFAULT_BURST,
+            "burst {burst} is unusable and must fall back to the default"
+        );
+        assert!(cfg.rate_limit.enabled, "the limiter stays on with the default burst");
+    }
+}
+
+#[test]
+fn rate_limit_accepts_the_highest_usable_burst() {
+    assert_eq!(SynRateLimit::MAX_THRESHOLD, 65_534, "the literal below tracks this ceiling");
+    let cfg = parse_ok(required_with(&[
         ("HUGINN_EBPF_RATE_LIMIT_ENABLED", "true"),
-        ("HUGINN_EBPF_RATE_LIMIT_BURST", "0"),
+        ("HUGINN_EBPF_RATE_LIMIT_BURST", "65534"),
     ]));
-    assert!(
-        matches!(
-            result,
-            Err(ConfigError::Invalid { ref name, .. }) if name == "HUGINN_EBPF_RATE_LIMIT_BURST"
-        ),
-        "a zero burst would blackhole all SYNs and must be rejected, got {result:?}"
-    );
+    assert_eq!(cfg.rate_limit.threshold, 65_534);
+    assert!(cfg.rate_limit.enabled, "the ceiling itself is still enforceable");
 }
 
 #[test]
-fn rate_limit_window_seconds_zero_is_rejected() {
-    let result = from_env(required_with(&[
+fn rate_limit_unusable_window_seconds_falls_back_to_the_default() {
+    // 0 would never rotate. Past the ceiling the counters saturate long before the window ends,
+    // so a source that reaches `burst` stays uncaptured for the rest of it.
+    for window in ["0", "not-a-number", "-3", "3601", "10000000000000"] {
+        let cfg = parse_ok(required_with(&[
+            ("HUGINN_EBPF_RATE_LIMIT_ENABLED", "true"),
+            ("HUGINN_EBPF_RATE_LIMIT_BURST", "500"),
+            ("HUGINN_EBPF_RATE_LIMIT_WINDOW_SECONDS", window),
+        ]));
+        assert_eq!(
+            cfg.rate_limit.window_ns,
+            DEFAULT_WINDOW_SECONDS.saturating_mul(1_000_000_000),
+            "window {window} is unusable and must fall back to the default"
+        );
+        assert_eq!(cfg.rate_limit.threshold, 500, "a valid burst is still honoured");
+    }
+}
+
+#[test]
+fn rate_limit_accepts_the_longest_usable_window() {
+    assert_eq!(SynRateLimit::MAX_WINDOW_SECONDS, 3600, "the literal below tracks this ceiling");
+    let cfg = parse_ok(required_with(&[
         ("HUGINN_EBPF_RATE_LIMIT_ENABLED", "true"),
         ("HUGINN_EBPF_RATE_LIMIT_BURST", "500"),
-        ("HUGINN_EBPF_RATE_LIMIT_WINDOW_SECONDS", "0"),
+        ("HUGINN_EBPF_RATE_LIMIT_WINDOW_SECONDS", "3600"),
     ]));
+    assert_eq!(cfg.rate_limit.window_ns, 3_600_000_000_000);
+    assert!(cfg.rate_limit.enabled, "the ceiling itself is still usable");
+}
+
+#[test]
+fn rate_limit_invalid_enabled_value_falls_back_to_disabled() {
+    let cfg = parse_ok(required_with(&[("HUGINN_EBPF_RATE_LIMIT_ENABLED", "maybe")]));
     assert!(
-        matches!(
-            result,
-            Err(ConfigError::Invalid { ref name, .. }) if name == "HUGINN_EBPF_RATE_LIMIT_WINDOW_SECONDS"
-        ),
-        "a zero window should be rejected, got {result:?}"
+        !cfg.rate_limit.enabled,
+        "an unparseable ENABLED value falls back to the default"
     );
 }
 
 #[test]
-fn rate_limit_invalid_enabled_value_is_rejected() {
-    let result = from_env(required_with(&[("HUGINN_EBPF_RATE_LIMIT_ENABLED", "maybe")]));
-    assert!(
-        matches!(
-            result,
-            Err(ConfigError::Invalid { ref name, .. }) if name == "HUGINN_EBPF_RATE_LIMIT_ENABLED"
-        ),
-        "an unparseable ENABLED value should be rejected, got {result:?}"
+fn rate_limit_enabled_tolerates_case_and_surrounding_whitespace() {
+    // Values are trimmed and lowercased before parsing, like HUGINN_EBPF_CAPTURE. `bool`'s own
+    // FromStr takes only exact "true"/"false", so without that a `TRUE` in a compose file or a
+    // trailing space out of a `.env` would leave the limiter silently off.
+    for raw in ["true", "TRUE", "True", " true ", "true\n"] {
+        let cfg = parse_ok(required_with(&[("HUGINN_EBPF_RATE_LIMIT_ENABLED", raw)]));
+        assert!(cfg.rate_limit.enabled, "ENABLED={raw:?} must enable the limiter");
+    }
+    for raw in ["false", "FALSE", " False "] {
+        let cfg = parse_ok(required_with(&[("HUGINN_EBPF_RATE_LIMIT_ENABLED", raw)]));
+        assert!(!cfg.rate_limit.enabled, "ENABLED={raw:?} must leave the limiter off");
+    }
+}
+
+#[test]
+fn rate_limit_burst_and_window_tolerate_surrounding_whitespace() {
+    let cfg = parse_ok(required_with(&[
+        ("HUGINN_EBPF_RATE_LIMIT_ENABLED", "true"),
+        ("HUGINN_EBPF_RATE_LIMIT_BURST", " 500 "),
+        ("HUGINN_EBPF_RATE_LIMIT_WINDOW_SECONDS", " 2\n"),
+    ]));
+    assert_eq!(
+        cfg.rate_limit.threshold, 500,
+        "a padded burst must not fall back to the default"
     );
+    assert_eq!(cfg.rate_limit.window_ns, 2_000_000_000, "a padded window must be honoured");
+}
+
+#[test]
+fn a_bad_rate_limit_never_fails_the_whole_config() {
+    // The agent must still start and pin its maps: exiting here leaves the proxy waiting forever
+    // on pinned maps that never appear, taking HTTP and TLS fingerprinting down with it.
+    let result = from_env(required_with(&[
+        ("HUGINN_EBPF_RATE_LIMIT_ENABLED", "yes-please"),
+        ("HUGINN_EBPF_RATE_LIMIT_BURST", "5000000000"),
+        ("HUGINN_EBPF_RATE_LIMIT_WINDOW_SECONDS", "-3"),
+    ]));
+    assert!(result.is_ok(), "rate-limit values must never be fatal, got {result:?}");
 }

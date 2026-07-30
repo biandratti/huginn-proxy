@@ -7,7 +7,7 @@
 //! other 5 are missing.
 //!
 //! Needs root (CAP_BPF / CAP_NET_ADMIN / CAP_PERFMON) and generic-XDP-on-loopback support, which
-//!  CI runner doesn't have, so this is `#[ignore]`d by default. Run it explicitly on a
+//! the CI runner does not have, so this is `#[ignore]`d by default. Run it explicitly on a
 //! privileged Linux host:
 //!
 //!   cargo test -p huginn-ebpf --test rate_limit_ebpf -- --ignored --nocapture

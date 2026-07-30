@@ -1,9 +1,9 @@
 //! Per-source-IP SYN rate limiting gate.
 //!
 //! Runs in both data path hooks (XDP and TC) right after the SYN check and before the expensive
-//! TCP-option copy. Over-limit SYNs are *skipped* (not captured into the `tcp_syn_map_v4/v6` LRU
-//! maps) so a single flooding IP cannot saturate them — the packet itself is never dropped and
-//! always passes through to the stack.
+//! TCP-option copy. Over-limit SYNs are skipped, not captured into the `tcp_syn_map_v4/v6` LRU
+//! maps, so a single flooding IP cannot saturate them. The packet is never dropped and always
+//! passes through to the stack.
 //!
 //! The counting algorithm lives in the shared `huginn-ebpf-rate-limit` crate; this module only
 //! wires it to BPF maps, loader-patched thresholds, and kernel clock.

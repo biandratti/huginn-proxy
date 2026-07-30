@@ -1,4 +1,4 @@
-use huginn_ebpf_rate_limit::{cell_indices, fold_v6, Sketch, SLOTS, SLOT_LEN};
+use huginn_ebpf_rate_limit::{cell_indices, fold_v6, Sketch, MAX_THRESHOLD, SLOTS, SLOT_LEN};
 
 const WINDOW: u64 = 1_000_000_000; // 1s in ns
 
@@ -218,4 +218,23 @@ fn counters_saturate_instead_of_wrapping_at_the_max() {
     // One more observation must saturate, not wrap to 0.
     let over = s.observe_over_limit(key, 0, WINDOW, u32::from(u16::MAX) - 1);
     assert!(over, "count must saturate at u16::MAX, not wrap around and look allowed");
+}
+
+#[test]
+fn max_threshold_is_the_largest_one_a_single_window_can_cross() {
+    // Saturating u16 counters cap one window's count at 65535, so MAX_THRESHOLD is the last
+    // threshold a window can push past on its own. Above it a window never fires, however many
+    // SYNs arrive, which is why configs must reject it (see the HUGINN_EBPF_RATE_LIMIT_BURST
+    // bound in huginn-ebpf-agent).
+    let key = key_from_v4(0x0A00_000A);
+    let saturate = u32::from(u16::MAX).saturating_add(1);
+
+    let mut at_max = Sketch::new();
+    let fired = (0..saturate).any(|_| at_max.observe_over_limit(key, 1, WINDOW, MAX_THRESHOLD));
+    assert!(fired, "MAX_THRESHOLD must still be reachable");
+
+    let mut over_max = Sketch::new();
+    let fired = (0..saturate)
+        .any(|_| over_max.observe_over_limit(key, 1, WINDOW, MAX_THRESHOLD.saturating_add(1)));
+    assert!(!fired, "a single window cannot cross a threshold above MAX_THRESHOLD");
 }

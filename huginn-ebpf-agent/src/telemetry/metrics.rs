@@ -41,7 +41,7 @@ impl Metrics {
                 .build(),
             rate_limit_enabled: meter
                 .u64_gauge("tcp_syn_rate_limit_enabled")
-                .with_description("1 if the in-kernel per-source-IP SYN rate limiter is enabled")
+                .with_description("1 if the per-source-IP SYN rate limiter is enabled")
                 .build(),
         }
     }
@@ -129,7 +129,7 @@ pub fn init_metrics(pin_path: Arc<String>) -> crate::error::Result<(Registry, Me
     let _ = meter
         .u64_observable_counter("tcp_syn_rate_skipped_total")
         .with_description(
-            "Number of TCP SYNs skipped (not captured/fingerprinted) by the per-source-IP eBPF rate limiter when over the limit; the packet still passes to the stack",
+            "Number of TCP SYNs not captured because the source IP was over the rate limit",
         )
         .with_callback(move |observer| {
             let v4 = syn_rate_skipped_v4_count_from_path(pin_path_rate.as_str()).unwrap_or(0);
@@ -141,11 +141,10 @@ pub fn init_metrics(pin_path: Arc<String>) -> crate::error::Result<(Registry, Me
 
     let _ = meter
         .u64_observable_counter("tcp_syn_rate_allowed_total")
-        .with_description(
-            "Number of TCP SYNs allowed through by the per-source-IP eBPF rate limiter (under limit)",
-        )
+        .with_description("Number of TCP SYNs captured while under the per-source-IP rate limit")
         .with_callback(move |observer| {
-            let v4 = syn_rate_allowed_v4_count_from_path(pin_path_rate_allowed.as_str()).unwrap_or(0);
+            let v4 =
+                syn_rate_allowed_v4_count_from_path(pin_path_rate_allowed.as_str()).unwrap_or(0);
             let v6 =
                 syn_rate_allowed_v6_count_from_path(pin_path_rate_allowed.as_str()).unwrap_or(0);
             observer.observe(v4, &[KeyValue::new(labels::FAMILY, labels::FAMILY_V4)]);

@@ -1,55 +1,79 @@
-use super::ConfigError;
 use huginn_ebpf::SynRateLimit;
+use std::fmt::Display;
+use std::str::FromStr;
 
-/// Resolve the per-source-IP SYN rate limit from the environment. Mirrors the proxy's global
-/// `[security.rate_limit]`: `HUGINN_EBPF_RATE_LIMIT_BURST` is the per-window per-IP threshold
-/// and `HUGINN_EBPF_RATE_LIMIT_WINDOW_SECONDS` the window. Disabled by default.
-pub(super) fn resolve_rate_limit(
-    get_var: &impl Fn(&str) -> Option<String>,
-) -> Result<SynRateLimit, ConfigError> {
-    let enabled = match get_var("HUGINN_EBPF_RATE_LIMIT_ENABLED") {
-        Some(s) => s.parse::<bool>().map_err(|_| ConfigError::Invalid {
-            name: "HUGINN_EBPF_RATE_LIMIT_ENABLED".to_string(),
-            value: s.clone(),
-            reason: "must be 'true' or 'false'".to_string(),
-        })?,
-        None => false,
-    };
+/// Fallback `burst` when `HUGINN_EBPF_RATE_LIMIT_BURST` is missing or unusable.
+pub const DEFAULT_BURST: u32 = 2000;
 
+/// Fallback window when `HUGINN_EBPF_RATE_LIMIT_WINDOW_SECONDS` is missing or unusable.
+pub const DEFAULT_WINDOW_SECONDS: u64 = 1;
+
+/// Resolve the per-source-IP SYN rate limit from the environment: `HUGINN_EBPF_RATE_LIMIT_BURST`
+/// is the per-window per-IP threshold and `HUGINN_EBPF_RATE_LIMIT_WINDOW_SECONDS` the window.
+/// Disabled by default. Not the proxy's `[security.rate_limit]`: this one counts SYNs and is
+/// enforced per CPU, so the same number means something different. See `EBPF-SETUP.md`.
+///
+/// Never fails. A bad value is logged at ERROR and replaced with its default. Exiting would
+/// leave the proxy waiting for pinned maps that never appear.
+pub(super) fn resolve_rate_limit(get_var: &impl Fn(&str) -> Option<String>) -> SynRateLimit {
+    let enabled =
+        or_default(get_var, "HUGINN_EBPF_RATE_LIMIT_ENABLED", false, "'true' or 'false'", |_| true);
     if !enabled {
-        return Ok(SynRateLimit::disabled());
+        return SynRateLimit::disabled();
     }
 
-    let burst_str = get_var("HUGINN_EBPF_RATE_LIMIT_BURST")
-        .ok_or(ConfigError::Missing { name: "HUGINN_EBPF_RATE_LIMIT_BURST".to_string() })?;
-    let burst: u32 = burst_str.parse().map_err(|_| ConfigError::Invalid {
-        name: "HUGINN_EBPF_RATE_LIMIT_BURST".to_string(),
-        value: burst_str.clone(),
-        reason: "must be a positive integer".to_string(),
-    })?;
-    if burst == 0 {
-        return Err(ConfigError::Invalid {
-            name: "HUGINN_EBPF_RATE_LIMIT_BURST".to_string(),
-            value: burst_str,
-            reason: "must be greater than zero".to_string(),
-        });
-    }
+    // The sketch's u16 counters saturate at 65535, so a larger burst can never be crossed by the
+    // window's own count and every SYN passes.
+    let max_burst = SynRateLimit::MAX_THRESHOLD;
+    let burst = or_default(
+        get_var,
+        "HUGINN_EBPF_RATE_LIMIT_BURST",
+        DEFAULT_BURST,
+        &format!("an integer between 1 and {max_burst}"),
+        |b| b > 0 && b <= max_burst,
+    );
+    // Counts only age out when the window rotates, and the u16 counters saturate long before that
+    // on a long window. Past an hour a source that reaches `burst` stays pinned at the ceiling and
+    // uncaptured for the rest of the window, turning the limiter into a blocklist.
+    let max_window = SynRateLimit::MAX_WINDOW_SECONDS;
+    let window_seconds = or_default(
+        get_var,
+        "HUGINN_EBPF_RATE_LIMIT_WINDOW_SECONDS",
+        DEFAULT_WINDOW_SECONDS,
+        &format!("an integer between 1 and {max_window} (seconds)"),
+        |w| w > 0 && w <= max_window,
+    );
 
-    let window_seconds: u64 = match get_var("HUGINN_EBPF_RATE_LIMIT_WINDOW_SECONDS") {
-        Some(s) => s.parse().map_err(|_| ConfigError::Invalid {
-            name: "HUGINN_EBPF_RATE_LIMIT_WINDOW_SECONDS".to_string(),
-            value: s.clone(),
-            reason: "must be a positive integer".to_string(),
-        })?,
-        None => 1,
+    SynRateLimit::from_burst_window(true, burst, window_seconds)
+}
+
+/// Read `name`, or log what was wrong with it and fall back to `default`.
+///
+/// Trimmed and lowercased before parsing, like `HUGINN_EBPF_CAPTURE` and `HUGINN_EBPF_LOG_LEVEL`:
+/// `bool`'s own `FromStr` takes only exact `true`/`false`, so without this a `TRUE` or a stray
+/// space from a compose/`.env` file would silently disable the limiter. Lowercasing is a no-op for
+/// the numeric values.
+fn or_default<T: FromStr + Display + Copy>(
+    get_var: &impl Fn(&str) -> Option<String>,
+    name: &str,
+    default: T,
+    expected: &str,
+    usable: impl Fn(T) -> bool,
+) -> T {
+    let Some(raw) = get_var(name) else {
+        return default;
     };
-    if window_seconds == 0 {
-        return Err(ConfigError::Invalid {
-            name: "HUGINN_EBPF_RATE_LIMIT_WINDOW_SECONDS".to_string(),
-            value: "0".to_string(),
-            reason: "must be greater than zero".to_string(),
-        });
+    match raw.trim().to_ascii_lowercase().parse::<T>() {
+        Ok(value) if usable(value) => value,
+        _ => {
+            tracing::error!(
+                name,
+                value = %raw,
+                expected,
+                fallback = %default,
+                "invalid eBPF rate-limit configuration; using the default instead"
+            );
+            default
+        }
     }
-
-    Ok(SynRateLimit::from_burst_window(true, burst, window_seconds))
 }
