@@ -2,6 +2,8 @@ use std::collections::HashMap;
 
 use huginn_ebpf_agent::config::{from_env, SynRateLimit, DEFAULT_BURST, DEFAULT_WINDOW_SECONDS};
 
+const NANOS_PER_SEC: u64 = 1_000_000_000;
+
 /// Build a `get_var` closure from a list of (name, value) pairs.
 fn env_of(pairs: &[(&'static str, &'static str)]) -> impl Fn(&str) -> Option<String> {
     let map: HashMap<String, String> = pairs
@@ -37,13 +39,9 @@ fn parse_ok(env: impl Fn(&str) -> Option<String>) -> huginn_ebpf_agent::config::
 
 #[test]
 fn rate_limit_disabled_by_default_and_ignores_garbage_burst() {
-    // With ENABLED unset (or false), BURST/WINDOW_SECONDS are never even read, so garbage
-    // values there must not cause an error.
-    let cfg = parse_ok(required_with(&[("HUGINN_EBPF_RATE_LIMIT_BURST", "not-a-number")]));
-    assert!(!cfg.rate_limit.enabled);
-
+    // With ENABLED unset, BURST/WINDOW_SECONDS are never read, so garbage there must not error.
+    // Explicit `false` is covered by rate_limit_enabled_tolerates_case_and_surrounding_whitespace.
     let cfg = parse_ok(required_with(&[
-        ("HUGINN_EBPF_RATE_LIMIT_ENABLED", "false"),
         ("HUGINN_EBPF_RATE_LIMIT_BURST", "not-a-number"),
         ("HUGINN_EBPF_RATE_LIMIT_WINDOW_SECONDS", "0"),
     ]));
@@ -59,16 +57,16 @@ fn rate_limit_enabled_converts_burst_and_window_seconds() {
     ]));
     assert!(cfg.rate_limit.enabled);
     assert_eq!(cfg.rate_limit.threshold, 2000);
-    assert_eq!(cfg.rate_limit.window_ns, 2_000_000_000);
+    assert_eq!(cfg.rate_limit.window_ns, NANOS_PER_SEC.saturating_mul(2));
 }
 
 #[test]
-fn rate_limit_enabled_defaults_window_to_one_second() {
+fn rate_limit_enabled_defaults_the_window() {
     let cfg = parse_ok(required_with(&[
         ("HUGINN_EBPF_RATE_LIMIT_ENABLED", "true"),
         ("HUGINN_EBPF_RATE_LIMIT_BURST", "500"),
     ]));
-    assert_eq!(cfg.rate_limit.window_ns, 1_000_000_000);
+    assert_eq!(cfg.rate_limit.window_ns, DEFAULT_WINDOW_SECONDS.saturating_mul(NANOS_PER_SEC));
 }
 
 #[test]
@@ -82,7 +80,7 @@ fn rate_limit_enabled_without_burst_falls_back_to_the_default() {
 fn rate_limit_unusable_burst_falls_back_to_the_default() {
     // A burst at or above 65535 is never crossed (the sketch counts in u16), so the limiter
     // would pass every SYN. Zero would skip every SYN. Both are logged at ERROR and replaced
-    // with the default so the agent still publishes its maps.
+    // with the default, so the agent still publishes its maps.
     for burst in ["0", "65535", "131070", "5000000000", "not-a-number", "-1"] {
         let cfg = parse_ok(required_with(&[
             ("HUGINN_EBPF_RATE_LIMIT_ENABLED", "true"),
@@ -119,7 +117,7 @@ fn rate_limit_unusable_window_seconds_falls_back_to_the_default() {
         ]));
         assert_eq!(
             cfg.rate_limit.window_ns,
-            DEFAULT_WINDOW_SECONDS.saturating_mul(1_000_000_000),
+            DEFAULT_WINDOW_SECONDS.saturating_mul(NANOS_PER_SEC),
             "window {window} is unusable and must fall back to the default"
         );
         assert_eq!(cfg.rate_limit.threshold, 500, "a valid burst is still honoured");
@@ -134,7 +132,7 @@ fn rate_limit_accepts_the_longest_usable_window() {
         ("HUGINN_EBPF_RATE_LIMIT_BURST", "500"),
         ("HUGINN_EBPF_RATE_LIMIT_WINDOW_SECONDS", "3600"),
     ]));
-    assert_eq!(cfg.rate_limit.window_ns, 3_600_000_000_000);
+    assert_eq!(cfg.rate_limit.window_ns, NANOS_PER_SEC.saturating_mul(3600));
     assert!(cfg.rate_limit.enabled, "the ceiling itself is still usable");
 }
 
@@ -149,8 +147,8 @@ fn rate_limit_invalid_enabled_value_falls_back_to_disabled() {
 
 #[test]
 fn rate_limit_enabled_tolerates_case_and_surrounding_whitespace() {
-    // Values are trimmed and lowercased before parsing, like HUGINN_EBPF_CAPTURE. `bool`'s own
-    // FromStr takes only exact "true"/"false", so without that a `TRUE` in a compose file or a
+    // Values are trimmed and lowercased before parsing. `bool`'s own FromStr takes only
+    // exact "true"/"false", so without that a `TRUE` in a compose file or a
     // trailing space out of a `.env` would leave the limiter silently off.
     for raw in ["true", "TRUE", "True", " true ", "true\n"] {
         let cfg = parse_ok(required_with(&[("HUGINN_EBPF_RATE_LIMIT_ENABLED", raw)]));
@@ -173,7 +171,11 @@ fn rate_limit_burst_and_window_tolerate_surrounding_whitespace() {
         cfg.rate_limit.threshold, 500,
         "a padded burst must not fall back to the default"
     );
-    assert_eq!(cfg.rate_limit.window_ns, 2_000_000_000, "a padded window must be honoured");
+    assert_eq!(
+        cfg.rate_limit.window_ns,
+        NANOS_PER_SEC.saturating_mul(2),
+        "a padded window must be honoured"
+    );
 }
 
 #[test]
@@ -181,7 +183,7 @@ fn a_bad_rate_limit_never_fails_the_whole_config() {
     // The agent must still start and pin its maps: exiting here leaves the proxy waiting forever
     // on pinned maps that never appear, taking HTTP and TLS fingerprinting down with it.
     let result = from_env(required_with(&[
-        ("HUGINN_EBPF_RATE_LIMIT_ENABLED", "yes-please"),
+        ("HUGINN_EBPF_RATE_LIMIT_ENABLED", "yes-test"),
         ("HUGINN_EBPF_RATE_LIMIT_BURST", "5000000000"),
         ("HUGINN_EBPF_RATE_LIMIT_WINDOW_SECONDS", "-3"),
     ]));
