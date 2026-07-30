@@ -276,9 +276,13 @@ Host matching order, against that resolved host:
    rule.
 4. No match → HTTP 421 (Misdirected Request).
 
-Host matching is **case-insensitive**: `host` values are lowercased at load and compared
-against the lowercased request host. The config is rejected at load if two domains share the
-same `host` (after lowercasing) or if more than one catch-all (host-less) domain is defined.
+Host matching is **case-insensitive**, and a trailing `.` (the DNS root label; `api.example.com.`
+and `api.example.com` name the same domain) is discarded: `host` values are lowercased and have
+a trailing dot stripped at load, and the same two normalizations are applied to the resolved
+request host and to the TLS SNI. The config is rejected at load if two domains share the same
+`host` after normalization (so `api.example.com` and `api.example.com.` count as the same host
+and collide as a duplicate), if a `host` normalizes to empty (a bare `"."`), or if more than one
+catch-all (host-less) domain is defined.
 
 `X-Forwarded-Host` sent to the backend mirrors this resolved routing host (never a
 client-supplied `X-Forwarded-Host`), so it always agrees with the backend the request reaches.
@@ -310,7 +314,7 @@ enforce).
 
 | Key         | Type   | Default | Description                                                                                      |
 |-------------|--------|---------|--------------------------------------------------------------------------------------------------|
-| `host`      | string | `null`  | Domain pattern for host matching: exact (`api.example.com`) or single-level wildcard (`*.example.com`). **Omit for a catch-all** that matches any host; its cert (if any) is the TLS default certificate. |
+| `host`      | string | `null`  | Domain pattern for host matching: exact (`api.example.com`) or single-level wildcard (`*.example.com`). Normalized at load: lowercased, trailing `.` stripped. **Omit for a catch-all** that matches any host; its cert (if any) is the TLS default certificate. |
 | `cert_path` | string | `null`  | Path to the TLS certificate PEM file. Omit for plain-HTTP-only domains. Requires a [`[tls]`](#tls) section: without it no listener terminates TLS and the config is rejected at startup. |
 | `key_path`  | string | `null`  | Path to the TLS private key PEM file. Must be set together with `cert_path` or both omitted.     |
 | `client_ca_path` | string | `null` | Path to a client-CA bundle PEM file. When set, this domain requires **mutual TLS**: clients must present a certificate signed by one of these CAs. Requires `cert_path`/`key_path`. Hot-reloadable per-domain. |

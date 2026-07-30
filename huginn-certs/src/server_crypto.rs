@@ -223,6 +223,12 @@ impl ServerCryptoMap {
 
     /// Resolve `sni` (or no SNI = `None`) to a [`ServerCryptoForSni`].
     ///
+    /// `sni` is expected already normalized by the caller (lowercased, trailing `.`
+    /// stripped) to match the domain keys stored in `exact`/`wildcard`, which go through
+    /// the same normalization at config load. rustls lowercases SNI itself but does not
+    /// strip the trailing dot, so the caller (`huginn-proxy-lib`'s TLS transport, the only
+    /// caller of this method) does that before calling `select`.
+    ///
     /// Order: exact → wildcard (one label stripped) → catch-all default. `None` means
     /// no match: in strict mode an unmatched or absent SNI resolves to nothing; in
     /// lenient mode both fall back to the default cert if one exists. A `None` result

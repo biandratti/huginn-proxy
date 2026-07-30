@@ -205,6 +205,67 @@ host = "API.Example.COM"
 }
 
 #[test]
+fn normalizes_domain_host_trailing_dot() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let path = tmp_path("host-trailing-dot");
+    let toml = r#"
+listen = { addrs = ["127.0.0.1:0"] }
+backends = [{ address = "b:9000" }]
+
+[[domains]]
+host = "API.Example.COM."
+"#;
+    fs::write(&path, toml)?;
+    let cfg = load_from_path(&path)?;
+    assert_eq!(cfg.domains[0].host.as_deref(), Some("api.example.com"));
+    let _ = fs::remove_file(&path);
+    Ok(())
+}
+
+#[test]
+fn rejects_duplicate_domain_host_with_and_without_trailing_dot(
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let path = tmp_path("dup-host-trailing-dot");
+    let toml = r#"
+listen = { addrs = ["127.0.0.1:0"] }
+backends = [{ address = "b:9000" }]
+
+[[domains]]
+host = "api.example.com."
+
+[[domains]]
+host = "api.example.com"
+"#;
+    fs::write(&path, toml)?;
+    let err = match load_from_path(&path) {
+        Ok(_) => panic!("should reject duplicate domain host (with/without trailing dot)"),
+        Err(e) => e.to_string(),
+    };
+    assert!(err.contains("Duplicate domain host"), "got: {err}");
+    let _ = fs::remove_file(&path);
+    Ok(())
+}
+
+#[test]
+fn rejects_bare_dot_host() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let path = tmp_path("bare-dot-host");
+    let toml = r#"
+listen = { addrs = ["127.0.0.1:0"] }
+backends = [{ address = "b:9000" }]
+
+[[domains]]
+host = "."
+"#;
+    fs::write(&path, toml)?;
+    let err = match load_from_path(&path) {
+        Ok(_) => panic!("a bare '.' host must not silently become an empty, unmatchable host"),
+        Err(e) => e.to_string(),
+    };
+    assert!(err.contains("must not be empty"), "got: {err}");
+    let _ = fs::remove_file(&path);
+    Ok(())
+}
+
+#[test]
 fn rejects_duplicate_domain_host() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let path = tmp_path("dup-host");
     // Different case → still a duplicate after normalization.

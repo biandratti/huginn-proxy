@@ -71,7 +71,12 @@ pub async fn handle_tls_connection(
             let start = LazyConfigAcceptor::new(Acceptor::default(), prefixed).await?;
             let server_config = {
                 let client_hello = start.client_hello();
-                let sni = client_hello.server_name();
+                // rustls lowercases SNI but does not strip a trailing `.` (the DNS
+                // root label); strip it here so it matches the domain config, which
+                // has the same trailing dot stripped at load time.
+                let sni = client_hello
+                    .server_name()
+                    .map(crate::proxy::handler::strip_trailing_dot);
                 selected_sni = sni.map(str::to_string);
                 match crypto.select(sni) {
                     Some(picked) => {
@@ -107,7 +112,14 @@ pub async fn handle_tls_connection(
         // SNI negotiated by the TLS connection (the name that selected the served cert).
         // Captured once here; HTTP/2 may carry many requests with differing `:authority`,
         // and the always-on misdirected-request (421) check compares each against this value.
-        let connection_sni: Option<Arc<str>> = tls.get_ref().1.server_name().map(Arc::from);
+        // Normalized the same way as `selected_sni` above (trailing dot stripped), so the
+        // 421 check compares like-for-like against the request host.
+        let connection_sni: Option<Arc<str>> = tls
+            .get_ref()
+            .1
+            .server_name()
+            .map(crate::proxy::handler::strip_trailing_dot)
+            .map(Arc::from);
 
         // Guard decrements TLS connection metrics counter when connection closes.
         // The main active_connections counter is handled by ConnectionGuard.

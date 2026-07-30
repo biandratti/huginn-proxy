@@ -1,5 +1,7 @@
 use huginn_proxy_lib::config::Domain;
-use huginn_proxy_lib::proxy::handler::{authority_matches_sni, mutual_tls_session_matches};
+use huginn_proxy_lib::proxy::handler::{
+    authority_matches_sni, mutual_tls_session_matches, strip_trailing_dot,
+};
 
 fn domain(host: &str) -> Domain {
     Domain {
@@ -200,4 +202,27 @@ fn non_mtls_domains_are_unaffected() {
     assert!(mutual_tls_session_matches(&domains, public, true, Some("admin.example.com")));
     assert!(mutual_tls_session_matches(&domains, public, true, None));
     assert!(mutual_tls_session_matches(&domains, public, false, None));
+}
+
+/// The TLS transport strips a client's trailing-dot SNI (`admin.example.com.`) before
+/// it ever reaches this module (see `proxy/transport/tls.rs`); this documents that
+/// contract at the unit level: once normalized, an FQDN-form SNI resolves to the same
+/// domain as a dot-less `Host`, so an FQDN client no longer gets the spurious 421 that
+/// the config/HTTP/TLS host-comparison mismatch used to produce.
+#[test]
+fn authority_matches_sni_after_trailing_dot_normalization() {
+    let domains = vec![domain("admin.example.com")];
+    let normalized_sni = strip_trailing_dot("admin.example.com.");
+    assert!(authority_matches_sni(&domains, normalized_sni, "admin.example.com"));
+}
+
+/// The mTLS bypass guard still fails closed for an FQDN-form foreign SNI: normalizing
+/// the trailing dot must not create a new way to reach the mTLS domain from a session
+/// opened with a different domain's SNI.
+#[test]
+fn mtls_rejects_foreign_sni_in_fqdn_form() {
+    let domains = shared_cert_domains();
+    let admin = resolve(&domains, "admin.example.com");
+    let foreign_sni = strip_trailing_dot("public.example.com.");
+    assert!(!mutual_tls_session_matches(&domains, admin, true, Some(foreign_sni)));
 }
