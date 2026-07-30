@@ -29,8 +29,8 @@ pub enum CertError {
     #[error("no certificates found")]
     NoCertificates,
 
-    /// No private key was found (keys must be in PKCS#8/PEM format).
-    #[error("no private keys found - make sure they are in PKCS#8/PEM format")]
+    /// No private key was found (keys must be PEM-encoded PKCS#8, PKCS#1, or SEC1).
+    #[error("no private keys found - make sure they are PEM-encoded PKCS#8, PKCS#1, or SEC1")]
     NoPrivateKey,
 
     /// A client-CA file was configured for mutual TLS but contained no
