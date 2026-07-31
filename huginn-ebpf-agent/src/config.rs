@@ -97,8 +97,7 @@ pub fn from_env(get_var: impl Fn(&str) -> Option<String>) -> Result<Config, Conf
 
     let log_level = resolve_log_level(&get_var)?;
 
-    // Never fails. Bad values are logged and defaulted so the agent still publishes its maps.
-    let rate_limit = resolve_rate_limit(&get_var);
+    let rate_limit = resolve_rate_limit(&get_var)?;
 
     Ok(Config {
         interface,

@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 
-use huginn_ebpf_agent::config::{from_env, SynRateLimit, DEFAULT_BURST, DEFAULT_WINDOW_SECONDS};
+use huginn_ebpf_agent::config::{
+    from_env, ConfigError, SynRateLimit, DEFAULT_BURST, DEFAULT_WINDOW_SECONDS,
+};
 
 const NANOS_PER_SEC: u64 = 1_000_000_000;
 
@@ -77,20 +79,22 @@ fn rate_limit_enabled_without_burst_falls_back_to_the_default() {
 }
 
 #[test]
-fn rate_limit_unusable_burst_falls_back_to_the_default() {
-    // A burst at or above 65535 is never crossed (the sketch counts in u16), so the limiter
-    // would pass every SYN. Zero would skip every SYN. Both are logged at ERROR and replaced
-    // with the default, so the agent still publishes its maps.
+fn rate_limit_unusable_burst_is_rejected() {
+    // A burst at or above 65535 is never crossed (the sketch counts in u16), so the limiter would
+    // pass every SYN. Zero would skip every SYN. Neither is silently accepted.
     for burst in ["0", "65535", "131070", "5000000000", "not-a-number", "-1"] {
-        let cfg = parse_ok(required_with(&[
+        let result = from_env(required_with(&[
             ("HUGINN_EBPF_RATE_LIMIT_ENABLED", "true"),
             ("HUGINN_EBPF_RATE_LIMIT_BURST", burst),
         ]));
-        assert_eq!(
-            cfg.rate_limit.threshold, DEFAULT_BURST,
-            "burst {burst} is unusable and must fall back to the default"
+        assert!(
+            matches!(
+                result,
+                Err(ConfigError::Invalid { ref name, .. })
+                    if name == "HUGINN_EBPF_RATE_LIMIT_BURST"
+            ),
+            "burst {burst} is unusable and must be rejected, got {result:?}"
         );
-        assert!(cfg.rate_limit.enabled, "the limiter stays on with the default burst");
     }
 }
 
@@ -106,21 +110,23 @@ fn rate_limit_accepts_the_highest_usable_burst() {
 }
 
 #[test]
-fn rate_limit_unusable_window_seconds_falls_back_to_the_default() {
-    // 0 would never rotate. Past the ceiling the counters saturate long before the window ends,
-    // so a source that reaches `burst` stays uncaptured for the rest of it.
+fn rate_limit_unusable_window_seconds_is_rejected() {
+    // 0 would never rotate. Past the ceiling a source that crosses `burst` stays uncaptured for
+    // the rest of the window, which is a blocklist rather than a rate limit.
     for window in ["0", "not-a-number", "-3", "3601", "10000000000000"] {
-        let cfg = parse_ok(required_with(&[
+        let result = from_env(required_with(&[
             ("HUGINN_EBPF_RATE_LIMIT_ENABLED", "true"),
             ("HUGINN_EBPF_RATE_LIMIT_BURST", "500"),
             ("HUGINN_EBPF_RATE_LIMIT_WINDOW_SECONDS", window),
         ]));
-        assert_eq!(
-            cfg.rate_limit.window_ns,
-            DEFAULT_WINDOW_SECONDS.saturating_mul(NANOS_PER_SEC),
-            "window {window} is unusable and must fall back to the default"
+        assert!(
+            matches!(
+                result,
+                Err(ConfigError::Invalid { ref name, .. })
+                    if name == "HUGINN_EBPF_RATE_LIMIT_WINDOW_SECONDS"
+            ),
+            "window {window} is unusable and must be rejected, got {result:?}"
         );
-        assert_eq!(cfg.rate_limit.threshold, 500, "a valid burst is still honoured");
     }
 }
 
@@ -137,11 +143,15 @@ fn rate_limit_accepts_the_longest_usable_window() {
 }
 
 #[test]
-fn rate_limit_invalid_enabled_value_falls_back_to_disabled() {
-    let cfg = parse_ok(required_with(&[("HUGINN_EBPF_RATE_LIMIT_ENABLED", "maybe")]));
+fn rate_limit_invalid_enabled_value_is_rejected() {
+    let result = from_env(required_with(&[("HUGINN_EBPF_RATE_LIMIT_ENABLED", "maybe")]));
     assert!(
-        !cfg.rate_limit.enabled,
-        "an unparseable ENABLED value falls back to the default"
+        matches!(
+            result,
+            Err(ConfigError::Invalid { ref name, .. })
+                if name == "HUGINN_EBPF_RATE_LIMIT_ENABLED"
+        ),
+        "an unparseable ENABLED value must be rejected, got {result:?}"
     );
 }
 
@@ -179,13 +189,23 @@ fn rate_limit_burst_and_window_tolerate_surrounding_whitespace() {
 }
 
 #[test]
-fn a_bad_rate_limit_never_fails_the_whole_config() {
-    // The agent must still start and pin its maps: exiting here leaves the proxy waiting forever
-    // on pinned maps that never appear, taking HTTP and TLS fingerprinting down with it.
+fn a_rejected_value_names_itself_and_its_reason() {
+    // The error leaves `main` as a `Result`, so it prints even before the tracing subscriber is
+    // installed. It has to identify the variable, the rejected value and the accepted range.
     let result = from_env(required_with(&[
-        ("HUGINN_EBPF_RATE_LIMIT_ENABLED", "yes-test"),
-        ("HUGINN_EBPF_RATE_LIMIT_BURST", "5000000000"),
-        ("HUGINN_EBPF_RATE_LIMIT_WINDOW_SECONDS", "-3"),
+        ("HUGINN_EBPF_RATE_LIMIT_ENABLED", "true"),
+        ("HUGINN_EBPF_RATE_LIMIT_BURST", "500"),
+        ("HUGINN_EBPF_RATE_LIMIT_WINDOW_SECONDS", "4000"),
     ]));
-    assert!(result.is_ok(), "rate-limit values must never be fatal, got {result:?}");
+    match result {
+        Err(ConfigError::Invalid { name, value, reason }) => {
+            assert_eq!(name, "HUGINN_EBPF_RATE_LIMIT_WINDOW_SECONDS");
+            assert_eq!(value, "4000", "the rejected value is reported verbatim");
+            assert!(
+                reason.contains("3600"),
+                "the reason must state the accepted range, got {reason:?}"
+            );
+        }
+        other => panic!("expected an Invalid error for the window, got {other:?}"),
+    }
 }

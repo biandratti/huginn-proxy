@@ -115,11 +115,10 @@ No `seccomp:unconfined` or `apparmor:unconfined` needed.
 | `HUGINN_EBPF_RATE_LIMIT_BURST` | `2000` | Max SYNs per window per source IP before its SYNs stop being captured. Range `1..=65534`. Counted **per CPU**, and *not* the proxy's `[security.rate_limit] burst`: size it with [Sizing the SYN rate limiter](#sizing-the-syn-rate-limiter). |
 | `HUGINN_EBPF_RATE_LIMIT_WINDOW_SECONDS` | `1` | Sliding-window length in seconds. Range `1..=3600`. Once a source crosses `burst`, its SYNs are skipped until the window ends, so a long window means a long gap in that source's fingerprints. |
 
-> **Bad rate-limit values are not fatal.** An unusable `ENABLED`, `BURST` or `WINDOW_SECONDS` is
-> logged at `ERROR` and replaced with its default; the agent still starts and pins its maps. After a
-> config change, grep the agent log for `invalid eBPF rate-limit configuration`: a rejected `BURST`
-> or `WINDOW_SECONDS` leaves the limiter running with the default, a rejected `ENABLED` leaves it
-> off.
+> **Bad rate-limit value stops the agent**, like every other agent variable. An unset variable
+> takes its default; one that is set but unusable exits with a message. Note the proxy waits on
+> pinned maps that never appear, so a typo here also blocks TCP fingerprinting until the agent
+> starts. Check the agent log first if the proxy sits in `eBPF agent maps not available yet`.
 
 > **Scope and limits.** This shields the capture LRU from one loud source IP. It is **not** a
 > network-level DoS defense, and it does nothing against a distributed flood where each source stays
@@ -144,7 +143,7 @@ burst = HUGINN_EBPF_SYN_MAP_MAX_ENTRIES / (4 × cpus)
    usual 4-tuple RSS hash, an IP varying its source ports lands on every RX queue, so use the
    interface's combined RX queue count. Fall back to the CPU count where there are no queues (veth,
    loopback, single-queue virtio).
-2. **Divide, then clamp to `1..=65534`.** Above that the agent logs an `ERROR` and uses the default.
+2. **Divide, then clamp to `1..=65534`.** Outside that range the agent refuses to start.
 3. **Verify against real traffic.** `tcp_syn_rate_skipped_total` should not increase under normal
    load; watch its rate, not its total, since the counter is pinned across restarts. If it climbs
    with no attack in progress, `burst` is too tight, usually a NAT gateway behind one IP (the sketch

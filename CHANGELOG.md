@@ -25,9 +25,9 @@ follows [Semantic Versioning](https://semver.org/).
   `tcp_syn_map` LRU from floods. The packet still reaches the TCP stack; only the fingerprint is
   lost. Constant memory whatever the number of (even spoofed) source IPs. The sketch is per-CPU, so
   the threshold is too: size `BURST` against `HUGINN_EBPF_SYN_MAP_MAX_ENTRIES`, not against the
-  proxy's `[security.rate_limit]`. Unusable values are logged at `ERROR` and replaced with defaults
-  instead of aborting startup. Adds `tcp_syn_rate_skipped_total` / `tcp_syn_rate_allowed_total`
-  (by `family`), `tcp_syn_rate_limit_enabled`, and four pinned maps under `HUGINN_EBPF_PIN_PATH`
+  proxy's `[security.rate_limit]`. An unset variable takes its default; one that is set but unusable
+  fails agent startup. Adds `tcp_syn_rate_skipped_total` / `tcp_syn_rate_allowed_total` (by `family`), 
+- `tcp_syn_rate_limit_enabled`, and four pinned maps under `HUGINN_EBPF_PIN_PATH`
   (`syn_rate_skipped_v4/v6`, `syn_rate_allowed_v4/v6`). The sketch itself is not pinned, but its
   maps are allocated on every agent load even with the limiter off (~260 KiB on 8 CPUs, ~2 MiB on
   64). See `EBPF-SETUP.md` and `TELEMETRY.md`.
