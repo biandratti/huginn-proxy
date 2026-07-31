@@ -81,7 +81,7 @@ impl SynRateLimit {
     /// window 0 would never rotate), so any such input yields a [`disabled`](Self::disabled)
     /// limiter rather than a footgun. Same for a `burst` above [`Self::MAX_THRESHOLD`], which is
     /// not enforceable, and a `window_seconds` above [`Self::MAX_WINDOW_SECONDS`], which turns the
-    /// limiter into a blocklist. Callers should replace such a value up front and log why.
+    /// limiter into a blocklist.
     pub fn from_burst_window(enabled: bool, burst: u32, window_seconds: u64) -> Self {
         if !enabled
             || burst == 0

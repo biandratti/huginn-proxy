@@ -5,7 +5,10 @@
 //!
 //! Counts each source IP's recent SYNs and reports when one goes over its limit. It never stores
 //! IPs individually - it hashes each into a small fixed-size grid of counters (a Count-Min
-//! Sketch). Memory is constant, so it holds up even under millions of spoofed source IPs.
+//! Sketch). Memory is constant, so it holds up even under millions of spoofed source IPs - but
+//! accuracy does not: the grid is only [`HASHES`] x [`SLOTS`] counters, so a flood spread across
+//! enough source IPs saturates every cell, and then every source reads over-limit and stops being
+//! captured, legitimate ones included.
 //!
 //! How it works:
 //!

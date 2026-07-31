@@ -122,7 +122,12 @@ No `seccomp:unconfined` or `apparmor:unconfined` needed.
 
 > **Scope and limits.** This shields the capture LRU from one loud source IP. It is **not** a
 > network-level DoS defense, and it does nothing against a distributed flood where each source stays
-> under the threshold, so the LRU can still saturate. The `syn_rate_skipped_*` /
+> under the threshold, so the LRU can still saturate. A flood from enough distinct source IPs
+> saturates every counter in the sketch instead, at which point *every* source reads over-limit and
+> nothing gets fingerprinted - the limiter inverts from a filter into a capture kill-switch, visible
+> as `tcp_syn_rate_skipped_total` climbing while `tcp_syn_rate_allowed_total` goes flat. The
+> constant-memory sketch survives millions of spoofed IPs; its accuracy does not. The
+> `syn_rate_skipped_*` /
 > `syn_rate_allowed_*` counters are pinned, so their totals survive agent restarts; the counting
 > sketch is not pinned and resets on every agent load. Its maps are allocated even with
 > `ENABLED=false`.
