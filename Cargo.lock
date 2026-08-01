@@ -1046,9 +1046,9 @@ dependencies = [
 
 [[package]]
 name = "huginn-net-http"
-version = "2.0.0-rc"
+version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b29d04e8911e69c05ebc452901291286c4a532c89bd682cfd27113bf53918ed1"
+checksum = "1207bab2896b2b5cda3b0f23bbe994e6deb085b7e4537384a995a79a02541855"
 dependencies = [
  "crossbeam-channel",
  "hpack-patched",
