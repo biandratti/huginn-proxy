@@ -29,8 +29,9 @@ pub mod labels {
 }
 
 pub mod values {
+    /// The one `error_type` not produced by `HttpError::error_type()`: a rate-limited
+    /// request is answered with a 429 response rather than an `HttpError`.
     pub const ERROR_RATE_LIMITED: &str = "rate_limited";
-    pub const ERROR_IP_BLOCKED: &str = "ip_blocked";
     pub const TIMEOUT_TLS_HANDSHAKE: &str = "tls_handshake";
     pub const TIMEOUT_CONNECTION_HANDLING: &str = "connection_handling";
     pub const CONTEXT_REQUEST: &str = "request";
@@ -680,6 +681,10 @@ impl Metrics {
             .add(1, &[KeyValue::new(labels::PROTOCOL, protocol.to_string())]);
     }
 
+    /// Count one failed request under `error_type`.
+    ///
+    /// Call site is the transport's `Err` arm only, which sees every error the handler
+    /// returns: one count per failed request, comparable across `error_type`.
     pub fn record_error(&self, error_type: &str) {
         self.errors_total
             .add(1, &[KeyValue::new(labels::ERROR_TYPE, error_type.to_string())]);

@@ -20,5 +20,11 @@ pub enum ProxyError {
     Http(String),
 }
 
+impl From<huginn_certs::CertError> for ProxyError {
+    fn from(e: huginn_certs::CertError) -> Self {
+        ProxyError::Tls(e.to_string())
+    }
+}
+
 pub type ProxyResult<T> = std::result::Result<T, ProxyError>;
 pub type Result<T> = ProxyResult<T>;

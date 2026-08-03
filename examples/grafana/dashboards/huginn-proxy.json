@@ -1944,7 +1944,7 @@
     {
       "id": 24,
       "type": "timeseries",
-      "title": "Error Rate by Component",
+      "title": "Failed Request Ratio",
       "gridPos": {
         "x": 12,
         "y": 119,
@@ -1953,14 +1953,14 @@
       },
       "targets": [
         {
-          "expr": "sum by (component) (rate(huginn_errors_total_total[$__rate_interval])) or on() vector(0)",
-          "legendFormat": "{{component}}",
+          "expr": "sum(rate(huginn_errors_total_total[$__rate_interval])) / sum(rate(huginn_entrypoint_requests_total_total[$__rate_interval])) or on() vector(0)",
+          "legendFormat": "failed",
           "refId": "A"
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "short"
+          "unit": "percentunit"
         }
       },
       "options": {

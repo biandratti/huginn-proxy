@@ -20,6 +20,9 @@ pub enum HttpError {
     #[error("No domain configured for this host")]
     MisdirectedRequest,
 
+    #[error("Host requires client authentication not performed by this TLS session")]
+    MutualTlsHostInconsistency,
+
     #[error("IP address blocked by filter")]
     Forbidden,
 
@@ -49,6 +52,7 @@ impl From<HttpError> for StatusCode {
             HttpError::NoMatchingBackend => StatusCode::SERVICE_UNAVAILABLE,
             HttpError::NoMatchingRoute => StatusCode::NOT_FOUND,
             HttpError::MisdirectedRequest => StatusCode::MISDIRECTED_REQUEST,
+            HttpError::MutualTlsHostInconsistency => StatusCode::MISDIRECTED_REQUEST,
             HttpError::Forbidden => StatusCode::FORBIDDEN,
             HttpError::NoUpstreamCandidates => StatusCode::NOT_FOUND,
             HttpError::FailedToGenerateUpstreamRequest(_) => StatusCode::INTERNAL_SERVER_ERROR,
@@ -67,6 +71,7 @@ impl HttpError {
             HttpError::NoMatchingBackend => "no_matching_backend",
             HttpError::NoMatchingRoute => "no_matching_route",
             HttpError::MisdirectedRequest => "misdirected_request",
+            HttpError::MutualTlsHostInconsistency => "mutual_tls_host_inconsistency",
             HttpError::Forbidden => "ip_blocked",
             HttpError::NoUpstreamCandidates => "no_upstream_candidates",
             HttpError::FailedToGenerateUpstreamRequest(_) => "upstream_request_failed",
@@ -81,6 +86,7 @@ impl HttpError {
         match self {
             HttpError::NoMatchingRoute
             | HttpError::MisdirectedRequest
+            | HttpError::MutualTlsHostInconsistency
             | HttpError::Forbidden
             | HttpError::UpstreamUnhealthy
             | HttpError::InvalidHostInRequestHeader

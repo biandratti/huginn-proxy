@@ -522,14 +522,32 @@ sum by (strategy) (rate(huginn_rate_limit_allowed_total[5m]))
 
 ### 9. Error Metrics
 
-| Metric                | Type    | Description          | Labels                    |
-|-----------------------|---------|----------------------|---------------------------|
-| `huginn_errors_total` | Counter | Total errors by type | `error_type`, `component` |
+| Metric                | Type    | Description                        | Labels       |
+|-----------------------|---------|------------------------------------|--------------|
+| `huginn_errors_total` | Counter | Failed requests, by failure reason | `error_type` |
+
+Counted **once per failed request**, where the error leaves the proxy and is turned into a response, so the
+series are directly comparable to each other and to `huginn_entrypoint_requests_total`.
 
 **Labels**:
 
-- `error_type`: Error category (`config`, `tls`, `http`, `io`, `timeout`)
-- `component`: Component where error occurred (`proxy`, `backend`, `fingerprint`, etc.)
+- `error_type`: why the request failed. One of:
+
+| `error_type`                    | Status | Meaning                                                              |
+|---------------------------------|--------|----------------------------------------------------------------------|
+| `invalid_host`                  | 400    | `Host` / `:authority` missing or unparseable                          |
+| `invalid_uri`                   | 400    | Request target could not be rebuilt for the upstream                  |
+| `ip_blocked`                    | 403    | Rejected by the IP ACL                                                |
+| `no_matching_route`             | 404    | Host matched a domain, no route matched the path                      |
+| `no_upstream_candidates`        | 404    | Route matched but declares no backend                                 |
+| `misdirected_request`           | 421    | `Host` not covered by the connection's certificate (HTTP/2 coalescing)|
+| `mutual_tls_host_inconsistency` | 421    | `Host` requires client auth this session did not perform              |
+| `rate_limited`                  | 429    | Rejected by a token bucket (see §8)                                   |
+| `no_matching_backend`           | 503    | Selected backend is not a configured `[[backends]]` entry             |
+| `backend_error`                 | 502    | Upstream did not answer (connect/read failure, timeout)               |
+| `upstream_unhealthy`            | 502    | Short-circuited by the active health check gate                       |
+| `upstream_request_failed`       | 500    | Upstream request could not be built                                   |
+| `downstream_response_failed`    | 500    | Response could not be returned to the client                          |
 
 **Example queries**:
 
@@ -537,8 +555,11 @@ sum by (strategy) (rate(huginn_rate_limit_allowed_total[5m]))
 # Error rate by type
 sum by (error_type) (rate(huginn_errors_total[5m]))
 
-# Total error rate
-rate(huginn_errors_total[5m])
+# Share of requests that failed
+sum(rate(huginn_errors_total[5m])) / sum(rate(huginn_entrypoint_requests_total[5m]))
+
+# Possible mTLS bypass attempts
+rate(huginn_errors_total{error_type="mutual_tls_host_inconsistency"}[5m])
 ```
 
 ---
@@ -628,7 +649,10 @@ sum by (protocol) (rate(huginn_mtls_connections_total[5m]))
 - This metric only counts successful TLS handshakes where a client certificate was present and verified.
 - mTLS verification failures are captured in `huginn_tls_handshake_errors_total`.
 - When mTLS is required but client certificate is invalid/absent, the TLS handshake fails before this metric is
-  recorded.
+  recorded. In that case the `TLS accept failed` / `TLS handshake timeout` **warning logs** carry `mtls=true` and the
+  selected `sni`, so a failure against a domain that required a client certificate can be attributed per-domain (the
+  mTLS flag comes from the per-SNI config picked from the ClientHello, so it is known even though the handshake never
+  completed).
 
 ---
 
@@ -655,6 +679,8 @@ sum by (protocol) (rate(huginn_mtls_connections_total[5m]))
   `success`; the bad cert surfaces as `huginn_tls_cert_reload_total{result="error", domain="..."}` (see §13).
 - `huginn_config_hash` changes whenever the deserialized `DynamicConfig` changes. It is unaffected by TOML formatting
   changes (whitespace, comments, field ordering within a table) since it hashes the parsed struct, not the raw file.
+- The hash is FNV-1a, a fixed algorithm, so the same config yields the same value on every replica and across proxy
+  upgrades: `count(count by (huginn_config_hash)(huginn_config_hash)) > 1` catches replicas running a stale config.
 
 ---
 
@@ -674,8 +700,8 @@ sum by (protocol) (rate(huginn_mtls_connections_total[5m]))
 
 **Notes**:
 
-- Cert loading is driven by config hot-reload (`DynamicCertResolver::update`) — each SIGHUP or config file change
-  reloads all domain certs. This replaces the former per-file watcher model.
+- Cert loading is driven by config hot-reload (the per-SNI `ServerCryptoMap` is rebuilt and swapped) — each SIGHUP or
+  config file change reloads all domain certs. This replaces the former per-file watcher model.
 - All three metrics are **per-domain** so you can track cert rotation independently for each domain.
 - Only domains that declare a certificate emit these metrics. Plain-HTTP domains and a cert-less catch-all
   produce no cert series.
@@ -684,6 +710,8 @@ sum by (protocol) (rate(huginn_mtls_connections_total[5m]))
 - `huginn_tls_cert_hash` hashes the certificate chain DER bytes. Private key material is intentionally excluded.
   The value is a `u64`; over the Prometheus exposition format (float64) hashes above 2^53 lose low-bit precision,
   so use `changes()` for rotation detection rather than comparing the literal value.
+- FNV-1a is a fixed algorithm, so the same chain yields the same value on every replica and across proxy upgrades:
+  a hash that differs between replicas means they really are serving different certificates.
 - Success metrics are emitted only **after** the new cert map goes live (atomic swap). A failing domain bumps
   `result="error"` and emits no success for that reload, so the hash/timestamp gauges always reflect the
   certificate actually serving traffic.

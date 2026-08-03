@@ -120,6 +120,9 @@ pub async fn forward(
         }
     }
 
+    // The client's raw `Host` header, unnormalized (case, trailing dot). Deliberate:
+    // preserve_host means preserve, matching nginx/Traefik. `X-Forwarded-Host` (added
+    // separately from the routing-resolved host) is the normalized one.
     let original_host = config
         .preserve_host
         .then(|| parts.headers.get("host").cloned())

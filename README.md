@@ -58,8 +58,8 @@ See [`examples/`](examples/).
 - **Security Headers** - HSTS, CSP, X-Frame-Options, and custom headers
 - **IP Filtering (ACL)** - Allowlist/denylist with CIDR notation support
 - **TLS Termination** - Server-side TLS with ALPN and per-domain certificate hot reload (SNI-based multi-cert selection)
-- **TLS Session Resumption** - Support for TLS 1.2 session IDs and TLS 1.3 session tickets
-- **mTLS (Mutual TLS)** - Client certificate authentication for secure service-to-service communication
+- **TLS Session Resumption** - Stateless session tickets (TLS 1.2 and 1.3), shared across cert hot-reloads
+- **mTLS (Mutual TLS)** - Per-domain client certificate authentication for secure service-to-service communication
 - **Granular Timeouts** - TLS handshake and connection handling timeouts for resource protection
 - **Host Header Preservation** - Configurable forwarding of original Host header for virtual hosting
 - **Passive Fingerprinting** - Automatic TLS (JA4), HTTP/2 (Akamai), and TCP SYN (p0f-style via eBPF) fingerprint
