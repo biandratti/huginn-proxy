@@ -260,6 +260,12 @@ pub struct Domain {
     /// Path to the TLS private key PEM file for this domain (optional).
     #[serde(default)]
     pub key_path: Option<String>,
+    /// Path to a client-CA bundle PEM file (optional). When set, this domain
+    /// requires **mutual TLS**: clients must present a certificate signed by one
+    /// of these CAs. Requires `cert_path`/`key_path` (mTLS needs the domain's own
+    /// certificate). Hot-reloadable per-domain.
+    #[serde(default)]
+    pub client_ca_path: Option<String>,
     /// Header manipulation applied to all routes in this domain (optional).
     /// Merged with global headers; route-level headers take final precedence.
     #[serde(default)]
@@ -371,6 +377,8 @@ pub(crate) struct DomainView<'a> {
     host: Option<&'a str>,
     cert_configured: bool,
     private_key_configured: bool,
+    /// Presence flag only; the client-CA path is never exposed.
+    client_auth_configured: bool,
     headers: Option<HeaderManipulationView<'a>>,
     security: Option<ScopedSecurityView<'a>>,
     fingerprinting: Option<bool>,
@@ -433,6 +441,7 @@ impl Domain {
             host: self.host.as_deref(),
             cert_configured: self.cert_path.is_some(),
             private_key_configured: self.key_path.is_some(),
+            client_auth_configured: self.client_ca_path.is_some(),
             headers: self
                 .headers
                 .as_ref()

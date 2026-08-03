@@ -101,6 +101,9 @@ impl Config {
                 hc.validate()?;
             }
         }
+        if let Some(tls) = &self.tls {
+            tls.options.validate()?;
+        }
         Ok(())
     }
 

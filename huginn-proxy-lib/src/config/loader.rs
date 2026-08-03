@@ -23,13 +23,17 @@ pub fn load_from_path<P: AsRef<Path>>(p: P) -> Result<Config> {
     Ok(cfg)
 }
 
-/// Lowercase every domain `host`. DNS names and the HTTP `Host` header are
-/// case-insensitive (RFC 4343 / RFC 7230); the request side is lowercased in
-/// `extract_request_host`, so config and request hosts compare consistently.
+/// Lowercase every domain `host` and strip a trailing `.` (the DNS root label). DNS
+/// names and the HTTP `Host` header are case-insensitive (RFC 4343 / RFC 7230), and
+/// `api.example.com.` names the same domain as `api.example.com` (RFC 1034 §3.1); the
+/// request side applies the same two normalizations in `extract_request_host`, so
+/// config and request hosts compare consistently.
 fn normalize_domain_hosts(cfg: &mut Config) {
     for domain in &mut cfg.domains {
         if let Some(host) = domain.host.as_mut() {
             host.make_ascii_lowercase();
+            let stripped = crate::proxy::handler::strip_trailing_dot(host).to_owned();
+            *host = stripped;
         }
     }
 }
@@ -42,6 +46,17 @@ fn validate_unique_hosts(cfg: &Config) -> Result<()> {
     let mut has_catch_all = false;
     for domain in &cfg.domains {
         match domain.host.as_deref() {
+            Some("") => {
+                // A `host` of "." normalizes to "" here, which is not `None`: it
+                // would never match any request (an empty host is never resolved
+                // by `extract_request_host`) and would silently act as a dead
+                // domain entry instead of the catch-all the user likely intended.
+                return Err(ProxyError::Config(
+                    "Domain host must not be empty; omit `host` entirely for a \
+                     catch-all domain"
+                        .to_string(),
+                ));
+            }
             None => {
                 if has_catch_all {
                     return Err(ProxyError::Config(
@@ -67,6 +82,19 @@ fn validate_config(cfg: &Config) -> Result<()> {
 
     for domain in &cfg.domains {
         let host = domain.label();
+
+        if cfg.tls.is_none()
+            && (domain.cert_path.is_some()
+                || domain.key_path.is_some()
+                || domain.client_ca_path.is_some())
+        {
+            return Err(ProxyError::Config(format!(
+                "Domain '{host}': TLS material is configured but there is no [tls] section, \
+                 so the listener would serve plaintext and ignore it; add [tls] or drop \
+                 cert_path/key_path/client_ca_path"
+            )));
+        }
+
         match (&domain.cert_path, &domain.key_path) {
             (Some(cert), Some(key)) => {
                 if !Path::new(cert).exists() {
@@ -84,6 +112,20 @@ fn validate_config(cfg: &Config) -> Result<()> {
             _ => {
                 return Err(ProxyError::Config(format!(
                     "Domain '{host}': cert_path and key_path must both be set or both omitted"
+                )));
+            }
+        }
+
+        if let Some(ca) = &domain.client_ca_path {
+            if domain.cert_path.is_none() || domain.key_path.is_none() {
+                return Err(ProxyError::Config(format!(
+                    "Domain '{host}': client_ca_path requires cert_path and key_path \
+                     (mutual TLS needs the domain's own certificate)"
+                )));
+            }
+            if !Path::new(ca).exists() {
+                return Err(ProxyError::Config(format!(
+                    "Domain '{host}': client CA file not found: {ca}"
                 )));
             }
         }

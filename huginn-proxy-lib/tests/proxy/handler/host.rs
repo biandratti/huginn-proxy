@@ -1,4 +1,6 @@
-use huginn_proxy_lib::proxy::handler::{extract_request_host_inner, strip_host_port};
+use huginn_proxy_lib::proxy::handler::{
+    extract_request_host_inner, strip_host_port, strip_trailing_dot,
+};
 
 #[test]
 fn strip_port_from_hostname() {
@@ -235,4 +237,37 @@ fn plain_http_routes_by_host_header() {
     // Plain HTTP/1.1 (no TLS, no SNI): routes by Host header.
     let req = req_h1_absolute("http://plain.example.com/x");
     assert_eq!(extract_request_host_inner(&req), "plain.example.com");
+}
+
+#[test]
+fn strips_single_trailing_dot() {
+    assert_eq!(strip_trailing_dot("example.com."), "example.com");
+}
+
+#[test]
+fn strips_only_one_trailing_dot() {
+    assert_eq!(strip_trailing_dot("example.com.."), "example.com.");
+}
+
+#[test]
+fn no_trailing_dot_is_unchanged() {
+    assert_eq!(strip_trailing_dot("example.com"), "example.com");
+}
+
+#[test]
+fn h1_host_header_with_trailing_dot_and_port_is_normalized() {
+    let req = req_h1("api.example.com.:8080");
+    assert_eq!(extract_request_host_inner(&req), "api.example.com");
+}
+
+#[test]
+fn h2_uri_authority_with_trailing_dot_is_normalized() {
+    let req = req_h2("https://api.example.com./path");
+    assert_eq!(extract_request_host_inner(&req), "api.example.com");
+}
+
+#[test]
+fn authority_of_bare_dot_falls_back_to_host_header() {
+    let req = req_h2_with_host("https://./path", "fallback.example.com");
+    assert_eq!(extract_request_host_inner(&req), "fallback.example.com");
 }

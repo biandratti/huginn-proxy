@@ -7,10 +7,9 @@ use crate::proxy::client_pool::ClientPool;
 use crate::proxy::protocol::warn_proxy_protocol_trust_gap;
 use crate::security::RateLimitManager;
 use crate::telemetry::Metrics;
-use crate::tls::DynamicCertResolver;
+use crate::tls::setup::SharedServerCrypto;
 use arc_swap::ArcSwap;
 use std::collections::{BTreeMap, HashSet};
-use std::hash::{Hash, Hasher};
 use std::path::Path;
 use std::sync::Arc;
 use tokio::runtime::Handle;
@@ -50,7 +49,7 @@ pub async fn try_reload(
     reload_mutex: &tokio::sync::Mutex<()>,
     metrics: &Arc<Metrics>,
     health_supervisor: &HealthCheckSupervisor,
-    cert_resolver: Option<&Arc<DynamicCertResolver>>,
+    server_crypto: Option<&SharedServerCrypto>,
 ) {
     let _guard = reload_mutex.lock().await;
 
@@ -91,13 +90,16 @@ pub async fn try_reload(
         &new_dynamic.security.trusted_proxies,
     );
 
-    let hash = fnv1a_hash(&new_dynamic);
-    let old_hash = fnv1a_hash(&old_dynamic);
+    let hash = config_hash(&new_dynamic);
+    let old_hash = config_hash(&old_dynamic);
 
-    let cert_report = match cert_resolver {
-        Some(resolver) => {
-            let report = resolver.update(&new_dynamic.domains, metrics).await;
-            if !resolver.has_serviceable_cert() && !new_dynamic.domains.is_empty() {
+    let cert_report = match (server_crypto, static_cfg.tls.as_ref()) {
+        (Some(shared), Some(tls)) => {
+            let options = crate::tls::tls_build_options(tls);
+            let report =
+                crate::tls::reload_server_crypto(shared, &new_dynamic.domains, &options, metrics)
+                    .await;
+            if !shared.load().has_serviceable_config() && !new_dynamic.domains.is_empty() {
                 info!(
                     "TLS is configured but no certificate is serviceable after reload; all TLS \
                      handshakes will be rejected until a cert is provided"
@@ -105,13 +107,13 @@ pub async fn try_reload(
             }
             report
         }
-        None => crate::tls::CertReloadReport::default(),
+        _ => crate::tls::CertReloadReport::default(),
     };
 
     if cert_report.is_partial() {
         info!(
-            failed = cert_report.failed,
-            loaded = cert_report.loaded,
+            failed = cert_report.failed.len(),
+            loaded = cert_report.loaded.len(),
             "Some domain certificates failed to load on reload; new routes/backends are live and \
              failed domains keep their previous certificates"
         );
@@ -294,13 +296,15 @@ fn drain_removed_backends(
     client_pool.store(Arc::new(new_pool));
 }
 
-/// Fast hash of a `DynamicConfig` for the `huginn_config_hash` Prometheus gauge: only needs to be
-/// stable within a process run and change whenever the config changes.
-fn fnv1a_hash(dynamic: &DynamicConfig) -> u64 {
-    use std::collections::hash_map::DefaultHasher;
-    let mut hasher = DefaultHasher::new();
-    format!("{:?}", dynamic).hash(&mut hasher);
-    hasher.finish()
+/// Hash of a `DynamicConfig` for the `huginn_config_hash` Prometheus gauge: changes whenever the
+/// config changes, and is the same value on every replica running that config.
+///
+/// Hashing `Debug` is deliberate. It covers every field for free, so a field added later cannot
+/// silently drop out of the fingerprint, and it keeps [`Secret`](crate::config::Secret) values in
+/// scope (their `Debug` is transparent for exactly this reason) where the serialized effective
+/// view would redact them and leave a rotated secret looking like no change at all.
+fn config_hash(dynamic: &DynamicConfig) -> u64 {
+    huginn_certs::fnv1a_hash(format!("{:?}", dynamic).as_bytes())
 }
 
 pub fn initial_rate_limiter(dynamic: &DynamicConfig) -> SharedRateLimiter {

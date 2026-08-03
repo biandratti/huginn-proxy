@@ -286,9 +286,12 @@ No restart required.
 
 ### Certificate Permissions
 
-**Docker:** Certificates must be readable by user `app` (UID 100).
+**Docker:** Certificates must be readable by user `app` (UID `10001`). Tightening the mode without
+also transferring ownership makes the key unreadable inside the container, and every handshake then
+fails with `no server certificate chain resolved`.
 
 ```bash
+chown 10001 server.crt server.key
 chmod 400 server.crt server.key
 ```
 

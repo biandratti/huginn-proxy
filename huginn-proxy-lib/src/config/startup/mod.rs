@@ -12,7 +12,7 @@ pub use listen::{ListenConfig, ProxyProtocolConfig, ProxyProtocolMode};
 pub use reload::ReloadConfig;
 pub use telemetry::{LoggingConfig, TelemetryConfig};
 pub use timeout::{KeepAliveConfig, TimeoutConfig};
-pub use tls::{ClientAuth, SessionResumptionConfig, TlsConfig, TlsOptions, TlsVersion};
+pub use tls::{SessionResumptionConfig, TlsConfig, TlsOptions, TlsVersion};
 
 use fingerprinting::FingerprintView;
 use listen::ListenView;

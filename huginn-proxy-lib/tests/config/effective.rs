@@ -16,6 +16,7 @@ headers = { request = { add = [
 host = "api.example.com"
 cert_path = "/run/secrets/server-certificate.pem"
 key_path = "/run/secrets/private-key.pem"
+client_ca_path = "/run/secrets/client-ca.pem"
 headers = { request = { add = [
   { name = "X-Domain-Token", value = "domain-secret" }
 ] } }
@@ -30,9 +31,6 @@ routes = [{
 
 [tls]
 alpn = ["h2", "http/1.1"]
-
-[tls.client_auth]
-required = { ca_cert_path = "/run/secrets/client-ca.pem" }
 
 [security.headers]
 custom = [{ name = "X-Security-Token", value = "security-secret" }]
@@ -81,10 +79,9 @@ fn effective_config_reports_applied_values_and_defaults() -> TestResult {
     assert_eq!(value["static"]["listen"]["proxy_protocol"]["mode"], "optional");
     assert_eq!(value["static"]["listen"]["proxy_protocol"]["header_timeout_ms"], 100);
     assert_eq!(value["static"]["max_connections"], 512);
-    assert_eq!(value["static"]["tls"]["client_auth"]["mode"], "required");
-    assert_eq!(value["static"]["tls"]["client_auth"]["ca_certificate_configured"], true);
     assert_eq!(value["dynamic"]["domains"][0]["cert_configured"], true);
     assert_eq!(value["dynamic"]["domains"][0]["private_key_configured"], true);
+    assert_eq!(value["dynamic"]["domains"][0]["client_auth_configured"], true);
     assert_eq!(value["dynamic"]["headers"]["request"]["add"][0]["value"], "<redacted>");
     assert_eq!(value["dynamic"]["security"]["headers"]["csp"]["policy"], "<redacted>");
     Ok(())
@@ -119,6 +116,26 @@ fn effective_config_summary_reports_runtime_aggregates() -> TestResult {
     assert_eq!(summary.trusted_proxy_count, 0);
     assert!(!summary.preserve_host);
     assert_eq!(summary.max_connections, 512);
+    Ok(())
+}
+
+#[test]
+fn effective_config_tls_versions_are_resolved() -> TestResult {
+    let with_bound = format!("{CONFIG}\n[tls.options]\nmin_version = \"1.3\"\n");
+    let parts = TomlParser.parse(&with_bound)?.into_parts();
+    let view: Value = serde_json::from_str(
+        &EffectiveConfigView::new(&parts.static_cfg, &parts.dynamic_cfg).to_json()?,
+    )?;
+
+    assert_eq!(view["static"]["tls"]["options"]["versions"], serde_json::json!(["1.3"]));
+
+    // Nothing configured: both versions, rather than an empty list.
+    let parts = TomlParser.parse(CONFIG)?.into_parts();
+    let view: Value = serde_json::from_str(
+        &EffectiveConfigView::new(&parts.static_cfg, &parts.dynamic_cfg).to_json()?,
+    )?;
+
+    assert_eq!(view["static"]["tls"]["options"]["versions"], serde_json::json!(["1.2", "1.3"]));
     Ok(())
 }
 

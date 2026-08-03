@@ -11,7 +11,7 @@ use crate::proxy::transport::{
     handle_plain_connection, handle_tls_connection, PlainConnectionConfig, TlsConnectionConfig,
 };
 use crate::telemetry::Metrics;
-use crate::tls::setup::SharedTlsAcceptor;
+use crate::tls::setup::SharedServerCrypto;
 use hyper_util::rt::TokioExecutor;
 use hyper_util::server::conn::auto::Builder as ConnBuilder;
 use std::net::SocketAddr;
@@ -31,7 +31,7 @@ pub type SynProbe = Arc<dyn Fn(SocketAddr) -> SynResult + Send + Sync>;
 pub struct AcceptContext {
     pub dynamic_cfg: SharedDynamicConfig,
     pub rate_limiter: SharedRateLimiter,
-    pub tls_acceptor: Option<SharedTlsAcceptor>,
+    pub server_crypto: Option<SharedServerCrypto>,
     pub fingerprint_config: FingerprintConfig,
     pub keep_alive_config: KeepAliveConfig,
     pub metrics: Arc<Metrics>,
@@ -141,12 +141,12 @@ pub async fn accept_loop(
                 ctx_task.backend_selector.clone(),
             );
 
-            if let Some(ref tls_acceptor) = ctx_task.tls_acceptor {
+            if let Some(ref server_crypto) = ctx_task.server_crypto {
                 handle_tls_connection(
                     stream,
                     peer,
                     TlsConnectionConfig {
-                        tls_acceptor: tls_acceptor.clone(),
+                        server_crypto: server_crypto.clone(),
                         fingerprint_config: ctx_task.fingerprint_config.clone(),
                         domains: domains.clone(),
                         backends,

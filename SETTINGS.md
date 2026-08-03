@@ -276,9 +276,13 @@ Host matching order, against that resolved host:
    rule.
 4. No match → HTTP 421 (Misdirected Request).
 
-Host matching is **case-insensitive**: `host` values are lowercased at load and compared
-against the lowercased request host. The config is rejected at load if two domains share the
-same `host` (after lowercasing) or if more than one catch-all (host-less) domain is defined.
+Host matching is **case-insensitive**, and a trailing `.` (the DNS root label; `api.example.com.`
+and `api.example.com` name the same domain) is discarded: `host` values are lowercased and have
+a trailing dot stripped at load, and the same two normalizations are applied to the resolved
+request host and to the TLS SNI. The config is rejected at load if two domains share the same
+`host` after normalization (so `api.example.com` and `api.example.com.` count as the same host
+and collide as a duplicate), if a `host` normalizes to empty (a bare `"."`), or if more than one
+catch-all (host-less) domain is defined.
 
 `X-Forwarded-Host` sent to the backend mirrors this resolved routing host (never a
 client-supplied `X-Forwarded-Host`), so it always agrees with the backend the request reaches.
@@ -310,9 +314,10 @@ enforce).
 
 | Key         | Type   | Default | Description                                                                                      |
 |-------------|--------|---------|--------------------------------------------------------------------------------------------------|
-| `host`      | string | `null`  | Domain pattern for host matching: exact (`api.example.com`) or single-level wildcard (`*.example.com`). **Omit for a catch-all** that matches any host; its cert (if any) is the TLS default certificate. |
-| `cert_path` | string | `null`  | Path to the TLS certificate PEM file. Omit for plain-HTTP-only domains.                          |
+| `host`      | string | `null`  | Domain pattern for host matching: exact (`api.example.com`) or single-level wildcard (`*.example.com`). Normalized at load: lowercased, trailing `.` stripped. **Omit for a catch-all** that matches any host; its cert (if any) is the TLS default certificate. |
+| `cert_path` | string | `null`  | Path to the TLS certificate PEM file. Omit for plain-HTTP-only domains. Requires a [`[tls]`](#tls) section: without it no listener terminates TLS and the config is rejected at startup. |
 | `key_path`  | string | `null`  | Path to the TLS private key PEM file. Must be set together with `cert_path` or both omitted.     |
+| `client_ca_path` | string | `null` | Path to a client-CA bundle PEM file. When set, this domain requires **mutual TLS**: clients must present a certificate signed by one of these CAs. Requires `cert_path`/`key_path`. Hot-reloadable per-domain. |
 | `headers`   | table  | —       | Domain-level header manipulation. Merged between global and route-level headers.                 |
 | `security`  | table  | —       | Per-domain security overrides (`ip_filter`, `rate_limit`, `headers`). See [`[domains.security]`](#domainssecurity) below. |
 | `fingerprinting` | bool | `null` (inherit) | Domain-level fingerprint-header **injection** gate. Resolved per route as `route.or(domain).unwrap_or(true)`. Controls header injection only; capture is the static global `[fingerprint]`. |
@@ -744,17 +749,28 @@ tls:
 
 | Key                 | Type             | Default          | Description                                                |
 |---------------------|------------------|------------------|------------------------------------------------------------|
-| `versions`          | array of strings | `["1.2", "1.3"]` | Allowed TLS versions. Values: `"1.2"`, `"1.3"`. **Currently parsed and validated but not enforced** — see note below. |
-| `min_version`       | string           | `null`           | Minimum TLS version (`"1.2"` or `"1.3"`). Mutually exclusive with an explicit `versions` list. **Currently parsed and validated but not enforced** — see note below. |
-| `max_version`       | string           | `null`           | Maximum TLS version (`"1.2"` or `"1.3"`). Mutually exclusive with an explicit `versions` list. **Currently parsed and validated but not enforced** — see note below. |
-| `cipher_suites`     | array of strings | all supported    | Named cipher suites. Restrict to tighten security posture. Applied to the TLS stack. |
-| `curve_preferences` | array of strings | all supported    | Named elliptic curves for key exchange. **Currently parsed and validated but not enforced** — see note below. |
+| `versions`          | array of strings | `[]` (empty)     | Allowed TLS versions. Values: `"1.2"`, `"1.3"`. Applied to the TLS stack. Empty means no restriction (both). Mutually exclusive with `min_version`/`max_version`. |
+| `min_version`       | string           | `null`           | Minimum TLS version (`"1.2"` or `"1.3"`). Applied to the TLS stack. Mutually exclusive with an explicit `versions` list. |
+| `max_version`       | string           | `null`           | Maximum TLS version (`"1.2"` or `"1.3"`). Applied to the TLS stack. Mutually exclusive with an explicit `versions` list. |
+| `cipher_suites`     | array of strings | all supported    | Ordered cipher suites, most preferred first. Restrict to tighten security posture. Applied to the TLS stack. A list replaces the defaults, so it must cover every enabled TLS version — see note below. Unknown names fail at config parse. |
+| `curve_preferences` | array of strings | `[]` (empty)     | Ordered key-exchange groups (curves), most preferred first. Applied to the TLS stack. Empty keeps the provider defaults — see note below. Valid: `"X25519MLKEM768"`, `"SECP256R1MLKEM768"`, `"X25519"`, `"secp256r1"`, `"secp384r1"`. Unknown names fail at config parse. |
 | `sni_strict`        | bool             | `false`          | When `true`, disable the default-cert fallback entirely (full parity with Traefik's `sniStrict`): reject (`unrecognized_name`) both a TLS connection whose SNI matches no domain cert **and** a connection that sends no SNI (IP-literal clients). When `false`, both fall back to the default cert. Production hardening against unknown-hostname / no-SNI access. |
 
-> **Note:** `cipher_suites` and `sni_strict` are applied to the TLS stack. `versions`, `min_version`,
-> `max_version`, and `curve_preferences` are currently validated at load but **not** applied — the
-> acceptor is built with rustls' safe defaults (TLS 1.2 **and** 1.3, default curve preferences). Do
-> not rely on these four keys to restrict the negotiated TLS version or curves yet.
+> **TLS versions are enforced.** `versions` (or `min_version`/`max_version`) restrict the versions
+> the acceptor offers: e.g. `min_version = "1.3"` refuses TLS 1.2 handshakes. Leaving all three unset
+> (the default) allows 1.2 **and** 1.3, i.e. rustls' safe defaults. Pick **one** of the two forms: a
+> config that sets both an explicit `versions` list and a bound is rejected at load.
+
+> **Cipher suites must cover every enabled version.** An explicit `cipher_suites` list replaces the
+> defaults instead of narrowing them, so listing only `TLS13_*` suites while TLS 1.2 is still enabled
+> would advertise 1.2 with nothing to negotiate and fail every 1.2 handshake. That config is rejected
+> at load: either add a `TLS_ECDHE_*` suite or exclude 1.2 with `min_version = "1.3"`.
+
+> **Note on `curve_preferences`:** leaving it **empty** (the default) keeps the provider's safe
+> defaults, which lead with the post-quantum hybrid group `X25519MLKEM768`. A non-empty list applies
+> **exactly** those groups in order, so if you set one, keep a PQ hybrid first — otherwise you silently
+> drop post-quantum protection. `secp521r1` is **not** available as a key-exchange group with the
+> aws-lc-rs provider and is rejected at load.
 
 > **Misdirected requests (HTTP 421)** are handled automatically and are not configurable. On a
 > coalesced HTTP/2 connection, any request whose host is served by a different certificate than
@@ -783,7 +799,7 @@ cipher_suites = [
     "TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256",
     "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256",
 ]
-curve_preferences = ["X25519", "secp256r1", "secp384r1"]
+curve_preferences = ["X25519MLKEM768", "SECP256R1MLKEM768", "X25519", "secp256r1", "secp384r1"]
 sni_strict = false   # set true in production to reject unknown-hostname SNI
 ```
 
@@ -803,6 +819,8 @@ tls:
       - "TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256"
       - "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"
     curve_preferences:
+      - "X25519MLKEM768"
+      - "SECP256R1MLKEM768"
       - "X25519"
       - "secp256r1"
       - "secp384r1"
@@ -814,49 +832,49 @@ tls:
 </tbody>
 </table>
 
-### `[tls.client_auth]`
+### Mutual TLS (mTLS)
 
-Mutual TLS (mTLS). Omit to disable. **Static**.
+Client authentication is **per-domain**, configured with `client_ca_path` on each
+`[[domains]]` entry (see [`[[domains]]`](#domains)) — there is no listener-wide
+`[tls.client_auth]` setting. A domain that sets `client_ca_path` requires clients to
+present a certificate signed by that CA; domains without it do not. Because the
+client verifier is bound to each domain's own TLS config, one listener can mix mTLS
+and public domains. mTLS domains never resume a session (the client certificate is
+re-verified on every connection).
 
-<table>
-<thead>
-<tr>
-<th>TOML</th>
-<th>YAML</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td valign="top">
+Because the verifier belongs to the domain that the **SNI** selected, an mTLS domain is
+only reachable over a TLS session established for that same `[[domains]]` entry. A request
+whose `Host` names an mTLS domain is rejected with **421** when it arrives over plaintext,
+without SNI, or over a session opened with another domain's SNI — even if both domains
+share the same certificate file, since that session never faced the client verifier.
+Requests coalesced under a single wildcard mTLS entry are unaffected: they were verified by
+that entry's own config. Rejections are counted as
+`huginn_errors_total{error_type="mutual_tls_host_inconsistency"}`.
 
-```toml
-# Require client certificates signed by this CA
-[tls.client_auth]
-required = { ca_cert_path = "/config/certs/ca.crt" }
-```
+> **A domain with `client_ca_path` never falls back to a config without a client verifier.**
+> The 421 rule above is derived from the configuration, so it assumes the domain's certificate
+> is actually being served. If that certificate fails to load (bad or missing PEM, empty
+> `client_ca_path` bundle), the domain does **not** fall back to the default certificate, which
+> carries no verifier: its handshakes are rejected with `unrecognized_name` instead. This holds
+> at startup and on reload, and does not depend on `sni_strict`. A failure that leaves a
+> last-good config with client auth already loaded keeps it, verifier included. Either way the
+> domain is reported by `tls_cert_reload_total{result="error"}` and an `error`-level log.
 
-</td>
-<td valign="top">
-
-```yaml
-# Require client certificates signed by this CA
-tls:
-  client_auth:
-    required:
-      ca_cert_path: "/config/certs/ca.crt"
-```
-
-</td>
-</tr>
-</tbody>
-</table>
+> **Client certificates are not checked for revocation.** There is no CRL or OCSP support: a
+> client certificate is accepted while its chain verifies and it has not expired, even if its
+> CA revoked it. Keep client certificates short-lived. To cut access off now, remove the issuing
+> CA from the domain's `client_ca_path` bundle and reload — it takes effect on the next
+> connection, since mTLS domains never resume a session, though it revokes every client under
+> that CA.
 
 ### `[tls.session_resumption]`
 
-| Key            | Type    | Default | Description                                                                    |
-|----------------|---------|---------|--------------------------------------------------------------------------------|
-| `enabled`      | bool    | `true`  | Enable TLS session resumption (TLS 1.2 session IDs + TLS 1.3 session tickets). |
-| `max_sessions` | integer | `256`   | TLS 1.2 server-side session cache size.                                        |
+Resumption uses **stateless TLS session tickets only** — there is no server-side
+session cache. mTLS domains never resume regardless of this setting.
+
+| Key            | Type    | Default | Description                                                                                      |
+|----------------|---------|---------|--------------------------------------------------------------------------------------------------|
+| `enabled`      | bool    | `true`  | Issue stateless session tickets so non-mTLS clients can resume without a full handshake.         |
 
 <table>
 <thead>
@@ -872,7 +890,6 @@ tls:
 ```toml
 [tls.session_resumption]
 enabled = true
-max_sessions = 256
 ```
 
 </td>
@@ -882,7 +899,6 @@ max_sessions = 256
 tls:
   session_resumption:
     enabled: true
-    max_sessions: 256
 ```
 
 </td>

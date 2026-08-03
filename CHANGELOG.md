@@ -11,6 +11,15 @@ follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **Client-CA trust anchors deduplicated by Subject Key Identifier.** A per-domain `client_ca_path`
+  bundle that repeats a CA — the same PEM twice, or the same CA key re-issued/re-encoded — now
+  collapses to a single trust anchor (SKID-based dedup via `x509-parser`). A CA that carries no SKID
+  extension falls back to DER identity and is still trusted rather than dropped.
+- **Per-domain mTLS attribution in handshake-failure logs.** The `TLS accept failed` and `TLS
+  handshake timeout` warnings now include the selected `sni` and an `mtls` flag indicating whether the
+  matched domain required a client certificate. The flag comes from the per-SNI config chosen from the
+  ClientHello, so it is known even when the handshake never completes (e.g. a client that omitted a
+  required client cert).
 - **Config validation warnings + `--validate --strict`.** Config loading audits for likely mistakes
   and logs non-fatal warnings (boot, `--validate`, hot reload): duplicate/contradictory header
   manipulation, security overrides that drop parent protection, over-broad `trusted_proxies` ranges,
@@ -52,6 +61,62 @@ follows [Semantic Versioning](https://semver.org/).
   watch = true
   debounce_secs = 60
   ```
+
+- **`[tls.client_auth]` removed; mTLS is now per-domain via `[[domains]].client_ca_path`.** Client
+  authentication used to be listener-wide: one CA, applied to every domain served by the proxy. It is
+  now a property of each domain, so you can require client certificates on an admin host while the
+  rest stay public. A config that still declares `[tls.client_auth]` is **rejected at load**
+  (`unknown field 'client_auth'`). Move the CA path to each domain that needs it.
+
+  ```toml
+  # before: every domain required a client cert
+  [tls.client_auth]
+  required = { ca_cert_path = "/config/certs/ca.crt" }
+
+  # after: only this domain does
+  [[domains]]
+  host = "admin.example.com"
+  cert_path = "/config/certs/admin.crt"
+  key_path = "/config/certs/admin.key"
+  client_ca_path = "/config/certs/ca.crt"
+  ```
+
+- **`[tls.session_resumption].max_sessions` removed.** Resumption is stateless (session tickets only),
+  so there is no server-side session cache to size. The key had already become a no-op; it is now
+  gone, and a config that still declares it is **rejected at load** (`deny_unknown_fields`). Delete the
+  key.
+
+### Changed
+
+- **TLS version limits are now enforced.** `[tls.options].versions` (or `min_version`/`max_version`)
+  are applied to the acceptor instead of only being validated — e.g. `min_version = "1.3"` now refuses
+  TLS 1.2 handshakes. The default (TLS 1.2 + 1.3) is unchanged.
+- **`[tls.options].curve_preferences` is now applied** (previously validated, then ignored). Two
+  **breaking** consequences: the default is now empty, keeping the provider's post-quantum-first
+  defaults, so an explicit classical-only list drops PQ protection — include `X25519MLKEM768` or
+  `SECP256R1MLKEM768` (both new valid values) to keep it. `secp521r1` is no longer accepted.
+- **TLS session resumption is now stateless tickets only.** A process-wide shared ticketer (kept
+  across cert hot-reloads) replaces the former server-side TLS 1.2 session-ID cache. This also turns
+  on TLS 1.3 resumption, which was previously off. mTLS domains never resume.
+- **`huginn_config_hash` and `huginn_tls_cert_hash` now use a fixed FNV-1a**, replacing `std`'s
+  `DefaultHasher`, whose algorithm can change between Rust releases and move a hash that should only
+  change with the content. The values are now comparable across replicas and upgrades, but **change
+  once** with this release; `changes()` queries are unaffected.
+
+### Fixed
+
+- **`huginn_errors_total` counted some errors twice.** Requests rejected by the handler
+  (`ip_blocked`, `misdirected_request`, `no_matching_route`) were recorded both where the error was
+  built and where it was turned into a response; errors raised while forwarding were recorded once.
+  Every failed request is now counted exactly once, so the series are comparable across `error_type`.
+  **Adjust alert thresholds**: rates for the affected types drop by half. `TELEMETRY.md` §9 also
+  documented a `component` label that was never emitted and a set of `error_type` values that never
+  existed; both now match what the proxy exports.
+- **A `key_path` file holding several private keys used only the last one.** Every key in the file is
+  now tried and the one that matches the certificate is used, whatever its position. Domains that
+  failed to load with `certificate/key mismatch` despite the right key being present in the file now
+  start. Files with a single key (the usual case) are unaffected, and a file whose keys all belong to
+  another certificate is still rejected.
 
 ---
 

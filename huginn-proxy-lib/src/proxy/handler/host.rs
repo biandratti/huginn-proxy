@@ -12,7 +12,7 @@ use hyper::Request;
 /// 2. `Host` header - fallback (HTTP/1.1 origin-form, or HTTP/2 without `:authority`).
 ///
 /// TLS SNI is intentionally NOT a routing input. It is used only for certificate
-/// selection at the TLS layer ([`crate::tls::DynamicCertResolver`]) and the optional
+/// selection at the TLS layer ([`crate::tls::ServerCryptoMap`]) and the optional
 /// `sni_strict` handshake rejection (exactly like Traefik), whose routers match on
 /// the HTTP host while SNI only drives cert / TLS-option selection. Routing uniformly
 /// by authority (instead of SNI-first for HTTP/1.1) keeps both protocol versions
@@ -28,6 +28,10 @@ use hyper::Request;
 /// The result is ASCII-lowercased: DNS names and the `Host` header are
 /// case-insensitive (RFC 4343 / RFC 7230), and domain config hosts are
 /// lowercased at load time, so both sides compare consistently.
+///
+/// A single trailing `.` (the DNS root label, RFC 1034 §3.1) is also stripped, so
+/// `api.example.com.` and `api.example.com` resolve to the same domain entry -
+/// domain config hosts have the same trailing dot stripped at load time.
 pub(crate) fn extract_request_host<B>(req: &Request<B>) -> String {
     extract_request_host_inner(req)
 }
@@ -36,10 +40,14 @@ pub fn extract_request_host_inner<B>(req: &Request<B>) -> String {
     // URI authority - :authority (HTTP/2) or absolute-form target (HTTP/1.1).
     // strip_host_port normalizes IPv6: http::Uri::host() returns "[::1]" (with
     // brackets); strip_host_port strips them to "::1" to match the domain config.
+    //
+    // The emptiness check runs AFTER normalization: a bare "." authority
+    // normalizes to "", and must fall through to the Host header fallback below
+    // rather than short-circuit on the pre-normalization non-empty "." value.
     if let Some(raw) = req.uri().host() {
-        let host = strip_host_port(raw);
+        let host = strip_trailing_dot(strip_host_port(raw)).to_ascii_lowercase();
         if !host.is_empty() {
-            return host.to_ascii_lowercase();
+            return host;
         }
     }
 
@@ -48,6 +56,7 @@ pub fn extract_request_host_inner<B>(req: &Request<B>) -> String {
         .get(hyper::header::HOST)
         .and_then(|v| v.to_str().ok())
         .map(strip_host_port)
+        .map(strip_trailing_dot)
         .map(str::to_ascii_lowercase)
         .unwrap_or_default()
 }
@@ -67,4 +76,16 @@ pub fn strip_host_port(host: &str) -> &str {
     } else {
         host.split_once(':').map_or(host, |(h, _)| h)
     }
+}
+
+/// Strip exactly one trailing `.`, the DNS root label (RFC 1034 §3.1): `"example.com."`
+/// and `"example.com"` name the same domain. Only ever strips one - `"example.com.."`
+/// has an empty label, which is not a valid name, and is passed through unchanged so it
+/// fails to match any configured domain rather than being silently coerced into one.
+///
+/// The empty string (no host at all) is unaffected: `"."` becomes `""`, which is already
+/// the "no host" sentinel handled elsewhere.
+#[doc(hidden)]
+pub fn strip_trailing_dot(host: &str) -> &str {
+    host.strip_suffix('.').unwrap_or(host)
 }
