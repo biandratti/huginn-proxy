@@ -1,5 +1,5 @@
 use huginn_proxy_lib::config::{
-    Backend, BackendHttpVersion, ClientAuth, Config, HealthCheckConfig, HealthCheckType, TlsConfig,
+    Backend, BackendHttpVersion, Config, HealthCheckConfig, HealthCheckType,
 };
 
 #[test]
@@ -52,75 +52,6 @@ fn test_backend_http_version_case_insensitive() {
     let toml = r#"address = "backend:9000"
 http_version = "HTTP11""#;
     assert!(toml::from_str::<Backend>(toml).is_err());
-}
-
-#[test]
-fn test_mtls_config_required() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let toml = r#"
-alpn = ["h2", "http/1.1"]
-
-[client_auth]
-required = { ca_cert_path = "/config/certs/client-ca.crt" }
-"#;
-
-    let config: TlsConfig = toml::from_str(toml)?;
-    match config.client_auth {
-        ClientAuth::Required { ca_cert_path } => {
-            assert_eq!(ca_cert_path, "/config/certs/client-ca.crt");
-        }
-        ClientAuth::Disabled => panic!("Expected ClientAuth::Required"),
-    }
-    Ok(())
-}
-
-#[test]
-fn test_mtls_config_default_is_disabled() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let toml = r#"
-alpn = ["h2", "http/1.1"]
-"#;
-
-    let config: TlsConfig = toml::from_str(toml)?;
-    assert!(matches!(config.client_auth, ClientAuth::Disabled));
-    Ok(())
-}
-
-#[test]
-fn test_mtls_full_config() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let toml = r#"
-listen = { addrs = ["0.0.0.0:7000"] }
-
-backends = [
-  { address = "backend-a:9000" }
-]
-
-[[domains]]
-host = "api.example.com"
-cert_path = "/config/certs/server.crt"
-key_path = "/config/certs/server.key"
-routes = [
-  { prefix = "/api", backend = "backend-a:9000" }
-]
-
-[tls]
-alpn = ["h2", "http/1.1"]
-
-[tls.client_auth]
-required = { ca_cert_path = "/config/certs/client-ca.crt" }
-"#;
-
-    let config: Config = toml::from_str(toml)?;
-
-    let Some(tls_config) = config.tls else {
-        panic!("Expected TLS config to be present");
-    };
-
-    match tls_config.client_auth {
-        ClientAuth::Required { ca_cert_path } => {
-            assert_eq!(ca_cert_path, "/config/certs/client-ca.crt");
-        }
-        ClientAuth::Disabled => panic!("Expected ClientAuth::Required"),
-    }
-    Ok(())
 }
 
 #[test]

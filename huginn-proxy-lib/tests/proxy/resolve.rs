@@ -54,6 +54,7 @@ fn domain(
         host: Some("a.com".to_string()),
         cert_path: None,
         key_path: None,
+        client_ca_path: None,
         headers: None,
         security,
         fingerprinting,

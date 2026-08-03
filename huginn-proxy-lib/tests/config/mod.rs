@@ -5,6 +5,7 @@ mod loader;
 mod parser;
 mod reload;
 mod secret;
+mod tls;
 mod types;
 
 use std::path::PathBuf;

@@ -111,6 +111,7 @@ impl BenchFixture {
                 host: None,
                 cert_path: Some(cert_file.path().to_string_lossy().into_owned()),
                 key_path: Some(key_file.path().to_string_lossy().into_owned()),
+                client_ca_path: None,
                 headers: None,
                 security: None,
                 fingerprinting: None,
@@ -147,7 +148,6 @@ impl BenchFixture {
             tls: Some(TlsConfig {
                 alpn: vec!["h2".to_string(), "http/1.1".to_string()],
                 options: Default::default(),
-                client_auth: Default::default(),
                 session_resumption: Default::default(),
             }),
             fingerprint: FingerprintConfig {

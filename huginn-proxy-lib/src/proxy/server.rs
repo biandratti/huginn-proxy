@@ -15,7 +15,9 @@ use crate::proxy::reload::{
 use crate::proxy::shutdown::{wait_for_drain, ServiceHandle, ShutdownSender};
 pub use crate::proxy::watch::WatchOptions;
 use crate::telemetry::{Metrics, Readiness};
-use crate::tls::{build_tls_acceptor, DynamicCertResolver};
+use crate::tls::setup::SharedServerCrypto;
+use crate::tls::{build_server_crypto_map, tls_build_options};
+use arc_swap::ArcSwap;
 use hyper_util::rt::{TokioExecutor, TokioTimer};
 use hyper_util::server::conn::auto::Builder as ConnBuilder;
 use std::net::SocketAddr;
@@ -65,34 +67,28 @@ pub async fn run(
     // Collect background service handles for ordered cooperative shutdown.
     let mut services: Vec<ServiceHandle> = Vec::new();
 
-    // Build the cert resolver and load initial certs from the current dynamic config.
+    // Build the per-SNI TLS config map from the current dynamic config.
     // `None` when TLS is not configured (plain HTTP mode).
-    let cert_resolver: Option<Arc<DynamicCertResolver>> = if let Some(tls) = &static_cfg.tls {
-        let resolver = Arc::new(DynamicCertResolver::new(tls.options.sni_strict));
-        let report = resolver.update(&dynamic_cfg.load().domains, &metrics).await;
+    let server_crypto: Option<SharedServerCrypto> = if let Some(tls) = &static_cfg.tls {
+        let options = tls_build_options(tls);
+        let (map, report) =
+            build_server_crypto_map(&dynamic_cfg.load().domains, &options, None, &metrics).await?;
         if report.is_partial() {
             info!(
-                failed = report.failed,
-                loaded = report.loaded,
+                failed = report.failed.len(),
+                loaded = report.loaded.len(),
                 "Some domain certificates failed to load at startup; those domains will not serve TLS"
             );
         }
-        if !resolver.has_serviceable_cert() && !dynamic_cfg.load().domains.is_empty() {
+        if !map.has_serviceable_config() && !dynamic_cfg.load().domains.is_empty() {
             info!(
                 "TLS is configured but no certificate is serviceable; all TLS handshakes will be \
                  rejected until a cert is provided"
             );
         }
-        Some(resolver)
+        Some(Arc::new(ArcSwap::from_pointee(map)))
     } else {
         None
-    };
-
-    let tls_acceptor = match (&static_cfg.tls, &cert_resolver) {
-        (Some(tls_config), Some(resolver)) => {
-            Some(build_tls_acceptor(tls_config, Arc::clone(resolver)).await?)
-        }
-        _ => None,
     };
 
     let shutdown_signal = Arc::new(AtomicUsize::new(0));
@@ -149,7 +145,7 @@ pub async fn run(
     let ctx = Arc::new(AcceptContext {
         dynamic_cfg: Arc::clone(&dynamic_cfg),
         rate_limiter: Arc::clone(&rate_limiter),
-        tls_acceptor,
+        server_crypto: server_crypto.clone(),
         fingerprint_config: static_cfg.fingerprint.clone(),
         keep_alive_config: static_cfg.timeout.keep_alive.clone(),
         metrics: Arc::clone(&metrics),
@@ -231,7 +227,7 @@ pub async fn run(
                         &reload_mutex,
                         &metrics,
                         &health_supervisor,
-                        cert_resolver.as_ref(),
+                        server_crypto.as_ref(),
                     )
                     .await;
                 }

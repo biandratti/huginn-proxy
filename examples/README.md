@@ -63,7 +63,9 @@ openssl req -x509 -newkey rsa:2048 -nodes \
   -subj "/CN=localhost" \
   -addext "subjectAltName=DNS:localhost,IP:127.0.0.1,IP:0:0:0:0:0:0:0:1"
 
-chmod 644 examples/certs/server.key examples/certs/server.crt
+chmod 644 examples/certs/server.crt
+chmod 600 examples/certs/server.key
+sudo chown 10001 examples/certs/server.key
 ```
 
 **Option B: Trusted local certificate (recommended for browser testing)**
@@ -83,8 +85,16 @@ mkcert -install
 # them — include every form you will type: hostname, IPv4 loopback, IPv6 loopback.
 mkcert -key-file examples/certs/server.key -cert-file examples/certs/server.crt localhost 127.0.0.1 ::1
 
-chmod 644 examples/certs/server.key examples/certs/server.crt
+chmod 644 examples/certs/server.crt
+chmod 600 examples/certs/server.key
+sudo chown 10001 examples/certs/server.key
 ```
+
+> **Key permissions:** the proxy container runs as UID `10001` and reads the key from the bind
+> mount, so the key must be both `0600` and owned by that UID — hence the `chown`. Leaving it
+> `root`-owned at `0600` makes it unreadable inside the container and every handshake fails with
+> `no server certificate chain resolved`; leaving it at `0644` works but the proxy logs a
+> `TLS private key file is world-readable` warning on startup.
 
 > **Note:** With self-signed certificates, browsers will show a security warning. You can either:
 > - Click "Advanced" → "Continue to localhost (unsafe)" to proceed

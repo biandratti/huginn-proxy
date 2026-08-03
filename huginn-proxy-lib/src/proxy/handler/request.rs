@@ -12,7 +12,6 @@ use crate::proxy::handler::rate_limit_validation::check_rate_limit;
 use crate::proxy::handler::resolve::{domain_defers_ip_filter, resolve_security};
 use crate::proxy::http_result::{HttpError, HttpResult};
 use crate::proxy::ClientPool;
-use crate::telemetry::metrics::values;
 use crate::telemetry::Metrics;
 use http::HeaderMap;
 use http::StatusCode;
@@ -55,7 +54,6 @@ fn check_ip_access(
     if !crate::security::is_ip_allowed(client_ip, ip_filter) {
         debug!(?peer, "IP blocked by filter");
         metrics.record_ip_filter_denied();
-        metrics.record_error(values::ERROR_IP_BLOCKED);
         return Err(HttpError::Forbidden);
     }
 
@@ -149,7 +147,7 @@ pub async fn handle_proxy_request(
     // fires on TLS connections that presented an SNI; runs after the IP filter so a blocked
     // client never learns whether a host exists.
     if let Some(sni) = connection_sni {
-        if !crate::proxy::router::authority_matches_sni(&domains, sni, &host) {
+        if !crate::proxy::handler::authority_matches_sni(&domains, sni, &host) {
             debug!(
                 ?peer,
                 sni,
@@ -157,7 +155,33 @@ pub async fn handle_proxy_request(
                 "421 Misdirected Request: host not covered by the connection's certificate (SNI)"
             );
             let error = HttpError::MisdirectedRequest;
-            metrics.record_error(error.error_type());
+            let status_code = StatusCode::from(error.clone()).as_u16();
+            metrics.record_entrypoint_request(&method, status_code, &protocol);
+            return Err(error);
+        }
+    }
+
+    // Client authentication is per-domain: the verifier is bound to the `ServerConfig` the
+    // SNI selected, so a domain with `client_ca_path` is only reachable over a session
+    // established for that same domain entry. Unlike the coalescing check above this runs on
+    // every transport (plaintext and no-SNI included, which is half the exposure) and the
+    // shared-certificate allowance does not apply, since two domains can share one
+    // certificate while only one of them demands a client certificate.
+    if let Some(domain) = domain {
+        if !crate::proxy::handler::mutual_tls_session_matches(
+            &domains,
+            domain,
+            is_https,
+            connection_sni,
+        ) {
+            let error = HttpError::MutualTlsHostInconsistency;
+            debug!(
+                ?peer,
+                sni = connection_sni.unwrap_or("<none>"),
+                host = %host,
+                https = is_https,
+                "421 Misdirected Request: host requires client authentication this session did not perform"
+            );
             let status_code = StatusCode::from(error.clone()).as_u16();
             metrics.record_entrypoint_request(&method, status_code, &protocol);
             return Err(error);
@@ -167,7 +191,6 @@ pub async fn handle_proxy_request(
     let route_match = match domain {
         None => {
             let error = HttpError::MisdirectedRequest;
-            metrics.record_error(error.error_type());
             let status_code = StatusCode::from(error.clone()).as_u16();
             metrics.record_entrypoint_request(&method, status_code, &protocol);
             return Err(error);
@@ -176,7 +199,6 @@ pub async fn handle_proxy_request(
             Some(r) => r,
             None => {
                 let error = HttpError::NoMatchingRoute;
-                metrics.record_error(error.error_type());
                 let status_code = StatusCode::from(error.clone()).as_u16();
                 metrics.record_entrypoint_request(&method, status_code, &protocol);
                 return Err(error);

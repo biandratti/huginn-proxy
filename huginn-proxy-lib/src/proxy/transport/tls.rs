@@ -10,17 +10,19 @@ use crate::proxy::synthetic_response::synthetic_error_response;
 use crate::proxy::ClientPool;
 use crate::telemetry::Metrics;
 use crate::tls::record_tls_handshake_metrics;
-use crate::tls::setup::SharedTlsAcceptor;
+use crate::tls::setup::SharedServerCrypto;
 use http::StatusCode;
 use hyper_util::rt::{TokioExecutor, TokioIo};
 use hyper_util::server::conn::auto::Builder as ConnBuilder;
 use tokio::net::TcpStream;
 use tokio::time::Instant;
+use tokio_rustls::rustls::server::Acceptor;
+use tokio_rustls::LazyConfigAcceptor;
 use tracing::warn;
 
 /// Configuration for handling TLS connections
 pub struct TlsConnectionConfig {
-    pub tls_acceptor: SharedTlsAcceptor,
+    pub server_crypto: SharedServerCrypto,
     pub fingerprint_config: crate::config::FingerprintConfig,
     pub domains: Arc<Vec<crate::config::Domain>>,
     pub backends: Arc<Vec<crate::config::Backend>>,
@@ -43,7 +45,7 @@ pub async fn handle_tls_connection(
     config: TlsConnectionConfig,
 ) {
     let metrics = config.metrics.clone();
-    let acc = config.tls_acceptor.load_full();
+    let crypto = config.server_crypto.load_full();
     {
         let handshake_start = Instant::now();
         let (prefix, ja4_fingerprints) =
@@ -57,18 +59,47 @@ pub async fn handle_tls_connection(
             };
 
         let prefixed = PrefixedStream::new(prefix, stream);
-        let tls_accept_result =
-            tokio::time::timeout(config.tls_handshake_timeout, acc.accept(prefixed)).await;
+        // SNI and whether the selected domain requires mTLS, captured at config
+        // selection so a handshake failure can be attributed per-domain (e.g. a
+        // client that omitted a required client cert). Mirrors rpxy's failure log.
+        let mut selected_sni: Option<String> = None;
+        let mut selected_mtls = false;
+        // Two-phase handshake: `LazyConfigAcceptor` reads the ClientHello (replayed
+        // from the prefix), then we pick the per-SNI `ServerConfig` and finish. The
+        // whole exchange is bounded by the single handshake timeout.
+        let tls_accept_result = tokio::time::timeout(config.tls_handshake_timeout, async {
+            let start = LazyConfigAcceptor::new(Acceptor::default(), prefixed).await?;
+            let server_config = {
+                let client_hello = start.client_hello();
+                // rustls lowercases SNI but does not strip a trailing `.` (the DNS
+                // root label); strip it here so it matches the domain config, which
+                // has the same trailing dot stripped at load time.
+                let sni = client_hello
+                    .server_name()
+                    .map(crate::proxy::handler::strip_trailing_dot);
+                selected_sni = sni.map(str::to_string);
+                match crypto.select(sni) {
+                    Some(picked) => {
+                        selected_mtls = picked.is_mutual_tls;
+                        picked.config
+                    }
+                    None => crypto.reject_config(),
+                }
+            };
+            start.into_stream(server_config).await
+        })
+        .await;
 
+        let sni_field = selected_sni.as_deref().unwrap_or("-");
         let tls = match tls_accept_result {
             Ok(Ok(tls)) => tls,
             Ok(Err(e)) => {
-                warn!(?peer, error = %e, "TLS accept failed");
+                warn!(?peer, sni = sni_field, mtls = selected_mtls, error = %e, "TLS accept failed");
                 metrics.record_tls_handshake_error();
                 return;
             }
             Err(_) => {
-                warn!(?peer, "TLS handshake timeout");
+                warn!(?peer, sni = sni_field, mtls = selected_mtls, "TLS handshake timeout");
                 metrics.record_timeout("tls_handshake");
                 metrics.record_tls_handshake_error();
                 return;
@@ -81,7 +112,14 @@ pub async fn handle_tls_connection(
         // SNI negotiated by the TLS connection (the name that selected the served cert).
         // Captured once here; HTTP/2 may carry many requests with differing `:authority`,
         // and the always-on misdirected-request (421) check compares each against this value.
-        let connection_sni: Option<Arc<str>> = tls.get_ref().1.server_name().map(Arc::from);
+        // Normalized the same way as `selected_sni` above (trailing dot stripped), so the
+        // 421 check compares like-for-like against the request host.
+        let connection_sni: Option<Arc<str>> = tls
+            .get_ref()
+            .1
+            .server_name()
+            .map(crate::proxy::handler::strip_trailing_dot)
+            .map(Arc::from);
 
         // Guard decrements TLS connection metrics counter when connection closes.
         // The main active_connections counter is handled by ConnectionGuard.

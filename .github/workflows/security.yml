@@ -24,6 +24,7 @@ jobs:
       matrix:
         crate:
           - huginn-proxy
+          - huginn-certs
           - huginn-proxy-lib
     steps:
       - uses: actions/checkout@v7

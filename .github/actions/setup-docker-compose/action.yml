@@ -28,8 +28,11 @@ runs:
           -out ${{ inputs.compose-dir }}/certs/server.crt \
           -days 365 \
           -subj "/CN=localhost"
-        chmod 644 ${{ inputs.compose-dir }}/certs/server.key
+        # The proxy container runs as UID 10001 and reads these from a bind mount, so the
+        # key must be owned by that UID to stay 0600 and still be readable inside the container.
         chmod 644 ${{ inputs.compose-dir }}/certs/server.crt
+        chmod 600 ${{ inputs.compose-dir }}/certs/server.key
+        sudo chown 10001 ${{ inputs.compose-dir }}/certs/server.key
 
     - name: Start Docker Compose services
       shell: bash
