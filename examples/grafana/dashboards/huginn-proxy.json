@@ -1837,7 +1837,7 @@
       "id": 57,
       "type": "timeseries",
       "title": "Passed vs Skipped (eBPF rate limiter)",
-      "description": "Total TCP SYNs captured (allowed) vs skipped (not captured, over limit) by the per-source-IP eBPF rate limiter. Over-limit SYNs are not dropped \u2014 the packet still passes.",
+      "description": "TCP SYNs that passed the per-source-IP eBPF rate limiter (capture attempted) vs skipped (not captured, over limit). Over-limit SYNs are not dropped \u2014 the packet still passes.",
       "gridPos": {
         "x": 6,
         "y": 109,

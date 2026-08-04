@@ -770,7 +770,7 @@ same health endpoints as the proxy.
 | `tcp_syn_insert_failures_total` | Observable counter | Number of TCP SYN map insert failures (e.g. LRU full)                  | `family`                  |
 | `tcp_syn_malformed_total`       | Observable counter | Number of malformed TCP packets (e.g. doff too short) that matched dst | `family`                  |
 | `tcp_syn_rate_skipped_total`    | Observable counter | Number of SYNs not captured: source IP over the rate limit             | `family`                  |
-| `tcp_syn_rate_allowed_total`    | Observable counter | Number of SYNs captured while under the per-source-IP rate limit       | `family`                  |
+| `tcp_syn_rate_allowed_total`    | Observable counter | Number of SYNs that passed the rate limiter (capture attempted)        | `family`                  |
 | `tcp_syn_rate_limit_enabled`    | Gauge              | 1 if the per-source-IP SYN rate limiter is enabled                     | -                         |
 | `agent_up`                      | Gauge              | 1 if the agent has pinned maps and is running                          | -                         |
 | `huginn_ebpf_agent_build_info`  | Gauge              | Build information (always 1)                                           | `version`, `rust_version` |
@@ -779,8 +779,9 @@ same health endpoints as the proxy.
   captured/failed/malformed/skipped/allowed SYN. Sum across both for a protocol-agnostic total
   (e.g. `sum(rate(tcp_syn_captured_total[$__rate_interval]))`).
 - Every SYN the limiter sees increments exactly one of `tcp_syn_rate_skipped_total` or
-  `tcp_syn_rate_allowed_total`. "Skipped" means not captured; the packet still reaches the TCP
-  stack, so the connection completes without a fingerprint.
+  `tcp_syn_rate_allowed_total`. "Skipped" means not captured; "allowed" means the limiter let the
+  SYN through to a capture attempt (the map insert can still fail). The packet still reaches the
+  TCP stack either way, so the connection completes without a fingerprint when skipped.
 - Both live in pinned BPF maps, so their totals survive agent restarts and stay frozen at the last
   value while the limiter is off. Alert on the rate, not the absolute count.
 
@@ -860,7 +861,7 @@ rather than this one:
 
 - Rate limiter enabled: `tcp_syn_rate_limit_enabled`
 - TCP SYN skipped (not captured) by rate limiter: `tcp_syn_rate_skipped_total`
-- TCP SYN allowed (captured) by rate limiter: `tcp_syn_rate_allowed_total`
+- TCP SYN allowed past rate limiter (capture attempted): `tcp_syn_rate_allowed_total`
 
 ---
 

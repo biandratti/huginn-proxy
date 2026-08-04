@@ -40,6 +40,22 @@ fn parse_ok(env: impl Fn(&str) -> Option<String>) -> huginn_ebpf_agent::config::
 }
 
 #[test]
+fn from_burst_window_only_builds_enforceable_limiters() {
+    // Fields are private: the only constructors are `disabled` / `from_burst_window`, and the
+    // latter must not hand out an enabled limiter that can never fire (or never rotate).
+    assert_eq!(SynRateLimit::from_burst_window(false, 100, 1), SynRateLimit::disabled());
+    assert_eq!(SynRateLimit::from_burst_window(true, 0, 1), SynRateLimit::disabled());
+    assert_eq!(SynRateLimit::from_burst_window(true, 65_535, 1), SynRateLimit::disabled());
+    assert_eq!(SynRateLimit::from_burst_window(true, 100, 0), SynRateLimit::disabled());
+    assert_eq!(SynRateLimit::from_burst_window(true, 100, 3601), SynRateLimit::disabled());
+
+    let ok = SynRateLimit::from_burst_window(true, 100, 2);
+    assert!(ok.enabled());
+    assert_eq!(ok.threshold(), 100);
+    assert_eq!(ok.window_ns(), NANOS_PER_SEC.saturating_mul(2));
+}
+
+#[test]
 fn rate_limit_disabled_by_default_and_ignores_garbage_burst() {
     // With ENABLED unset, BURST/WINDOW_SECONDS are never read, so garbage there must not error.
     // Explicit `false` is covered by rate_limit_enabled_tolerates_case_and_surrounding_whitespace.
@@ -47,7 +63,7 @@ fn rate_limit_disabled_by_default_and_ignores_garbage_burst() {
         ("HUGINN_EBPF_RATE_LIMIT_BURST", "not-a-number"),
         ("HUGINN_EBPF_RATE_LIMIT_WINDOW_SECONDS", "0"),
     ]));
-    assert!(!cfg.rate_limit.enabled);
+    assert!(!cfg.rate_limit.enabled());
 }
 
 #[test]
@@ -57,9 +73,9 @@ fn rate_limit_enabled_converts_burst_and_window_seconds() {
         ("HUGINN_EBPF_RATE_LIMIT_BURST", "2000"),
         ("HUGINN_EBPF_RATE_LIMIT_WINDOW_SECONDS", "2"),
     ]));
-    assert!(cfg.rate_limit.enabled);
-    assert_eq!(cfg.rate_limit.threshold, 2000);
-    assert_eq!(cfg.rate_limit.window_ns, NANOS_PER_SEC.saturating_mul(2));
+    assert!(cfg.rate_limit.enabled());
+    assert_eq!(cfg.rate_limit.threshold(), 2000);
+    assert_eq!(cfg.rate_limit.window_ns(), NANOS_PER_SEC.saturating_mul(2));
 }
 
 #[test]
@@ -68,14 +84,14 @@ fn rate_limit_enabled_defaults_the_window() {
         ("HUGINN_EBPF_RATE_LIMIT_ENABLED", "true"),
         ("HUGINN_EBPF_RATE_LIMIT_BURST", "500"),
     ]));
-    assert_eq!(cfg.rate_limit.window_ns, DEFAULT_WINDOW_SECONDS.saturating_mul(NANOS_PER_SEC));
+    assert_eq!(cfg.rate_limit.window_ns(), DEFAULT_WINDOW_SECONDS.saturating_mul(NANOS_PER_SEC));
 }
 
 #[test]
 fn rate_limit_enabled_without_burst_falls_back_to_the_default() {
     let cfg = parse_ok(required_with(&[("HUGINN_EBPF_RATE_LIMIT_ENABLED", "true")]));
-    assert!(cfg.rate_limit.enabled);
-    assert_eq!(cfg.rate_limit.threshold, DEFAULT_BURST);
+    assert!(cfg.rate_limit.enabled());
+    assert_eq!(cfg.rate_limit.threshold(), DEFAULT_BURST);
 }
 
 #[test]
@@ -105,8 +121,8 @@ fn rate_limit_accepts_the_highest_usable_burst() {
         ("HUGINN_EBPF_RATE_LIMIT_ENABLED", "true"),
         ("HUGINN_EBPF_RATE_LIMIT_BURST", "65534"),
     ]));
-    assert_eq!(cfg.rate_limit.threshold, 65_534);
-    assert!(cfg.rate_limit.enabled, "the ceiling itself is still enforceable");
+    assert_eq!(cfg.rate_limit.threshold(), 65_534);
+    assert!(cfg.rate_limit.enabled(), "the ceiling itself is still enforceable");
 }
 
 #[test]
@@ -138,8 +154,8 @@ fn rate_limit_accepts_the_longest_usable_window() {
         ("HUGINN_EBPF_RATE_LIMIT_BURST", "500"),
         ("HUGINN_EBPF_RATE_LIMIT_WINDOW_SECONDS", "3600"),
     ]));
-    assert_eq!(cfg.rate_limit.window_ns, NANOS_PER_SEC.saturating_mul(3600));
-    assert!(cfg.rate_limit.enabled, "the ceiling itself is still usable");
+    assert_eq!(cfg.rate_limit.window_ns(), NANOS_PER_SEC.saturating_mul(3600));
+    assert!(cfg.rate_limit.enabled(), "the ceiling itself is still usable");
 }
 
 #[test]
@@ -162,11 +178,11 @@ fn rate_limit_enabled_tolerates_case_and_surrounding_whitespace() {
     // trailing space out of a `.env` would leave the limiter silently off.
     for raw in ["true", "TRUE", "True", " true ", "true\n"] {
         let cfg = parse_ok(required_with(&[("HUGINN_EBPF_RATE_LIMIT_ENABLED", raw)]));
-        assert!(cfg.rate_limit.enabled, "ENABLED={raw:?} must enable the limiter");
+        assert!(cfg.rate_limit.enabled(), "ENABLED={raw:?} must enable the limiter");
     }
     for raw in ["false", "FALSE", " False "] {
         let cfg = parse_ok(required_with(&[("HUGINN_EBPF_RATE_LIMIT_ENABLED", raw)]));
-        assert!(!cfg.rate_limit.enabled, "ENABLED={raw:?} must leave the limiter off");
+        assert!(!cfg.rate_limit.enabled(), "ENABLED={raw:?} must leave the limiter off");
     }
 }
 
@@ -178,11 +194,12 @@ fn rate_limit_burst_and_window_tolerate_surrounding_whitespace() {
         ("HUGINN_EBPF_RATE_LIMIT_WINDOW_SECONDS", " 2\n"),
     ]));
     assert_eq!(
-        cfg.rate_limit.threshold, 500,
+        cfg.rate_limit.threshold(),
+        500,
         "a padded burst must not fall back to the default"
     );
     assert_eq!(
-        cfg.rate_limit.window_ns,
+        cfg.rate_limit.window_ns(),
         NANOS_PER_SEC.saturating_mul(2),
         "a padded window must be honoured"
     );

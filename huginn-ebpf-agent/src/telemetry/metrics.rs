@@ -141,7 +141,9 @@ pub fn init_metrics(pin_path: Arc<String>) -> crate::error::Result<(Registry, Me
 
     let _ = meter
         .u64_observable_counter("tcp_syn_rate_allowed_total")
-        .with_description("Number of TCP SYNs captured while under the per-source-IP rate limit")
+        .with_description(
+            "Number of TCP SYNs that passed the per-source-IP rate limiter (capture attempted)",
+        )
         .with_callback(move |observer| {
             let v4 =
                 syn_rate_allowed_v4_count_from_path(pin_path_rate_allowed.as_str()).unwrap_or(0);

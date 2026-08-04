@@ -28,10 +28,14 @@ impl CaptureBackend {
     }
 }
 
-/// Per-source-IP SYN rate-limit thresholds patched into the BPF program at load time.
+/// Per-source SYN rate-limit thresholds patched into the BPF program at load time.
 ///
-/// `threshold` is the `burst` (max SYNs per window per source IP before its SYNs stop being
-/// captured), `window_ns` is `window_seconds` in nanoseconds. When `enabled` is false, every SYN
+/// Construct only via [`SynRateLimit::from_burst_window`] or [`SynRateLimit::disabled`]: fields are
+/// private so an unenforceable `threshold` (above [`SynRateLimit::MAX_THRESHOLD`]) or a zero window
+/// cannot be smuggled past validation.
+///
+/// `threshold` is the `burst` (max SYNs per window per source before its SYNs stop being
+/// captured), `window_ns` is `window_seconds` in nanoseconds. When disabled, every SYN
 /// passes through to capture as before.
 ///
 /// Not the proxy's global `[security.rate_limit]`, despite the shared `burst`/`window_seconds`
@@ -39,24 +43,13 @@ impl CaptureBackend {
 /// ceiling here. See `EBPF-SETUP.md` for how to size it.
 ///
 /// Scope: over-limit SYNs are skipped (not fingerprinted), never dropped. Protects the
-/// `tcp_syn_map_v4/v6` capture LRU from one loud source IP; not a network-level DoS defense.
+/// `tcp_syn_map_v4/v6` capture LRU from one loud source; not a network-level DoS defense.
+/// IPv4 is keyed per address; IPv6 per `/64` prefix.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SynRateLimit {
-    /// Whether the in-kernel SYN rate limiter is active.
-    pub enabled: bool,
-    /// Max SYNs per window per source IP. SYNs beyond this are skipped (not captured into the
-    /// fingerprint map). The packet itself always passes through to the stack, never dropped.
-    ///
-    /// Enforced **per CPU**: the sketch lives in a per-CPU map, so a source IP whose SYNs land on
-    /// multiple RX queues can send up to roughly `threshold * num_cpus` per window before being
-    /// skipped. Size it accordingly.
-    ///
-    /// Must be in `1..=`[`SynRateLimit::MAX_THRESHOLD`]. Above that the limiter cannot fire on the
-    /// current window's own count, so it is not enforceable.
-    pub threshold: u32,
-    /// Sliding-window length in nanoseconds. Derived from a `window_seconds` in
-    /// `1..=`[`SynRateLimit::MAX_WINDOW_SECONDS`].
-    pub window_ns: u64,
+    enabled: bool,
+    threshold: u32,
+    window_ns: u64,
 }
 
 impl SynRateLimit {
@@ -96,5 +89,27 @@ impl SynRateLimit {
             threshold: burst,
             window_ns: window_seconds.saturating_mul(1_000_000_000),
         }
+    }
+
+    /// Whether the in-kernel SYN rate limiter is active.
+    pub const fn enabled(self) -> bool {
+        self.enabled
+    }
+
+    /// Max SYNs per window per source before capture is skipped.
+    ///
+    /// Enforced **per CPU**: the sketch lives in a per-CPU map, so a source whose SYNs land on
+    /// multiple RX queues can send up to roughly `threshold * num_cpus` per window before being
+    /// skipped. Size it accordingly.
+    ///
+    /// Always in `1..=`[`SynRateLimit::MAX_THRESHOLD`] when [`enabled`](Self::enabled); `0` when
+    /// disabled.
+    pub const fn threshold(self) -> u32 {
+        self.threshold
+    }
+
+    /// Sliding-window length in nanoseconds. `0` when disabled.
+    pub const fn window_ns(self) -> u64 {
+        self.window_ns
     }
 }

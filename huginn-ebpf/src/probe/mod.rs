@@ -160,13 +160,13 @@ impl EbpfProbe {
         // Rate-limit settings for the kernel program. Over-limit SYNs are skipped (not captured),
         // never dropped. The sketch is a per-CPU map, so the threshold is enforced per CPU
         // (see `SynRateLimit`).
-        let bpf_rate_enabled: u8 = u8::from(rate_limit.enabled);
-        let bpf_rate_threshold: u32 = rate_limit.threshold;
-        let bpf_rate_window_ns: u64 = rate_limit.window_ns;
+        let bpf_rate_enabled: u8 = u8::from(rate_limit.enabled());
+        let bpf_rate_threshold: u32 = rate_limit.threshold();
+        let bpf_rate_window_ns: u64 = rate_limit.window_ns();
 
         // Random per-load seed so a flood can't target a victim's cells (see `probe::seed`).
         // Only drawn when the limiter is on.
-        let bpf_rate_seed: u64 = if rate_limit.enabled {
+        let bpf_rate_seed: u64 = if rate_limit.enabled() {
             seed::random_seed()?
         } else {
             0
@@ -228,9 +228,9 @@ impl EbpfProbe {
             filter_ip_v6,
             dst_port,
             mode = mode_str,
-            rate_limit_enabled = rate_limit.enabled,
-            rate_limit_threshold = rate_limit.threshold,
-            rate_limit_window_ns = rate_limit.window_ns,
+            rate_limit_enabled = rate_limit.enabled(),
+            rate_limit_threshold = rate_limit.threshold(),
+            rate_limit_window_ns = rate_limit.window_ns(),
             "eBPF TCP SYN fingerprinting attached"
         );
 

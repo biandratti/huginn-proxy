@@ -26,19 +26,22 @@ follows [Semantic Versioning](https://semver.org/).
   a self-defeating `rate_limit` (`window_seconds = 0`, or `limit_by = "header"` with no
   `limit_by_header`), and `proxy_protocol` with no trusted peer. `--validate` prints a warning count;
   `--strict` exits non-zero on any warning. See `SETTINGS.md`.
-- **In-kernel per-source-IP SYN rate limiter (eBPF).** New agent env vars
+- **In-kernel per-source SYN rate limiter (eBPF).** New agent env vars
   `HUGINN_EBPF_RATE_LIMIT_ENABLED` (default `false`), `HUGINN_EBPF_RATE_LIMIT_BURST`
   (`1..=65534`, default `2000`) and `HUGINN_EBPF_RATE_LIMIT_WINDOW_SECONDS` (`1..=3600`,
-  default `1`). When enabled, the XDP/TC datapath counts each source IP's SYNs with a
-  sliding-window Count-Min Sketch (hashed with a random seed drawn per agent load, so which
-  counters a source IP shares cannot be computed offline and aimed at a chosen victim) and skips
-  capture for those over the threshold, protecting the
-  `tcp_syn_map` LRU from floods. The packet still reaches the TCP stack; only the fingerprint is
-  lost. Constant memory whatever the number of (even spoofed) source IPs. The sketch is per-CPU, so
-  the threshold is too: size `BURST` against `HUGINN_EBPF_SYN_MAP_MAX_ENTRIES`, not against the
-  proxy's `[security.rate_limit]`. An unset variable takes its default; one that is set but unusable
-  fails agent startup. Adds `tcp_syn_rate_skipped_total` / `tcp_syn_rate_allowed_total` (by
-  `family`), `tcp_syn_rate_limit_enabled`, and four pinned maps under `HUGINN_EBPF_PIN_PATH`
+  default `1`). When enabled, the XDP/TC datapath counts SYNs with a sliding-window Count-Min
+  Sketch (hashed with a random seed drawn per agent load, so which counters a source shares
+  cannot be computed offline and aimed at a chosen victim) and skips capture for those over the
+  threshold, protecting the `tcp_syn_map` LRU from floods. IPv4 is keyed per address; IPv6 is
+  keyed per `/64` prefix (the interface identifier is free for whoever holds the `/64` to pick,
+  so full-address keys would never hit the budget — at the cost that one noisy address can push
+  the whole prefix over the limit and skip its fingerprints). The packet still reaches the TCP
+  stack; only the fingerprint is lost. Constant memory whatever the number of (even spoofed)
+  sources. The sketch is per-CPU, so the threshold is too: size `BURST` against
+  `HUGINN_EBPF_SYN_MAP_MAX_ENTRIES`, not against the proxy's `[security.rate_limit]`. An unset
+  variable takes its default; one that is set but unusable fails agent startup. Adds
+  `tcp_syn_rate_skipped_total` / `tcp_syn_rate_allowed_total` (by `family`),
+  `tcp_syn_rate_limit_enabled`, and four pinned maps under `HUGINN_EBPF_PIN_PATH`
   (`syn_rate_skipped_v4/v6`, `syn_rate_allowed_v4/v6`). The sketch itself is not pinned, but its
   maps are allocated on every agent load even with the limiter off (~260 KiB on 8 CPUs, ~2 MiB on
   64). See `EBPF-SETUP.md` and `TELEMETRY.md`.

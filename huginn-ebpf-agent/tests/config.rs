@@ -53,7 +53,7 @@ fn from_env_minimal_applies_defaults() {
     assert_eq!(cfg.syn_map_max_entries, huginn_ebpf::DEFAULT_SYN_MAP_MAX_ENTRIES);
     assert!(matches!(cfg.capture, CaptureBackend::Xdp(XdpAttachMode::Native)));
     assert_eq!(cfg.log_level, EbpfLogLevel::Off, "log level must default to off");
-    assert!(!cfg.rate_limit.enabled, "rate limiter must default to disabled");
+    assert!(!cfg.rate_limit.enabled(), "rate limiter must default to disabled");
 }
 
 #[test]
