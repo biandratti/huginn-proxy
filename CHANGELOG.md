@@ -30,7 +30,9 @@ follows [Semantic Versioning](https://semver.org/).
   `HUGINN_EBPF_RATE_LIMIT_ENABLED` (default `false`), `HUGINN_EBPF_RATE_LIMIT_BURST`
   (`1..=65534`, default `2000`) and `HUGINN_EBPF_RATE_LIMIT_WINDOW_SECONDS` (`1..=3600`,
   default `1`). When enabled, the XDP/TC datapath counts each source IP's SYNs with a
-  sliding-window Count-Min Sketch and skips capture for those over the threshold, protecting the
+  sliding-window Count-Min Sketch (hashed with a random seed drawn per agent load, so which
+  counters a source IP shares cannot be computed offline and aimed at a chosen victim) and skips
+  capture for those over the threshold, protecting the
   `tcp_syn_map` LRU from floods. The packet still reaches the TCP stack; only the fingerprint is
   lost. Constant memory whatever the number of (even spoofed) source IPs. The sketch is per-CPU, so
   the threshold is too: size `BURST` against `HUGINN_EBPF_SYN_MAP_MAX_ENTRIES`, not against the

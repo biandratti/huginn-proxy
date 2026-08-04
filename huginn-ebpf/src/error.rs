@@ -51,4 +51,7 @@ pub enum EbpfError {
 
     #[error("failed to initialize eBPF debug logger: {0}")]
     LogInit(#[source] aya_log::Error),
+
+    #[error("failed to draw a random SYN rate-limit hash seed: {0}")]
+    RateLimitSeed(#[from] getrandom::Error),
 }

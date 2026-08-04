@@ -29,6 +29,10 @@
 //!   `no_std`, so its arithmetic doesn't carry over as-is to eBPF).
 //! - **Integers only**: eBPF has no floats, so the decay is integer math:
 //!   `estimate = current + previous * remaining_ns / window_ns`.
+//! - **Keyed hashing**: which cells an IP lands in depends on a random `seed` the loader picks
+//!   per load, mixed in by [`key_v4`]/[`key_v6`]. Without it an attacker can compute a victim's
+//!   cells offline and flood them (targeted suppression). [`SketchKey`] can only come from those
+//!   two functions, so a raw address can't reach the grid unkeyed.
 //!
 //! **Concurrency**: each CPU has its own copy (stored in a per-CPU BPF map), so nothing is shared
 //! and no locks or atomics are needed. Downside: the limit is per-CPU, not global.
@@ -74,8 +78,11 @@ const _: () =
 /// `counters` lifts it automatically.
 pub const MAX_THRESHOLD: u32 = (u16::MAX as u32).saturating_sub(1);
 
-/// One salt number per row, used to turn an IP into a column index. Each is a well-known
+/// One salt number per row, used to turn a key into a column index. Each is a well-known
 /// constant borrowed from other hash functions, chosen only because it mixes bits well.
+///
+/// Public, no secrecy here - unpredictability comes from the per-load seed in the key
+/// ([`key_v4`]/[`key_v6`]). These just decorrelate the rows.
 const SALTS: [u64; HASHES] = [
     0x9E37_79B9_7F4A_7C15, // from the golden ratio
     0xC2B2_AE3D_27D4_EB4F, // from xxHash
@@ -83,14 +90,48 @@ const SALTS: [u64; HASHES] = [
     0xFF51_AFD7_ED55_8CCD, // from MurmurHash3
 ];
 
-/// Turn a 16-byte IPv6 address into a single 8-byte key by XOR-ing its two halves together.
+/// Scramble one 64-bit value into another (the SplitMix64 finalizer). A bijection with full bit
+/// diffusion, so an IP's cells stay unpredictable once seeded. No division or 128-bit math, so
+/// it lowers cleanly on BPF.
 #[inline(always)]
-pub fn fold_v6(addr: [u8; 16]) -> u64 {
+fn mix64(x: u64) -> u64 {
+    let mut h = x ^ x.wrapping_shr(30);
+    h = h.wrapping_mul(0xBF58_476D_1CE4_E5B9);
+    h ^= h.wrapping_shr(27);
+    h = h.wrapping_mul(0x94D0_49BB_1331_11EB);
+    h ^ h.wrapping_shr(31)
+}
+
+/// A source address already mixed with the per-load seed, ready to index the grid.
+///
+/// Only [`key_v4`]/[`key_v6`] build one, so [`Sketch::observe_over_limit`] can't be handed an
+/// unseeded address (see the keyed-hashing note above).
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+#[repr(transparent)]
+pub struct SketchKey(u64);
+
+/// Key an IPv4 source address with `seed`.
+///
+/// The mixer is a bijection, so two distinct addresses never share a key (they can still share
+/// a *cell* - inherent to the sketch - but which cells is unknown without the seed).
+#[inline(always)]
+pub fn key_v4(saddr: u32, seed: u64) -> SketchKey {
+    SketchKey(mix64(seed ^ (saddr as u64)))
+}
+
+/// Key a 16-byte IPv6 source address with `seed`.
+///
+/// Halves are chained through the mixer, not XOR-folded. A plain `hi ^ lo` fold gives an exact
+/// key collision for free (`lo = victim_hi ^ victim_lo ^ attacker_hi`, sourceable from one /64);
+/// chaining keeps the low half injective, closing that off.
+#[inline(always)]
+pub fn key_v6(addr: [u8; 16], seed: u64) -> SketchKey {
     let mut hi = [0u8; 8];
     let mut lo = [0u8; 8];
     hi.copy_from_slice(&addr[..8]);
     lo.copy_from_slice(&addr[8..]);
-    u64::from_ne_bytes(hi) ^ u64::from_ne_bytes(lo)
+    let h = mix64(seed ^ u64::from_ne_bytes(hi));
+    SketchKey(mix64(h ^ u64::from_ne_bytes(lo)))
 }
 
 /// Pick the column for `key` in row `row`: multiply by the row's salt, keep the top bits.
@@ -103,11 +144,11 @@ fn column(key: u64, row: usize) -> usize {
 
 /// The column each row picks for `key` - one index per row, [`HASHES`] in total.
 #[inline(always)]
-pub fn cell_indices(key: u64) -> [usize; HASHES] {
+pub fn cell_indices(key: SketchKey) -> [usize; HASHES] {
     let mut cols = [0usize; HASHES];
     let mut row = 0;
     while row < HASHES {
-        cols[row] = column(key, row);
+        cols[row] = column(key.0, row);
         row = row.saturating_add(1);
     }
     cols
@@ -196,7 +237,7 @@ impl Sketch {
     #[inline(always)]
     pub fn observe_over_limit(
         &mut self,
-        key: u64,
+        key: SketchKey,
         now_ns: u64,
         window_ns: u64,
         threshold: u32,

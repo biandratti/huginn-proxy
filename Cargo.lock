@@ -1027,6 +1027,7 @@ version = "0.0.3-beta.0"
 dependencies = [
  "aya",
  "aya-log",
+ "getrandom 0.4.3",
  "huginn-ebpf-common",
  "huginn-ebpf-rate-limit",
  "huginn-net-tcp",

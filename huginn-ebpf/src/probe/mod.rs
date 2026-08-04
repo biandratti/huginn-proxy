@@ -19,6 +19,7 @@ mod counters;
 mod keys;
 mod lookup;
 mod maps;
+mod seed;
 
 pub use counters::{
     is_stale, syn_captured_v4_count_from_path, syn_captured_v6_count_from_path,
@@ -28,6 +29,7 @@ pub use counters::{
     syn_rate_skipped_v4_count_from_path, syn_rate_skipped_v6_count_from_path,
 };
 pub use keys::{make_bpf_key_v4, make_bpf_key_v6};
+pub use seed::random_seed;
 
 /// Raw bytes of the compiled BPF object (XDP + TC programs), embedded at compile time.
 /// `include_bytes_aligned!` ensures 8-byte alignment required by aya's ELF parser.
@@ -162,6 +164,14 @@ impl EbpfProbe {
         let bpf_rate_threshold: u32 = rate_limit.threshold;
         let bpf_rate_window_ns: u64 = rate_limit.window_ns;
 
+        // Random per-load seed so a flood can't target a victim's cells (see `probe::seed`).
+        // Only drawn when the limiter is on.
+        let bpf_rate_seed: u64 = if rate_limit.enabled {
+            seed::random_seed()?
+        } else {
+            0
+        };
+
         // Create the pin directory and drop any pins left over from an
         // incompatible capacity before the loader touches them.
         maps::prepare_pins(pin_base, syn_map_max_entries)?;
@@ -182,6 +192,7 @@ impl EbpfProbe {
             .override_global("syn_rate_enabled", &bpf_rate_enabled, false)
             .override_global("syn_rate_threshold", &bpf_rate_threshold, false)
             .override_global("syn_rate_window_ns", &bpf_rate_window_ns, false)
+            .override_global("syn_rate_seed", &bpf_rate_seed, false)
             .map_max_entries(pin::SYN_MAP_V4_NAME, syn_map_max_entries)
             .map_max_entries(pin::SYN_MAP_V6_NAME, syn_map_max_entries);
         for (name, path) in &pin_paths {

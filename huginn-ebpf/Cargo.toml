@@ -9,6 +9,7 @@ build = "src/build.rs"
 [dependencies]
 aya.workspace = true
 aya-log.workspace = true
+getrandom.workspace = true
 huginn-ebpf-common = { workspace = true, features = ["aya"] }
 huginn-ebpf-rate-limit.workspace = true
 huginn-net-tcp.workspace = true

@@ -31,6 +31,7 @@ const PATCHED_GLOBALS: &[&str] = &[
     "syn_rate_enabled",
     "syn_rate_threshold",
     "syn_rate_window_ns",
+    "syn_rate_seed",
 ];
 
 #[test]

@@ -11,12 +11,12 @@
 mod maps;
 
 use aya_ebpf::helpers::bpf_ktime_get_ns;
-use huginn_ebpf_rate_limit::{fold_v6, Sketch};
+use huginn_ebpf_rate_limit::{key_v4, key_v6, Sketch};
 
 use maps::{
     increment_syn_rate_allowed_v4, increment_syn_rate_allowed_v6, increment_syn_rate_skipped_v4,
-    increment_syn_rate_skipped_v6, syn_rate_enabled, syn_rate_sketch_v4, syn_rate_sketch_v6,
-    syn_rate_threshold, syn_rate_window_ns,
+    increment_syn_rate_skipped_v6, syn_rate_enabled, syn_rate_seed, syn_rate_sketch_v4,
+    syn_rate_sketch_v6, syn_rate_threshold, syn_rate_window_ns,
 };
 
 /// Observe one IPv4 SYN from `saddr` and report whether capture should be skipped (over limit).
@@ -34,8 +34,8 @@ pub fn should_skip_v4(saddr: u32) -> bool {
     // PerCpuArray copy, so the &mut cannot alias another CPU's sketch.
     let sketch: &mut Sketch = unsafe { &mut *ptr };
     let now = unsafe { bpf_ktime_get_ns() };
-    let over =
-        sketch.observe_over_limit(saddr as u64, now, syn_rate_window_ns(), syn_rate_threshold());
+    let key = key_v4(saddr, syn_rate_seed());
+    let over = sketch.observe_over_limit(key, now, syn_rate_window_ns(), syn_rate_threshold());
     if over {
         increment_syn_rate_skipped_v4();
     } else {
@@ -58,8 +58,8 @@ pub fn should_skip_v6(saddr: [u8; 16]) -> bool {
     // PerCpuArray copy, so the &mut cannot alias another CPU's sketch.
     let sketch: &mut Sketch = unsafe { &mut *ptr };
     let now = unsafe { bpf_ktime_get_ns() };
-    let over =
-        sketch.observe_over_limit(fold_v6(saddr), now, syn_rate_window_ns(), syn_rate_threshold());
+    let key = key_v6(saddr, syn_rate_seed());
+    let over = sketch.observe_over_limit(key, now, syn_rate_window_ns(), syn_rate_threshold());
     if over {
         increment_syn_rate_skipped_v6();
     } else {

@@ -1,9 +1,14 @@
-use huginn_ebpf_rate_limit::{cell_indices, fold_v6, Sketch, MAX_THRESHOLD, SLOTS, SLOT_LEN};
+use huginn_ebpf_rate_limit::{
+    cell_indices, key_v4, key_v6, Sketch, SketchKey, MAX_THRESHOLD, SLOTS, SLOT_LEN,
+};
 
 const WINDOW: u64 = 1_000_000_000; // 1s in ns
 
-fn key_from_v4(ip: u32) -> u64 {
-    ip as u64
+/// Stands in for the random seed the loader patches in per program load.
+const SEED: u64 = 0x5EED_1234_ABCD_9876;
+
+fn key_from_v4(ip: u32) -> SketchKey {
+    key_v4(ip, SEED)
 }
 
 #[test]
@@ -118,24 +123,24 @@ fn point_estimate_never_underreports_a_heavy_key() {
 }
 
 #[test]
-fn v6_fold_is_stable_and_mixes_both_halves() {
+fn v6_key_is_stable_and_mixes_both_halves() {
     let addr = [0x20, 0x01, 0x0d, 0xb8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01];
-    assert_eq!(fold_v6(addr), fold_v6(addr), "fold is deterministic");
+    assert_eq!(key_v6(addr, SEED), key_v6(addr, SEED), "the key is deterministic for a seed");
     // Changing a byte in the low half (bytes 8..16) must change the key.
     let mut low = addr;
     low[15] = 0x02;
-    assert_ne!(fold_v6(addr), fold_v6(low), "low half affects the key");
+    assert_ne!(key_v6(addr, SEED), key_v6(low, SEED), "low half affects the key");
     // Changing a byte in the high half (bytes 0..8) must change the key too.
     let mut high = addr;
     high[0] = 0x21;
-    assert_ne!(fold_v6(addr), fold_v6(high), "high half affects the key");
+    assert_ne!(key_v6(addr, SEED), key_v6(high, SEED), "high half affects the key");
 }
 
 #[test]
 fn v6_key_goes_over_limit() {
     let mut s = Sketch::new();
     let addr = [0x20, 0x01, 0x0d, 0xb8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x99];
-    let key = fold_v6(addr);
+    let key = key_v6(addr, SEED);
     let threshold = 3;
     for i in 1..=threshold {
         assert!(!s.observe_over_limit(key, 0, WINDOW, threshold), "v6 observation {i} allowed");
@@ -237,4 +242,98 @@ fn max_threshold_is_the_largest_one_a_single_window_can_cross() {
     let fired = (0..saturate)
         .any(|_| over_max.observe_over_limit(key, 1, WINDOW, MAX_THRESHOLD.saturating_add(1)));
     assert!(!fired, "a single window cannot cross a threshold above MAX_THRESHOLD");
+}
+
+// --- keyed hashing ---------------------------------------------------------------------------
+
+#[test]
+fn the_seed_decides_where_a_v4_source_lands() {
+    let ip = 0x0A00_0B0Cu32;
+    let a = cell_indices(key_v4(ip, SEED));
+    let b = cell_indices(key_v4(ip, SEED ^ 1));
+    assert_ne!(a, b, "one seed bit must move the cells; otherwise the grid layout is public");
+    assert_eq!(
+        cell_indices(key_v4(ip, SEED)),
+        a,
+        "the same seed must keep placing an IP in the same cells, or counting breaks"
+    );
+}
+
+#[test]
+fn the_seed_decides_where_a_v6_source_lands() {
+    let addr = [0x20, 0x01, 0x0d, 0xb8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x07];
+    assert_ne!(
+        cell_indices(key_v6(addr, SEED)),
+        cell_indices(key_v6(addr, SEED ^ 1)),
+        "one seed bit must move the cells for v6 too"
+    );
+}
+
+#[test]
+fn a_v6_attacker_in_one_prefix_cannot_land_on_a_victims_key() {
+    // The old `hi ^ lo` key gave an exact collision for free: pick
+    // `lo = victim_hi ^ victim_lo ^ attacker_hi` from any /64. Chaining through the mixer closes
+    // that off.
+    let victim = [0x20, 0x01, 0x0d, 0xb8, 0, 0, 0, 0x01, 0, 0, 0, 0, 0, 0, 0, 0x42];
+    let victim_hi = u64::from_ne_bytes([0x20, 0x01, 0x0d, 0xb8, 0, 0, 0, 0x01]);
+    let victim_lo = u64::from_ne_bytes([0, 0, 0, 0, 0, 0, 0, 0x42]);
+
+    // Attacker's /64, plus the low half the old XOR fold would collide on.
+    let attacker_hi_bytes = [0x2a, 0x00, 0x14, 0x50, 0, 0, 0, 0x99];
+    let attacker_hi = u64::from_ne_bytes(attacker_hi_bytes);
+    let forged_lo = (victim_hi ^ victim_lo ^ attacker_hi).to_ne_bytes();
+
+    let mut attacker = [0u8; 16];
+    attacker[..8].copy_from_slice(&attacker_hi_bytes);
+    attacker[8..].copy_from_slice(&forged_lo);
+
+    assert_eq!(
+        attacker_hi ^ u64::from_ne_bytes(forged_lo),
+        victim_hi ^ victim_lo,
+        "the address really is an XOR-fold collision, so this test would fail against that fold"
+    );
+    assert_ne!(
+        key_v6(attacker, SEED),
+        key_v6(victim, SEED),
+        "an XOR-fold collision must no longer be a key collision"
+    );
+}
+
+#[test]
+fn no_two_addresses_in_one_prefix_share_a_key() {
+    // Same /64, varying low halves: every address gets its own key. Cell collisions still
+    // happen (inherent to the sketch) but can't be aimed.
+    let mut seen = std::collections::HashSet::new();
+    for i in 0..20_000u64 {
+        let mut addr = [0u8; 16];
+        addr[..8].copy_from_slice(&[0x2a, 0x00, 0x14, 0x50, 0, 0, 0, 0x99]);
+        addr[8..].copy_from_slice(&i.to_ne_bytes());
+        assert!(seen.insert(key_v6(addr, SEED)), "two addresses in one /64 share a key at i={i}");
+    }
+}
+
+#[test]
+fn no_two_v4_addresses_share_a_key() {
+    let mut seen = std::collections::HashSet::new();
+    for i in 0..20_000u32 {
+        let ip = 0x0100_0000u32.wrapping_add(i.wrapping_mul(7919));
+        assert!(seen.insert(key_v4(ip, SEED)), "two IPv4 addresses share a key at i={i}");
+    }
+}
+
+#[test]
+fn suppressing_a_victim_takes_a_flood_the_attacker_cannot_target() {
+    // End to end: flood with ~4x threshold spoofed SYNs (a targeted attack's budget) and a
+    // specific victim must still be under its limit.
+    let mut s = Sketch::new();
+    let threshold = 50u32;
+    let victim = 0x0A00_00FFu32;
+    for i in 0..threshold.saturating_mul(4) {
+        let spoofed = 0xC000_0000u32.wrapping_add(i);
+        s.observe_over_limit(key_v4(spoofed, SEED), 0, WINDOW, threshold);
+    }
+    assert!(
+        !s.observe_over_limit(key_v4(victim, SEED), 0, WINDOW, threshold),
+        "a victim must not be pushed over the limit by a flood that could not target it"
+    );
 }

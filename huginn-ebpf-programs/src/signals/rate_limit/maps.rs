@@ -50,6 +50,10 @@ static SYN_RATE_THRESHOLD: u32 = 0;
 static SYN_RATE_WINDOW_NS: u64 = 0;
 
 #[allow(unsafe_code)]
+#[export_name = "syn_rate_seed"]
+static SYN_RATE_SEED: u64 = 0;
+
+#[allow(unsafe_code)]
 #[inline(always)]
 pub fn syn_rate_enabled() -> bool {
     // SAFETY: read_volatile of a loader-patched global.
@@ -68,6 +72,13 @@ pub fn syn_rate_threshold() -> u32 {
 pub fn syn_rate_window_ns() -> u64 {
     // SAFETY: read_volatile of a loader-patched global.
     unsafe { core::ptr::read_volatile(&SYN_RATE_WINDOW_NS) }
+}
+
+#[allow(unsafe_code)]
+#[inline(always)]
+pub fn syn_rate_seed() -> u64 {
+    // SAFETY: read_volatile of a loader-patched global.
+    unsafe { core::ptr::read_volatile(&SYN_RATE_SEED) }
 }
 
 #[allow(unsafe_code)]
