@@ -123,14 +123,15 @@ fn point_estimate_never_underreports_a_heavy_key() {
 }
 
 #[test]
-fn v6_key_is_stable_and_mixes_both_halves() {
+fn v6_key_is_stable_and_keyed_on_the_prefix_only() {
     let addr = [0x20, 0x01, 0x0d, 0xb8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01];
     assert_eq!(key_v6(addr, SEED), key_v6(addr, SEED), "the key is deterministic for a seed");
-    // Changing a byte in the low half (bytes 8..16) must change the key.
+    // Changing a byte in the low half (bytes 8..16, the interface ID) must NOT change the key:
+    // that's the whole point of keying on the /64.
     let mut low = addr;
     low[15] = 0x02;
-    assert_ne!(key_v6(addr, SEED), key_v6(low, SEED), "low half affects the key");
-    // Changing a byte in the high half (bytes 0..8) must change the key too.
+    assert_eq!(key_v6(addr, SEED), key_v6(low, SEED), "low half must not affect the key");
+    // Changing a byte in the high half (bytes 0..8, the /64 prefix) must change the key.
     let mut high = addr;
     high[0] = 0x21;
     assert_ne!(key_v6(addr, SEED), key_v6(high, SEED), "high half affects the key");
@@ -270,45 +271,55 @@ fn the_seed_decides_where_a_v6_source_lands() {
 }
 
 #[test]
-fn a_v6_attacker_in_one_prefix_cannot_land_on_a_victims_key() {
-    // The old `hi ^ lo` key gave an exact collision for free: pick
-    // `lo = victim_hi ^ victim_lo ^ attacker_hi` from any /64. Chaining through the mixer closes
-    // that off.
-    let victim = [0x20, 0x01, 0x0d, 0xb8, 0, 0, 0, 0x01, 0, 0, 0, 0, 0, 0, 0, 0x42];
-    let victim_hi = u64::from_ne_bytes([0x20, 0x01, 0x0d, 0xb8, 0, 0, 0, 0x01]);
-    let victim_lo = u64::from_ne_bytes([0, 0, 0, 0, 0, 0, 0, 0x42]);
-
-    // Attacker's /64, plus the low half the old XOR fold would collide on.
-    let attacker_hi_bytes = [0x2a, 0x00, 0x14, 0x50, 0, 0, 0, 0x99];
-    let attacker_hi = u64::from_ne_bytes(attacker_hi_bytes);
-    let forged_lo = (victim_hi ^ victim_lo ^ attacker_hi).to_ne_bytes();
-
-    let mut attacker = [0u8; 16];
-    attacker[..8].copy_from_slice(&attacker_hi_bytes);
-    attacker[8..].copy_from_slice(&forged_lo);
-
-    assert_eq!(
-        attacker_hi ^ u64::from_ne_bytes(forged_lo),
-        victim_hi ^ victim_lo,
-        "the address really is an XOR-fold collision, so this test would fail against that fold"
-    );
-    assert_ne!(
-        key_v6(attacker, SEED),
-        key_v6(victim, SEED),
-        "an XOR-fold collision must no longer be a key collision"
+fn a_v6_attacker_spraying_interface_ids_cannot_dodge_its_own_prefix_budget() {
+    // An attacker who owns one /64 can pick any of 2^64 low halves for free. Keying on the
+    // prefix means all of them land on the same key, so spraying interface IDs can't manufacture
+    // fresh budget the way varying the full address used to.
+    let mut s = Sketch::new();
+    let threshold = 50u32;
+    let prefix = [0x2a, 0x00, 0x14, 0x50, 0, 0, 0, 0x99];
+    for i in 0..threshold.saturating_mul(4) as u64 {
+        let mut addr = [0u8; 16];
+        addr[..8].copy_from_slice(&prefix);
+        addr[8..].copy_from_slice(&i.to_ne_bytes());
+        s.observe_over_limit(key_v6(addr, SEED), 0, WINDOW, threshold);
+    }
+    let mut last = [0u8; 16];
+    last[..8].copy_from_slice(&prefix);
+    last[8..].copy_from_slice(&0xFFFF_u64.to_ne_bytes());
+    assert!(
+        s.observe_over_limit(key_v6(last, SEED), 0, WINDOW, threshold),
+        "spraying interface IDs within one /64 must still hit the shared budget"
     );
 }
 
 #[test]
-fn no_two_addresses_in_one_prefix_share_a_key() {
-    // Same /64, varying low halves: every address gets its own key. Cell collisions still
-    // happen (inherent to the sketch) but can't be aimed.
+fn every_address_in_one_prefix_shares_a_key() {
+    // Same /64, varying low halves: all addresses share one key, since the low half is free
+    // for whoever holds the /64 to pick and carries no allocation cost.
+    let prefix = [0x2a, 0x00, 0x14, 0x50, 0, 0, 0, 0x99];
+    let mut base = [0u8; 16];
+    base[..8].copy_from_slice(&prefix);
+    let base_key = key_v6(base, SEED);
+    for i in 0..20_000u64 {
+        let mut addr = [0u8; 16];
+        addr[..8].copy_from_slice(&prefix);
+        addr[8..].copy_from_slice(&i.to_ne_bytes());
+        assert_eq!(
+            key_v6(addr, SEED),
+            base_key,
+            "every address in one /64 must share a key at i={i}"
+        );
+    }
+}
+
+#[test]
+fn distinct_v6_prefixes_get_distinct_keys() {
     let mut seen = std::collections::HashSet::new();
     for i in 0..20_000u64 {
         let mut addr = [0u8; 16];
-        addr[..8].copy_from_slice(&[0x2a, 0x00, 0x14, 0x50, 0, 0, 0, 0x99]);
-        addr[8..].copy_from_slice(&i.to_ne_bytes());
-        assert!(seen.insert(key_v6(addr, SEED)), "two addresses in one /64 share a key at i={i}");
+        addr[..8].copy_from_slice(&i.to_ne_bytes());
+        assert!(seen.insert(key_v6(addr, SEED)), "two /64 prefixes share a key at i={i}");
     }
 }
 

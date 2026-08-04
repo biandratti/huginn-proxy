@@ -1,9 +1,10 @@
 # huginn-ebpf-rate-limit
 
-Per-source-IP SYN rate limiter for the huginn eBPF SYN-capture programs.
+Per-source SYN rate limiter for the huginn eBPF SYN-capture programs: per-address for IPv4, per-/64
+for IPv6.
 
-Counts each source IP's recent SYNs and reports when one goes over its limit. It never stores
-IPs individually - it hashes each into a small fixed-size grid of counters (a Count-Min Sketch).
+Counts each source's recent SYNs and reports when one goes over its limit. It never stores
+sources individually - it hashes each into a small fixed-size grid of counters (a Count-Min Sketch).
 Memory is constant, so it holds up even under millions of spoofed source IPs - but accuracy does
 not: the grid is only [`HASHES`](src/lib.rs) x [`SLOTS`](src/lib.rs) counters, so a flood spread
 across enough source IPs saturates every cell, and then every source reads over-limit and stops
@@ -28,9 +29,19 @@ being captured, legitimate ones included.
   arithmetic doesn't carry over as-is to eBPF).
 - **Integers only**: eBPF has no floats, so the decay is integer math:
   `estimate = current + previous * remaining_ns / window_ns`.
-- **Keyed hashing**: which cells an IP lands in depends on a random `seed` the loader picks per
+- **Keyed hashing**: which cells a key lands in depends on a random `seed` the loader picks per
   load, mixed in by `key_v4`/`key_v6`. Without it an attacker can compute a victim's cells offline
-  and flood them. `SketchKey` can only come from those two functions, so a raw address can't reach the grid unkeyed.
+  and flood them. `SketchKey` can only come from those two functions, so a raw address can't
+  reach the grid unkeyed.
+- **IPv6 is keyed by /64, not by full address**: the low 64 bits (interface identifier) are free
+  for whoever holds the /64 to pick, at no allocation cost. Keying on the full address would let
+  one delegated /64 spray unlimited distinct keys and never hit the budget. Keying on the prefix
+  closes that off, at a cost: every address sharing a /64 also shares its budget, so one noisy
+  device in a household or office can push the whole prefix over the limit. Acceptable because
+  going over the limit only skips capture (fingerprinting); the packet is never dropped. It's also
+  a partial fix, not a full one - a delegation bigger than /64 (/56, /48, a hosting /32) still
+  gets one budget per /64 inside it, so the attacker's cost scales with prefix size, not address
+  space.
 
 **Concurrency**: each CPU has its own copy (stored in a per-CPU BPF map), so nothing is shared and
 no locks or atomics are needed. Downside: the limit is per-CPU, not global.

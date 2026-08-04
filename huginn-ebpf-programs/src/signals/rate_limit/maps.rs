@@ -1,4 +1,4 @@
-//! BPF maps and settings for per-source-IP SYN rate limiting.
+//! BPF maps and settings for per-source SYN rate limiting.
 //!
 //! Each sketch (one for IPv4, one for IPv6) lives in a single-entry `PerCpuArray` map: every CPU
 //! gets its own private copy, so the datapath can update it in place through a pointer with no

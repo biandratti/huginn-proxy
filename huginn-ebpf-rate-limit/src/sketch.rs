@@ -19,19 +19,17 @@ pub fn key_v4(saddr: u32, seed: u64) -> SketchKey {
     SketchKey(mix64(seed ^ (saddr as u64)))
 }
 
-/// Key a 16-byte IPv6 source address with `seed`.
+/// Key a 16-byte IPv6 source address with `seed`, using only the /64 prefix (high 8 bytes).
 ///
-/// Halves are chained through the mixer, not XOR-folded. A plain `hi ^ lo` fold gives an exact
-/// key collision for free (`lo = victim_hi ^ victim_lo ^ attacker_hi`, sourceable from one /64);
-/// chaining keeps the low half injective, closing that off.
+/// The low 64 bits (interface identifier) are free for whoever holds the /64 to pick, so keying
+/// on them lets one delegated /64 spray unlimited distinct keys and never hit the sketch budget.
+/// Keying on the prefix instead matches the actual allocation boundary: a /64 shares one budget,
+/// however many addresses inside it are used.
 #[inline(always)]
 pub fn key_v6(addr: [u8; 16], seed: u64) -> SketchKey {
     let mut hi = [0u8; 8];
-    let mut lo = [0u8; 8];
     hi.copy_from_slice(&addr[..8]);
-    lo.copy_from_slice(&addr[8..]);
-    let h = mix64(seed ^ u64::from_ne_bytes(hi));
-    SketchKey(mix64(h ^ u64::from_ne_bytes(lo)))
+    SketchKey(mix64(seed ^ u64::from_ne_bytes(hi)))
 }
 
 /// One salt number per row, used to turn a key into a column index. Each is a well-known
