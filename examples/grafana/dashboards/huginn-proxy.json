@@ -1775,13 +1775,110 @@
       }
     },
     {
+      "id": 56,
+      "type": "stat",
+      "title": "eBPF Rate Limit Enabled",
+      "description": "1 if the in-kernel per-source-IP SYN rate limiter is enabled (HUGINN_EBPF_RATE_LIMIT_ENABLED).",
+      "gridPos": {
+        "x": 0,
+        "y": 109,
+        "w": 6,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "tcp_syn_rate_limit_enabled or on() vector(0)",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "DISABLED",
+                  "color": "red"
+                },
+                "1": {
+                  "text": "ENABLED",
+                  "color": "green"
+                }
+              }
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 57,
+      "type": "timeseries",
+      "title": "Passed vs Skipped (eBPF rate limiter)",
+      "description": "TCP SYNs that passed the per-source-IP eBPF rate limiter (capture attempted) vs skipped (not captured, over limit). Over-limit SYNs are not dropped \u2014 the packet still passes.",
+      "gridPos": {
+        "x": 6,
+        "y": 109,
+        "w": 18,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(tcp_syn_rate_allowed_total_total[$__rate_interval])) or on() vector(0)",
+          "legendFormat": "passed/s",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(rate(tcp_syn_rate_skipped_total_total[$__rate_interval])) or on() vector(0)",
+          "legendFormat": "skipped/s",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        }
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
       "id": 106,
       "type": "row",
       "title": "eBPF Agent",
       "collapsed": false,
       "gridPos": {
         "x": 0,
-        "y": 109,
+        "y": 117,
         "w": 24,
         "h": 1
       }
@@ -1792,7 +1889,7 @@
       "title": "TCP SYN Captured (agent)",
       "gridPos": {
         "x": 0,
-        "y": 110,
+        "y": 118,
         "w": 8,
         "h": 8
       },
@@ -1824,7 +1921,7 @@
       "title": "TCP SYN Failures (agent)",
       "gridPos": {
         "x": 8,
-        "y": 110,
+        "y": 118,
         "w": 8,
         "h": 8
       },
@@ -1861,7 +1958,7 @@
       "title": "TCP SYN by Family (agent)",
       "gridPos": {
         "x": 16,
-        "y": 110,
+        "y": 118,
         "w": 8,
         "h": 8
       },
@@ -1904,7 +2001,7 @@
       "collapsed": false,
       "gridPos": {
         "x": 0,
-        "y": 118,
+        "y": 126,
         "w": 24,
         "h": 1
       }
@@ -1915,7 +2012,7 @@
       "title": "Error Rate by Type",
       "gridPos": {
         "x": 0,
-        "y": 119,
+        "y": 127,
         "w": 12,
         "h": 8
       },
@@ -1947,7 +2044,7 @@
       "title": "Failed Request Ratio",
       "gridPos": {
         "x": 12,
-        "y": 119,
+        "y": 127,
         "w": 12,
         "h": 8
       },
@@ -1980,7 +2077,7 @@
       "collapsed": false,
       "gridPos": {
         "x": 0,
-        "y": 127,
+        "y": 135,
         "w": 24,
         "h": 1
       }
@@ -1991,7 +2088,7 @@
       "title": "IP Filter Denial Rate",
       "gridPos": {
         "x": 0,
-        "y": 128,
+        "y": 136,
         "w": 6,
         "h": 4
       },
@@ -2035,7 +2132,7 @@
       "title": "IP Filter: Allowed vs Denied",
       "gridPos": {
         "x": 6,
-        "y": 128,
+        "y": 136,
         "w": 18,
         "h": 8
       },
@@ -2078,7 +2175,7 @@
       "collapsed": false,
       "gridPos": {
         "x": 0,
-        "y": 136,
+        "y": 144,
         "w": 24,
         "h": 1
       }
@@ -2087,10 +2184,10 @@
       "id": 55,
       "type": "timeseries",
       "title": "Headers Added / Removed (ops/s) by Context",
-      "description": "Header manipulation operations applied to requests/responses. Only emitted when at least one header was added/removed (global → domain → route rules). No series means no header manipulation is configured.",
+      "description": "Header manipulation operations applied to requests/responses. Only emitted when at least one header was added/removed (global \u2192 domain \u2192 route rules). No series means no header manipulation is configured.",
       "gridPos": {
         "x": 0,
-        "y": 137,
+        "y": 145,
         "w": 12,
         "h": 8
       },
@@ -2128,7 +2225,7 @@
       "collapsed": false,
       "gridPos": {
         "x": 0,
-        "y": 145,
+        "y": 153,
         "w": 24,
         "h": 1
       }
@@ -2139,7 +2236,7 @@
       "title": "mTLS Connections by Protocol",
       "gridPos": {
         "x": 0,
-        "y": 146,
+        "y": 154,
         "w": 12,
         "h": 8
       },
@@ -2171,7 +2268,7 @@
       "title": "mTLS Usage (% of TLS handshakes)",
       "gridPos": {
         "x": 12,
-        "y": 146,
+        "y": 154,
         "w": 12,
         "h": 8
       },
@@ -2204,7 +2301,7 @@
       "collapsed": false,
       "gridPos": {
         "x": 0,
-        "y": 154,
+        "y": 162,
         "w": 24,
         "h": 1
       },
@@ -2216,7 +2313,7 @@
       "title": "Active Config Hash",
       "gridPos": {
         "x": 0,
-        "y": 155,
+        "y": 163,
         "w": 3,
         "h": 6
       },
@@ -2250,7 +2347,7 @@
       "title": "Time Since Last Successful Reload",
       "gridPos": {
         "x": 3,
-        "y": 155,
+        "y": 163,
         "w": 3,
         "h": 6
       },
@@ -2282,7 +2379,7 @@
       "title": "Total Reloads",
       "gridPos": {
         "x": 6,
-        "y": 155,
+        "y": 163,
         "w": 3,
         "h": 6
       },
@@ -2315,7 +2412,7 @@
       "title": "Config Reload Attempts",
       "gridPos": {
         "x": 9,
-        "y": 155,
+        "y": 163,
         "w": 7,
         "h": 6
       },
@@ -2353,7 +2450,7 @@
       "collapsed": false,
       "gridPos": {
         "x": 0,
-        "y": 167,
+        "y": 175,
         "w": 24,
         "h": 1
       }
@@ -2365,7 +2462,7 @@
       "description": "CPU usage from cAdvisor. Series are summed by Compose project and service (expects services named `proxy` and `ebpf-agent`, e.g. examples/docker-compose.ebpf.yml). Values are approximate cores (rate of cgroup CPU seconds). Requires docker-compose.observability.yml with cAdvisor.",
       "gridPos": {
         "x": 0,
-        "y": 168,
+        "y": 176,
         "w": 12,
         "h": 8
       },
@@ -2399,7 +2496,7 @@
       "description": "container_memory_working_set_bytes for the same Compose services as the CPU panel.",
       "gridPos": {
         "x": 12,
-        "y": 168,
+        "y": 176,
         "w": 12,
         "h": 8
       },
@@ -2431,7 +2528,7 @@
       "title": "Active Cert Hash",
       "gridPos": {
         "x": 0,
-        "y": 161,
+        "y": 169,
         "w": 3,
         "h": 6
       },
@@ -2466,7 +2563,7 @@
       "title": "Time Since Last Cert Reload",
       "gridPos": {
         "x": 3,
-        "y": 161,
+        "y": 169,
         "w": 3,
         "h": 6
       },
@@ -2499,7 +2596,7 @@
       "title": "Total Cert Reloads",
       "gridPos": {
         "x": 6,
-        "y": 161,
+        "y": 169,
         "w": 3,
         "h": 6
       },
@@ -2534,7 +2631,7 @@
       "title": "TLS Cert Reload Attempts",
       "gridPos": {
         "x": 16,
-        "y": 155,
+        "y": 163,
         "w": 8,
         "h": 6
       },
@@ -2572,7 +2669,7 @@
       "description": "Cumulative automatic reconnects after the agent recreated pinned BPF maps (new kernel object id). Normal agent restarts reuse the same maps and should not increment this counter.",
       "gridPos": {
         "x": 9,
-        "y": 161,
+        "y": 169,
         "w": 3,
         "h": 6
       },
@@ -2606,7 +2703,7 @@
       "description": "Rate of automatic pinned-map reconnections in the proxy, by IP family. Requires `ebpf-tcp` and `fingerprint.tcp_enabled`.",
       "gridPos": {
         "x": 12,
-        "y": 161,
+        "y": 169,
         "w": 12,
         "h": 6
       },

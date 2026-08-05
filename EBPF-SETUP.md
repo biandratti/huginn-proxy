@@ -36,6 +36,8 @@ TCP fingerprinting uses two separate processes:
                     syn_insert_failures_v4/v6  (PerCpuArray)
                     syn_captured_v4/v6         (PerCpuArray)
                     syn_malformed_v4/v6        (PerCpuArray)
+                    syn_rate_skipped_v4/v6     (PerCpuArray)
+                    syn_rate_allowed_v4/v6     (PerCpuArray)
 ```
 
 ---
@@ -109,6 +111,70 @@ No `seccomp:unconfined` or `apparmor:unconfined` needed.
 | `HUGINN_EBPF_SYN_MAP_MAX_ENTRIES` | `8192` | LRU map capacity (default shown). Agent-only: the agent publishes this value into the family-agnostic `syn_meta` map, and the proxy reads it from there for its staleness threshold — so it must not be set on the proxy. |
 | `HUGINN_EBPF_CAPTURE` | `xdp-native` | Capture backend: `xdp-native` (driver XDP, default), `xdp-skb` (generic XDP, veth/loopback/VMs), or `tc` (clsact ingress; GRO-safe when native XDP is unavailable, e.g. VLAN/bond on generic XDP). Same BPF maps either way. |
 | `HUGINN_EBPF_LOG_LEVEL` | `off` | Verbosity of in-kernel `aya-log` datapath logging: `off` (default), `error`, `warn`, `info`, `debug`, `trace`. The kernel emits only records at/above the level (`debug` = per-capture, `warn` = map-insert failures), so the level gate runs in-kernel and `off` is zero-cost on the hot path. When non-`off` and `RUST_LOG` is unset, the agent defaults its filter to that level so records are shown. For diagnostics only. |
+| `HUGINN_EBPF_RATE_LIMIT_ENABLED` | `false` | Enable the in-kernel per-source-IP SYN rate limiter. When on, SYNs from an IP exceeding the threshold are skipped (not captured/fingerprinted); the packet still passes to the stack (never dropped). Uses a dual-buffer sliding-window Count-Min Sketch, hashed with a random seed drawn per agent load so the counter layout is not predictable from outside. |
+| `HUGINN_EBPF_RATE_LIMIT_BURST` | `2000` | Max SYNs per window per source IP before its SYNs stop being captured. Range `1..=65534`. Counted **per CPU**, and *not* the proxy's `[security.rate_limit] burst`: size it with [Sizing the SYN rate limiter](#sizing-the-syn-rate-limiter). |
+| `HUGINN_EBPF_RATE_LIMIT_WINDOW_SECONDS` | `1` | Sliding-window length in seconds. Range `1..=3600`. Once a source crosses `burst`, its SYNs are skipped until the window ends, so a long window means a long gap in that source's fingerprints. |
+
+> **Bad rate-limit value stops the agent**, like every other agent variable. An unset variable
+> takes its default; one that is set but unusable exits with a message. Note the proxy waits on
+> pinned maps that never appear, so a typo here also blocks TCP fingerprinting until the agent
+> starts. Check the agent log first if the proxy sits in `eBPF agent maps not available yet`.
+
+> **Scope and limits.** This shields the capture LRU from one loud source IP. It is **not** a
+> network-level DoS defense, and it does nothing against a distributed flood where each source stays
+> under the threshold, so the LRU can still saturate. A flood from enough distinct source IPs
+> saturates every counter in the sketch instead, at which point *every* source reads over-limit and
+> nothing gets fingerprinted - the limiter inverts from a filter into a capture kill-switch, visible
+> as `tcp_syn_rate_skipped_total` climbing while `tcp_syn_rate_allowed_total` goes flat. The
+> constant-memory sketch survives millions of spoofed IPs; its accuracy does not. The
+> `syn_rate_skipped_*` /
+> `syn_rate_allowed_*` counters are pinned, so their totals survive agent restarts; the counting
+> sketch is not pinned and resets on every agent load. Its maps are allocated even with
+> `ENABLED=false`.
+
+#### Sizing the SYN rate limiter
+
+`burst` caps how much of the capture LRU one source IP can claim, so size it against
+`HUGINN_EBPF_SYN_MAP_MAX_ENTRIES`, never against a request rate. The map is shared by every client
+and keyed `(source IP, source port)`, so one IP claims one entry per source port. Once it is full,
+each insert evicts the least recently used entry, and the victim is whoever loses their entry before
+the proxy reads it at accept time.
+
+```
+burst = HUGINN_EBPF_SYN_MAP_MAX_ENTRIES / (4 × cpus)
+```
+
+1. **Find `cpus`**, the number of CPUs one source's SYNs can reach. With a multi-queue NIC and the
+   usual 4-tuple RSS hash, an IP varying its source ports lands on every RX queue, so use the
+   interface's combined RX queue count. Fall back to the CPU count where there are no queues (veth,
+   loopback, single-queue virtio).
+2. **Divide, then clamp to `1..=65534`.** Outside that range the agent refuses to start.
+3. **Verify against real traffic.** `tcp_syn_rate_skipped_total` should not increase under normal
+   load; watch its rate, not its total, since the counter is pinned across restarts. If it climbs
+   with no attack in progress, `burst` is too tight, usually a NAT gateway behind one IP (the sketch
+   over-counts on hash collisions, never under-counts, so a gateway sharing cells with a flooder
+   loses its signature early).
+
+`burst` is enforced **per CPU** (each core has its own sketch, which keeps the datapath lock-free),
+so one source's real ceiling is `burst × cpus`. That product is what you are sizing: as cores grow,
+`burst` shrinks and the ceiling stays put.
+
+| LRU | `cpus` | `burst` | Ceiling per source IP |
+|---|---|---|---|
+| 8192 (default) | 1 (veth in a VM) | `2048` | 2048, a quarter of the map |
+| 8192 | 4 queues | `512` | 2048, a quarter of the map |
+| 8192 | 32 queues | `64` | 2048, a quarter of the map |
+| 32768 | 8 queues | `1024` | 8192, a quarter of the map |
+
+The `4 ×` is a conservative default, not a measured one: it caps one source at a quarter of the map
+and leaves the rest for everyone else. Err on the low side. Going over only skips fingerprint
+capture, so a tight `burst` costs TCP signatures for that source, not its traffic; a loose one costs
+the protection entirely.
+
+> The default `2000` is **not** a sized value, here or in `examples/docker-compose.ebpf.yml`. It is
+> roughly right on a single-core host and too loose as soon as the host has several cores: on 8
+> cores it allows 16000 SYNs per window against an 8192-entry LRU, so the limiter is on while one IP
+> can still evict the whole map nearly twice over. Compute your own from the formula above.
 
 #### Choosing a capture backend
 

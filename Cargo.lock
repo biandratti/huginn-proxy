@@ -1027,8 +1027,11 @@ version = "0.0.3-beta.0"
 dependencies = [
  "aya",
  "aya-log",
+ "getrandom 0.4.3",
  "huginn-ebpf-common",
+ "huginn-ebpf-rate-limit",
  "huginn-net-tcp",
+ "libc",
  "log 0.4.33",
  "thiserror 2.0.19",
  "tracing",
@@ -1060,6 +1063,10 @@ version = "0.0.3-beta.0"
 dependencies = [
  "aya",
 ]
+
+[[package]]
+name = "huginn-ebpf-rate-limit"
+version = "0.0.3-beta.0"
 
 [[package]]
 name = "huginn-net-http"

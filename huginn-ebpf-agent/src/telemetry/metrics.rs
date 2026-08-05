@@ -1,7 +1,9 @@
 use huginn_ebpf::{
-    syn_captured_count_from_path, syn_captured_v6_count_from_path,
-    syn_insert_failures_count_from_path, syn_insert_failures_v6_count_from_path,
-    syn_malformed_count_from_path, syn_malformed_v6_count_from_path,
+    syn_captured_v4_count_from_path, syn_captured_v6_count_from_path,
+    syn_insert_failures_v4_count_from_path, syn_insert_failures_v6_count_from_path,
+    syn_malformed_v4_count_from_path, syn_malformed_v6_count_from_path,
+    syn_rate_allowed_v4_count_from_path, syn_rate_allowed_v6_count_from_path,
+    syn_rate_skipped_v4_count_from_path, syn_rate_skipped_v6_count_from_path,
 };
 use opentelemetry::global;
 use opentelemetry::metrics::{Gauge, Meter};
@@ -23,6 +25,7 @@ pub mod labels {
 pub struct Metrics {
     pub agent_up: Gauge<u64>,
     pub build_info: Gauge<u64>,
+    pub rate_limit_enabled: Gauge<u64>,
 }
 
 impl Metrics {
@@ -36,6 +39,10 @@ impl Metrics {
                 .u64_gauge("huginn_ebpf_agent_build_info")
                 .with_description("Build information (version, rust version)")
                 .build(),
+            rate_limit_enabled: meter
+                .u64_gauge("tcp_syn_rate_limit_enabled")
+                .with_description("1 if the per-source-IP SYN rate limiter is enabled")
+                .build(),
         }
     }
 
@@ -45,6 +52,10 @@ impl Metrics {
 
     pub fn set_not_ready(&self) {
         self.agent_up.record(0, &[]);
+    }
+
+    pub fn set_rate_limit_enabled(&self, enabled: bool) {
+        self.rate_limit_enabled.record(u64::from(enabled), &[]);
     }
 
     pub fn set_build_info(&self) {
@@ -75,12 +86,14 @@ pub fn init_metrics(pin_path: Arc<String>) -> crate::error::Result<(Registry, Me
 
     let pin_path_captured = pin_path.clone();
     let pin_path_failures = pin_path.clone();
+    let pin_path_rate = pin_path.clone();
+    let pin_path_rate_allowed = pin_path.clone();
 
     let _ = meter
         .u64_observable_counter("tcp_syn_captured_total")
         .with_description("Number of TCP SYN signatures successfully captured")
         .with_callback(move |observer| {
-            let v4 = syn_captured_count_from_path(pin_path_captured.as_str()).unwrap_or(0);
+            let v4 = syn_captured_v4_count_from_path(pin_path_captured.as_str()).unwrap_or(0);
             let v6 = syn_captured_v6_count_from_path(pin_path_captured.as_str()).unwrap_or(0);
             observer.observe(v4, &[KeyValue::new(labels::FAMILY, labels::FAMILY_V4)]);
             observer.observe(v6, &[KeyValue::new(labels::FAMILY, labels::FAMILY_V6)]);
@@ -91,7 +104,8 @@ pub fn init_metrics(pin_path: Arc<String>) -> crate::error::Result<(Registry, Me
         .u64_observable_counter("tcp_syn_insert_failures_total")
         .with_description("Number of TCP SYN map insert failures (e.g. LRU full)")
         .with_callback(move |observer| {
-            let v4 = syn_insert_failures_count_from_path(pin_path_failures.as_str()).unwrap_or(0);
+            let v4 =
+                syn_insert_failures_v4_count_from_path(pin_path_failures.as_str()).unwrap_or(0);
             let v6 =
                 syn_insert_failures_v6_count_from_path(pin_path_failures.as_str()).unwrap_or(0);
             observer.observe(v4, &[KeyValue::new(labels::FAMILY, labels::FAMILY_V4)]);
@@ -105,8 +119,36 @@ pub fn init_metrics(pin_path: Arc<String>) -> crate::error::Result<(Registry, Me
             "Number of malformed TCP packets (e.g. doff too short) that matched dst filter",
         )
         .with_callback(move |observer| {
-            let v4 = syn_malformed_count_from_path(pin_path.as_str()).unwrap_or(0);
+            let v4 = syn_malformed_v4_count_from_path(pin_path.as_str()).unwrap_or(0);
             let v6 = syn_malformed_v6_count_from_path(pin_path.as_str()).unwrap_or(0);
+            observer.observe(v4, &[KeyValue::new(labels::FAMILY, labels::FAMILY_V4)]);
+            observer.observe(v6, &[KeyValue::new(labels::FAMILY, labels::FAMILY_V6)]);
+        })
+        .build();
+
+    let _ = meter
+        .u64_observable_counter("tcp_syn_rate_skipped_total")
+        .with_description(
+            "Number of TCP SYNs not captured because the source IP was over the rate limit",
+        )
+        .with_callback(move |observer| {
+            let v4 = syn_rate_skipped_v4_count_from_path(pin_path_rate.as_str()).unwrap_or(0);
+            let v6 = syn_rate_skipped_v6_count_from_path(pin_path_rate.as_str()).unwrap_or(0);
+            observer.observe(v4, &[KeyValue::new(labels::FAMILY, labels::FAMILY_V4)]);
+            observer.observe(v6, &[KeyValue::new(labels::FAMILY, labels::FAMILY_V6)]);
+        })
+        .build();
+
+    let _ = meter
+        .u64_observable_counter("tcp_syn_rate_allowed_total")
+        .with_description(
+            "Number of TCP SYNs that passed the per-source-IP rate limiter (capture attempted)",
+        )
+        .with_callback(move |observer| {
+            let v4 =
+                syn_rate_allowed_v4_count_from_path(pin_path_rate_allowed.as_str()).unwrap_or(0);
+            let v6 =
+                syn_rate_allowed_v6_count_from_path(pin_path_rate_allowed.as_str()).unwrap_or(0);
             observer.observe(v4, &[KeyValue::new(labels::FAMILY, labels::FAMILY_V4)]);
             observer.observe(v6, &[KeyValue::new(labels::FAMILY, labels::FAMILY_V6)]);
         })

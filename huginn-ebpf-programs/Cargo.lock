@@ -150,7 +150,12 @@ dependencies = [
  "aya-ebpf",
  "aya-log-ebpf",
  "huginn-ebpf-common",
+ "huginn-ebpf-rate-limit",
 ]
+
+[[package]]
+name = "huginn-ebpf-rate-limit"
+version = "0.0.3-beta.0"
 
 [[package]]
 name = "itoa"

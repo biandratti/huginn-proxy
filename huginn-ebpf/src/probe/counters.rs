@@ -32,16 +32,24 @@ pub fn is_stale(stored_tick: u64, current_tick: u64, syn_map_max_entries: u32) -
     current_tick.saturating_sub(stored_tick) > threshold
 }
 
-pub fn syn_insert_failures_count_from_path(base_path: &str) -> Option<u64> {
+pub fn syn_insert_failures_v4_count_from_path(base_path: &str) -> Option<u64> {
     read_percpu_counter_from_path(pin::insert_failures_v4_path(base_path))
 }
 
-pub fn syn_captured_count_from_path(base_path: &str) -> Option<u64> {
+pub fn syn_captured_v4_count_from_path(base_path: &str) -> Option<u64> {
     read_percpu_counter_from_path(pin::syn_captured_v4_path(base_path))
 }
 
-pub fn syn_malformed_count_from_path(base_path: &str) -> Option<u64> {
+pub fn syn_malformed_v4_count_from_path(base_path: &str) -> Option<u64> {
     read_percpu_counter_from_path(pin::syn_malformed_v4_path(base_path))
+}
+
+pub fn syn_rate_skipped_v4_count_from_path(base_path: &str) -> Option<u64> {
+    read_percpu_counter_from_path(pin::syn_rate_skipped_v4_path(base_path))
+}
+
+pub fn syn_rate_allowed_v4_count_from_path(base_path: &str) -> Option<u64> {
+    read_percpu_counter_from_path(pin::syn_rate_allowed_v4_path(base_path))
 }
 
 pub fn syn_insert_failures_v6_count_from_path(base_path: &str) -> Option<u64> {
@@ -54,4 +62,12 @@ pub fn syn_captured_v6_count_from_path(base_path: &str) -> Option<u64> {
 
 pub fn syn_malformed_v6_count_from_path(base_path: &str) -> Option<u64> {
     read_percpu_counter_from_path(pin::syn_malformed_v6_path(base_path))
+}
+
+pub fn syn_rate_skipped_v6_count_from_path(base_path: &str) -> Option<u64> {
+    read_percpu_counter_from_path(pin::syn_rate_skipped_v6_path(base_path))
+}
+
+pub fn syn_rate_allowed_v6_count_from_path(base_path: &str) -> Option<u64> {
+    read_percpu_counter_from_path(pin::syn_rate_allowed_v6_path(base_path))
 }

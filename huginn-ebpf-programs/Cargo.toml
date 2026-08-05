@@ -1,20 +1,21 @@
-# Empty [workspace] table tells Cargo this is a standalone crate,
-# not a member of the parent workspace. It is compiled independently
-# by huginn-ebpf's build.rs using the nightly toolchain and
-# bpfel-unknown-none target.
-[workspace]
-
 [package]
 name = "huginn-ebpf-programs"
 version = "0.0.3-beta.0"
 edition = "2021"
 publish = false
 
-[dependencies]
-aya-ebpf = "0.2.1"
-aya-log-ebpf = "0.2.0"
-huginn-ebpf-common = { path = "../huginn-ebpf-common" }
+# Empty [workspace] table tells Cargo this is a standalone crate,
+# not a member of the parent workspace. It is compiled independently
+# by huginn-ebpf's build.rs using the nightly toolchain and
+# bpfel-unknown-none target.
+[workspace]
 
 [[bin]]
 name = "huginn-ebpf-programs"
 path = "src/main.rs"
+
+[dependencies]
+aya-ebpf = "0.2.1"
+aya-log-ebpf = "0.2.0"
+huginn-ebpf-common = { path = "../huginn-ebpf-common" }
+huginn-ebpf-rate-limit = { path = "../huginn-ebpf-rate-limit" }

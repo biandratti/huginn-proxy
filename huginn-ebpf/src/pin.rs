@@ -14,8 +14,13 @@ pub const SYN_INSERT_FAILURES_V6_NAME: &str = "syn_insert_failures_v6";
 pub const SYN_CAPTURED_V6_NAME: &str = "syn_captured_v6";
 pub const SYN_MALFORMED_V6_NAME: &str = "syn_malformed_v6";
 
+pub const SYN_RATE_SKIPPED_V4_NAME: &str = "syn_rate_skipped_v4";
+pub const SYN_RATE_SKIPPED_V6_NAME: &str = "syn_rate_skipped_v6";
+pub const SYN_RATE_ALLOWED_V4_NAME: &str = "syn_rate_allowed_v4";
+pub const SYN_RATE_ALLOWED_V6_NAME: &str = "syn_rate_allowed_v6";
+
 /// Every map the agent pins and the proxy opens, in no particular order.
-pub const ALL_NAMES: [&str; 10] = [
+pub const ALL_NAMES: [&str; 14] = [
     SYN_MAP_V4_NAME,
     SYN_MAP_V6_NAME,
     COUNTER_NAME,
@@ -26,6 +31,10 @@ pub const ALL_NAMES: [&str; 10] = [
     SYN_INSERT_FAILURES_V6_NAME,
     SYN_CAPTURED_V6_NAME,
     SYN_MALFORMED_V6_NAME,
+    SYN_RATE_SKIPPED_V4_NAME,
+    SYN_RATE_SKIPPED_V6_NAME,
+    SYN_RATE_ALLOWED_V4_NAME,
+    SYN_RATE_ALLOWED_V6_NAME,
 ];
 
 pub fn syn_map_v4_path(base: &str) -> PathBuf {
@@ -66,4 +75,20 @@ pub fn syn_captured_v6_path(base: &str) -> PathBuf {
 
 pub fn syn_malformed_v6_path(base: &str) -> PathBuf {
     Path::new(base).join(SYN_MALFORMED_V6_NAME)
+}
+
+pub fn syn_rate_skipped_v4_path(base: &str) -> PathBuf {
+    Path::new(base).join(SYN_RATE_SKIPPED_V4_NAME)
+}
+
+pub fn syn_rate_skipped_v6_path(base: &str) -> PathBuf {
+    Path::new(base).join(SYN_RATE_SKIPPED_V6_NAME)
+}
+
+pub fn syn_rate_allowed_v4_path(base: &str) -> PathBuf {
+    Path::new(base).join(SYN_RATE_ALLOWED_V4_NAME)
+}
+
+pub fn syn_rate_allowed_v6_path(base: &str) -> PathBuf {
+    Path::new(base).join(SYN_RATE_ALLOWED_V6_NAME)
 }

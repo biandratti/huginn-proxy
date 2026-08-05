@@ -4,7 +4,9 @@
 use huginn_ebpf::pin;
 use std::path::Path;
 
-const REQUIRED_PINS: &[&str] = &[
+/// The pins `/ready` gates on. Deliberately a subset of `pin::ALL_NAMES`: telemetry-only maps are
+/// pinned by the loader but do not hold readiness back.
+pub const REQUIRED_PINS: &[&str] = &[
     pin::SYN_MAP_V4_NAME,
     pin::SYN_MAP_V6_NAME,
     pin::COUNTER_NAME,

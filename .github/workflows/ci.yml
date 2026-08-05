@@ -66,6 +66,10 @@ jobs:
           components: rustfmt
       - name: Check code formatting
         run: cargo fmt --all -- --check
+      - name: Check code formatting (huginn-ebpf-programs)
+        run: |
+          cd huginn-ebpf-programs
+          cargo +stable fmt --all -- --check
 
   cargo-sort:
     runs-on: ubuntu-latest
@@ -90,6 +94,10 @@ jobs:
         run: cargo install cargo-sort
       - name: Check Cargo.toml sorting
         run: cargo sort --workspace --check
+      - name: Check Cargo.toml sorting (huginn-ebpf-programs)
+        run: |
+          cd huginn-ebpf-programs
+          cargo +stable sort --check
   
   lint:
     runs-on: ubuntu-latest
@@ -181,6 +189,7 @@ jobs:
           - huginn-ebpf
           - huginn-ebpf-agent
           - huginn-ebpf-common
+          - huginn-ebpf-rate-limit
           - huginn-proxy-lib
     steps:
       - name: Checkout

@@ -15,15 +15,25 @@ const BPF_OBJECT_FILENAME: &str = "huginn.bpf.o";
 /// The `rust-toolchain.toml` in `huginn-ebpf-programs/` pins the channel.
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let manifest_dir = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR")?);
-    let programs_dir = manifest_dir
+    let workspace_root = manifest_dir
         .parent()
-        .ok_or("could not find workspace root")?
-        .join("huginn-ebpf-programs");
+        .ok_or("could not find workspace root")?;
+    let programs_dir = workspace_root.join("huginn-ebpf-programs");
 
-    // Watch the entire src/ directory so that adding new .rs modules (e.g.
-    // constants.rs, headers.rs) triggers a rebuild of the BPF object.
-    println!("cargo:rerun-if-changed={}", programs_dir.join("src").display());
-    println!("cargo:rerun-if-changed={}", programs_dir.join("Cargo.toml").display());
+    // Watch every crate that compiles into the BPF object: the programs crate and its path
+    // dependencies. Watching whole src/ directories means a new .rs module also triggers a rebuild.
+    //
+    // The path dependencies must be listed here because cargo re-runs a build script only for the
+    // paths the script declares. Miss one and editing it leaves a stale huginn.bpf.o embedded,
+    // with no rebuild and no warning.
+    for crate_dir in [
+        programs_dir.clone(),
+        workspace_root.join("huginn-ebpf-common"),
+        workspace_root.join("huginn-ebpf-rate-limit"),
+    ] {
+        println!("cargo:rerun-if-changed={}", crate_dir.join("src").display());
+        println!("cargo:rerun-if-changed={}", crate_dir.join("Cargo.toml").display());
+    }
 
     let out_dir = PathBuf::from(std::env::var("OUT_DIR")?);
     let bpf_target_dir = out_dir.join("bpf-programs-target");

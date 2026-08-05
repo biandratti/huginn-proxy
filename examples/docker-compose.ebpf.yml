@@ -22,6 +22,9 @@ services:
       - HUGINN_EBPF_CAPTURE=${HUGINN_EBPF_CAPTURE:-xdp-skb}
       - HUGINN_EBPF_METRICS_ADDR=0.0.0.0
       - HUGINN_EBPF_METRICS_PORT=9091
+      - HUGINN_EBPF_RATE_LIMIT_ENABLED=false
+      - HUGINN_EBPF_RATE_LIMIT_BURST=2000
+      - HUGINN_EBPF_RATE_LIMIT_WINDOW_SECONDS=1
     healthcheck:
       test: [ "CMD-SHELL", "curl -sf http://127.0.0.1:9091/ready || exit 1" ]
       interval: 2s
