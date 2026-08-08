@@ -5,7 +5,7 @@
 #   docker build -f docker/ebpf-agent.Dockerfile .
 
 # ── builder ─────────────────────────────────────────────────────
-FROM rust:1.97.1-slim@sha256:5c6f46a6e4472ab1ca7ba7d494e6677f2f219ebc02f32025d3986f057635ec9c AS builder
+FROM rust:1.97.1-slim@sha256:3b2879047d42784ca9403ad20c51ed3df361a50f1df96f5777d39b4e33aa65cd AS builder
 # bpf-linker uses aya-rustc-llvm-proxy which needs LLVM shared libs from
 RUN apt-get update -q && apt-get install -y --no-install-recommends \
     pkg-config libssl-dev \
