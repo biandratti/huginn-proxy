@@ -22,14 +22,14 @@ The **`[timeout]`** section sets connection timeouts and graceful shutdown behav
 
 ```yaml
 timeout:
- upstream_connect_ms: 5000
- proxy_idle_ms: 60000
- tls_handshake_secs: 15
- connection_handling_secs: 300
- shutdown_secs: 30
- keep_alive:
- enabled: true
- upstream_idle_timeout: 60
+  upstream_connect_ms: 5000
+  proxy_idle_ms: 60000
+  tls_handshake_secs: 15
+  connection_handling_secs: 300
+  shutdown_secs: 30
+  keep_alive:
+    enabled: true
+    upstream_idle_timeout: 60
 ```
 
  </TabItem>

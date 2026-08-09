@@ -41,7 +41,7 @@ Do **not** duplicate certificate recipes here: they drift easily. Follow **[`exa
 
 **Reference files:** build from source → [`examples/docker-compose.ebpf.yml`](https://github.com/biandratti/huginn-proxy/blob/master/examples/docker-compose.ebpf.yml) · pre-built GHCR images → [`examples/docker-compose.release-ebpf.yml`](https://github.com/biandratti/huginn-proxy/blob/master/examples/docker-compose.release-ebpf.yml)
 
-**Proxy `command` and `environment`:** the first CLI argument is the config path: **`compose.toml`** or **`compose.yaml`** (or any name); TOML vs YAML follows the **file extension**. Typical **`environment`** entries: **`HUGINN_EBPF_PIN_PATH`** (must match the agent), optional **`HUGINN_EBPF_RECONNECT_POLL_SECS`**, optional **`HUGINN_WATCH`** / **`HUGINN_WATCH_DELAY_SECS`** for reload-on-change. Map capacity and capture backend (`HUGINN_EBPF_SYN_MAP_MAX_ENTRIES`, `HUGINN_EBPF_CAPTURE`) are set on the **agent**. See [Configuration overview: Environment variables](/huginn-proxy/docs/configuration/#environment-variables) and [eBPF TCP setup](/huginn-proxy/docs/ebpf-setup/#environment-variables). Ensure **`fingerprint.tcp_enabled`** matches this stack.
+**Proxy `command` and `environment`:** the first CLI argument is the config path: **`compose.toml`** or **`compose.yaml`** (or any name); TOML vs YAML follows the **file extension**. Typical **`environment`** entries: **`HUGINN_EBPF_PIN_PATH`** (must match the agent), optional **`HUGINN_EBPF_RECONNECT_POLL_SECS`**. Config / PEM hot reload is controlled by **`[reload]`** in the config file (watch defaults to on). Map capacity, capture backend, and the optional SYN rate limiter (`HUGINN_EBPF_SYN_MAP_MAX_ENTRIES`, `HUGINN_EBPF_CAPTURE`, `HUGINN_EBPF_RATE_LIMIT_*`) are set on the **agent**. See [Configuration overview](/huginn-proxy/docs/configuration/#environment-variables) and [eBPF TCP setup](/huginn-proxy/docs/ebpf-setup/#environment-variables). Ensure **`fingerprint.tcp_enabled`** matches this stack.
 
 ```bash
 git clone https://github.com/biandratti/huginn-proxy.git
@@ -75,7 +75,7 @@ Pin **`:latest`** to **`:vX.Y.Z`** on **all** `huginn-proxy*` images from the sa
 
 **Reference files:** build from source → [`examples/docker-compose.without-ebpf.yml`](https://github.com/biandratti/huginn-proxy/blob/master/examples/docker-compose.without-ebpf.yml) · pre-built GHCR images → [`examples/docker-compose.release-without-ebpf.yml`](https://github.com/biandratti/huginn-proxy/blob/master/examples/docker-compose.release-without-ebpf.yml)
 
-It mounts config and certs like the eBPF release file. Pass the config via **`command`** (first arg) and/or **`HUGINN_CONFIG_PATH`**; **`.yaml` / `.yml` vs `.toml`** is determined by the path extension. Optional **`HUGINN_WATCH`** / **`HUGINN_WATCH_DELAY_SECS`**: [Environment variables](/huginn-proxy/docs/configuration/#environment-variables). No **`HUGINN_EBPF_*`** vars on the plain image unless you mistakenly mix layouts.
+It mounts config and certs like the eBPF release file. Pass the config via **`command`** (first arg) and/or **`HUGINN_CONFIG_PATH`**; **`.yaml` / `.yml` vs `.toml`** is determined by the path extension. Hot reload: **`[reload]`** in the config file ([Configuration overview](/huginn-proxy/docs/configuration/)). No **`HUGINN_EBPF_*`** vars on the plain image unless you mistakenly mix layouts.
 
 ```bash
 git clone https://github.com/biandratti/huginn-proxy.git

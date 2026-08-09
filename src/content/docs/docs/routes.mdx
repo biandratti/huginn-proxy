@@ -20,14 +20,14 @@ Each `[[domains]]` entry handles one hostname (exact or wildcard). Omit `host` f
 
 ```yaml
 domains:
- - host: "api.example.com"
- cert_path: "/config/certs/api.crt"
- key_path: "/config/certs/api.key"
- routes:
- - prefix: "/api"
- backend: "backend-a:9000"
- - prefix: "/"
- backend: "backend-b:9000"
+  - host: "api.example.com"
+    cert_path: "/config/certs/api.crt"
+    key_path: "/config/certs/api.key"
+    routes:
+      - prefix: "/api"
+        backend: "backend-a:9000"
+      - prefix: "/"
+        backend: "backend-b:9000"
 ```
 
  </TabItem>
@@ -39,13 +39,13 @@ host = "api.example.com"
 cert_path = "/config/certs/api.crt"
 key_path = "/config/certs/api.key"
 
- [[domains.routes]]
- prefix = "/api"
- backend = "backend-a:9000"
+[[domains.routes]]
+prefix = "/api"
+backend = "backend-a:9000"
 
- [[domains.routes]]
- prefix = "/"
- backend = "backend-b:9000"
+[[domains.routes]]
+prefix = "/"
+backend = "backend-b:9000"
 ```
 
  </TabItem>
@@ -58,12 +58,12 @@ key_path = "/config/certs/api.key"
 
 ```yaml
 domains:
- - host: "*.example.com"
- cert_path: "/config/certs/wildcard.crt"
- key_path: "/config/certs/wildcard.key"
- routes:
- - prefix: "/"
- backend: "backend-a:9000"
+  - host: "*.example.com"
+    cert_path: "/config/certs/wildcard.crt"
+    key_path: "/config/certs/wildcard.key"
+    routes:
+      - prefix: "/"
+        backend: "backend-a:9000"
 ```
 
  </TabItem>
@@ -75,9 +75,9 @@ host = "*.example.com"
 cert_path = "/config/certs/wildcard.crt"
 key_path = "/config/certs/wildcard.key"
 
- [[domains.routes]]
- prefix = "/"
- backend = "backend-a:9000"
+[[domains.routes]]
+prefix = "/"
+backend = "backend-a:9000"
 ```
 
  </TabItem>
@@ -94,9 +94,9 @@ Matches any host that has no explicit domain entry. Its certificate (if set) bec
 
 ```yaml
 domains:
- - routes:
- - prefix: "/"
- backend: "localhost:3000"
+  - routes:
+      - prefix: "/"
+        backend: "localhost:3000"
 ```
 
  </TabItem>
@@ -105,9 +105,9 @@ domains:
 ```toml
 [[domains]] # no host = catch-all
 
- [[domains.routes]]
- prefix = "/"
- backend = "localhost:3000"
+[[domains.routes]]
+prefix = "/"
+backend = "localhost:3000"
 ```
 
  </TabItem>
@@ -137,14 +137,14 @@ Within a domain, routes are matched by **URL prefix**. The **most specific (long
 
 ```yaml
 domains:
- - host: "api.example.com"
- routes:
- - prefix: "/api/v2"
- backend: "backend-a:9000"
- - prefix: "/api"
- backend: "backend-b:9000"
- - prefix: "/"
- backend: "backend-b:9000"
+  - host: "api.example.com"
+    routes:
+      - prefix: "/api/v2"
+        backend: "backend-a:9000"
+      - prefix: "/api"
+        backend: "backend-b:9000"
+      - prefix: "/"
+        backend: "backend-b:9000"
 ```
 
  </TabItem>
@@ -154,17 +154,17 @@ domains:
 [[domains]]
 host = "api.example.com"
 
- [[domains.routes]]
- prefix = "/api/v2"
- backend = "backend-a:9000"
+[[domains.routes]]
+prefix = "/api/v2"
+backend = "backend-a:9000"
 
- [[domains.routes]]
- prefix = "/api"
- backend = "backend-b:9000"
+[[domains.routes]]
+prefix = "/api"
+backend = "backend-b:9000"
 
- [[domains.routes]]
- prefix = "/"
- backend = "backend-b:9000"
+[[domains.routes]]
+prefix = "/"
+backend = "backend-b:9000"
 ```
 
  </TabItem>
@@ -187,11 +187,11 @@ Query strings are preserved. There is **no regular-expression** routing, only pr
 
 ```yaml
 domains:
- - host: "api.example.com"
- routes:
- - prefix: "/strip"
- backend: "backend-a:9000"
- replace_path: ""
+  - host: "api.example.com"
+    routes:
+      - prefix: "/strip"
+        backend: "backend-a:9000"
+        replace_path: ""
 ```
 
  </TabItem>
@@ -201,10 +201,10 @@ domains:
 [[domains]]
 host = "api.example.com"
 
- [[domains.routes]]
- prefix = "/strip"
- backend = "backend-a:9000"
- replace_path = ""
+[[domains.routes]]
+prefix = "/strip"
+backend = "backend-a:9000"
+replace_path = ""
 ```
 
  </TabItem>
@@ -217,11 +217,11 @@ host = "api.example.com"
 
 ```yaml
 domains:
- - host: "api.example.com"
- routes:
- - prefix: "/old"
- backend: "backend-b:9000"
- replace_path: "/new"
+  - host: "api.example.com"
+    routes:
+      - prefix: "/old"
+        backend: "backend-b:9000"
+        replace_path: "/new"
 ```
 
  </TabItem>
@@ -231,10 +231,10 @@ domains:
 [[domains]]
 host = "api.example.com"
 
- [[domains.routes]]
- prefix = "/old"
- backend = "backend-b:9000"
- replace_path = "/new"
+[[domains.routes]]
+prefix = "/old"
+backend = "backend-b:9000"
+replace_path = "/new"
 ```
 
  </TabItem>
@@ -251,12 +251,12 @@ Resolution order: `route` → `domain` → global default (`true`).
 
 ```yaml
 domains:
- - host: "api.example.com"
- fingerprinting: true # domain-level default
- routes:
- - prefix: "/internal"
- backend: "backend-a:9000"
- fingerprinting: false # override for this route
+  - host: "api.example.com"
+    fingerprinting: true # domain-level default
+    routes:
+      - prefix: "/internal"
+        backend: "backend-a:9000"
+        fingerprinting: false # override for this route
 ```
 
  </TabItem>
@@ -267,10 +267,10 @@ domains:
 host = "api.example.com"
 fingerprinting = true
 
- [[domains.routes]]
- prefix = "/internal"
- backend = "backend-a:9000"
- fingerprinting = false
+[[domains.routes]]
+prefix = "/internal"
+backend = "backend-a:9000"
+fingerprinting = false
 ```
 
  </TabItem>
@@ -308,14 +308,14 @@ It does **not** affect client fingerprint capture: TLS JA4 and HTTP/2 signatures
 
 ```yaml
 domains:
- - host: "api.example.com"
- routes:
- - prefix: "/isolated"
- backend: "backend-a:9000"
- force_new_connection: true
- - prefix: "/api"
- backend: "backend-a:9000"
- force_new_connection: false
+  - host: "api.example.com"
+    routes:
+      - prefix: "/isolated"
+        backend: "backend-a:9000"
+        force_new_connection: true
+      - prefix: "/api"
+        backend: "backend-a:9000"
+        force_new_connection: false
 ```
 
  </TabItem>
@@ -325,15 +325,15 @@ domains:
 [[domains]]
 host = "api.example.com"
 
- [[domains.routes]]
- prefix = "/isolated"
- backend = "backend-a:9000"
- force_new_connection = true
+[[domains.routes]]
+prefix = "/isolated"
+backend = "backend-a:9000"
+force_new_connection = true
 
- [[domains.routes]]
- prefix = "/api"
- backend = "backend-a:9000"
- force_new_connection = false
+[[domains.routes]]
+prefix = "/api"
+backend = "backend-a:9000"
+force_new_connection = false
 ```
 
  </TabItem>
@@ -351,6 +351,7 @@ Pool settings are under **[`[backend_pool]`](/huginn-proxy/docs/backends/#backen
 
 - **`host`** (exact, `*.wildcard`, or absent for catch-all)
 - **`cert_path`**, **`key_path`**: TLS certificate for this domain (omit for plain HTTP)
+- **`client_ca_path`**: optional client-CA bundle; when set, this domain requires **mTLS** (see [TLS](/huginn-proxy/docs/tls/#client-authentication-mtls))
 - **`fingerprinting`**: domain-level gate (resolved against route-level `fingerprinting`)
 - **`headers`**: domain-level header manipulation (same shape as global `[headers]`)
 - **`security`**: per-domain overrides for `ip_filter`, `rate_limit`, `headers` (whole-block replaces)
