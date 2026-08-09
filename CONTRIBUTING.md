@@ -19,6 +19,7 @@ Requires Rust stable. Install from [rustup.rs](https://rustup.rs/).
 | --- | --- |
 | `huginn-proxy/` | proxy binary |
 | `huginn-proxy-lib/` | core proxy logic |
+| `huginn-certs/` | TLS cert loading and per-SNI rustls config |
 | `huginn-ebpf/` | reads pinned BPF maps |
 | `huginn-ebpf-agent/` | XDP agent binary |
 | `huginn-ebpf-common/` | shared types |
