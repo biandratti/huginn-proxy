@@ -23,6 +23,9 @@ services:
       - HUGINN_EBPF_CAPTURE=${HUGINN_EBPF_CAPTURE:-xdp-skb}
       - HUGINN_EBPF_METRICS_ADDR=0.0.0.0
       - HUGINN_EBPF_METRICS_PORT=9091
+      - HUGINN_EBPF_RATE_LIMIT_ENABLED=false
+      - HUGINN_EBPF_RATE_LIMIT_BURST=2000
+      - HUGINN_EBPF_RATE_LIMIT_WINDOW_SECONDS=1
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://127.0.0.1:9091/ready || exit 1"]
       interval: 2s
@@ -41,11 +44,6 @@ services:
       - RUST_LOG=${RUST_LOG:-info}
       - HUGINN_EBPF_PIN_PATH=/sys/fs/bpf/huginn
       - HUGINN_EBPF_RECONNECT_POLL_SECS=5
-      # DEPRECATED: read only by the previously published release image. The current
-      # code moved watch/debounce to the config file ([reload] section, watch=true by
-      # default). Kept for the pinned release image; remove in the next release.
-      - HUGINN_WATCH=true
-      - HUGINN_WATCH_DELAY_SECS=10
     volumes:
       #- ./config/compose.toml:/config/compose.toml:ro
       - ./config/compose.yaml:/config/compose.yaml:ro
