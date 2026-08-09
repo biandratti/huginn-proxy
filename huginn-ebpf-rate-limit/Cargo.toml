@@ -4,9 +4,9 @@
 
 [package]
 name = "huginn-ebpf-rate-limit"
-version = "0.0.4-beta.0"
-edition = "2021"
-license = "MIT OR Apache-2.0"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
 publish = false
 
 [lib]

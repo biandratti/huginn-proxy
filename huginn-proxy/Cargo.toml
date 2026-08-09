@@ -1,8 +1,8 @@
 [package]
 name = "huginn-proxy"
-version = "0.0.4-beta.0"
-edition = "2021"
-license = "MIT OR Apache-2.0"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
 publish = false
 
 [features]
@@ -11,8 +11,8 @@ ebpf-tcp = ["dep:huginn-ebpf"]
 [dependencies]
 arc-swap.workspace = true
 clap.workspace = true
-huginn-ebpf = { path = "../huginn-ebpf", version = "0.0.4-beta.0", optional = true }
-huginn-proxy-lib = { path = "../huginn-proxy-lib", version = "0.0.4-beta.0" }
+huginn-ebpf = { workspace = true, optional = true }
+huginn-proxy-lib.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "signal"] }
 tracing.workspace = true

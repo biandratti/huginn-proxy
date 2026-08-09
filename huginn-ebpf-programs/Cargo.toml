@@ -1,5 +1,6 @@
 [package]
 name = "huginn-ebpf-programs"
+# Not a root workspace member (nightly + bpfel); bump alongside [workspace.package] in root Cargo.toml.
 version = "0.0.4-beta.0"
 edition = "2021"
 publish = false

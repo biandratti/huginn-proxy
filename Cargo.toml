@@ -37,8 +37,10 @@ getrandom = "0.4.3"
 http = "1.5.0"
 http-body-util = "0.1.4"
 huginn-certs = { path = "huginn-certs" }
+huginn-ebpf = { path = "huginn-ebpf" }
 huginn-ebpf-common = { path = "huginn-ebpf-common" }
 huginn-ebpf-rate-limit = { path = "huginn-ebpf-rate-limit" }
+huginn-proxy-lib = { path = "huginn-proxy-lib" }
 huginn-net-http = { version = "2.0.0", features = ["akamai"] }
 huginn-net-tcp = { version = "2.0.0", features = ["syn"] }
 huginn-net-tls = { version = "2.0.0", features = ["stable-v1"] }
