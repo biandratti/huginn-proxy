@@ -7,59 +7,26 @@ follows [Semantic Versioning](https://semver.org/).
 
 ---
 
-## [uncoming]
+## [0.0.4-beta.0]
 
 ### Added
 
-- **Client-CA trust anchors deduplicated by Subject Key Identifier.** A per-domain `client_ca_path`
-  bundle that repeats a CA — the same PEM twice, or the same CA key re-issued/re-encoded — now
-  collapses to a single trust anchor (SKID-based dedup via `x509-parser`). A CA that carries no SKID
-  extension falls back to DER identity and is still trusted rather than dropped.
-- **Per-domain mTLS attribution in handshake-failure logs.** The `TLS accept failed` and `TLS
-  handshake timeout` warnings now include the selected `sni` and an `mtls` flag indicating whether the
-  matched domain required a client certificate. The flag comes from the per-SNI config chosen from the
-  ClientHello, so it is known even when the handshake never completes (e.g. a client that omitted a
-  required client cert).
-- **Config validation warnings + `--validate --strict`.** Config loading audits for likely mistakes
-  and logs non-fatal warnings (boot, `--validate`, hot reload): duplicate/contradictory header
-  manipulation, security overrides that drop parent protection, over-broad `trusted_proxies` ranges,
-  a self-defeating `rate_limit` (`window_seconds = 0`, or `limit_by = "header"` with no
-  `limit_by_header`), and `proxy_protocol` with no trusted peer. `--validate` prints a warning count;
-  `--strict` exits non-zero on any warning. See `SETTINGS.md`.
-- **In-kernel per-source SYN rate limiter (eBPF).** New agent env vars
-  `HUGINN_EBPF_RATE_LIMIT_ENABLED` (default `false`), `HUGINN_EBPF_RATE_LIMIT_BURST`
-  (`1..=65534`, default `2000`) and `HUGINN_EBPF_RATE_LIMIT_WINDOW_SECONDS` (`1..=3600`,
-  default `1`). When enabled, the XDP/TC datapath counts SYNs with a sliding-window Count-Min
-  Sketch (hashed with a random seed drawn per agent load, so which counters a source shares
-  cannot be computed offline and aimed at a chosen victim) and skips capture for those over the
-  threshold, protecting the `tcp_syn_map` LRU from floods. IPv4 is keyed per address; IPv6 is
-  keyed per `/64` prefix (the interface identifier is free for whoever holds the `/64` to pick,
-  so full-address keys would never hit the budget — at the cost that one noisy address can push
-  the whole prefix over the limit and skip its fingerprints). The packet still reaches the TCP
-  stack; only the fingerprint is lost. Constant memory whatever the number of (even spoofed)
-  sources. The sketch is per-CPU, so the threshold is too: size `BURST` against
-  `HUGINN_EBPF_SYN_MAP_MAX_ENTRIES`, not against the proxy's `[security.rate_limit]`. An unset
-  variable takes its default; one that is set but unusable fails agent startup. Adds
-  `tcp_syn_rate_skipped_total` / `tcp_syn_rate_allowed_total` (by `family`),
-  `tcp_syn_rate_limit_enabled`, and four pinned maps under `HUGINN_EBPF_PIN_PATH`
-  (`syn_rate_skipped_v4/v6`, `syn_rate_allowed_v4/v6`). The sketch itself is not pinned, but its
-  maps are allocated on every agent load even with the limiter off (~260 KiB on 8 CPUs, ~2 MiB on
-  64). See `EBPF-SETUP.md` and `TELEMETRY.md`.
+- **Client-CA dedup by Subject Key Identifier.** Repeated CAs in a `client_ca_path` bundle collapse to one anchor; CAs without SKID fall back to DER identity.
+- **mTLS context in TLS failure logs.** `TLS accept failed` / `handshake timeout` warnings now include `sni` and `mtls`.
+- **Config validation warnings + `--validate --strict`.** Non-fatal audits on boot, validate, and hot reload; `--strict` fails on warnings. See `SETTINGS.md`.
+- **In-kernel per-source SYN rate limiter (eBPF).** Optional Count-Min Sketch limiter via `HUGINN_EBPF_RATE_LIMIT_*` env vars; skips fingerprint capture above threshold, packet still forwarded. See `EBPF-SETUP.md` and `TELEMETRY.md`.
 
 ### Breaking changes
 
-- **`[security].trusted_proxies` is now a table** (`cidrs` + `insecure`). `insecure = true` replaces
-  listing `0.0.0.0/0`; a `/0` CIDR still works but warns.
+- **`[security].trusted_proxies` is now a table** (`cidrs` + `insecure`). `insecure = true` replaces listing `0.0.0.0/0`.
 
   ```toml
   [security.trusted_proxies]
   cidrs = ["10.0.0.0/8", "192.168.0.0/16"]
-  insecure = false   # trust every peer; default false
+  insecure = false
   ```
 
-- **Filesystem watch moved to `[reload]`; `--watch`/`--watch-delay-secs` flags and
-  `HUGINN_WATCH`/`HUGINN_WATCH_DELAY_SECS` env vars removed.** Watch now defaults to `true`; set
-  `watch = false` to disable. See `SETTINGS.md`.
+- **Filesystem watch moved to `[reload]`.** `--watch`/`--watch-delay-secs` flags and `HUGINN_WATCH`/`HUGINN_WATCH_DELAY_SECS` removed; defaults to `watch = true`.
 
   ```toml
   [reload]
@@ -67,18 +34,14 @@ follows [Semantic Versioning](https://semver.org/).
   debounce_secs = 60
   ```
 
-- **`[tls.client_auth]` removed; mTLS is now per-domain via `[[domains]].client_ca_path`.** Client
-  authentication used to be listener-wide: one CA, applied to every domain served by the proxy. It is
-  now a property of each domain, so you can require client certificates on an admin host while the
-  rest stay public. A config that still declares `[tls.client_auth]` is **rejected at load**
-  (`unknown field 'client_auth'`). Move the CA path to each domain that needs it.
+- **`[tls.client_auth]` removed; mTLS is per-domain via `client_ca_path`.** Configs with `[tls.client_auth]` are rejected at load.
 
   ```toml
-  # before: every domain required a client cert
+  # before
   [tls.client_auth]
   required = { ca_cert_path = "/config/certs/ca.crt" }
 
-  # after: only this domain does
+  # after
   [[domains]]
   host = "admin.example.com"
   cert_path = "/config/certs/admin.crt"
@@ -86,42 +49,19 @@ follows [Semantic Versioning](https://semver.org/).
   client_ca_path = "/config/certs/ca.crt"
   ```
 
-- **`[tls.session_resumption].max_sessions` removed.** Resumption is stateless (session tickets only),
-  so there is no server-side session cache to size. The key had already become a no-op; it is now
-  gone, and a config that still declares it is **rejected at load** (`deny_unknown_fields`). Delete the
-  key.
+- **`[tls.session_resumption].max_sessions` removed.** Stateless tickets only; key is rejected if present.
 
 ### Changed
 
-- **TLS version limits are now enforced.** `[tls.options].versions` (or `min_version`/`max_version`)
-  are applied to the acceptor instead of only being validated — e.g. `min_version = "1.3"` now refuses
-  TLS 1.2 handshakes. The default (TLS 1.2 + 1.3) is unchanged.
-- **`[tls.options].curve_preferences` is now applied** (previously validated, then ignored). Two
-  **breaking** consequences: the default is now empty, keeping the provider's post-quantum-first
-  defaults, so an explicit classical-only list drops PQ protection — include `X25519MLKEM768` or
-  `SECP256R1MLKEM768` (both new valid values) to keep it. `secp521r1` is no longer accepted.
-- **TLS session resumption is now stateless tickets only.** A process-wide shared ticketer (kept
-  across cert hot-reloads) replaces the former server-side TLS 1.2 session-ID cache. This also turns
-  on TLS 1.3 resumption, which was previously off. mTLS domains never resume.
-- **`huginn_config_hash` and `huginn_tls_cert_hash` now use a fixed FNV-1a**, replacing `std`'s
-  `DefaultHasher`, whose algorithm can change between Rust releases and move a hash that should only
-  change with the content. The values are now comparable across replicas and upgrades, but **change
-  once** with this release; `changes()` queries are unaffected.
+- **TLS version limits are now enforced** (`min_version`/`max_version`/`versions`).
+- **`curve_preferences` is now applied** (was validated then ignored). Empty default keeps PQ-first provider defaults; explicit classical-only lists drop PQ unless you include `X25519MLKEM768` or `SECP256R1MLKEM768`. `secp521r1` removed.
+- **TLS resumption is stateless tickets only** (shared ticketer, TLS 1.3 resumption enabled; mTLS domains never resume).
+- **`huginn_config_hash` / `huginn_tls_cert_hash` use fixed FNV-1a** — values change once on upgrade; comparable across replicas thereafter.
 
 ### Fixed
 
-- **`huginn_errors_total` counted some errors twice.** Requests rejected by the handler
-  (`ip_blocked`, `misdirected_request`, `no_matching_route`) were recorded both where the error was
-  built and where it was turned into a response; errors raised while forwarding were recorded once.
-  Every failed request is now counted exactly once, so the series are comparable across `error_type`.
-  **Adjust alert thresholds**: rates for the affected types drop by half. `TELEMETRY.md` §9 also
-  documented a `component` label that was never emitted and a set of `error_type` values that never
-  existed; both now match what the proxy exports.
-- **A `key_path` file holding several private keys used only the last one.** Every key in the file is
-  now tried and the one that matches the certificate is used, whatever its position. Domains that
-  failed to load with `certificate/key mismatch` despite the right key being present in the file now
-  start. Files with a single key (the usual case) are unaffected, and a file whose keys all belong to
-  another certificate is still rejected.
+- **`huginn_errors_total` double-counted handler rejections** — adjust alert thresholds (~half rate for `ip_blocked`, `misdirected_request`, `no_matching_route`). `TELEMETRY.md` corrected.
+- **Multi-key PEM files now pick the matching key** instead of always using the last one.
 
 ---
 

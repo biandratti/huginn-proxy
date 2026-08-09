@@ -159,15 +159,12 @@ For module structure and design decisions, see [ARCHITECTURE.md](ARCHITECTURE.md
 | HTTP/2 (Akamai) | `x-http2-akamai` | No                                  |
 | TCP SYN (p0f)   | `x-tcp-p0f`      | **Yes** - Linux only, kernel ≥ 5.11 |
 
-**GHCR:** three container packages ([
-`huginn-proxy`](https://github.com/biandratti/huginn-proxy/pkgs/container/huginn-proxy), [
-`huginn-proxy-plain`](https://github.com/biandratti/huginn-proxy/pkgs/container/huginn-proxy-plain), [
-`huginn-proxy-ebpf-agent`](https://github.com/biandratti/huginn-proxy-ebpf-agent/pkgs/container/huginn-proxy-ebpf-agent)).
-How many you run depends on the setup:
+**GHCR:** [`huginn-proxy`](https://github.com/biandratti/huginn-proxy/pkgs/container/huginn-proxy), [`huginn-proxy-plain`](https://github.com/biandratti/huginn-proxy/pkgs/container/huginn-proxy-plain), [`huginn-proxy-ebpf-agent`](https://github.com/biandratti/huginn-proxy-ebpf-agent/pkgs/container/huginn-proxy-ebpf-agent).
 
-- **Proxy + eBPF agent (TCP SYN):** **`huginn-proxy`** + **`huginn-proxy-ebpf-agent`** two containers; JA4, Akamai, and
-  `x-tcp-p0f`.
-- **Proxy only (no TCP SYN):** **`huginn-proxy-plain`** one container; JA4 and Akamai, no kernel SYN path.
+| Setup | Containers | Signatures |
+| --- | --- | --- |
+| `huginn-proxy` + `huginn-proxy-ebpf-agent` | 2 | TLS, HTTP, TCP |
+| `huginn-proxy-plain` | 1 | TLS, HTTP |
 
 ## License
 
