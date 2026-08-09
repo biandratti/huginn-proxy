@@ -9,7 +9,7 @@ import { Tabs, TabItem } from '@astrojs/starlight/components';
 
 The **`[security]`** block groups controls that apply **before** and **around** request handling: connection caps, trusted-proxy CIDRs for real-IP resolution, IP allow/deny lists (see [IP filtering](/huginn-proxy/docs/ip-filtering/)), rate limits (see [Rate limiting](/huginn-proxy/docs/rate-limiting/)), and **response** security headers (HSTS, CSP, custom).
 
-**TLS** termination and **mTLS** are configured under **`[tls]`**; see [TLS](/huginn-proxy/docs/tls/).
+**TLS** termination options live under **`[tls]`**; **mTLS** is per-domain via `client_ca_path`. See [TLS](/huginn-proxy/docs/tls/).
 
 ## Connection limit
 
@@ -20,7 +20,7 @@ The **`[security]`** block groups controls that apply **before** and **around** 
 
 ```yaml
 security:
- max_connections: 512
+  max_connections: 512
 ```
 
  </TabItem>
@@ -36,28 +36,31 @@ max_connections = 512
 
 ## Trusted proxies
 
-When the proxy sits behind a load balancer or ingress, client IPs in `X-Forwarded-For` can be trusted for real-IP resolution. **`trusted_proxies`** is a global CIDR list: it applies to **all** requests and is **not** overridable per domain or route.
+When the proxy sits behind a load balancer or ingress, client IPs in `X-Forwarded-For` can be trusted for real-IP resolution. **`[security.trusted_proxies]`** is a **table** (`cidrs` + `insecure`): it applies to **all** requests and is **not** overridable per domain or route.
 
-When set and the peer IP is in this list, the proxy walks `X-Forwarded-For` right-to-left and uses the first IP **not** in the trusted list as the real client IP. This real IP drives rate limiting (`limit_by = "ip"` or `"combined"`) and IP filtering. The same list gates [PROXY protocol](/huginn-proxy/docs/listen/#proxy-protocol) headers: only trusted peers may supply a PROXY address.
+When `cidrs` is set and the peer IP is in that list, the proxy walks `X-Forwarded-For` right-to-left and uses the first IP **not** in the trusted list as the real client IP. This real IP drives rate limiting (`limit_by = "ip"` or `"combined"`) and IP filtering. The same list gates [PROXY protocol](/huginn-proxy/docs/listen/#proxy-protocol) headers: only trusted peers may supply a PROXY address.
 
-When empty (default), the non-forgeable TCP peer IP is used directly. **Dynamic** (hot-reloadable).
+`insecure = true` trusts every peer (Traefik-style) and replaces listing `0.0.0.0/0`. Over-broad CIDRs warn on load / `--validate`; with `--strict`, warnings fail CI. When `cidrs` is empty and `insecure` is false (default), the non-forgeable TCP peer IP is used directly. **Dynamic** (hot-reloadable).
 
 <Tabs syncKey="huginn-config">
  <TabItem label="YAML">
 
 ```yaml
 security:
- trusted_proxies:
- - "10.0.0.0/8"
- - "172.16.0.0/12"
+  trusted_proxies:
+    cidrs:
+      - "10.0.0.0/8"
+      - "172.16.0.0/12"
+    insecure: false
 ```
 
  </TabItem>
  <TabItem label="TOML">
 
 ```toml
-[security]
-trusted_proxies = ["10.0.0.0/8", "172.16.0.0/12"]
+[security.trusted_proxies]
+cidrs = ["10.0.0.0/8", "172.16.0.0/12"]
+insecure = false
 ```
 
  </TabItem>
@@ -74,20 +77,20 @@ HSTS, CSP, and custom headers attach to **responses**. The global `[security.hea
 
 ```yaml
 security:
- headers:
- custom:
- - name: "X-Frame-Options"
- value: "DENY"
- - name: "X-Content-Type-Options"
- value: "nosniff"
- hsts:
- enabled: true
- max_age: 31536000
- include_subdomains: false
- preload: false
- csp:
- enabled: true
- policy: "default-src 'self'; script-src 'self' 'unsafe-inline'"
+  headers:
+    custom:
+      - name: "X-Frame-Options"
+        value: "DENY"
+      - name: "X-Content-Type-Options"
+        value: "nosniff"
+    hsts:
+      enabled: true
+      max_age: 31536000
+      include_subdomains: false
+      preload: false
+    csp:
+      enabled: true
+      policy: "default-src 'self'; script-src 'self' 'unsafe-inline'"
 ```
 
  </TabItem>
@@ -96,8 +99,8 @@ security:
 ```toml
 [security.headers]
 custom = [
- { name = "X-Frame-Options", value = "DENY" },
- { name = "X-Content-Type-Options", value = "nosniff" },
+  { name = "X-Frame-Options", value = "DENY" },
+  { name = "X-Content-Type-Options", value = "nosniff" },
 ]
 
 [security.headers.hsts]
@@ -132,22 +135,22 @@ Use `[headers]` for free-form request/response plumbing; use `security.headers` 
 
 ```yaml
 domains:
- - host: "api.example.com"
- security:
- ip_filter:
- mode: "allowlist"
- allowlist: ["10.0.0.0/8"]
- rate_limit:
- enabled: true
- requests_per_second: 50
- burst: 100
- limit_by: "ip"
- routes:
- - prefix: "/internal"
- backend: "backend-a:9000"
- security:
- rate_limit:
- enabled: false # this route is exempt
+  - host: "api.example.com"
+    security:
+      ip_filter:
+        mode: "allowlist"
+        allowlist: ["10.0.0.0/8"]
+      rate_limit:
+        enabled: true
+        requests_per_second: 50
+        burst: 100
+        limit_by: "ip"
+    routes:
+      - prefix: "/internal"
+        backend: "backend-a:9000"
+        security:
+          rate_limit:
+            enabled: false # this route is exempt
 ```
 
  </TabItem>
@@ -167,12 +170,12 @@ requests_per_second = 50
 burst = 100
 limit_by = "ip"
 
- [[domains.routes]]
- prefix = "/internal"
- backend = "backend-a:9000"
+[[domains.routes]]
+prefix = "/internal"
+backend = "backend-a:9000"
 
- [domains.routes.security.rate_limit]
- enabled = false # this route is exempt
+[domains.routes.security.rate_limit]
+enabled = false # this route is exempt
 ```
 
  </TabItem>

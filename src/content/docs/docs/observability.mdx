@@ -68,15 +68,15 @@ The observability Compose file already wires this up. For custom deployments:
 
 ```yaml
 scrape_configs:
- - job_name: huginn-proxy
- static_configs:
- - targets: ["localhost:9090"]
- scrape_interval: 15s
+  - job_name: huginn-proxy
+    static_configs:
+      - targets: ["localhost:9090"]
+    scrape_interval: 15s
 
- - job_name: huginn-ebpf-agent
- static_configs:
- - targets: ["localhost:9091"]
- scrape_interval: 15s
+  - job_name: huginn-ebpf-agent
+    static_configs:
+      - targets: ["localhost:9091"]
+    scrape_interval: 15s
 ```
 
 Adjust hosts to your Docker/Kubernetes networking. See [Telemetry](/huginn-proxy/docs/telemetry/) for the full metric reference.

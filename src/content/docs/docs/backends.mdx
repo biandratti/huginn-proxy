@@ -24,10 +24,10 @@ The **`[[backends]]`** entries define upstream targets. Each route references a 
 
 ```yaml
 backends:
- - address: "backend-a:9000"
- http_version: preserve
- - address: "backend-b:9000"
- http_version: http11
+  - address: "backend-a:9000"
+    http_version: preserve
+  - address: "backend-b:9000"
+    http_version: http11
 ```
 
  </TabItem>
@@ -69,12 +69,12 @@ If you omit `health_check`, the backend is always treated as healthy (no backgro
 
 ```yaml
 backends:
- - address: "app:8080"
- http_version: http11
- health_check:
- type: http
- path: /ready
- expected_status: 200
+  - address: "app:8080"
+    http_version: http11
+    health_check:
+      type: http
+      path: /ready
+      expected_status: 200
 ```
 
  </TabItem>
@@ -104,9 +104,9 @@ The **`[backend_pool]`** block configures the HTTP **connection pool** for proxy
 
 ```yaml
 backend_pool:
- enabled: true
- idle_timeout: 90
- pool_max_idle_per_host: 0
+  enabled: true
+  idle_timeout: 90
+  pool_max_idle_per_host: 0
 ```
 
  </TabItem>

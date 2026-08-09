@@ -30,19 +30,19 @@ The same shape applies at `[domains.headers]` and `[domains.routes.headers]`.
 
 ```yaml
 headers:
- request:
- remove:
- - "X-Forwarded-Server"
- add:
- - name: "X-Proxy-Name"
- value: "huginn-proxy"
- response:
- remove:
- - "Server"
- - "X-Powered-By"
- add:
- - name: "X-Proxy"
- value: "huginn-proxy"
+  request:
+    remove:
+      - "X-Forwarded-Server"
+    add:
+      - name: "X-Proxy-Name"
+        value: "huginn-proxy"
+  response:
+    remove:
+      - "Server"
+      - "X-Powered-By"
+    add:
+      - name: "X-Proxy"
+        value: "huginn-proxy"
 ```
 
  </TabItem>
@@ -52,13 +52,13 @@ headers:
 [headers.request]
 remove = ["X-Forwarded-Server"]
 add = [
- { name = "X-Proxy-Name", value = "huginn-proxy" },
+  { name = "X-Proxy-Name", value = "huginn-proxy" },
 ]
 
 [headers.response]
 remove = ["Server", "X-Powered-By"]
 add = [
- { name = "X-Proxy", value = "huginn-proxy" },
+  { name = "X-Proxy", value = "huginn-proxy" },
 ]
 ```
 

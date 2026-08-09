@@ -27,8 +27,8 @@ Configured under **`[telemetry]`** in the config file. **Static**: the listener 
 
 ```yaml
 telemetry:
- metrics_port: 9090
- otel_log_level: "warn"
+  metrics_port: 9090
+  otel_log_level: "warn"
 ```
 
  </TabItem>
@@ -48,7 +48,7 @@ otel_log_level = "warn"
 | Path | Role |
 | --- | --- |
 | `/health` | Process is running |
-| `/ready` | Ready to serve (503 when not ready, e.g. no backends) |
+| `/ready` | Ready to serve (listeners accepting; independent of backend health) |
 | `/live` | Liveness |
 | `/metrics` | Prometheus text |
 
@@ -58,7 +58,7 @@ Health responses are JSON; `/metrics` is Prometheus exposition format.
 
 ### Metric families (proxy, summary)
 
-**44** `huginn_*` metrics: connections, requests, throughput, TLS, JA4 / HTTP/2 fingerprinting, backend timings, active health checks, rate limits, IP filter, headers, mTLS, config reload, build info. TCP SYN **lookup** metrics on the proxy reflect map reads; **capture** counters are on the agent. See [TELEMETRY.md](https://github.com/biandratti/huginn-proxy/blob/master/TELEMETRY.md).
+**52** `huginn_*` metrics: connections, PROXY protocol, requests, throughput, TLS, JA4 / HTTP/2 fingerprinting, backend timings, active health checks, rate limits, IP filter, headers, mTLS, config reload, TLS cert reload (FNV-1a hashes), build info. TCP SYN **lookup** metrics on the proxy reflect map reads; **capture** counters (including the optional SYN rate limiter) are on the agent. See [TELEMETRY.md](https://github.com/biandratti/huginn-proxy/blob/master/TELEMETRY.md).
 
 ---
 
@@ -73,7 +73,7 @@ Only when the **TCP SYN** path is enabled. Configured with **environment variabl
 
 Same **four paths** as the proxy (`/health`, `/ready`, `/live`, `/metrics`) for Kubernetes-style probes. **`/ready`** may return 503 until BPF maps are pinned.
 
-**Agent-only** metrics (examples): `tcp_syn_captured_total`, `tcp_syn_insert_failures_total`, `tcp_syn_malformed_total`, `agent_up`, `huginn_ebpf_agent_build_info`: full list in [TELEMETRY.md: eBPF Agent Metrics](https://github.com/biandratti/huginn-proxy/blob/master/TELEMETRY.md#ebpf-agent-metrics).
+**Agent-only** metrics (examples): `tcp_syn_captured_total`, `tcp_syn_insert_failures_total`, `tcp_syn_malformed_total`, `tcp_syn_rate_skipped_total`, `tcp_syn_rate_allowed_total`, `tcp_syn_rate_limit_enabled`, `agent_up`, `huginn_ebpf_agent_build_info`: full list in [TELEMETRY.md: eBPF Agent Metrics](https://github.com/biandratti/huginn-proxy/blob/master/TELEMETRY.md#ebpf-agent-metrics).
 
 **Bind address vs scrape URL:** [eBPF TCP setup: Agent metrics bind address](/huginn-proxy/docs/ebpf-setup/#agent-metrics-bind-address).
 
@@ -85,13 +85,13 @@ Scrape the **proxy** and the **agent** on **different ports** (e.g. `9090` and `
 
 ```yaml
 scrape_configs:
- - job_name: huginn-proxy
- static_configs:
- - targets: ["localhost:9090"]
+  - job_name: huginn-proxy
+    static_configs:
+      - targets: ["localhost:9090"]
 
- - job_name: huginn-ebpf-agent
- static_configs:
- - targets: ["localhost:9091"]
+  - job_name: huginn-ebpf-agent
+    static_configs:
+      - targets: ["localhost:9091"]
 ```
 
 Adjust hosts to your Docker/Kubernetes networking. With eBPF Compose, ports are often published on the host as in [`docker-compose.release-ebpf.yml`](https://github.com/biandratti/huginn-proxy/blob/master/examples/docker-compose.release-ebpf.yml).

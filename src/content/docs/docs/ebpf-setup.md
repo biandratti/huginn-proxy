@@ -41,7 +41,12 @@ Two processes cooperate:
 | `HUGINN_EBPF_SYN_MAP_MAX_ENTRIES` | LRU map capacity. **Agent-only**: published into `syn_meta` for the proxy; do **not** set this on the proxy. |
 | `HUGINN_EBPF_CAPTURE` | Capture backend: `xdp-native` (default), `xdp-skb`, or `tc`. See [Choosing a capture backend](#choosing-a-capture-backend). |
 | `HUGINN_EBPF_LOG_LEVEL` | In-kernel datapath log level: `off` (default), `error`, `warn`, `info`, `debug`, `trace`. Diagnostics only. |
+| `HUGINN_EBPF_RATE_LIMIT_ENABLED` | Optional in-kernel per-source SYN rate limiter (`false` by default). Over-limit SYNs are **not captured** (packet still forwarded). |
+| `HUGINN_EBPF_RATE_LIMIT_BURST` | Max SYNs per window per source before skipping capture (`1..=65534`, default `2000`). Counted **per CPU**; size against `SYN_MAP_MAX_ENTRIES`, not the proxy’s `[security.rate_limit]`. |
+| `HUGINN_EBPF_RATE_LIMIT_WINDOW_SECONDS` | Sliding window length in seconds (`1..=3600`, default `1`). |
 | `HUGINN_EBPF_METRICS_ADDR` / `HUGINN_EBPF_METRICS_PORT` | Where the **agent** binds `/metrics`, `/health`, `/ready`, `/live`. |
+
+> A bad rate-limit value fails agent startup (same as other agent vars). Unset → defaults. Size `BURST` with the formula in [EBPF-SETUP.md](https://github.com/biandratti/huginn-proxy/blob/master/EBPF-SETUP.md#sizing-the-syn-rate-limiter). Metrics: `tcp_syn_rate_skipped_total` / `tcp_syn_rate_allowed_total` / `tcp_syn_rate_limit_enabled` in [TELEMETRY.md](https://github.com/biandratti/huginn-proxy/blob/master/TELEMETRY.md).
 
 ### Proxy
 

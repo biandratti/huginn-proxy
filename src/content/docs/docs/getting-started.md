@@ -18,7 +18,7 @@ Inspired by production-grade proxies like [Pingora](https://github.com/cloudflar
 
 Huginn Proxy focuses on **passive fingerprinting** and a small set of hardening features, not feature parity with Nginx/Traefik. Current rough edges:
 
-- **No built-in ACME:** certificates are files on disk (`cert_path` / `key_path` per domain). Another process issues and renews them (cert-manager, acme.sh, Vault, etc.). PEMs reload on **config reload**, not by watching cert files alone. See [TLS](/huginn-proxy/docs/tls/).
+- **No built-in ACME:** certificates are files on disk (`cert_path` / `key_path` per domain; optional `client_ca_path` for mTLS). Another process issues and renews them (cert-manager, acme.sh, Vault, etc.). PEMs reload on **config reload** (`SIGHUP` or `[reload].watch`), not by watching cert files alone. See [TLS](/huginn-proxy/docs/tls/).
 - **Load balancing:** round-robin across backend addresses on a route. Optional active [`health_check`](/huginn-proxy/docs/backends/#health-checks). No least-connections or weights; many setups still leave replicas and failover to an orchestrator (see [Routes](/huginn-proxy/docs/routes/)).
 - **Rate limiting** is per process only (not distributed across proxy replicas).
 - **HTTP/3** is not supported yet.

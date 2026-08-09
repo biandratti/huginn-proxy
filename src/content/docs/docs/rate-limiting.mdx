@@ -1,13 +1,25 @@
 ---
 title: Rate limiting
-description: Token-bucket limits globally and per domain/route.
+description: Token-bucket HTTP limits and the separate eBPF SYN capture limiter.
 sidebar:
   order: 8
 ---
 
 import { Tabs, TabItem } from '@astrojs/starlight/components';
 
-Token-bucket rate limits live under **`[security.rate_limit]`** (global), **`[domains.security.rate_limit]`** (per domain), and **`[domains.routes.security.rate_limit]`** (per route). **Dynamic.**
+Huginn has **two different rate limiters**. They do not share knobs, counters, or goals:
+
+| | **Proxy** `[security.rate_limit]` | **eBPF agent** `HUGINN_EBPF_RATE_LIMIT_*` |
+| --- | --- | --- |
+| **Layer** | HTTP request (after accept / TLS) | TCP SYN capture (XDP/TC datapath) |
+| **When over limit** | **429** response | Fingerprint **not captured**; packet still reaches the stack |
+| **Protects** | Backends / application abuse | Capture LRU (`tcp_syn_map`) from one loud source |
+| **Sized against** | Request rate you want to allow | `HUGINN_EBPF_SYN_MAP_MAX_ENTRIES` (and CPU/queues) |
+| **Scope** | Global / domain / route | Per source IP (IPv6: `/64` prefix) |
+
+The rest of this page covers the **proxy** token bucket. The eBPF limiter and how to run both without losing TCP signatures are in [eBPF SYN rate limiter](#ebpf-syn-rate-limiter).
+
+Token-bucket limits live under **`[security.rate_limit]`** (global), **`[domains.security.rate_limit]`** (per domain), and **`[domains.routes.security.rate_limit]`** (per route). **Dynamic.**
 
 Per-domain and per-route blocks are **whole-block replaces**: the most specific scope that defines a `rate_limit` block replaces the parent's block entirely. There is no field-level inheritance.
 
@@ -17,7 +29,7 @@ See [`examples/config/rate-limit-example.toml`](https://github.com/biandratti/hu
 
 Key **`limit_by`** values:
 
-- **`ip`:** client IP (resolved from `X-Forwarded-For` when `[security].trusted_proxies` is set; see below)
+- **`ip`:** client IP (resolved from `X-Forwarded-For` when `[security.trusted_proxies]` is set; see below)
 - **`header`:** value of a named header (`limit_by_header`)
 - **`route`:** shared limit per route path
 - **`combined`:** IP + route
@@ -26,29 +38,30 @@ Responses use **429** when exceeded. Counters are **in-memory** and **per proces
 
 ## Real client IP behind a load balancer
 
-When the proxy sits behind a trusted load balancer, set **`[security].trusted_proxies`** (a global CIDR list) so `limit_by = "ip"` and `"combined"` resolve the real client IP from `X-Forwarded-For` instead of the proxy's IP:
+When the proxy sits behind a trusted load balancer, set **`[security.trusted_proxies]`** (`cidrs` + optional `insecure`) so `limit_by = "ip"` and `"combined"` resolve the real client IP from `X-Forwarded-For` instead of the proxy's IP:
 
 <Tabs syncKey="huginn-config">
  <TabItem label="YAML">
 
 ```yaml
 security:
- trusted_proxies:
- - "10.0.0.0/8"
- - "172.16.0.0/12"
- rate_limit:
- enabled: true
- requests_per_second: 500
- burst: 1000
- limit_by: "ip"
+  trusted_proxies:
+    cidrs:
+      - "10.0.0.0/8"
+      - "172.16.0.0/12"
+  rate_limit:
+    enabled: true
+    requests_per_second: 500
+    burst: 1000
+    limit_by: "ip"
 ```
 
  </TabItem>
  <TabItem label="TOML">
 
 ```toml
-[security]
-trusted_proxies = ["10.0.0.0/8", "172.16.0.0/12"]
+[security.trusted_proxies]
+cidrs = ["10.0.0.0/8", "172.16.0.0/12"]
 
 [security.rate_limit]
 enabled = true
@@ -60,7 +73,7 @@ limit_by = "ip"
  </TabItem>
 </Tabs>
 
-`trusted_proxies` is **global only**: it is a property of the network topology, not of any individual domain or route.
+`trusted_proxies` is **global only**: it is a property of the network topology, not of any individual domain or route. See [Security](/huginn-proxy/docs/security/#trusted-proxies).
 
 ## Global default
 
@@ -69,12 +82,12 @@ limit_by = "ip"
 
 ```yaml
 security:
- rate_limit:
- enabled: true
- requests_per_second: 1000
- burst: 2000
- window_seconds: 1
- limit_by: "ip"
+  rate_limit:
+    enabled: true
+    requests_per_second: 1000
+    burst: 2000
+    window_seconds: 1
+    limit_by: "ip"
 ```
 
  </TabItem>
@@ -101,13 +114,13 @@ The domain block **replaces** the global rate-limit config entirely for all requ
 
 ```yaml
 domains:
- - host: "api.example.com"
- security:
- rate_limit:
- enabled: true
- requests_per_second: 50
- burst: 100
- limit_by: "combined"
+  - host: "api.example.com"
+    security:
+      rate_limit:
+        enabled: true
+        requests_per_second: 50
+        burst: 100
+        limit_by: "combined"
 ```
 
  </TabItem>
@@ -136,21 +149,21 @@ The route block **replaces** the domain (or global) rate-limit config for reques
 
 ```yaml
 domains:
- - host: "api.example.com"
- routes:
- - prefix: "/api"
- backend: "backend-a:9000"
- security:
- rate_limit:
- enabled: true
- requests_per_second: 50
- burst: 100
- limit_by: "combined"
- - prefix: "/public"
- backend: "backend-b:9000"
- security:
- rate_limit:
- enabled: false
+  - host: "api.example.com"
+    routes:
+      - prefix: "/api"
+        backend: "backend-a:9000"
+        security:
+          rate_limit:
+            enabled: true
+            requests_per_second: 50
+            burst: 100
+            limit_by: "combined"
+      - prefix: "/public"
+        backend: "backend-b:9000"
+        security:
+          rate_limit:
+            enabled: false
 ```
 
  </TabItem>
@@ -160,22 +173,22 @@ domains:
 [[domains]]
 host = "api.example.com"
 
- [[domains.routes]]
- prefix = "/api"
- backend = "backend-a:9000"
+[[domains.routes]]
+prefix = "/api"
+backend = "backend-a:9000"
 
- [domains.routes.security.rate_limit]
- enabled = true
- requests_per_second = 50
- burst = 100
- limit_by = "combined"
+[domains.routes.security.rate_limit]
+enabled = true
+requests_per_second = 50
+burst = 100
+limit_by = "combined"
 
- [[domains.routes]]
- prefix = "/public"
- backend = "backend-b:9000"
+[[domains.routes]]
+prefix = "/public"
+backend = "backend-b:9000"
 
- [domains.routes.security.rate_limit]
- enabled = false # disable for this route
+[domains.routes.security.rate_limit]
+enabled = false # disable for this route
 ```
 
  </TabItem>
@@ -188,12 +201,12 @@ host = "api.example.com"
 
 ```yaml
 security:
- rate_limit:
- enabled: true
- requests_per_second: 200
- burst: 400
- limit_by: "header"
- limit_by_header: "X-API-Key"
+  rate_limit:
+    enabled: true
+    requests_per_second: 200
+    burst: 400
+    limit_by: "header"
+    limit_by_header: "X-API-Key"
 ```
 
  </TabItem>
@@ -211,9 +224,44 @@ limit_by_header = "X-API-Key"
  </TabItem>
 </Tabs>
 
+## eBPF SYN rate limiter
+
+Optional. Only relevant when the **TCP SYN** path is on (`fingerprint.tcp_enabled` + eBPF agent). Configured on the **agent** with environment variables — not in `[security.rate_limit]`.
+
+| Variable | Default | Role |
+| --- | --- | --- |
+| `HUGINN_EBPF_RATE_LIMIT_ENABLED` | `false` | Turn the in-kernel limiter on |
+| `HUGINN_EBPF_RATE_LIMIT_BURST` | `2000` | Max SYNs per window per source before skipping capture (`1..=65534`, **per CPU**) |
+| `HUGINN_EBPF_RATE_LIMIT_WINDOW_SECONDS` | `1` | Sliding window (`1..=3600`) |
+
+When a source exceeds `BURST`, later SYNs from that source are **not written** to the capture map. The TCP handshake and HTTP path still proceed; you only lose **`x-tcp-p0f`** for those connections. This is **not** a network DoS shield and it is **not** a substitute for `[security.rate_limit]`.
+
+Size `BURST` against the capture LRU:
+
+```text
+burst ≈ HUGINN_EBPF_SYN_MAP_MAX_ENTRIES / (4 × cpus)
+```
+
+Use the NIC’s RX queue count (or CPU count on veth/single-queue). Full tables and caveats: [EBPF-SETUP.md — Sizing the SYN rate limiter](https://github.com/biandratti/huginn-proxy/blob/master/EBPF-SETUP.md#sizing-the-syn-rate-limiter). The compose default `2000` is a placeholder for a single-core lab host — **recompute** for production.
+
+Watch agent metrics (rate, not totals — counters are pinned across restarts): `tcp_syn_rate_skipped_total` should stay flat under normal load; if it climbs without an attack, `BURST` is too tight (common behind a shared NAT). See [Telemetry](/huginn-proxy/docs/telemetry/).
+
+### Coordinating proxy and eBPF limiters
+
+Treat them as **orthogonal**. Copying the same `burst` / RPS numbers between them is almost always wrong.
+
+1. **Decide who stops abuse.** HTTP abuse → tighten **`[security.rate_limit]`** (429). Capture-map thrash from one loud IP opening many connections → enable and size the **eBPF** limiter. Do not expect the eBPF limiter to return 429 or protect backends.
+2. **Preserve TCP signatures for legitimate clients.** Prefer that a healthy client hit the **proxy** limit (request denied, but the SYN was already captured) rather than the eBPF limit (request may succeed without `x-tcp-p0f`). Keep eBPF `BURST` high enough that normal peak SYN rates (including NAT gateways) do not skip capture; keep the proxy request budget as the tighter application control.
+3. **New connections vs keep-alive.** The eBPF path only sees **SYNs**. Keep-alive requests reuse the fingerprint from accept time. A client that already has `x-tcp-p0f` can still be HTTP-rate-limited on later requests without losing that header. A client skipped at SYN time never gets the header for that connection.
+4. **Validate independently.** Proxy: rejection rates on `huginn_rate_limit_*`. Agent: `tcp_syn_rate_skipped_total` / `tcp_syn_rate_allowed_total`. If skipped climbs while allowed goes flat across many sources, the sketch may be saturated (distributed flood) — that is a capture outage, not “working rate limit”; raise map size / revisit whether the limiter should stay on.
+5. **Fail closed on bad agent config.** An invalid `HUGINN_EBPF_RATE_LIMIT_*` value stops the agent; unset uses defaults. Typos here also leave the proxy without maps until the agent starts.
+
+Env table and Compose layout: [eBPF TCP setup](/huginn-proxy/docs/ebpf-setup/#environment-variables).
+
 ## Related
 
 - [Security](/huginn-proxy/docs/security/): `trusted_proxies`, connection limits, security headers
 - [IP filtering](/huginn-proxy/docs/ip-filtering/): `[security.ip_filter]`
+- [eBPF TCP setup](/huginn-proxy/docs/ebpf-setup/): agent env vars and capture backends
 - [Routes & Domains](/huginn-proxy/docs/routes/): prefix and backend selection
 - [Configuration overview](/huginn-proxy/docs/configuration/)

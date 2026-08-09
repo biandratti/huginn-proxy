@@ -18,6 +18,7 @@ Validate a config file without starting the proxy:
 ```bash
 huginn-proxy --validate config.toml
 huginn-proxy --validate config.yaml
+huginn-proxy --validate --strict config.yaml   # non-zero exit if any config warning
 ```
 
 Print the validated, **effective** configuration as deterministic JSON (implies `--validate`, then exits):
@@ -31,7 +32,9 @@ Includes defaults, normalizations, and fallbacks. Header values and CSP policy a
 
 **Strict keys:** unknown or misplaced keys are rejected at every nesting level during startup, `--validate`, and hot reload (they are never silently ignored). This catches typos and YAML indentation mistakes; a failed reload keeps the currently active config.
 
-**Hot reload:** dynamic sections update on `SIGHUP` or a file-watcher trigger without dropping connections. Static sections require a process restart. Changes are logged as a warning and ignored. See the [SETTINGS.md](https://github.com/biandratti/huginn-proxy/blob/master/SETTINGS.md) reference on GitHub for the static/dynamic split per section.
+**Config warnings:** load, `--validate`, and hot reload also emit non-fatal `WARN`s for likely mistakes (over-broad `trusted_proxies`, self-defeating `rate_limit`, security overrides that drop parent protection, etc.). `--validate` prints a warning count; **`--strict`** exits non-zero on any warning (useful in CI).
+
+**Hot reload:** dynamic sections update on `SIGHUP` or the filesystem watcher (`[reload].watch`, default `true`) without dropping connections. Static sections require a process restart. Invalid reloads keep the current config. See the [SETTINGS.md](https://github.com/biandratti/huginn-proxy/blob/master/SETTINGS.md) reference on GitHub for the static/dynamic split per section.
 
 ## Environment variables
 
@@ -40,9 +43,9 @@ These apply to the **`huginn-proxy`** process. They do **not** change how TOML v
 | Variable | Role |
 | --- | --- |
 | `HUGINN_CONFIG_PATH` | Path to the config file when you do **not** pass it as the sole CLI argument (equivalent to `huginn-proxy /path/to/config`). |
-| `HUGINN_WATCH` | Set to `true` to enable a **file watcher** so config (and TLS PEMs via config reload) can refresh without sending `SIGHUP`. |
-| `HUGINN_WATCH_DELAY_SECS` | Debounce delay in **seconds** after a file change before reload (avoids thrashing on editors that rewrite often). Default `60`. |
 | `RUST_LOG` | Overrides log filtering at the Rust tracing layer; can override `[logging].level`. See [Logging](/huginn-proxy/docs/logging/). |
+
+File watching and debounce live in the config file under **`[reload]`** (not env vars): `watch` (default `true`) and `debounce_secs` (default `60`). See [SETTINGS.md — `[reload]`](https://github.com/biandratti/huginn-proxy/blob/master/SETTINGS.md).
 
 **eBPF (TCP SYN path):** when the proxy uses pinned BPF maps, it reads **`HUGINN_EBPF_PIN_PATH`** (must match the agent) and optionally **`HUGINN_EBPF_RECONNECT_POLL_SECS`**. Map capacity (`HUGINN_EBPF_SYN_MAP_MAX_ENTRIES`) is **agent-only**: the proxy reads it from the pinned `syn_meta` map. Capture backend (`HUGINN_EBPF_CAPTURE`: `xdp-native` / `xdp-skb` / `tc`) is **agent-only**. See [eBPF TCP setup](/huginn-proxy/docs/ebpf-setup/#environment-variables).
 
@@ -64,6 +67,7 @@ Rough split: **static** blocks need a process restart to take effect; **dynamic*
 | `[timeout]` | [Timeout](/huginn-proxy/docs/timeout/) |
 | `[logging]` | [Logging](/huginn-proxy/docs/logging/) |
 | `[telemetry]` | [Telemetry](/huginn-proxy/docs/telemetry/) |
+| `[reload]` | Filesystem watch / debounce ([SETTINGS.md](https://github.com/biandratti/huginn-proxy/blob/master/SETTINGS.md)) |
 
 ### Dynamic (hot-reloadable)
 
@@ -71,8 +75,8 @@ Rough split: **static** blocks need a process restart to take effect; **dynamic*
 | --- | --- |
 | `preserve_host` | Top-level bool: [Routes](/huginn-proxy/docs/routes/) (forwarding `Host` upstream) |
 | `[[backends]]` | [Backends](/huginn-proxy/docs/backends/) |
-| `[[domains]]` | [Routes](/huginn-proxy/docs/routes/) (hostname matching, TLS certs, nested routes) |
-| `[security.trusted_proxies]` | [Security](/huginn-proxy/docs/security/) (global CIDR list for XFF / PROXY client-IP resolution) |
+| `[[domains]]` | [Routes](/huginn-proxy/docs/routes/) (hostname matching, TLS certs, nested routes, per-domain `client_ca_path`) |
+| `[security.trusted_proxies]` | [Security](/huginn-proxy/docs/security/) (`cidrs` + `insecure` for XFF / PROXY client-IP resolution) |
 | `[security.ip_filter]` | [IP filtering](/huginn-proxy/docs/ip-filtering/) |
 | `[security.rate_limit]` | [Rate limiting](/huginn-proxy/docs/rate-limiting/) |
 | `[security.headers]` | [Security](/huginn-proxy/docs/security/) (HSTS, CSP, custom: reloadable) |
