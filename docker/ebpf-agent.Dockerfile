@@ -6,12 +6,17 @@
 
 # ── builder ─────────────────────────────────────────────────────
 FROM rust:1.97.1-slim@sha256:8e8cf8f7fd54a2d23d5a743b3a03f56e26b6c774276c33fa0595111704ebb15c AS builder
-# bpf-linker uses aya-rustc-llvm-proxy which needs LLVM shared libs from
+# bpf-linker 0.11+ needs a matching LLVM when built from source; install the prebuilt binary instead.
 RUN apt-get update -q && apt-get install -y --no-install-recommends \
     pkg-config libssl-dev \
     && rm -rf /var/lib/apt/lists/*
 RUN rustup toolchain install nightly --component rust-src
-RUN cargo +nightly install bpf-linker --locked
+ARG TARGETARCH
+ADD https://github.com/cargo-bins/cargo-binstall/releases/latest/download/cargo-binstall-x86_64-unknown-linux-musl.tgz /tmp/cargo-binstall-amd64.tgz
+ADD https://github.com/cargo-bins/cargo-binstall/releases/latest/download/cargo-binstall-aarch64-unknown-linux-musl.tgz /tmp/cargo-binstall-arm64.tgz
+RUN tar -xzf /tmp/cargo-binstall-${TARGETARCH}.tgz -C /usr/local/cargo/bin cargo-binstall \
+    && rm /tmp/cargo-binstall-*.tgz \
+    && cargo binstall bpf-linker --no-confirm
 WORKDIR /app
 COPY . .
 RUN cargo build --release -p huginn-ebpf-agent

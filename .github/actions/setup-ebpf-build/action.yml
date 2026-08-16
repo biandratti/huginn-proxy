@@ -7,9 +7,7 @@ runs:
       shell: bash
       run: rustup toolchain install nightly --component rust-src --component clippy
     - name: Install cargo-binstall
-      uses: taiki-e/install-action@v2
-      with:
-        tool: cargo-binstall
+      uses: cargo-bins/cargo-binstall@main
     - name: Install bpf-linker
       shell: bash
       # bpf-linker 0.11+ links against system LLVM; use prebuilt binaries instead of cargo install.

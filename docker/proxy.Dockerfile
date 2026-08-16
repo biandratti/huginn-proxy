@@ -21,10 +21,14 @@ RUN cargo build --release -p huginn-proxy
 
 # ── ebpf builder ────────────────────────────────────────────────
 FROM builder-base AS builder-ebpf
-# bpf-linker uses aya-rustc-llvm-proxy which needs LLVM shared libs from
-# the rustc distribution. glibc-based image required (Alpine/musl won't work).
+# bpf-linker 0.11+ needs a matching LLVM when built from source; install the prebuilt binary instead.
 RUN rustup toolchain install nightly --component rust-src
-RUN cargo +nightly install bpf-linker --locked
+ARG TARGETARCH
+ADD https://github.com/cargo-bins/cargo-binstall/releases/latest/download/cargo-binstall-x86_64-unknown-linux-musl.tgz /tmp/cargo-binstall-amd64.tgz
+ADD https://github.com/cargo-bins/cargo-binstall/releases/latest/download/cargo-binstall-aarch64-unknown-linux-musl.tgz /tmp/cargo-binstall-arm64.tgz
+RUN tar -xzf /tmp/cargo-binstall-${TARGETARCH}.tgz -C /usr/local/cargo/bin cargo-binstall \
+    && rm /tmp/cargo-binstall-*.tgz \
+    && cargo binstall bpf-linker --no-confirm
 RUN cargo build --release -p huginn-proxy --features ebpf-tcp
 
 # ── runtime base ────────────────────────────────────────────────
