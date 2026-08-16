@@ -6,8 +6,9 @@ runs:
     - name: Install Rust nightly with rust-src and clippy
       shell: bash
       run: rustup toolchain install nightly --component rust-src --component clippy
+    - name: Install cargo-binstall
+      uses: cargo-bins/cargo-binstall@main
     - name: Install bpf-linker
       shell: bash
-      # Use nightly to compile bpf-linker: its deps require rustc > the stable MSRV in this repo.
-      # --locked pins to the exact dep versions in bpf-linker's published Cargo.lock.
-      run: cargo +nightly install bpf-linker --locked
+      # bpf-linker 0.11+ links against system LLVM; use prebuilt binaries instead of cargo install.
+      run: cargo binstall bpf-linker --no-confirm
