@@ -1,7 +1,7 @@
 use super::maps::{
     increment_syn_captured_v4, increment_syn_captured_v6, increment_syn_insert_failures_v4,
-    increment_syn_insert_failures_v6, read_and_increment_syn_counter, tcp_syn_map_v4,
-    tcp_syn_map_v6,
+    increment_syn_insert_failures_v6, increment_syn_malformed_v4, increment_syn_malformed_v6,
+    read_and_increment_syn_counter, tcp_syn_map_v4, tcp_syn_map_v6,
 };
 use aya_ebpf::programs::XdpContext;
 use core::mem;
@@ -15,6 +15,18 @@ use huginn_ebpf_common::{make_key_v4, make_key_v6, SynRawDataV4, SynRawDataV6};
 #[derive(Clone, Copy)]
 pub enum TcpSynError {
     MapInsertFailed,
+    /// Fewer option bytes readable than `doff` declares; see `declared_optlen`.
+    TruncatedOptions,
+}
+
+/// TCP option bytes the header declares. `doff` maxes out at 15, so this never
+/// exceeds `TCPOPT_MAXLEN` and the `min` is only a bound for the verifier.
+#[inline(always)]
+fn declared_optlen(tcp: &TcpHdr) -> usize {
+    usize::from(tcp.doff())
+        .saturating_mul(4)
+        .saturating_sub(mem::size_of::<TcpHdr>())
+        .min(TCPOPT_MAXLEN)
 }
 
 #[allow(unsafe_code)]
@@ -26,10 +38,7 @@ pub fn handle_tcp_syn_v4(
 ) -> Result<(), TcpSynError> {
     // Must stay inline so the BPF verifier tracks packet bounds in this frame.
     // SAFETY: tcp is valid packet memory; options start immediately after the header.
-    let tcp_hdr_len = usize::from(tcp.doff()).saturating_mul(4);
-    let declared_optlen = tcp_hdr_len
-        .saturating_sub(mem::size_of::<TcpHdr>())
-        .min(TCPOPT_MAXLEN);
+    let declared_optlen = declared_optlen(tcp);
 
     let opts_ptr = unsafe { (tcp as *const TcpHdr as *const u8).add(mem::size_of::<TcpHdr>()) };
     let data_end = ctx.data_end();
@@ -58,6 +67,13 @@ pub fn finish_tcp_syn_v4(
     options: [u8; 40],
     optlen: u8,
 ) -> Result<(), TcpSynError> {
+    // A short read would leave `optlen` below the declared length, shrinking both the
+    // option layout and `tot_hdr` relative to what huginn-net derives from `doff`.
+    if usize::from(optlen) != declared_optlen(tcp) {
+        increment_syn_malformed_v4();
+        return Err(TcpSynError::TruncatedOptions);
+    }
+
     let tick = read_and_increment_syn_counter();
     let quirks = compute_quirks_v4(ip, tcp);
 
@@ -85,10 +101,7 @@ pub fn finish_tcp_syn_v4(
 
 #[allow(unsafe_code)]
 pub fn handle_tcp_syn_v6(ctx: &XdpContext, ip6: &Ip6Hdr, tcp: &TcpHdr) -> Result<(), TcpSynError> {
-    let tcp_hdr_len = usize::from(tcp.doff()).saturating_mul(4);
-    let declared_optlen = tcp_hdr_len
-        .saturating_sub(mem::size_of::<TcpHdr>())
-        .min(TCPOPT_MAXLEN);
+    let declared_optlen = declared_optlen(tcp);
 
     let opts_ptr = unsafe { (tcp as *const TcpHdr as *const u8).add(mem::size_of::<TcpHdr>()) };
     let data_end = ctx.data_end();
@@ -115,6 +128,12 @@ pub fn finish_tcp_syn_v6(
     options: [u8; 40],
     optlen: u8,
 ) -> Result<(), TcpSynError> {
+    // See `finish_tcp_syn_v4`: a partial option read would desync `tot_hdr` from `doff`.
+    if usize::from(optlen) != declared_optlen(tcp) {
+        increment_syn_malformed_v6();
+        return Err(TcpSynError::TruncatedOptions);
+    }
+
     let tick = read_and_increment_syn_counter();
     let quirks = compute_quirks_v6(ip6, tcp);
 

@@ -16,7 +16,7 @@ fn ip4(frag_off: u16, id: u16, tos: u8) -> Ip4Hdr {
     Ip4Hdr {
         version_ihl: 0x45,
         tos,
-        tot_len: 60,
+        tot_len: 60_u16.to_be(),
         id,
         frag_off,
         ttl: 64,
@@ -29,10 +29,14 @@ fn ip4(frag_off: u16, id: u16, tos: u8) -> Ip4Hdr {
 
 /// Baseline IPv6 header. `priority_version` encodes version=6 + tc_high.
 fn ip6(priority_version: u8, flow_lbl_0: u8) -> Ip6Hdr {
+    ip6_with_flow(priority_version, [flow_lbl_0, 0, 0])
+}
+
+fn ip6_with_flow(priority_version: u8, flow_lbl: [u8; 3]) -> Ip6Hdr {
     Ip6Hdr {
         priority_version,
-        flow_lbl: [flow_lbl_0, 0, 0],
-        payload_len: 40,
+        flow_lbl,
+        payload_len: 40_u16.to_be(),
         nexthdr: 6,
         hop_limit: 64,
         saddr: [0u8; 16],
@@ -185,6 +189,15 @@ fn v4_urg_flag() {
 }
 
 #[test]
+fn v4_urg_flag_with_nonzero_ptr_excludes_uptr() {
+    // p0f: when URG is set, only urgf+ — not uptr+ even if urg_ptr != 0.
+    let t = tcp(0x0200 | 0x00A0 | 0x2000, 0, 0, 1);
+    let q = compute_v4(&ip4(IP_DF, 1, 0), &t);
+    assert_ne!(q & quirk_bits::URG, 0);
+    assert_eq!(q & quirk_bits::NONZERO_URG, 0);
+}
+
+#[test]
 fn v4_push_flag() {
     // PSH flag = bit 11 = 0x0800
     let t = tcp(0x0200 | 0x00A0 | 0x0800, 0, 0, 0);
@@ -271,4 +284,72 @@ fn v6_clean_syn_has_no_quirks() {
     let t = tcp(0x0200 | 0x00A0, 1, 0, 0);
     let q = compute_v6(&ip6(0x60, 0x00), &t);
     assert_eq!(q, 0, "clean IPv6 SYN should produce no quirks, got {q:#010x}");
+}
+
+#[test]
+fn v6_flow_label_sets_flow() {
+    // flow_lbl[0] low nibble = high 4 bits of the 20-bit label.
+    let q = compute_v6(&ip6_with_flow(0x60, [0x01, 0, 0]), &syn_tcp());
+    assert_ne!(q & quirk_bits::FLOW, 0);
+}
+
+#[test]
+fn v6_flow_label_mid_byte_sets_flow() {
+    let q = compute_v6(&ip6_with_flow(0x60, [0x00, 0x01, 0]), &syn_tcp());
+    assert_ne!(q & quirk_bits::FLOW, 0);
+}
+
+#[test]
+fn v6_zero_flow_label_no_flow_quirk() {
+    // tc nibble in high half of flow_lbl[0] must not count as flow label.
+    let q = compute_v6(&ip6(0x60, 0xF0), &syn_tcp());
+    assert_eq!(q & quirk_bits::FLOW, 0);
+}
+
+// ── pclass (PAYLOAD_NONZERO) ─────────────────────────────────────────────────
+
+#[test]
+fn v4_bare_syn_has_no_payload() {
+    // tot_len 60 == ihl(5)*4 + doff(10)*4.
+    let q = compute_v4(&ip4(IP_DF, 1234, 0), &syn_tcp());
+    assert_eq!(q & quirk_bits::PAYLOAD_NONZERO, 0);
+}
+
+#[test]
+fn v4_syn_with_data_sets_payload_nonzero() {
+    let mut ip = ip4(IP_DF, 1234, 0);
+    ip.tot_len = 61_u16.to_be();
+    let q = compute_v4(&ip, &syn_tcp());
+    assert_ne!(q & quirk_bits::PAYLOAD_NONZERO, 0);
+}
+
+#[test]
+fn v4_tot_len_shorter_than_headers_has_no_payload() {
+    let mut ip = ip4(IP_DF, 1234, 0);
+    ip.tot_len = 40_u16.to_be();
+    let q = compute_v4(&ip, &syn_tcp());
+    assert_eq!(q & quirk_bits::PAYLOAD_NONZERO, 0);
+}
+
+#[test]
+fn v4_zeroed_tot_len_has_no_payload() {
+    let mut ip = ip4(IP_DF, 1234, 0);
+    ip.tot_len = 0;
+    let q = compute_v4(&ip, &syn_tcp());
+    assert_eq!(q & quirk_bits::PAYLOAD_NONZERO, 0);
+}
+
+#[test]
+fn v6_bare_syn_has_no_payload() {
+    // payload_len 40 == doff(10)*4.
+    let q = compute_v6(&ip6(0x60, 0x00), &syn_tcp());
+    assert_eq!(q & quirk_bits::PAYLOAD_NONZERO, 0);
+}
+
+#[test]
+fn v6_syn_with_data_sets_payload_nonzero() {
+    let mut ip = ip6(0x60, 0x00);
+    ip.payload_len = 41_u16.to_be();
+    let q = compute_v6(&ip, &syn_tcp());
+    assert_ne!(q & quirk_bits::PAYLOAD_NONZERO, 0);
 }

@@ -92,7 +92,7 @@ fn handle_ipv4(ctx: &XdpContext, mut offset: usize) {
         return;
     }
 
-    if unsafe { !(*tcp).syn() || (*tcp).ack() } {
+    if unsafe { !(*tcp).is_bare_syn() } {
         return;
     }
 
@@ -113,8 +113,11 @@ fn handle_ipv4(ctx: &XdpContext, mut offset: usize) {
             u16::from_be(tcp_ref.source),
             u16::from_be(tcp_ref.dest)
         ),
-        Err(_) if lvl >= tcp_syn::level::WARN => {
+        Err(tcp_syn::TcpSynError::MapInsertFailed) if lvl >= tcp_syn::level::WARN => {
             warn!(ctx, "xdp: TCP SYN v4 map insert failed (LRU full?)")
+        }
+        Err(tcp_syn::TcpSynError::TruncatedOptions) if lvl >= tcp_syn::level::DEBUG => {
+            debug!(ctx, "xdp: TCP SYN v4 options truncated; not fingerprinted")
         }
         _ => {}
     }
@@ -158,7 +161,7 @@ fn handle_ipv6(ctx: &XdpContext, mut offset: usize) {
         return;
     }
 
-    if unsafe { !(*tcp).syn() || (*tcp).ack() } {
+    if unsafe { !(*tcp).is_bare_syn() } {
         return;
     }
 
@@ -179,8 +182,11 @@ fn handle_ipv6(ctx: &XdpContext, mut offset: usize) {
             u16::from_be(tcp_ref.source),
             u16::from_be(tcp_ref.dest)
         ),
-        Err(_) if lvl >= tcp_syn::level::WARN => {
+        Err(tcp_syn::TcpSynError::MapInsertFailed) if lvl >= tcp_syn::level::WARN => {
             warn!(ctx, "xdp: TCP SYN v6 map insert failed (LRU full?)")
+        }
+        Err(tcp_syn::TcpSynError::TruncatedOptions) if lvl >= tcp_syn::level::DEBUG => {
+            debug!(ctx, "xdp: TCP SYN v6 options truncated; not fingerprinted")
         }
         _ => {}
     }

@@ -1,8 +1,7 @@
 use huginn_net_tcp::syn_options::{parse_options_raw, ParsedTcpOptions};
-use huginn_net_tcp::tcp::{IpVersion, PayloadSize, TcpOption};
-use huginn_net_tcp::tcp::{Quirk, Ttl, WindowSize};
+use huginn_net_tcp::tcp::{IpVersion, PayloadSize, Quirk, QuirkSet, Ttl};
+use huginn_net_tcp::ttl;
 use huginn_net_tcp::TcpObservation;
-use huginn_net_tcp::{ttl, window_size};
 use tracing::warn;
 
 pub use huginn_ebpf_common::{quirk_bits, SynRawDataV4, SynRawDataV6};
@@ -37,9 +36,13 @@ fn scan_option_quirks(opts: &[u8]) -> OptionQuirks {
                 let Some(option_data) = data.get(..data_len) else {
                     break;
                 };
-                if kind == 8 && len == 10 {
-                    if let (Some(v), Some(e)) = (option_data.get(..4), option_data.get(4..8)) {
+                // huginn-net gates on the payload length (>= 4 / >= 8), not on the
+                // declared option length, so an off-spec TS length still yields ts1-/ts2+.
+                if kind == 8 {
+                    if let Some(v) = option_data.get(..4) {
                         ts_val = Some(u32::from_be_bytes([v[0], v[1], v[2], v[3]]));
+                    }
+                    if let Some(e) = option_data.get(4..8) {
                         ts_ecr = Some(u32::from_be_bytes([e[0], e[1], e[2], e[3]]));
                     }
                 }
@@ -54,44 +57,81 @@ fn scan_option_quirks(opts: &[u8]) -> OptionQuirks {
     OptionQuirks { ts_val, ts_ecr, trailing_nonzero: false }
 }
 
-fn decode_quirks(bits: u32) -> Vec<Quirk> {
-    let mut v = Vec::new();
+fn decode_quirks(bits: u32) -> QuirkSet {
+    let mut set = QuirkSet::EMPTY;
     if bits & quirk_bits::DF != 0 {
-        v.push(Quirk::Df);
+        set.insert(Quirk::Df);
     }
     if bits & quirk_bits::NONZERO_ID != 0 {
-        v.push(Quirk::NonZeroID);
+        set.insert(Quirk::NonZeroID);
     }
     if bits & quirk_bits::ZERO_ID != 0 {
-        v.push(Quirk::ZeroID);
+        set.insert(Quirk::ZeroID);
     }
     if bits & quirk_bits::MUST_BE_ZERO != 0 {
-        v.push(Quirk::MustBeZero);
+        set.insert(Quirk::MustBeZero);
     }
     if bits & quirk_bits::ECN != 0 {
-        v.push(Quirk::Ecn);
+        set.insert(Quirk::Ecn);
     }
     if bits & quirk_bits::SEQ_ZERO != 0 {
-        v.push(Quirk::SeqNumZero);
+        set.insert(Quirk::SeqNumZero);
     }
     if bits & quirk_bits::ACK_NONZERO != 0 {
-        v.push(Quirk::AckNumNonZero);
+        set.insert(Quirk::AckNumNonZero);
     }
     if bits & quirk_bits::NONZERO_URG != 0 {
-        v.push(Quirk::NonZeroURG);
+        set.insert(Quirk::NonZeroURG);
     }
     if bits & quirk_bits::URG != 0 {
-        v.push(Quirk::Urg);
+        set.insert(Quirk::Urg);
     }
     if bits & quirk_bits::PUSH != 0 {
-        v.push(Quirk::Push);
+        set.insert(Quirk::Push);
     }
-    v
+    if bits & quirk_bits::FLOW != 0 {
+        set.insert(Quirk::FlowID);
+    }
+    set
 }
 
+fn apply_option_quirks(quirks: &mut QuirkSet, valid_opts: &[u8], wscale: Option<u8>) {
+    if wscale.map(|ws| ws > 14).unwrap_or(false) {
+        quirks.insert(Quirk::ExcessiveWindowScaling);
+    }
+
+    let oq: OptionQuirks = scan_option_quirks(valid_opts);
+    if oq.ts_val == Some(0) {
+        quirks.insert(Quirk::OwnTimestampZero);
+    }
+    if oq.ts_ecr.map(|v| v != 0).unwrap_or(false) {
+        quirks.insert(Quirk::PeerTimestampNonZero);
+    }
+    if oq.trailing_nonzero {
+        quirks.insert(Quirk::TrailinigNonZero);
+    }
+}
+
+/// DSCP from the IP ToS / traffic-class byte (bits 2–7).
+fn dscp_from_tos(ip_tos: u8) -> u8 {
+    ip_tos.wrapping_shr(2)
+}
+
+fn decode_pclass(bits: u32) -> PayloadSize {
+    if bits & quirk_bits::PAYLOAD_NONZERO != 0 {
+        PayloadSize::NonZero
+    } else {
+        PayloadSize::Zero
+    }
+}
+
+/// Deliberate deviation from huginn-net: its `visit_tcp` keeps the partial layout and
+/// still emits a signature when the options are malformed. Emitting nothing avoids
+/// injecting a header whose signature cannot match any database entry.
 pub fn parse_syn_v6(raw: &SynRawDataV6) -> Option<TcpObservation> {
     let window_host = u16::from_be(raw.window);
-    let valid_opts = &raw.options[..usize::from(raw.optlen.min(40))];
+    let optlen = raw.optlen.min(40);
+    let valid_opts = &raw.options[..usize::from(optlen)];
 
     let parsed: ParsedTcpOptions = parse_options_raw(valid_opts);
     if parsed.malformed {
@@ -104,49 +144,33 @@ pub fn parse_syn_v6(raw: &SynRawDataV6) -> Option<TcpObservation> {
     }
 
     let ittl: Ttl = ttl::calculate_ttl(raw.ip_ttl);
-    // IPv6 fixed header is 40 bytes; no IP options.
-    let ip_plus_tcp: u16 = 60;
-    let wsize: WindowSize = window_size::detect_win_multiplicator(
-        window_host,
-        parsed.mss.unwrap_or(0),
-        ip_plus_tcp,
-        parsed.olayout.contains(&TcpOption::TS),
-        &IpVersion::V6,
-    );
+    // IPv6 fixed header (40) + TCP header including options (20 + optlen).
+    let tot_hdr = 40_u16.saturating_add(20).saturating_add(u16::from(optlen));
 
-    let mut quirks: Vec<Quirk> = decode_quirks(raw.quirks);
-
-    if parsed.wscale.map(|ws| ws > 14).unwrap_or(false) {
-        quirks.push(Quirk::ExcessiveWindowScaling);
-    }
-
-    let oq: OptionQuirks = scan_option_quirks(valid_opts);
-    if oq.ts_val == Some(0) {
-        quirks.push(Quirk::OwnTimestampZero);
-    }
-    if oq.ts_ecr.map(|v| v != 0).unwrap_or(false) {
-        quirks.push(Quirk::PeerTimestampNonZero);
-    }
-    if oq.trailing_nonzero {
-        quirks.push(Quirk::TrailinigNonZero);
-    }
+    let mut quirks = decode_quirks(raw.quirks);
+    apply_option_quirks(&mut quirks, valid_opts, parsed.wscale);
 
     Some(TcpObservation {
         version: IpVersion::V6,
         ittl,
         olen: 0,
         mss: parsed.mss,
-        wsize,
+        wsize: window_host,
+        tot_hdr,
         wscale: parsed.wscale,
         olayout: parsed.olayout,
         quirks,
-        pclass: PayloadSize::Zero,
+        pclass: decode_pclass(raw.quirks),
+        peer_mss: None,
+        tos: dscp_from_tos(raw.ip_tos),
     })
 }
 
+/// See [`parse_syn_v6`] for the malformed-options behaviour.
 pub fn parse_syn_v4(raw: &SynRawDataV4) -> Option<TcpObservation> {
     let window_host = u16::from_be(raw.window);
-    let valid_opts = &raw.options[..usize::from(raw.optlen.min(40))];
+    let optlen = raw.optlen.min(40);
+    let valid_opts = &raw.options[..usize::from(optlen)];
 
     let parsed: ParsedTcpOptions = parse_options_raw(valid_opts);
     if parsed.malformed {
@@ -159,43 +183,27 @@ pub fn parse_syn_v4(raw: &SynRawDataV4) -> Option<TcpObservation> {
     }
 
     let ittl: Ttl = ttl::calculate_ttl(raw.ip_ttl);
-    let ip_plus_tcp = 20_u16
+    // IP header (20 + ip_olen) + TCP header including options (20 + optlen).
+    let tot_hdr = 20_u16
         .saturating_add(u16::from(raw.ip_olen))
-        .saturating_add(20);
-    let wsize: WindowSize = window_size::detect_win_multiplicator(
-        window_host,
-        parsed.mss.unwrap_or(0),
-        ip_plus_tcp,
-        parsed.olayout.contains(&TcpOption::TS),
-        &IpVersion::V4,
-    );
+        .saturating_add(20)
+        .saturating_add(u16::from(optlen));
 
-    let mut quirks: Vec<Quirk> = decode_quirks(raw.quirks);
-
-    if parsed.wscale.map(|ws| ws > 14).unwrap_or(false) {
-        quirks.push(Quirk::ExcessiveWindowScaling);
-    }
-
-    let oq: OptionQuirks = scan_option_quirks(valid_opts);
-    if oq.ts_val == Some(0) {
-        quirks.push(Quirk::OwnTimestampZero);
-    }
-    if oq.ts_ecr.map(|v| v != 0).unwrap_or(false) {
-        quirks.push(Quirk::PeerTimestampNonZero);
-    }
-    if oq.trailing_nonzero {
-        quirks.push(Quirk::TrailinigNonZero);
-    }
+    let mut quirks = decode_quirks(raw.quirks);
+    apply_option_quirks(&mut quirks, valid_opts, parsed.wscale);
 
     Some(TcpObservation {
         version: IpVersion::V4,
         ittl,
         olen: raw.ip_olen,
         mss: parsed.mss,
-        wsize,
+        wsize: window_host,
+        tot_hdr,
         wscale: parsed.wscale,
         olayout: parsed.olayout,
         quirks,
-        pclass: PayloadSize::Zero,
+        pclass: decode_pclass(raw.quirks),
+        peer_mss: None,
+        tos: dscp_from_tos(raw.ip_tos),
     })
 }

@@ -1,4 +1,7 @@
 //! Quirk bitmask constants and computation for TCP SYN fingerprinting (p0f-style).
+//!
+//! The bitmask also carries `PAYLOAD_NONZERO`, which is not a quirk but the p0f
+//! `pclass` field. It rides along here so the BPF map value layout stays fixed.
 
 pub const DF: u32 = 1 << 0;
 pub const NONZERO_ID: u32 = 1 << 1;
@@ -11,6 +14,10 @@ pub const NONZERO_URG: u32 = 1 << 7;
 pub const URG: u32 = 1 << 8;
 pub const PUSH: u32 = 1 << 9;
 pub const NS: u32 = 1 << 10; // ECN Nonce Sum (RFC 3540)
+pub const FLOW: u32 = 1 << 11; // IPv6 non-zero flow label (p0f `flow`)
+
+/// Not a quirk: the SYN carries payload (TCP Fast Open), i.e. p0f `pclass` == `+`.
+pub const PAYLOAD_NONZERO: u32 = 1 << 12;
 
 use crate::constants::{IP_DF, IP_RF, IP_TOS_CE, IP_TOS_ECT};
 use crate::headers::{Ip4Hdr, Ip6Hdr, TcpHdr};
@@ -46,17 +53,25 @@ pub fn compute_v4(ip: &Ip4Hdr, tcp: &TcpHdr) -> u32 {
     if tcp.ack_seq != 0 {
         quirks |= ACK_NONZERO;
     }
-    if tcp.urg_ptr != 0 {
-        quirks |= NONZERO_URG;
-    }
+    // p0f / huginn-net: URG flag and uptr+ are mutually exclusive.
     if tcp.urg() {
         quirks |= URG;
+    } else if tcp.urg_ptr != 0 {
+        quirks |= NONZERO_URG;
     }
     if tcp.psh() {
         quirks |= PUSH;
     }
     if tcp.ns() {
         quirks |= NS;
+    }
+    // p0f `pclass`: a SYN with data (TCP Fast Open) is `+`. A `tot_len` shorter than
+    // the headers (or zeroed by offload) falls back to "no payload".
+    let hdr_bytes = u16::from(ip.ihl())
+        .saturating_mul(4)
+        .saturating_add(u16::from(tcp.doff()).saturating_mul(4));
+    if u16::from_be(ip.tot_len) > hdr_bytes {
+        quirks |= PAYLOAD_NONZERO;
     }
     quirks
 }
@@ -65,8 +80,8 @@ pub fn compute_v4(ip: &Ip4Hdr, tcp: &TcpHdr) -> u32 {
 ///
 /// IPv6-specific: `DF`, `NONZERO_ID`, `ZERO_ID`, `MUST_BE_ZERO` are never set
 /// (they depend on IPv4 `id`/`frag_off` fields absent in IPv6). `ECN` is derived
-/// from the traffic class byte and TCP ECE/CWR. All TCP-level quirks are identical
-/// to the IPv4 path.
+/// from the traffic class byte and TCP ECE/CWR. `FLOW` is set when the flow label
+/// is non-zero. All TCP-level quirks are identical to the IPv4 path.
 ///
 /// Pure function: no packet or map access. Safe to call on host with mock headers.
 #[inline(always)]
@@ -74,6 +89,9 @@ pub fn compute_v6(ip6: &Ip6Hdr, tcp: &TcpHdr) -> u32 {
     let mut quirks: u32 = 0;
     let tc = ip6.traffic_class();
 
+    if ip6.flow_label_nonzero() {
+        quirks |= FLOW;
+    }
     if tcp.ece() || tcp.cwr() || (tc & (IP_TOS_CE | IP_TOS_ECT) != 0) {
         quirks |= ECN;
     }
@@ -83,17 +101,22 @@ pub fn compute_v6(ip6: &Ip6Hdr, tcp: &TcpHdr) -> u32 {
     if tcp.ack_seq != 0 {
         quirks |= ACK_NONZERO;
     }
-    if tcp.urg_ptr != 0 {
-        quirks |= NONZERO_URG;
-    }
+    // p0f / huginn-net: URG flag and uptr+ are mutually exclusive.
     if tcp.urg() {
         quirks |= URG;
+    } else if tcp.urg_ptr != 0 {
+        quirks |= NONZERO_URG;
     }
     if tcp.psh() {
         quirks |= PUSH;
     }
     if tcp.ns() {
         quirks |= NS;
+    }
+    // p0f `pclass`. Only nexthdr == TCP is captured, so `payload_len` holds no
+    // extension headers and the TCP header is all that precedes the payload.
+    if u16::from_be(ip6.payload_len) > u16::from(tcp.doff()).saturating_mul(4) {
+        quirks |= PAYLOAD_NONZERO;
     }
     quirks
 }

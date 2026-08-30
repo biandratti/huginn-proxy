@@ -11,7 +11,7 @@
 //! offset 10: ip_ttl    u8
 //! offset 11: ip_olen   u8   (IP options length: ihl*4 - 20)
 //! offset 12: options   [u8; 40]
-//! offset 52: quirks    u32  (quirk_bits bitmask)
+//! offset 52: quirks    u32  (quirk_bits bitmask; also carries PAYLOAD_NONZERO -> pclass)
 //! offset 56: tick      u64  (global SYN counter at capture time)
 //! total: 64 bytes
 //! ```

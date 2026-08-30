@@ -106,10 +106,28 @@ impl TcpHdr {
     pub fn cwr(&self) -> bool {
         (self.offset_flags >> 15) & 1 != 0
     }
+    #[inline(always)]
+    pub fn fin(&self) -> bool {
+        (self.offset_flags >> 8) & 1 != 0
+    }
+    #[inline(always)]
+    pub fn rst(&self) -> bool {
+        (self.offset_flags >> 10) & 1 != 0
+    }
     /// ECN Nonce Sum (RFC 3540), bit 3 of the low byte.
     #[inline(always)]
     pub fn ns(&self) -> bool {
         (self.offset_flags >> 3) & 1 != 0
+    }
+
+    /// p0f capture predicate: `flags & (SYN|ACK|FIN|RST) == SYN`.
+    ///
+    /// Mirrors huginn-net's `is_valid` + `is_fingerprintable`, which discard the
+    /// SYN+FIN / SYN+RST combinations that scanners emit. Without the FIN/RST
+    /// check a crafted packet yields a fingerprint the reference never produces.
+    #[inline(always)]
+    pub fn is_bare_syn(&self) -> bool {
+        self.syn() && !self.ack() && !self.fin() && !self.rst()
     }
 }
 
@@ -143,5 +161,14 @@ impl Ip6Hdr {
     #[inline(always)]
     pub fn traffic_class(&self) -> u8 {
         ((self.priority_version & 0x0F) << 4) | ((self.flow_lbl[0] & 0xF0) >> 4)
+    }
+
+    /// Whether the 20-bit IPv6 flow label is non-zero (p0f `flow` quirk).
+    ///
+    /// Layout: `flow_lbl[0]` low nibble is the high 4 bits of the label; `[1]` and `[2]`
+    /// are the remaining 16 bits.
+    #[inline(always)]
+    pub fn flow_label_nonzero(&self) -> bool {
+        (self.flow_lbl[0] & 0x0F) != 0 || self.flow_lbl[1] != 0 || self.flow_lbl[2] != 0
     }
 }
