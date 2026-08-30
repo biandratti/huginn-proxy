@@ -32,14 +32,26 @@ fn make_syn_raw_with_quirks(
     options: [u8; 40],
     quirks: u32,
 ) -> SynRawDataV4 {
+    make_syn_raw_full(window, ip_ttl, 0, 0, optlen, options, quirks)
+}
+
+fn make_syn_raw_full(
+    window: u16,
+    ip_ttl: u8,
+    ip_tos: u8,
+    ip_olen: u8,
+    optlen: u8,
+    options: [u8; 40],
+    quirks: u32,
+) -> SynRawDataV4 {
     SynRawDataV4 {
         src_addr: 0,
         src_port: 0,
         window,
         optlen,
-        ip_tos: 0,
+        ip_tos,
         ip_ttl,
-        ip_olen: 0,
+        ip_olen,
         options,
         quirks,
         tick: 0,
@@ -146,12 +158,55 @@ fn test_all_quirk_bits_roundtrip() -> TestResult {
         let raw = make_syn_raw_with_quirks(65535u16.to_be(), 64, optlen, options, *bit);
         let obs = parse_syn_v4(&raw).ok_or("parse_syn_v4 returned None for valid options")?;
         assert!(
-            obs.quirks.contains(expected_quirk),
+            obs.quirks.contains(*expected_quirk),
             "quirk bit 0x{:x} should decode to {:?}, got quirks: {:?}",
             bit,
             expected_quirk,
             obs.quirks
         );
     }
+    Ok(())
+}
+
+#[test]
+fn test_raw_wsize_and_tot_hdr() -> TestResult {
+    let (options, optlen) = make_test_options();
+    let ip_olen = 0u8;
+    let raw = make_syn_raw_full(8192u16.to_be(), 64, 0, ip_olen, optlen, options, 0);
+    let obs = parse_syn_v4(&raw).ok_or("parse_syn_v4 returned None")?;
+
+    assert_eq!(obs.wsize, 8192, "wsize must be host-endian raw window");
+    assert_eq!(
+        obs.tot_hdr,
+        20u16
+            .saturating_add(u16::from(ip_olen))
+            .saturating_add(20)
+            .saturating_add(u16::from(optlen)),
+        "tot_hdr must include IP header + TCP header with options"
+    );
+    assert_eq!(obs.peer_mss, None, "SYN observations have no peer_mss");
+
+    let wsize_part = obs
+        .to_string()
+        .split(':')
+        .nth(4)
+        .ok_or("signature missing wsize field")?
+        .to_string();
+    // 8192 / 1460 is not exact; Display should keep the raw value or an mss*/mtu* form
+    // that does not look like a byte-swapped window.
+    assert!(
+        wsize_part.starts_with("8192,") || wsize_part.contains("mss*") || wsize_part.contains("mtu*"),
+        "unexpected wsize display field: {wsize_part}"
+    );
+    Ok(())
+}
+
+#[test]
+fn test_tos_is_dscp() -> TestResult {
+    let (options, optlen) = make_test_options();
+    // ToS 0xB8 → DSCP 0x2E (EF)
+    let raw = make_syn_raw_full(8192u16.to_be(), 64, 0xB8, 0, optlen, options, 0);
+    let obs = parse_syn_v4(&raw).ok_or("parse_syn_v4 returned None")?;
+    assert_eq!(obs.tos, 0x2E, "tos must be DSCP (ip_tos >> 2)");
     Ok(())
 }

@@ -53,8 +53,8 @@ pub mod names {
     /// Header name for TCP SYN p0f-style raw signature injection
     ///
     /// This header contains the raw TCP SYN fingerprint extracted via eBPF/XDP.
-    /// Format: `"ver:ittl:olen:mss:wsize,wscale:olayout"`
-    /// Example: `"4:64:0:1460:8192,6:mss,nop,ws,nop,nop,ts,sok"`
+    /// Format: `"ver:ittl:olen:mss:wsize,wscale:olayout:quirks:pclass"` (8 colon-separated fields)
+    /// Example: `"4:64:0:1460:mss*4,6:mss,nop,ws,nop,nop,ts,sok::0"`
     /// Only injected when the `ebpf-tcp` feature is enabled and fingerprinting is configured.
     pub const TCP_SYN: &str = "x-tcp-p0f";
 
