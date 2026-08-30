@@ -165,3 +165,16 @@ fn ip6_traffic_class_dscp46_ecn0() {
     // priority_version = 0x6B, flow_lbl[0] = 0x80
     assert_eq!(ip6_hdr(0x6B, 0x80).traffic_class(), 0xB8);
 }
+
+// ── Ip6Hdr::flow_label_nonzero ───────────────────────────────────────────────
+
+#[test]
+fn ip6_flow_label_zero() {
+    // tc nibble alone must not count as flow label.
+    assert!(!ip6_hdr(0x60, 0xF0).flow_label_nonzero());
+}
+
+#[test]
+fn ip6_flow_label_high_nibble() {
+    assert!(ip6_hdr(0x60, 0x01).flow_label_nonzero());
+}

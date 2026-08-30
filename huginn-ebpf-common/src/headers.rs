@@ -144,4 +144,13 @@ impl Ip6Hdr {
     pub fn traffic_class(&self) -> u8 {
         ((self.priority_version & 0x0F) << 4) | ((self.flow_lbl[0] & 0xF0) >> 4)
     }
+
+    /// Whether the 20-bit IPv6 flow label is non-zero (p0f `flow` quirk).
+    ///
+    /// Layout: `flow_lbl[0]` low nibble is the high 4 bits of the label; `[1]` and `[2]`
+    /// are the remaining 16 bits.
+    #[inline(always)]
+    pub fn flow_label_nonzero(&self) -> bool {
+        (self.flow_lbl[0] & 0x0F) != 0 || self.flow_lbl[1] != 0 || self.flow_lbl[2] != 0
+    }
 }

@@ -85,6 +85,9 @@ fn decode_quirks(bits: u32) -> QuirkSet {
     if bits & quirk_bits::PUSH != 0 {
         set.insert(Quirk::Push);
     }
+    if bits & quirk_bits::FLOW != 0 {
+        set.insert(Quirk::FlowID);
+    }
     set
 }
 
@@ -127,9 +130,7 @@ pub fn parse_syn_v6(raw: &SynRawDataV6) -> Option<TcpObservation> {
 
     let ittl: Ttl = ttl::calculate_ttl(raw.ip_ttl);
     // IPv6 fixed header (40) + TCP header including options (20 + optlen).
-    let tot_hdr = 40_u16
-        .saturating_add(20)
-        .saturating_add(u16::from(optlen));
+    let tot_hdr = 40_u16.saturating_add(20).saturating_add(u16::from(optlen));
 
     let mut quirks = decode_quirks(raw.quirks);
     apply_option_quirks(&mut quirks, valid_opts, parsed.wscale);

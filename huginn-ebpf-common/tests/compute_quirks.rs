@@ -29,9 +29,13 @@ fn ip4(frag_off: u16, id: u16, tos: u8) -> Ip4Hdr {
 
 /// Baseline IPv6 header. `priority_version` encodes version=6 + tc_high.
 fn ip6(priority_version: u8, flow_lbl_0: u8) -> Ip6Hdr {
+    ip6_with_flow(priority_version, [flow_lbl_0, 0, 0])
+}
+
+fn ip6_with_flow(priority_version: u8, flow_lbl: [u8; 3]) -> Ip6Hdr {
     Ip6Hdr {
         priority_version,
-        flow_lbl: [flow_lbl_0, 0, 0],
+        flow_lbl,
         payload_len: 40,
         nexthdr: 6,
         hop_limit: 64,
@@ -185,6 +189,15 @@ fn v4_urg_flag() {
 }
 
 #[test]
+fn v4_urg_flag_with_nonzero_ptr_excludes_uptr() {
+    // p0f: when URG is set, only urgf+ — not uptr+ even if urg_ptr != 0.
+    let t = tcp(0x0200 | 0x00A0 | 0x2000, 0, 0, 1);
+    let q = compute_v4(&ip4(IP_DF, 1, 0), &t);
+    assert_ne!(q & quirk_bits::URG, 0);
+    assert_eq!(q & quirk_bits::NONZERO_URG, 0);
+}
+
+#[test]
 fn v4_push_flag() {
     // PSH flag = bit 11 = 0x0800
     let t = tcp(0x0200 | 0x00A0 | 0x0800, 0, 0, 0);
@@ -271,4 +284,24 @@ fn v6_clean_syn_has_no_quirks() {
     let t = tcp(0x0200 | 0x00A0, 1, 0, 0);
     let q = compute_v6(&ip6(0x60, 0x00), &t);
     assert_eq!(q, 0, "clean IPv6 SYN should produce no quirks, got {q:#010x}");
+}
+
+#[test]
+fn v6_flow_label_sets_flow() {
+    // flow_lbl[0] low nibble = high 4 bits of the 20-bit label.
+    let q = compute_v6(&ip6_with_flow(0x60, [0x01, 0, 0]), &syn_tcp());
+    assert_ne!(q & quirk_bits::FLOW, 0);
+}
+
+#[test]
+fn v6_flow_label_mid_byte_sets_flow() {
+    let q = compute_v6(&ip6_with_flow(0x60, [0x00, 0x01, 0]), &syn_tcp());
+    assert_ne!(q & quirk_bits::FLOW, 0);
+}
+
+#[test]
+fn v6_zero_flow_label_no_flow_quirk() {
+    // tc nibble in high half of flow_lbl[0] must not count as flow label.
+    let q = compute_v6(&ip6(0x60, 0xF0), &syn_tcp());
+    assert_eq!(q & quirk_bits::FLOW, 0);
 }

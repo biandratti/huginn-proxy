@@ -1,5 +1,5 @@
-use huginn_ebpf::types::{parse_syn_v4, quirk_bits, SynRawDataV4};
-use huginn_net_tcp::tcp::Quirk;
+use huginn_ebpf::types::{parse_syn_v4, parse_syn_v6, quirk_bits, SynRawDataV4, SynRawDataV6};
+use huginn_net_tcp::tcp::{IpVersion, Quirk};
 
 type TestResult = Result<(), Box<dyn std::error::Error + Send + Sync>>;
 
@@ -52,6 +52,28 @@ fn make_syn_raw_full(
         ip_tos,
         ip_ttl,
         ip_olen,
+        options,
+        quirks,
+        tick: 0,
+    }
+}
+
+fn make_syn_raw_v6(
+    window: u16,
+    ip_ttl: u8,
+    ip_tos: u8,
+    optlen: u8,
+    options: [u8; 40],
+    quirks: u32,
+) -> SynRawDataV6 {
+    SynRawDataV6 {
+        src_addr: [0u8; 16],
+        src_port: 0,
+        window,
+        optlen,
+        ip_tos,
+        ip_ttl,
+        _pad: 0,
         options,
         quirks,
         tick: 0,
@@ -153,6 +175,7 @@ fn test_all_quirk_bits_roundtrip() -> TestResult {
         (quirk_bits::NONZERO_URG, Quirk::NonZeroURG),
         (quirk_bits::URG, Quirk::Urg),
         (quirk_bits::PUSH, Quirk::Push),
+        (quirk_bits::FLOW, Quirk::FlowID),
     ];
     for (bit, expected_quirk) in cases {
         let raw = make_syn_raw_with_quirks(65535u16.to_be(), 64, optlen, options, *bit);
@@ -195,7 +218,9 @@ fn test_raw_wsize_and_tot_hdr() -> TestResult {
     // 8192 / 1460 is not exact; Display should keep the raw value or an mss*/mtu* form
     // that does not look like a byte-swapped window.
     assert!(
-        wsize_part.starts_with("8192,") || wsize_part.contains("mss*") || wsize_part.contains("mtu*"),
+        wsize_part.starts_with("8192,")
+            || wsize_part.contains("mss*")
+            || wsize_part.contains("mtu*"),
         "unexpected wsize display field: {wsize_part}"
     );
     Ok(())
@@ -209,4 +234,40 @@ fn test_tos_is_dscp() -> TestResult {
     let obs = parse_syn_v4(&raw).ok_or("parse_syn_v4 returned None")?;
     assert_eq!(obs.tos, 0x2E, "tos must be DSCP (ip_tos >> 2)");
     Ok(())
+}
+
+#[test]
+fn test_parse_syn_v6_fields() -> TestResult {
+    let (options, optlen) = make_test_options();
+    // traffic class 0xB8 → DSCP 0x2E
+    let raw = make_syn_raw_v6(8192u16.to_be(), 64, 0xB8, optlen, options, quirk_bits::FLOW);
+    let obs = parse_syn_v6(&raw).ok_or("parse_syn_v6 returned None")?;
+
+    assert_eq!(obs.version, IpVersion::V6);
+    assert_eq!(obs.olen, 0, "IPv6 fixed-header path has no extension olen");
+    assert_eq!(
+        obs.tot_hdr,
+        40u16.saturating_add(20).saturating_add(u16::from(optlen)),
+        "tot_hdr must be IPv6 header + TCP header with options"
+    );
+    assert_eq!(obs.wsize, 8192);
+    assert_eq!(obs.tos, 0x2E);
+    assert_eq!(obs.peer_mss, None);
+    assert!(obs.quirks.contains(Quirk::FlowID));
+    assert!(!obs.quirks.contains(Quirk::Df), "IPv4-only quirks must not appear");
+
+    let sig = obs.to_string();
+    assert!(sig.starts_with("6:"), "signature must start with IPv6 version: {sig}");
+    assert!(sig.contains("flow"), "Display must include p0f flow quirk: {sig}");
+    Ok(())
+}
+
+#[test]
+fn test_parse_syn_v6_empty_options() {
+    let raw = make_syn_raw_v6(8192u16.to_be(), 128, 0, 0, [0u8; 40], 0);
+    let Some(obs) = parse_syn_v6(&raw) else {
+        panic!("parse_syn_v6 returned None for empty options");
+    };
+    assert_eq!(obs.tot_hdr, 60);
+    assert_eq!(obs.olen, 0);
 }
