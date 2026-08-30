@@ -40,11 +40,11 @@ huginn-certs = { path = "huginn-certs" }
 huginn-ebpf = { path = "huginn-ebpf" }
 huginn-ebpf-common = { path = "huginn-ebpf-common" }
 huginn-ebpf-rate-limit = { path = "huginn-ebpf-rate-limit" }
-huginn-net-http = { version = "2.0.0", features = ["akamai"] }
-huginn-net-tcp = { version = "2.0.0", features = ["syn"] }
-huginn-net-tls = { version = "2.0.0", features = ["stable-v1"] }
+huginn-net-http = { version = "2.1.0", features = ["akamai"] }
+huginn-net-tcp = { version = "2.1.0", features = ["syn"] }
+huginn-net-tls = { version = "2.1.0", features = ["stable-v1"] }
 huginn-proxy-lib = { path = "huginn-proxy-lib" }
-hyper = { version = "1.11.0", features = ["full"] }
+hyper = { version = "1.11.1", features = ["full"] }
 hyper-util = { version = "0.1.20", features = ["full"] }
 ipnet = "2.12.1"
 libc = "0.2.189"
@@ -57,7 +57,7 @@ pingora-limits = "0.8.1"
 pingora-timeout = "0.8.1"
 ppp = "2.3.0"
 prometheus = "0.14.0"
-rcgen = "0.14.9"
+rcgen = "0.14.10"
 reqwest = { version = "0.13.4", features = ["json", "http2"] }
 rustls-pki-types = "1.15.1"
 serde = { version = "1.0.229", features = ["derive"] }
