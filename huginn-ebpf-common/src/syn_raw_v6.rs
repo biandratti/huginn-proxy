@@ -12,7 +12,8 @@
 //! offset 23: _pad      u8        (always 0; ip_olen has no IPv6 equivalent)
 //! offset 24: options   [u8; 40]
 //! offset 64: quirks    u32       (quirk_bits bitmask; DF/ID quirks absent for IPv6;
-//!                                 FLOW set when flow label != 0)
+//!                                 FLOW set when flow label != 0; also carries
+//!                                 PAYLOAD_NONZERO -> pclass)
 //! offset 68: tick      u64       (global SYN counter at capture time; shared with V4)
 //! total: 76 bytes
 //! ```

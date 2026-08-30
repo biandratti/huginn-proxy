@@ -16,6 +16,7 @@ fn quirk_bits_expected_values() {
     assert_eq!(quirk_bits::PUSH, 1 << 9);
     assert_eq!(quirk_bits::NS, 1 << 10);
     assert_eq!(quirk_bits::FLOW, 1 << 11);
+    assert_eq!(quirk_bits::PAYLOAD_NONZERO, 1 << 12);
 }
 
 #[test]
@@ -33,6 +34,7 @@ fn quirk_bits_all_distinct() {
         quirk_bits::PUSH,
         quirk_bits::NS,
         quirk_bits::FLOW,
+        quirk_bits::PAYLOAD_NONZERO,
     ];
     for (i, &a) in bits.iter().enumerate() {
         for (j, &b) in bits.iter().enumerate() {

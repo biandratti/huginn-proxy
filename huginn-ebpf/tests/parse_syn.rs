@@ -1,5 +1,5 @@
 use huginn_ebpf::types::{parse_syn_v4, parse_syn_v6, quirk_bits, SynRawDataV4, SynRawDataV6};
-use huginn_net_tcp::tcp::{IpVersion, Quirk};
+use huginn_net_tcp::tcp::{IpVersion, PayloadSize, Quirk};
 
 type TestResult = Result<(), Box<dyn std::error::Error + Send + Sync>>;
 
@@ -259,6 +259,40 @@ fn test_parse_syn_v6_fields() -> TestResult {
     let sig = obs.to_string();
     assert!(sig.starts_with("6:"), "signature must start with IPv6 version: {sig}");
     assert!(sig.contains("flow"), "Display must include p0f flow quirk: {sig}");
+    Ok(())
+}
+
+/// PAYLOAD_NONZERO rides in the quirks bitmask but must decode to pclass, not a quirk.
+#[test]
+fn test_payload_nonzero_bit_sets_pclass() -> TestResult {
+    let (options, optlen) = make_test_options();
+
+    let bare = make_syn_raw_with_quirks(65535u16.to_be(), 64, optlen, options, 0);
+    let sig = parse_syn_v4(&bare)
+        .ok_or("parse_syn_v4 returned None")?
+        .to_string();
+    assert!(sig.ends_with(":0"), "SYN without data must have pclass 0: {sig}");
+
+    let with_data = make_syn_raw_with_quirks(
+        65535u16.to_be(),
+        64,
+        optlen,
+        options,
+        quirk_bits::PAYLOAD_NONZERO,
+    );
+    let obs = parse_syn_v4(&with_data).ok_or("parse_syn_v4 returned None")?;
+    assert_eq!(obs.pclass, PayloadSize::NonZero, "TFO SYN must have pclass +");
+    let sig = obs.to_string();
+    assert!(sig.ends_with(":+"), "TFO SYN must render pclass +: {sig}");
+
+    let v6 = make_syn_raw_v6(65535u16.to_be(), 64, 0, optlen, options, quirk_bits::PAYLOAD_NONZERO);
+    let obs = parse_syn_v6(&v6).ok_or("parse_syn_v6 returned None")?;
+    assert_eq!(obs.pclass, PayloadSize::NonZero);
+    assert!(
+        obs.quirks.is_empty(),
+        "PAYLOAD_NONZERO must not decode as a quirk, got: {:?}",
+        obs.quirks
+    );
     Ok(())
 }
 

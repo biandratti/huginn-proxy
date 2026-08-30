@@ -113,6 +113,14 @@ fn dscp_from_tos(ip_tos: u8) -> u8 {
     ip_tos.wrapping_shr(2)
 }
 
+fn decode_pclass(bits: u32) -> PayloadSize {
+    if bits & quirk_bits::PAYLOAD_NONZERO != 0 {
+        PayloadSize::NonZero
+    } else {
+        PayloadSize::Zero
+    }
+}
+
 pub fn parse_syn_v6(raw: &SynRawDataV6) -> Option<TcpObservation> {
     let window_host = u16::from_be(raw.window);
     let optlen = raw.optlen.min(40);
@@ -145,7 +153,7 @@ pub fn parse_syn_v6(raw: &SynRawDataV6) -> Option<TcpObservation> {
         wscale: parsed.wscale,
         olayout: parsed.olayout,
         quirks,
-        pclass: PayloadSize::Zero,
+        pclass: decode_pclass(raw.quirks),
         peer_mss: None,
         tos: dscp_from_tos(raw.ip_tos),
     })
@@ -186,7 +194,7 @@ pub fn parse_syn_v4(raw: &SynRawDataV4) -> Option<TcpObservation> {
         wscale: parsed.wscale,
         olayout: parsed.olayout,
         quirks,
-        pclass: PayloadSize::Zero,
+        pclass: decode_pclass(raw.quirks),
         peer_mss: None,
         tos: dscp_from_tos(raw.ip_tos),
     })

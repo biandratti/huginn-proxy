@@ -1,4 +1,7 @@
 //! Quirk bitmask constants and computation for TCP SYN fingerprinting (p0f-style).
+//!
+//! The bitmask also carries `PAYLOAD_NONZERO`, which is not a quirk but the p0f
+//! `pclass` field. It rides along here so the BPF map value layout stays fixed.
 
 pub const DF: u32 = 1 << 0;
 pub const NONZERO_ID: u32 = 1 << 1;
@@ -12,6 +15,9 @@ pub const URG: u32 = 1 << 8;
 pub const PUSH: u32 = 1 << 9;
 pub const NS: u32 = 1 << 10; // ECN Nonce Sum (RFC 3540)
 pub const FLOW: u32 = 1 << 11; // IPv6 non-zero flow label (p0f `flow`)
+
+/// Not a quirk: the SYN carries payload (TCP Fast Open), i.e. p0f `pclass` == `+`.
+pub const PAYLOAD_NONZERO: u32 = 1 << 12;
 
 use crate::constants::{IP_DF, IP_RF, IP_TOS_CE, IP_TOS_ECT};
 use crate::headers::{Ip4Hdr, Ip6Hdr, TcpHdr};
@@ -59,6 +65,14 @@ pub fn compute_v4(ip: &Ip4Hdr, tcp: &TcpHdr) -> u32 {
     if tcp.ns() {
         quirks |= NS;
     }
+    // p0f `pclass`: a SYN with data (TCP Fast Open) is `+`. A `tot_len` shorter than
+    // the headers (or zeroed by offload) falls back to "no payload".
+    let hdr_bytes = u16::from(ip.ihl())
+        .saturating_mul(4)
+        .saturating_add(u16::from(tcp.doff()).saturating_mul(4));
+    if u16::from_be(ip.tot_len) > hdr_bytes {
+        quirks |= PAYLOAD_NONZERO;
+    }
     quirks
 }
 
@@ -98,6 +112,11 @@ pub fn compute_v6(ip6: &Ip6Hdr, tcp: &TcpHdr) -> u32 {
     }
     if tcp.ns() {
         quirks |= NS;
+    }
+    // p0f `pclass`. Only nexthdr == TCP is captured, so `payload_len` holds no
+    // extension headers and the TCP header is all that precedes the payload.
+    if u16::from_be(ip6.payload_len) > u16::from(tcp.doff()).saturating_mul(4) {
+        quirks |= PAYLOAD_NONZERO;
     }
     quirks
 }
