@@ -80,6 +80,37 @@ fn tcp_ack_flag() {
 }
 
 #[test]
+fn tcp_fin_flag() {
+    // FIN = bit 8 = 0x0100
+    assert!(tcp_hdr(0x0100).fin());
+    assert!(!tcp_hdr(0x0000).fin());
+    assert!(!tcp_hdr(0x0200).fin()); // SYN only
+}
+
+#[test]
+fn tcp_rst_flag() {
+    // RST = bit 10 = 0x0400
+    assert!(tcp_hdr(0x0400).rst());
+    assert!(!tcp_hdr(0x0000).rst());
+}
+
+/// Mirrors huginn-net `is_valid` + `is_fingerprintable`: only a bare SYN is captured.
+#[test]
+fn tcp_is_bare_syn_matches_reference_filter() {
+    assert!(tcp_hdr(0x0200).is_bare_syn(), "plain SYN must be captured");
+    // PSH/URG/ECE/CWR are outside p0f's tcp_type mask, so they stay fingerprintable.
+    assert!(tcp_hdr(0x0200 | 0x0800).is_bare_syn(), "SYN+PSH must be captured");
+    assert!(tcp_hdr(0x0200 | 0x2000).is_bare_syn(), "SYN+URG must be captured");
+    assert!(tcp_hdr(0x0200 | 0xC000).is_bare_syn(), "SYN+ECE+CWR must be captured");
+
+    assert!(!tcp_hdr(0x0000).is_bare_syn(), "no SYN");
+    assert!(!tcp_hdr(0x1200).is_bare_syn(), "SYN+ACK is the server side");
+    assert!(!tcp_hdr(0x0300).is_bare_syn(), "SYN+FIN is rejected by huginn-net");
+    assert!(!tcp_hdr(0x0600).is_bare_syn(), "SYN+RST is rejected by huginn-net");
+    assert!(!tcp_hdr(0x0700).is_bare_syn(), "SYN+FIN+RST is rejected by huginn-net");
+}
+
+#[test]
 fn tcp_syn_ack_combined() {
     // SYN+ACK = 0x1200
     let h = tcp_hdr(0x1200);

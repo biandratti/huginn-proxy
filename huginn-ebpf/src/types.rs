@@ -36,9 +36,13 @@ fn scan_option_quirks(opts: &[u8]) -> OptionQuirks {
                 let Some(option_data) = data.get(..data_len) else {
                     break;
                 };
-                if kind == 8 && len == 10 {
-                    if let (Some(v), Some(e)) = (option_data.get(..4), option_data.get(4..8)) {
+                // huginn-net gates on the payload length (>= 4 / >= 8), not on the
+                // declared option length, so an off-spec TS length still yields ts1-/ts2+.
+                if kind == 8 {
+                    if let Some(v) = option_data.get(..4) {
                         ts_val = Some(u32::from_be_bytes([v[0], v[1], v[2], v[3]]));
+                    }
+                    if let Some(e) = option_data.get(4..8) {
                         ts_ecr = Some(u32::from_be_bytes([e[0], e[1], e[2], e[3]]));
                     }
                 }
@@ -121,6 +125,9 @@ fn decode_pclass(bits: u32) -> PayloadSize {
     }
 }
 
+/// Deliberate deviation from huginn-net: its `visit_tcp` keeps the partial layout and
+/// still emits a signature when the options are malformed. Emitting nothing avoids
+/// injecting a header whose signature cannot match any database entry.
 pub fn parse_syn_v6(raw: &SynRawDataV6) -> Option<TcpObservation> {
     let window_host = u16::from_be(raw.window);
     let optlen = raw.optlen.min(40);
@@ -159,6 +166,7 @@ pub fn parse_syn_v6(raw: &SynRawDataV6) -> Option<TcpObservation> {
     })
 }
 
+/// See [`parse_syn_v6`] for the malformed-options behaviour.
 pub fn parse_syn_v4(raw: &SynRawDataV4) -> Option<TcpObservation> {
     let window_host = u16::from_be(raw.window);
     let optlen = raw.optlen.min(40);

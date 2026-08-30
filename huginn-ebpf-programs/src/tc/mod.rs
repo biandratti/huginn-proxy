@@ -81,7 +81,7 @@ fn handle_ipv4(ctx: &TcContext, offset: usize) {
         return;
     }
 
-    if !tcp.syn() || tcp.ack() {
+    if !tcp.is_bare_syn() {
         return;
     }
 
@@ -101,8 +101,11 @@ fn handle_ipv4(ctx: &TcContext, offset: usize) {
             u16::from_be(tcp.source),
             u16::from_be(tcp.dest)
         ),
-        Err(_) if lvl >= tcp_syn::level::WARN => {
+        Err(tcp_syn::TcpSynError::MapInsertFailed) if lvl >= tcp_syn::level::WARN => {
             warn!(ctx, "tc: TCP SYN v4 map insert failed (LRU full?)")
+        }
+        Err(tcp_syn::TcpSynError::TruncatedOptions) if lvl >= tcp_syn::level::DEBUG => {
+            debug!(ctx, "tc: TCP SYN v4 options truncated; not fingerprinted")
         }
         _ => {}
     }
@@ -140,7 +143,7 @@ fn handle_ipv6(ctx: &TcContext, offset: usize) {
         return;
     }
 
-    if !tcp.syn() || tcp.ack() {
+    if !tcp.is_bare_syn() {
         return;
     }
 
@@ -160,8 +163,11 @@ fn handle_ipv6(ctx: &TcContext, offset: usize) {
             u16::from_be(tcp.source),
             u16::from_be(tcp.dest)
         ),
-        Err(_) if lvl >= tcp_syn::level::WARN => {
+        Err(tcp_syn::TcpSynError::MapInsertFailed) if lvl >= tcp_syn::level::WARN => {
             warn!(ctx, "tc: TCP SYN v6 map insert failed (LRU full?)")
+        }
+        Err(tcp_syn::TcpSynError::TruncatedOptions) if lvl >= tcp_syn::level::DEBUG => {
+            debug!(ctx, "tc: TCP SYN v6 options truncated; not fingerprinted")
         }
         _ => {}
     }

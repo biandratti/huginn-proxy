@@ -106,10 +106,28 @@ impl TcpHdr {
     pub fn cwr(&self) -> bool {
         (self.offset_flags >> 15) & 1 != 0
     }
+    #[inline(always)]
+    pub fn fin(&self) -> bool {
+        (self.offset_flags >> 8) & 1 != 0
+    }
+    #[inline(always)]
+    pub fn rst(&self) -> bool {
+        (self.offset_flags >> 10) & 1 != 0
+    }
     /// ECN Nonce Sum (RFC 3540), bit 3 of the low byte.
     #[inline(always)]
     pub fn ns(&self) -> bool {
         (self.offset_flags >> 3) & 1 != 0
+    }
+
+    /// p0f capture predicate: `flags & (SYN|ACK|FIN|RST) == SYN`.
+    ///
+    /// Mirrors huginn-net's `is_valid` + `is_fingerprintable`, which discard the
+    /// SYN+FIN / SYN+RST combinations that scanners emit. Without the FIN/RST
+    /// check a crafted packet yields a fingerprint the reference never produces.
+    #[inline(always)]
+    pub fn is_bare_syn(&self) -> bool {
+        self.syn() && !self.ack() && !self.fin() && !self.rst()
     }
 }
 
