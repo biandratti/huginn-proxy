@@ -27,6 +27,8 @@ use std::fmt;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
+use crate::telemetry::Readiness;
+use tokio::signal;
 use tokio::sync::watch;
 use tokio::task::JoinHandle;
 use tokio::time::{Duration, Instant};
@@ -111,6 +113,38 @@ impl ServiceHandle {
                 self.name,
                 timeout.as_secs()
             ),
+        }
+    }
+}
+
+/// Fail `/ready` and enter [`ShutdownPhase::Draining`]. Accept loops keep running
+/// until `drain_delay` elapses or a second SIGTERM/SIGINT arrives.
+pub async fn begin_shutdown(
+    signal: &str,
+    readiness: &Readiness,
+    shutdown_tx: &ShutdownSender,
+    sigterm: &mut signal::unix::Signal,
+    sigint: &mut signal::unix::Signal,
+    drain_delay: Duration,
+) {
+    info!(signal, "Initiating graceful shutdown");
+    readiness.mark_draining();
+    let _ = shutdown_tx.send(ShutdownPhase::Draining);
+
+    if drain_delay.is_zero() {
+        return;
+    }
+
+    info!(secs = drain_delay.as_secs(), "Failing readiness, still accepting");
+    tokio::select! {
+        _ = tokio::time::sleep(drain_delay) => {
+            info!("Drain delay elapsed");
+        }
+        _ = sigterm.recv() => {
+            info!("Second SIGTERM, skipping remaining drain delay");
+        }
+        _ = sigint.recv() => {
+            info!("Second SIGINT, skipping remaining drain delay");
         }
     }
 }

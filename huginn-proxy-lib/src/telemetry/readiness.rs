@@ -3,6 +3,22 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
+/// Why `/ready` is 503. Serialized as the JSON `reason` snake_case string at the HTTP edge.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NotReadyReason {
+    ProxyStarting,
+    ProxyDraining,
+}
+
+impl NotReadyReason {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::ProxyStarting => "proxy_starting",
+            Self::ProxyDraining => "proxy_draining",
+        }
+    }
+}
+
 struct Inner {
     ready: AtomicBool,
     draining: AtomicBool,
@@ -49,15 +65,15 @@ impl Readiness {
         self.not_ready_reason().is_none()
     }
 
-    /// `None` when ready; otherwise the `/ready` JSON `reason`.
-    pub fn not_ready_reason(&self) -> Option<&'static str> {
+    /// `None` when ready; otherwise why `/ready` is 503.
+    pub fn not_ready_reason(&self) -> Option<NotReadyReason> {
         if self.0.ready.load(Ordering::Acquire) {
             return None;
         }
         if self.0.draining.load(Ordering::Acquire) {
-            Some("proxy_draining")
+            Some(NotReadyReason::ProxyDraining)
         } else {
-            Some("proxy_starting")
+            Some(NotReadyReason::ProxyStarting)
         }
     }
 }

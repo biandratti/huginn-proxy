@@ -1,10 +1,10 @@
-use huginn_proxy_lib::Readiness;
+use huginn_proxy_lib::{NotReadyReason, Readiness};
 
 #[test]
 fn starts_not_ready_as_starting() {
     let r = Readiness::new();
     assert!(!r.is_ready());
-    assert_eq!(r.not_ready_reason(), Some("proxy_starting"));
+    assert_eq!(r.not_ready_reason(), Some(NotReadyReason::ProxyStarting));
 }
 
 #[test]
@@ -21,5 +21,5 @@ fn mark_draining_uses_drain_reason() {
     r.mark_ready();
     r.mark_draining();
     assert!(!r.is_ready());
-    assert_eq!(r.not_ready_reason(), Some("proxy_draining"));
+    assert_eq!(r.not_ready_reason(), Some(NotReadyReason::ProxyDraining));
 }

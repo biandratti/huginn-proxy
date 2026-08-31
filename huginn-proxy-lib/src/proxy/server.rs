@@ -12,7 +12,9 @@ use crate::proxy::protocol::warn_proxy_protocol_trust_gap;
 use crate::proxy::reload::{
     initial_client_pool, initial_rate_limiter, try_reload, SharedDynamicConfig,
 };
-use crate::proxy::shutdown::{wait_for_drain, ServiceHandle, ShutdownPhase, ShutdownSender};
+use crate::proxy::shutdown::{
+    begin_shutdown, wait_for_drain, ServiceHandle, ShutdownPhase, ShutdownSender,
+};
 pub use crate::proxy::watch::WatchOptions;
 use crate::telemetry::{Metrics, Readiness};
 use crate::tls::setup::SharedServerCrypto;
@@ -281,34 +283,4 @@ pub async fn run(
 
     info!("Proxy server stopped");
     Ok(())
-}
-
-async fn begin_shutdown(
-    signal: &str,
-    readiness: &Readiness,
-    shutdown_tx: &ShutdownSender,
-    sigterm: &mut signal::unix::Signal,
-    sigint: &mut signal::unix::Signal,
-    drain_delay: Duration,
-) {
-    info!(signal, "Initiating graceful shutdown");
-    readiness.mark_draining();
-    let _ = shutdown_tx.send(ShutdownPhase::Draining);
-
-    if drain_delay.is_zero() {
-        return;
-    }
-
-    info!(secs = drain_delay.as_secs(), "Failing readiness, still accepting");
-    tokio::select! {
-        _ = tokio::time::sleep(drain_delay) => {
-            info!("Drain delay elapsed");
-        }
-        _ = sigterm.recv() => {
-            info!("Second SIGTERM, skipping remaining drain delay");
-        }
-        _ = sigint.recv() => {
-            info!("Second SIGINT, skipping remaining drain delay");
-        }
-    }
 }
