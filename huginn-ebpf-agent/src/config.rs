@@ -2,32 +2,18 @@ use huginn_ebpf::pin;
 use std::net::{Ipv4Addr, Ipv6Addr};
 
 mod capture;
+mod health_format;
 mod log_level;
 mod rate_limit;
 pub use capture::resolve_capture_backend;
+use health_format::parse_health_format;
+pub use health_format::HealthFormat;
 use log_level::resolve_log_level;
 use rate_limit::resolve_rate_limit;
 pub use rate_limit::{DEFAULT_BURST, DEFAULT_WINDOW_SECONDS};
 
 pub const DEFAULT_PIN_PATH: &str = pin::DEFAULT_PIN_BASE;
 pub use huginn_ebpf::{CaptureBackend, EbpfLogLevel, SynRateLimit, XdpAttachMode};
-
-/// Wire format of `/health`, `/ready`, `/live`, and observability 404/500. `/metrics` is unchanged.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub enum HealthFormat {
-    #[default]
-    Json,
-    Text,
-}
-
-impl HealthFormat {
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::Json => "json",
-            Self::Text => "text",
-        }
-    }
-}
 
 #[derive(Debug, Clone)]
 pub struct Config {
@@ -133,21 +119,4 @@ pub fn from_env(get_var: impl Fn(&str) -> Option<String>) -> Result<Config, Conf
         rate_limit,
         health_format,
     })
-}
-
-fn parse_health_format(
-    get_var: &impl Fn(&str) -> Option<String>,
-) -> Result<HealthFormat, ConfigError> {
-    let Some(raw) = get_var("HUGINN_EBPF_HEALTH_FORMAT") else {
-        return Ok(HealthFormat::Json);
-    };
-    match raw.trim().to_ascii_lowercase().as_str() {
-        "json" => Ok(HealthFormat::Json),
-        "text" => Ok(HealthFormat::Text),
-        _ => Err(ConfigError::Invalid {
-            name: "HUGINN_EBPF_HEALTH_FORMAT".to_string(),
-            value: raw,
-            reason: "must be json or text".to_string(),
-        }),
-    }
 }
