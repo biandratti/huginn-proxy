@@ -1,6 +1,5 @@
 use serde::Serialize;
 
-/// Why `/ready` is 503. Serialized as the JSON `reason` snake_case string.
 #[derive(Debug, Clone, Copy, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub(crate) enum NotReadyReason {

@@ -1,7 +1,5 @@
 use serde::{Deserialize, Serialize};
 
-/// Wire format of `/health`, `/ready`, `/live`, and observability 404/500 bodies.
-/// `/metrics` is never affected.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum HealthFormat {

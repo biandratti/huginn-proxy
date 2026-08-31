@@ -1,6 +1,5 @@
 use super::ConfigError;
 
-/// Wire format of `/health`, `/ready`, `/live`, and observability 404/500. `/metrics` is unchanged.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum HealthFormat {
     #[default]
