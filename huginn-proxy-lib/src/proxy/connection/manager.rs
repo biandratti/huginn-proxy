@@ -4,6 +4,7 @@ use thiserror::Error;
 use tokio::sync::watch;
 use tracing::warn;
 
+use crate::proxy::shutdown::{ShutdownPhase, ShutdownSender};
 use crate::telemetry::metrics::values;
 use crate::telemetry::Metrics;
 
@@ -22,20 +23,20 @@ pub enum ConnectionError {
 pub struct ConnectionManager {
     active_connections: Arc<AtomicUsize>,
     max_connections: usize,
-    shutdown_signal: Arc<AtomicUsize>,
+    shutdown_tx: ShutdownSender,
     connections_closed_tx: watch::Sender<()>,
 }
 
 impl ConnectionManager {
     pub fn new(
         max_connections: usize,
-        shutdown_signal: Arc<AtomicUsize>,
+        shutdown_tx: ShutdownSender,
         connections_closed_tx: watch::Sender<()>,
     ) -> Self {
         Self {
             active_connections: Arc::new(AtomicUsize::new(0)),
             max_connections,
-            shutdown_signal,
+            shutdown_tx,
             connections_closed_tx,
         }
     }
@@ -45,9 +46,9 @@ impl ConnectionManager {
         self.active_connections.clone()
     }
 
-    /// Check if shutdown was requested
+    /// Check if shutdown has entered [`ShutdownPhase::Stopping`].
     pub fn is_shutdown(&self) -> bool {
-        self.shutdown_signal.load(Ordering::Relaxed) == 1
+        *self.shutdown_tx.borrow() == ShutdownPhase::Stopping
     }
 
     /// Try to accept a new connection
@@ -57,7 +58,6 @@ impl ConnectionManager {
         peer: std::net::SocketAddr,
         metrics: &Arc<Metrics>,
     ) -> Result<ConnectionGuard, ConnectionError> {
-        // Check if shutdown was requested
         if self.is_shutdown() {
             return Err(ConnectionError::Shutdown);
         }

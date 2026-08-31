@@ -27,6 +27,7 @@ fn create_test_config(listen: &str, backends: Vec<Backend>) -> Config {
         timeout: TimeoutConfig {
             upstream_connect_ms: Some(5000),
             proxy_idle_ms: 60000,
+            drain_delay_secs: 0,
             shutdown_secs: 30,
             tls_handshake_secs: 15,
             connection_handling_secs: 300,

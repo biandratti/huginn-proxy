@@ -11,7 +11,7 @@ use crate::utils::http::{json_response, RespBody};
 pub fn dispatch(path: &str, registry: &Registry, readiness: &Readiness) -> Response<RespBody> {
     let response = match path {
         "/health" => health_check_response(),
-        "/ready" => ready_check_response(readiness.is_ready()),
+        "/ready" => ready_check_response(readiness.not_ready_reason()),
         "/live" => live_check_response(),
         "/metrics" => handle_metrics(registry).unwrap_or_else(|e| {
             warn!(error = %e, "Failed to encode metrics");

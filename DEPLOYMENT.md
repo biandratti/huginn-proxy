@@ -177,7 +177,7 @@ mounts the same ConfigMap; a parse, unknown-field, or cross-reference error prev
 ### Proxy (observability server)
 
 - `/health` - general health check (alias of liveness, always 200 while running)
-- `/ready` - readiness probe: 200 once listeners are accepting connections; 503 while starting up and during graceful shutdown (fails first on SIGTERM so traffic drains cleanly).
+- `/ready` - readiness probe: 200 once listeners are accepting connections; 503 while starting up (`proxy_starting`) and during graceful shutdown (`proxy_draining`). With `timeout.drain_delay_secs > 0`, `/ready` fails first while the process still accepts traffic so the load balancer can drain; then the listen socket closes.
 - `/live` - liveness probe (200 while the process is alive)
 - `/metrics` - Prometheus metrics
 
@@ -251,7 +251,7 @@ continues running with the old values.
 | `[fingerprint]` | Fingerprinting feature flags (`tcp_enabled`, `tls_enabled`, `http_enabled`, `max_capture`) — static because they control eBPF program loading and capture buffers at startup |
 | `[logging]` | Log level and format |
 | `[telemetry]` | Metrics port and OpenTelemetry log level |
-| `[timeout]` | `upstream_connect_ms` (TCP connect to backend; absent = no timeout), `proxy_idle_ms` (inbound idle), `tls_handshake_secs`, `connection_handling_secs`, `shutdown_secs`, `keep_alive.upstream_idle_timeout` |
+| `[timeout]` | `upstream_connect_ms` (TCP connect to backend; absent = no timeout), `proxy_idle_ms` (inbound idle), `tls_handshake_secs`, `connection_handling_secs`, `drain_delay_secs`, `shutdown_secs`, `keep_alive.upstream_idle_timeout` |
 | `[security].max_connections` | Maximum concurrent connections |
 
 > **TLS certificates** are re-read as part of a **config reload**, not by an

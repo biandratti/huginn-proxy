@@ -114,7 +114,7 @@ async fn watch_pinned_maps(
     loop {
         tokio::select! {
             biased;
-            _ = shutdown_rx.wait_for(|shutting_down| *shutting_down) => {
+            _ = shutdown_rx.wait_for(|phase| phase.is_stopping()) => {
                 tracing::info!("eBPF pinned-map reconnect watcher shutting down");
                 break;
             }

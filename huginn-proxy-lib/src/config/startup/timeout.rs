@@ -13,6 +13,11 @@ pub struct TimeoutConfig {
     /// Default: 60000 (60 seconds)
     #[serde(default = "default_proxy_idle_ms")]
     pub proxy_idle_ms: u64,
+    /// Seconds to fail `/ready` while still accepting (phase 1). `0` = fail
+    /// readiness and stop accepting together (historical behaviour).
+    /// Default: 0
+    #[serde(default)]
+    pub drain_delay_secs: u64,
     /// Graceful shutdown timeout in seconds
     /// Default: 30
     #[serde(default = "default_shutdown_timeout")]
@@ -44,6 +49,7 @@ impl Default for TimeoutConfig {
         Self {
             upstream_connect_ms: None,
             proxy_idle_ms: default_proxy_idle_ms(),
+            drain_delay_secs: 0,
             shutdown_secs: default_shutdown_timeout(),
             tls_handshake_secs: default_tls_handshake_timeout(),
             connection_handling_secs: default_connection_handling_timeout(),
@@ -116,6 +122,7 @@ fn default_upstream_idle_timeout() -> u64 {
 pub(crate) struct TimeoutView {
     upstream_connect_ms: Option<u64>,
     proxy_idle_ms: u64,
+    drain_delay_secs: u64,
     shutdown_secs: u64,
     tls_handshake_secs: u64,
     connection_handling_secs: u64,
@@ -133,6 +140,7 @@ impl TimeoutConfig {
         TimeoutView {
             upstream_connect_ms: self.upstream_connect_ms,
             proxy_idle_ms: self.proxy_idle_ms,
+            drain_delay_secs: self.drain_delay_secs,
             shutdown_secs: self.shutdown_secs,
             tls_handshake_secs: self.tls_handshake_secs,
             connection_handling_secs: self.connection_handling_secs,

@@ -25,6 +25,7 @@ pub struct PlainConnectionConfig {
     pub client_pool: Arc<ClientPool>,
     pub syn_fingerprint: Option<TcpObservation>,
     pub upstream: UpstreamGateway,
+    pub shutdown_rx: crate::proxy::shutdown::ShutdownWatch,
 }
 
 /// Handle a plain HTTP connection
@@ -92,7 +93,19 @@ pub async fn handle_plain_connection(
         }
     });
 
-    let serve_fut = config.builder.serve_connection(TokioIo::new(stream), svc);
+    let serve_fut = Box::pin(
+        config
+            .builder
+            .serve_connection(TokioIo::new(stream), svc)
+            .into_owned(),
+    );
 
-    serve_with_timeout(serve_fut, config.connection_handling_timeout, config.metrics, peer).await;
+    serve_with_timeout(
+        serve_fut,
+        config.connection_handling_timeout,
+        config.shutdown_rx,
+        config.metrics,
+        peer,
+    )
+    .await;
 }

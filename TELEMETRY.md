@@ -12,7 +12,9 @@ Huginn Proxy provides comprehensive telemetry through:
 - **Prometheus Metrics** - 52 metrics covering connections, PROXY protocol, requests, TLS, fingerprinting, backends, active health
   checks, throughput, rate limiting, IP filtering, header manipulation, mTLS, config hot reload, TLS certificate
   hot reload, and fingerprint spoofing detection
-- **Health Check Endpoints** - Kubernetes-ready: `/health`, `/ready`, `/live`, `/metrics`
+- **Health Check Endpoints** - Kubernetes-ready: `/health`, `/ready`, `/live`, `/metrics`. `/ready` is 503 with
+  `reason` `proxy_starting` until listeners bind, and `proxy_draining` during graceful shutdown phase 1 (while
+  traffic is still accepted). `/live` and `/health` stay 200 while the process is up.
 - **Structured Logs** - one secret-safe effective-config summary at startup (`info`), with the
   complete redacted effective config available at `debug`
 
