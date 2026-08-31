@@ -177,7 +177,7 @@ mounts the same ConfigMap; a parse, unknown-field, or cross-reference error prev
 ### Proxy (observability server)
 
 - `/health` - general health check (alias of liveness, always 200 while running)
-- `/ready` - Kubernetes `readinessProbe` and load-balancer health: 200 once listeners are accepting connections; 503 while starting up (`proxy_starting` / text `STARTING`) and during graceful shutdown (`proxy_draining` / text `DRAINING`). With `timeout.drain_delay_secs > 0`, `/ready` fails first while the process still accepts traffic so the load balancer can drain; then the listen socket closes. Body format is `telemetry.health_format` (`json` default; `text` for load balancers that match a plain token such as `SERVING`).
+- `/ready` - Kubernetes `readinessProbe` and load-balancer health: 200 once listeners are accepting connections; 503 while starting up (`proxy_starting` / text `STARTING`) and during graceful shutdown (`proxy_draining` / text `DRAINING`). With `timeout.drain_delay_secs > 0`, `/ready` fails first while the process still accepts traffic so the load balancer can drain; then the listen socket closes. Body format is `telemetry.health_format` (`json` default, `/ready` 200 is `{"status":"serving"}`; `text` is the token `SERVING`).
 - `/live` - Kubernetes `livenessProbe` (200 while the process is alive; stays 200 during drain so kubelet does not SIGKILL the pod)
 - `/metrics` - Prometheus metrics
 
@@ -186,7 +186,7 @@ Size `drain_delay_secs + shutdown_secs` below `terminationGracePeriodSeconds` (o
 ### eBPF agent (observability server)
 
 - `/health` - general health check (alias of liveness, always 200 while running)
-- `/ready` - readiness probe: 200 if BPF map pins exist under `HUGINN_EBPF_PIN_PATH`, 503 otherwise
+- `/ready` - readiness probe: 200 if BPF map pins exist under `HUGINN_EBPF_PIN_PATH`, 503 otherwise (`pins_not_ready` / text `PINS_MISSING`). Body format is `HUGINN_EBPF_HEALTH_FORMAT` (`json` default, `/ready` 200 is `{"status":"serving"}`; `text` is `SERVING`). `/metrics` is never affected.
 - `/live` - liveness probe (200 while the process is alive)
 - `/metrics` - Prometheus metrics
 

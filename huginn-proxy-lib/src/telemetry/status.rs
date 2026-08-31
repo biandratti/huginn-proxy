@@ -29,7 +29,6 @@ impl StatusBody {
         Self { status, reason: Some(reason) }
     }
 
-    /// Plain-text token. Healthy `/ready` is `SERVING`, never `READY`.
     pub(crate) fn proxy_text_token(&self) -> &'static str {
         match self.status {
             Status::Healthy => "HEALTHY",

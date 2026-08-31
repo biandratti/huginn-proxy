@@ -1012,7 +1012,7 @@ Metrics server and OpenTelemetry settings. **Static** — the metrics listener b
 |------------------|---------|----------|-----------------------------------------------------------------------------------------------------------------------------------|
 | `metrics_port`   | integer | `null`   | Port for the Prometheus metrics + health-check HTTP server. Omit to disable. Endpoints: `/metrics`, `/health`, `/ready`, `/live`. |
 | `otel_log_level` | string  | `"warn"` | OpenTelemetry SDK internal log level. Does not affect application logs.                                                           |
-| `health_format`  | string  | `"json"` | Body of `/health`, `/ready`, `/live`, and observability 404/500. `"json"` is `{"status":…,"reason":…}`. `"text"` is a single token with no trailing newline (`SERVING` when `/ready` is 200). For load balancers that match the body and ignore the status code. `/metrics` is never affected. |
+| `health_format`  | string  | `"json"` | Body of `/health`, `/ready`, `/live`, and observability 404/500. `"json"` is `{"status":…,"reason":…}`; `/ready` 200 is `{"status":"serving"}`. `"text"` is a single token with no trailing newline (`SERVING` when `/ready` is 200). For load balancers that match the body and ignore the status code. `/metrics` is never affected. |
 
 <table>
 <thead>
