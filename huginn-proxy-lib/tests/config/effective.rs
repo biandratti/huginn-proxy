@@ -84,6 +84,7 @@ fn effective_config_reports_applied_values_and_defaults() -> TestResult {
     assert_eq!(value["dynamic"]["domains"][0]["client_auth_configured"], true);
     assert_eq!(value["dynamic"]["headers"]["request"]["add"][0]["value"], "<redacted>");
     assert_eq!(value["dynamic"]["security"]["headers"]["csp"]["policy"], "<redacted>");
+    assert_eq!(value["static"]["telemetry"]["health_format"], "json");
     Ok(())
 }
 

@@ -25,6 +25,14 @@ pub(crate) fn json_response(status: StatusCode, body: impl Serialize) -> Respons
     resp
 }
 
+pub(crate) fn text_response(status: StatusCode, token: &'static str) -> Response<RespBody> {
+    let mut resp = Response::new(full_body(token));
+    *resp.status_mut() = status;
+    resp.headers_mut()
+        .insert(CONTENT_TYPE, HeaderValue::from_static("text/plain; charset=utf-8"));
+    resp
+}
+
 #[derive(Serialize)]
 struct ErrorBody<'a> {
     error: &'a str,

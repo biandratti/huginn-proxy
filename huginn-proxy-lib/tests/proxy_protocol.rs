@@ -390,7 +390,11 @@ async fn spawn_proxy_tls(
             keep_alive: KeepAliveConfig::default(),
         },
         security: SecurityConfig { trusted_proxies, ..Default::default() },
-        telemetry: TelemetryConfig { metrics_port: None, otel_log_level: "error".to_string() },
+        telemetry: TelemetryConfig {
+            metrics_port: None,
+            otel_log_level: "error".to_string(),
+            ..Default::default()
+        },
         reload: huginn_proxy_lib::config::ReloadConfig::default(),
         headers: None,
         preserve_host: false,

@@ -34,7 +34,11 @@ fn create_test_config(listen: &str, backends: Vec<Backend>) -> Config {
             keep_alive: KeepAliveConfig::default(),
         },
         security: SecurityConfig::default(),
-        telemetry: TelemetryConfig { metrics_port: None, otel_log_level: "warn".to_string() },
+        telemetry: TelemetryConfig {
+            metrics_port: None,
+            otel_log_level: "warn".to_string(),
+            ..Default::default()
+        },
         reload: ReloadConfig::default(),
         headers: None,
     }

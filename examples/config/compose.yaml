@@ -214,6 +214,7 @@ security:
 telemetry:
   metrics_port: 9090
   otel_log_level: "warn"
+  health_format: json
 
 reload:
   watch: true

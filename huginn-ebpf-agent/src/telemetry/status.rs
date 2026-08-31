@@ -1,11 +1,32 @@
 use serde::Serialize;
 
+/// Why `/ready` is 503. Serialized as the JSON `reason` snake_case string.
+#[derive(Debug, Clone, Copy, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum NotReadyReason {
+    PinsNotReady,
+}
+
+impl NotReadyReason {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::PinsNotReady => "pins_not_ready",
+        }
+    }
+
+    pub const fn text_token(self) -> &'static str {
+        match self {
+            Self::PinsNotReady => "PINS_MISSING",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub(crate) enum Status {
     Healthy,
     Alive,
-    Ready,
+    Serving,
     NotReady,
     NotFound,
     Error,
@@ -15,7 +36,7 @@ pub(crate) enum Status {
 pub(crate) struct StatusBody {
     status: Status,
     #[serde(skip_serializing_if = "Option::is_none")]
-    reason: Option<&'static str>,
+    reason: Option<NotReadyReason>,
 }
 
 impl StatusBody {
@@ -23,7 +44,21 @@ impl StatusBody {
         Self { status, reason: None }
     }
 
-    pub(crate) fn with_reason(status: Status, reason: &'static str) -> Self {
+    pub(crate) fn with_reason(status: Status, reason: NotReadyReason) -> Self {
         Self { status, reason: Some(reason) }
+    }
+
+    pub(crate) fn agent_text_token(&self) -> &'static str {
+        match self.status {
+            Status::Healthy => "HEALTHY",
+            Status::Alive => "ALIVE",
+            Status::Serving => "SERVING",
+            Status::NotReady => match self.reason {
+                Some(reason) => reason.text_token(),
+                None => "ERROR",
+            },
+            Status::NotFound => "NOT_FOUND",
+            Status::Error => "ERROR",
+        }
     }
 }

@@ -98,11 +98,13 @@ async fn main() -> Result<(), BoxError> {
         if let Some(metrics_port) = static_cfg.telemetry.metrics_port {
             info!(port = metrics_port, "Metrics initialized, starting observability server");
             let readiness_for_observability = readiness.clone();
+            let health_format = static_cfg.telemetry.health_format;
             let handle = tokio::spawn(async move {
                 if let Err(e) = start_observability_server(
                     metrics_port,
                     registry,
                     readiness_for_observability,
+                    health_format,
                     obs_stop_rx,
                 )
                 .await

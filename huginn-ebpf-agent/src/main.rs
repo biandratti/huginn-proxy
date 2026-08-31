@@ -98,12 +98,14 @@ async fn main() -> Result<()> {
     let pin_path_str = cfg.pin_path.clone();
     let listen_addr = cfg.metrics_listen_addr.clone();
     let port = cfg.metrics_port;
+    let health_format = cfg.health_format;
     tokio::spawn(async move {
         let _ = huginn_ebpf_agent::telemetry::start_observability_server(
             &listen_addr,
             port,
             registry,
             pin_path_str,
+            health_format,
         )
         .await;
     });

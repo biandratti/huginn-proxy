@@ -29,7 +29,7 @@ pub use parser::{ConfigFormat, ConfigParser, TomlParser, YamlParser};
 pub use root::{Config, ConfigParts};
 pub use secret::Secret;
 pub use startup::{
-    FingerprintConfig, KeepAliveConfig, ListenConfig, LoggingConfig, ProxyProtocolConfig,
-    ProxyProtocolMode, ReloadConfig, SessionResumptionConfig, StaticConfig, TelemetryConfig,
-    TimeoutConfig, TlsConfig, TlsOptions, TlsVersion,
+    FingerprintConfig, HealthFormat, KeepAliveConfig, ListenConfig, LoggingConfig,
+    ProxyProtocolConfig, ProxyProtocolMode, ReloadConfig, SessionResumptionConfig, StaticConfig,
+    TelemetryConfig, TimeoutConfig, TlsConfig, TlsOptions, TlsVersion,
 };

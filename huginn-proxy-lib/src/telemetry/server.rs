@@ -1,3 +1,4 @@
+use crate::config::HealthFormat;
 use crate::telemetry::router::dispatch;
 use crate::telemetry::Readiness;
 use hyper::body::Incoming;
@@ -27,6 +28,7 @@ pub async fn start_observability_server(
     port: u16,
     registry: Registry,
     readiness: Readiness,
+    format: HealthFormat,
     mut stop_rx: watch::Receiver<bool>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let registry = Arc::new(registry);
@@ -61,6 +63,7 @@ pub async fn start_observability_server(
                                 req.uri().path(),
                                 &registry,
                                 &readiness,
+                                format,
                             ))
                         }
                     });

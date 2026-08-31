@@ -248,3 +248,35 @@ backends = [
     config.validate_cross_refs()?;
     Ok(())
 }
+
+#[test]
+fn telemetry_health_format_defaults_to_json_and_accepts_text(
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let toml = r#"
+listen = { addrs = ["0.0.0.0:7000"] }
+backends = [{ address = "backend:9000" }]
+"#;
+    let config: Config = toml::from_str(toml)?;
+    assert_eq!(config.telemetry.health_format, huginn_proxy_lib::config::HealthFormat::Json);
+
+    let toml = r#"
+listen = { addrs = ["0.0.0.0:7000"] }
+backends = [{ address = "backend:9000" }]
+[telemetry]
+health_format = "text"
+"#;
+    let config: Config = toml::from_str(toml)?;
+    assert_eq!(config.telemetry.health_format, huginn_proxy_lib::config::HealthFormat::Text);
+    Ok(())
+}
+
+#[test]
+fn telemetry_health_format_rejects_unknown() {
+    let toml = r#"
+listen = { addrs = ["0.0.0.0:7000"] }
+backends = [{ address = "backend:9000" }]
+[telemetry]
+health_format = "xml"
+"#;
+    assert!(toml::from_str::<Config>(toml).is_err());
+}
