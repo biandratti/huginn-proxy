@@ -1105,7 +1105,7 @@ values.
 | `proxy_idle_ms`            | integer | `60000`             | Inbound idle timeout in milliseconds. Applied as HTTP/1.1 `header_read_timeout` and HTTP/2 keep-alive interval.                       |
 | `tls_handshake_secs`       | integer | `15`                | Maximum seconds to complete the client TLS handshake. Slow/malicious clients that stall the handshake are disconnected.               |
 | `connection_handling_secs` | integer | `300`               | Maximum total seconds for a full connection lifecycle (read request + proxy + write response). Guards against extremely slow clients. |
-| `drain_delay_secs`         | integer | `0`                 | Seconds to fail `/ready` while still accepting connections (graceful drain phase 1). `0` = fail readiness and stop accepting together. |
+| `drain_delay_secs`         | integer | `0`                 | Seconds to fail `/ready` while still accepting connections (graceful drain phase 1). `0` = fail readiness and stop accepting together. Size so `drain_delay_secs + shutdown_secs` is less than the orchestrator stop grace (`terminationGracePeriodSeconds`, systemd `TimeoutStopSec`). |
 | `shutdown_secs`            | integer | `30`                | After drain delay: seconds for in-flight requests to finish after the listen socket closes (phase 2).                                 |
 
 <table>

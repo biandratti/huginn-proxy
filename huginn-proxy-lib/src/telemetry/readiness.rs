@@ -43,9 +43,10 @@ impl Readiness {
         self.0.ready.store(false, Ordering::Release);
     }
 
-    /// Whether the proxy is currently ready to accept traffic.
+    /// Whether `/ready` would return 200. Same source of truth as the HTTP probe
+    /// (`not_ready_reason`).
     pub fn is_ready(&self) -> bool {
-        self.0.ready.load(Ordering::Acquire)
+        self.not_ready_reason().is_none()
     }
 
     /// `None` when ready; otherwise the `/ready` JSON `reason`.

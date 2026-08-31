@@ -177,9 +177,11 @@ mounts the same ConfigMap; a parse, unknown-field, or cross-reference error prev
 ### Proxy (observability server)
 
 - `/health` - general health check (alias of liveness, always 200 while running)
-- `/ready` - readiness probe: 200 once listeners are accepting connections; 503 while starting up (`proxy_starting`) and during graceful shutdown (`proxy_draining`). With `timeout.drain_delay_secs > 0`, `/ready` fails first while the process still accepts traffic so the load balancer can drain; then the listen socket closes.
-- `/live` - liveness probe (200 while the process is alive)
+- `/ready` - Kubernetes `readinessProbe` and load-balancer health: 200 once listeners are accepting connections; 503 while starting up (`proxy_starting`) and during graceful shutdown (`proxy_draining`). With `timeout.drain_delay_secs > 0`, `/ready` fails first while the process still accepts traffic so the load balancer can drain; then the listen socket closes.
+- `/live` - Kubernetes `livenessProbe` (200 while the process is alive; stays 200 during drain so kubelet does not SIGKILL the pod)
 - `/metrics` - Prometheus metrics
+
+Size `drain_delay_secs + shutdown_secs` below `terminationGracePeriodSeconds` (or systemd `TimeoutStopSec`).
 
 ### eBPF agent (observability server)
 
