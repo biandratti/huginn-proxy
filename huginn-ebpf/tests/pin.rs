@@ -210,6 +210,7 @@ fn test_all_names_contains_every_name_constant() {
         pin::SYN_RATE_SKIPPED_V6_NAME,
         pin::SYN_RATE_ALLOWED_V4_NAME,
         pin::SYN_RATE_ALLOWED_V6_NAME,
+        pin::CAPTURE_STATE_NAME,
     ] {
         assert!(
             pin::ALL_NAMES.contains(&name),
@@ -218,7 +219,7 @@ fn test_all_names_contains_every_name_constant() {
     }
     assert_eq!(
         pin::ALL_NAMES.len(),
-        14,
+        15,
         "ALL_NAMES has an entry with no matching name constant, or one was not listed above"
     );
 }
@@ -239,4 +240,25 @@ fn test_rate_limit_sketches_are_not_pinned() {
     for name in ["syn_rate_sketch_v4", "syn_rate_sketch_v6"] {
         assert!(!pin::ALL_NAMES.contains(&name), "{name} must not be pinned");
     }
+}
+
+#[test]
+fn test_capture_link_is_not_a_map_name() {
+    assert!(!pin::ALL_NAMES.contains(&pin::CAPTURE_LINK_NAME));
+}
+
+#[test]
+fn test_capture_link_path_joins_base() {
+    let path = pin::capture_link_path("/sys/fs/bpf/huginn");
+    assert_eq!(path.file_name().and_then(|p| p.to_str()), Some(pin::CAPTURE_LINK_NAME));
+    assert_eq!(pin::CAPTURE_LINK_NAME, "capture_link");
+}
+
+#[test]
+fn test_capture_mode_labels() {
+    use huginn_ebpf::CaptureMode;
+    assert_eq!(CaptureMode::Tcx.as_str(), "tcx");
+    assert_eq!(CaptureMode::Netlink.as_str(), "netlink");
+    assert_eq!(CaptureMode::XdpNative.as_str(), "xdp-native");
+    assert_eq!(CaptureMode::XdpSkb.as_str(), "xdp-skb");
 }

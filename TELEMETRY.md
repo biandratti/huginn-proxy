@@ -13,8 +13,9 @@ Huginn Proxy provides comprehensive telemetry through:
   checks, throughput, rate limiting, IP filtering, header manipulation, mTLS, config hot reload, TLS certificate
   hot reload, and fingerprint spoofing detection
 - **Health Check Endpoints** - Kubernetes-ready: `/health`, `/ready`, `/live`, `/metrics`. `/ready` is 503 with
-  `reason` `proxy_starting` until listeners bind, and `proxy_draining` during graceful shutdown phase 1 (while
-  traffic is still accepted). `/live` and `/health` stay 200 while the process is up.
+  `reason` `proxy_starting` until listeners bind, `proxy_draining` during graceful shutdown phase 1 (while
+  traffic is still accepted), and when TCP fingerprinting is on, `capture_absent` / `capture_draining` /
+  `capture_detached` from the capture gate. `/live` and `/health` stay 200 while the process is up.
   Body format is `telemetry.health_format` (`json` default, or `text` tokens — see [Health body format](#health-body-format)).
 - **Structured Logs** - one secret-safe effective-config summary at startup (`info`), with the
   complete redacted effective config available at `debug`
@@ -28,11 +29,10 @@ on stderr; stdout remains either `Config OK` or valid effective-config JSON.
 The eBPF agent (DaemonSet) exposes the **same four HTTP endpoints** as the proxy for K8s compatibility, plus its own
 Prometheus metrics:
 
-- **Endpoints** - `/health`, `/ready`, `/live`, `/metrics` (same body format as proxy; `/ready` returns 503 when BPF map
-  pins are missing)
+- **Endpoints** - `/health`, `/ready`, `/live`, `/metrics` (same body format as proxy; `/ready` returns 503 unless the program is attached in-process, required pins exist, and the agent is not draining)
 - **Metrics** - `tcp_syn_captured_total`, `tcp_syn_insert_failures_total`, `tcp_syn_malformed_total`,
   `tcp_syn_rate_skipped_total`, `tcp_syn_rate_allowed_total`, `tcp_syn_rate_limit_enabled`, `agent_up`,
-  `huginn_ebpf_agent_build_info`
+  `huginn_ebpf_agent_build_info`, `huginn_ebpf_capture_info`
 
 ---
 
@@ -86,8 +86,8 @@ Text tokens:
 | `/live` | 200 | `ALIVE` |
 | `/health` | 200 | `HEALTHY` |
 | `/ready` | 200 | `SERVING` (JSON `{"status":"serving"}`; never token `READY`) |
-| `/ready` (proxy) | 503 | `STARTING` / `DRAINING` |
-| `/ready` (agent) | 503 | `PINS_MISSING` |
+| `/ready` (proxy) | 503 | `STARTING` / `DRAINING` / `NOCAPTURE` (`capture_*` collapses to `NOCAPTURE`) |
+| `/ready` (agent) | 503 | `PINS_MISSING` / `NOCAPTURE` (`capture_draining` / `capture_detached`) |
 | unknown path | 404 | `NOT_FOUND` |
 | metrics encode failure | 500 | `ERROR` |
 
@@ -803,7 +803,8 @@ same health endpoints as the proxy.
 | `tcp_syn_rate_skipped_total`    | Observable counter | Number of SYNs not captured: source IP over the rate limit             | `family`                  |
 | `tcp_syn_rate_allowed_total`    | Observable counter | Number of SYNs that passed the rate limiter (capture attempted)        | `family`                  |
 | `tcp_syn_rate_limit_enabled`    | Gauge              | 1 if the per-source-IP SYN rate limiter is enabled                     | -                         |
-| `agent_up`                      | Gauge              | 1 if the agent has pinned maps and is running                          | -                         |
+| `huginn_ebpf_capture_info`      | Gauge              | 1; effective attach mechanism (always present while the agent is up) | `capture_mode`, `link_pinned` |
+| `agent_up`                      | Gauge              | 1 if the agent is attached, required pins exist, and it is not draining | -                         |
 | `huginn_ebpf_agent_build_info`  | Gauge              | Build information (always 1)                                           | `version`, `rust_version` |
 
 - `family` (on the five `tcp_syn_*_total` counters): `ipv4` or `ipv6`, the IP version of the
@@ -815,6 +816,9 @@ same health endpoints as the proxy.
   TCP stack either way, so the connection completes without a fingerprint when skipped.
 - Both live in pinned BPF maps, so their totals survive agent restarts and stay frozen at the last
   value while the limiter is off. Alert on the rate, not the absolute count.
+- `huginn_ebpf_capture_info`: `capture_mode` is `tcx`, `netlink`, `xdp-native`, or `xdp-skb` (what
+  actually attached, not just `HUGINN_EBPF_CAPTURE`). `link_pinned` is `true` when the capture
+  `bpf_link` was pinned so agent restart does not detach.
 
 ## Grafana Dashboard Suggestions
 

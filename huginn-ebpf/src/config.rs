@@ -28,6 +28,43 @@ impl CaptureBackend {
     }
 }
 
+/// Attach mechanism actually used at runtime.
+///
+/// Distinct from [`CaptureBackend`]: `HUGINN_EBPF_CAPTURE=tc` becomes [`CaptureMode::Tcx`] on
+/// kernel ≥ 6.6 (pinnable `bpf_link`) or [`CaptureMode::Netlink`] below (legacy clsact filter,
+/// not hitless across agent restarts). XDP labels match the configured backend; whether the
+/// XDP attach used an fd link (pinnable) is reported separately via [`crate::EbpfProbe::link_pinned`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CaptureMode {
+    /// TCX (`bpf_link` + `bpf_mprog`), kernel ≥ 6.6.
+    Tcx,
+    /// Legacy TC clsact filter via netlink.
+    Netlink,
+    /// Driver-mode XDP.
+    XdpNative,
+    /// Generic/SKB XDP.
+    XdpSkb,
+}
+
+impl CaptureMode {
+    /// Prometheus / log label: `tcx` | `netlink` | `xdp-native` | `xdp-skb`.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Tcx => "tcx",
+            Self::Netlink => "netlink",
+            Self::XdpNative => "xdp-native",
+            Self::XdpSkb => "xdp-skb",
+        }
+    }
+
+    pub(crate) fn from_xdp(mode: XdpAttachMode) -> Self {
+        match mode {
+            XdpAttachMode::Native => Self::XdpNative,
+            XdpAttachMode::Skb => Self::XdpSkb,
+        }
+    }
+}
+
 /// Per-source SYN rate-limit thresholds patched into the BPF program at load time.
 ///
 /// Construct only via [`SynRateLimit::from_burst_window`] or [`SynRateLimit::disabled`]: fields are

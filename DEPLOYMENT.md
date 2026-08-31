@@ -58,7 +58,7 @@ Two workloads: the eBPF agent as a **DaemonSet** (1 per node) and the proxy as a
 
 ### eBPF Agent (DaemonSet)
 
-Loads the capture program and pins BPF maps to `/sys/fs/bpf/huginn/`. Exposes `/metrics` and `/ready` on a configurable address and port (env vars `HUGINN_EBPF_METRICS_ADDR`, `HUGINN_EBPF_METRICS_PORT`; e.g. `127.0.0.1:9091`). Use an HTTP readiness probe to the same address and port, path `/ready`.
+Loads the capture program and pins BPF maps (and, when the attach is a `bpf_link`, the capture link) to `/sys/fs/bpf/huginn/`. Exposes `/metrics` and `/ready` on a configurable address and port (env vars `HUGINN_EBPF_METRICS_ADDR`, `HUGINN_EBPF_METRICS_PORT`; e.g. `127.0.0.1:9091`). Use an HTTP readiness probe to the same address and port, path `/ready`. Point the **load balancer at the proxy** (`/live` for process liveness, `/ready` for traffic). The agent's `/ready` is for the kubelet (restart the DaemonSet pod), not a second load-balancer monitor ANDed with the proxy.
 
 **Capture backend in Kubernetes:** `tc` is recommended over `xdp-native` for most clusters. CNI overlays (Flannel VXLAN, Weave, Calico VXLAN) place traffic on veth pairs where native XDP driver support is not guaranteed, and generic XDP (`xdp-skb`) drops GRO-aggregated packets. TC clsact ingress runs after GRO and works on any interface. Use `xdp-native` only if you have confirmed driver XDP support on the node's physical NIC and no overlay is involved.
 
@@ -177,7 +177,7 @@ mounts the same ConfigMap; a parse, unknown-field, or cross-reference error prev
 ### Proxy (observability server)
 
 - `/health` - general health check (alias of liveness, always 200 while running)
-- `/ready` - Kubernetes `readinessProbe` and load-balancer health: 200 once listeners are accepting connections; 503 while starting up (`proxy_starting` / text `STARTING`) and during graceful shutdown (`proxy_draining` / text `DRAINING`). With `timeout.drain_delay_secs > 0`, `/ready` fails first while the process still accepts traffic so the load balancer can drain; then the listen socket closes. Body format is `telemetry.health_format` (`json` default, `/ready` 200 is `{"status":"serving"}`; `text` is the token `SERVING`).
+- `/ready` - Kubernetes `readinessProbe` and load-balancer health: 200 once listeners are accepting connections; 503 while starting up (`proxy_starting` / text `STARTING`) and during graceful shutdown (`proxy_draining` / text `DRAINING`). With TCP SYN capture enabled, also 503 when the capture gate is down (`capture_*` / text `NOCAPTURE`). With `timeout.drain_delay_secs > 0`, `/ready` fails first while the process still accepts traffic so the load balancer can drain; then the listen socket closes. Body format is `telemetry.health_format` (`json` default, `/ready` 200 is `{"status":"serving"}`; `text` is the token `SERVING`).
 - `/live` - Kubernetes `livenessProbe` (200 while the process is alive; stays 200 during drain so kubelet does not SIGKILL the pod)
 - `/metrics` - Prometheus metrics
 
@@ -186,7 +186,7 @@ Size `drain_delay_secs + shutdown_secs` below `terminationGracePeriodSeconds` (o
 ### eBPF agent (observability server)
 
 - `/health` - general health check (alias of liveness, always 200 while running)
-- `/ready` - readiness probe: 200 if BPF map pins exist under `HUGINN_EBPF_PIN_PATH`, 503 otherwise (`pins_not_ready` / text `PINS_MISSING`). Body format is `HUGINN_EBPF_HEALTH_FORMAT` (`json` default, `/ready` 200 is `{"status":"serving"}`; `text` is `SERVING`). `/metrics` is never affected.
+- `/ready` - kubelet readiness probe: 200 if the program is attached in-process, required pins exist, and the agent is not draining; 503 otherwise (`capture_draining` / `capture_detached` / `pins_not_ready`; text `NOCAPTURE` or `PINS_MISSING`). Body format is `HUGINN_EBPF_HEALTH_FORMAT` (`json` default, `/ready` 200 is `{"status":"serving"}`; `text` is `SERVING`). `/metrics` is never affected. Do not AND this with the proxy as a second load-balancer monitor.
 - `/live` - liveness probe (200 while the process is alive)
 - `/metrics` - Prometheus metrics
 

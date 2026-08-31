@@ -15,6 +15,16 @@ pub enum EbpfError {
     #[error("failed to attach BPF program to interface: {0}")]
     Attach(#[source] aya::programs::ProgramError),
 
+    #[error("failed to open or convert BPF link: {0}")]
+    Link(#[from] aya::programs::links::LinkError),
+
+    #[error("failed to pin BPF link at '{path}': {source}")]
+    LinkPin {
+        path: String,
+        #[source]
+        source: aya::pin::PinError,
+    },
+
     #[error("failed to pin BPF map '{name}': {source}")]
     Pin {
         name: String,

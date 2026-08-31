@@ -120,8 +120,13 @@ async fn main() -> Result<(), BoxError> {
             None
         };
 
-    let (syn_probe, ebpf_reconnect_service) =
-        ebpf::connect_syn_probe(&static_cfg, Arc::clone(&metrics), shutdown_rx.clone()).await;
+    let connected =
+        ebpf::connect_syn_probe(&static_cfg, Arc::clone(&metrics), shutdown_rx.clone())?;
+    if let Some(gate) = connected.gate {
+        readiness.set_gate(gate);
+    }
+    let syn_probe = connected.syn_probe;
+    let ebpf_watcher_service = connected.watcher;
 
     info!("huginn-proxy starting");
 
@@ -149,7 +154,7 @@ async fn main() -> Result<(), BoxError> {
     if let Some(svc) = metrics_service {
         svc.shutdown(Duration::from_secs(2)).await;
     }
-    if let Some(svc) = ebpf_reconnect_service {
+    if let Some(svc) = ebpf_watcher_service {
         svc.shutdown(Duration::from_secs(2)).await;
     }
 

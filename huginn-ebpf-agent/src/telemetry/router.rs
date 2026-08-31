@@ -17,7 +17,7 @@ use super::http::RespBody;
 pub fn dispatch(
     path: &str,
     registry: &Registry,
-    pin_path: &str,
+    health: &crate::healthchecks::AgentHealth,
     format: HealthFormat,
 ) -> Response<RespBody> {
     let response = match path {
@@ -26,7 +26,7 @@ pub fn dispatch(
             render(StatusCode::INTERNAL_SERVER_ERROR, StatusBody::new(Status::Error), format)
         }),
         "/health" => health::health_check_response(format),
-        "/ready" => health::ready_check_response(pin_path, format),
+        "/ready" => health::ready_check_response(health, format),
         "/live" => health::live_check_response(format),
         _ => render(StatusCode::NOT_FOUND, StatusBody::new(Status::NotFound), format),
     };

@@ -1,21 +1,26 @@
 use serde::Serialize;
 
-#[derive(Debug, Clone, Copy, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
-pub(crate) enum NotReadyReason {
+pub enum NotReadyReason {
     PinsNotReady,
+    CaptureDraining,
+    CaptureDetached,
 }
 
 impl NotReadyReason {
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::PinsNotReady => "pins_not_ready",
+            Self::CaptureDraining => "capture_draining",
+            Self::CaptureDetached => "capture_detached",
         }
     }
 
     pub const fn text_token(self) -> &'static str {
         match self {
             Self::PinsNotReady => "PINS_MISSING",
+            Self::CaptureDraining | Self::CaptureDetached => "NOCAPTURE",
         }
     }
 }

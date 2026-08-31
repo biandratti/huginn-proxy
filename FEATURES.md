@@ -377,7 +377,8 @@ hosts.
 Health endpoints: `/health` (general, alias of liveness), `/ready` (Kubernetes readiness), `/live` (Kubernetes
 liveness), `/metrics` (Prometheus). `/live` and `/health` return 200 while the process runs. `/ready` returns 200 once
 the proxy's listeners are accepting connections and 503 while starting up or during graceful shutdown.
-The eBPF agent's `/ready` returns 200 once its BPF map pins are loaded.
+With TCP SYN fingerprinting enabled, `/ready` also ANDs the capture gate (`capture_*` / text `NOCAPTURE`).
+The eBPF agent's `/ready` is 200 when attached, required pins exist, and it is not draining (kubelet, not a second load-balancer monitor).
 
 For the full metric list, labels, and example queries, see [TELEMETRY.md](TELEMETRY.md).
 

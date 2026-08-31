@@ -71,7 +71,7 @@ pub fn shutdown_channel() -> (ShutdownSender, ShutdownWatch) {
 pub enum ServiceName {
     CertReload,
     ConfigWatcher,
-    EbpfReconnect,
+    EbpfWatcher,
     MetricsServer,
 }
 
@@ -80,7 +80,7 @@ impl fmt::Display for ServiceName {
         f.write_str(match self {
             Self::CertReload => "cert-reload",
             Self::ConfigWatcher => "config-watcher",
-            Self::EbpfReconnect => "ebpf-reconnect",
+            Self::EbpfWatcher => "ebpf-watcher",
             Self::MetricsServer => "metrics-server",
         })
     }
