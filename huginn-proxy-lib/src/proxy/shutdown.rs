@@ -13,7 +13,7 @@
 //!   │     │
 //!   │     ├─▶ accept loops              wait_for(Stopping) → break
 //!   │     ├─▶ config-watcher            wait_for(Stopping) → break
-//!   │     ├─▶ ebpf-reconnect            wait_for(Stopping) → break
+//!   │     ├─▶ ebpf-watcher              wait_for(Stopping) → break
 //!   │     └─▶ connections               graceful_shutdown() then wait_for_drain
 //!   │
 //!   └─▶ observability server            stopped by main.rs after run() returns

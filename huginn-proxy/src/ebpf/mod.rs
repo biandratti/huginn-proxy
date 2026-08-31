@@ -126,9 +126,11 @@ struct WatchConfig {
 
 #[cfg(feature = "ebpf-tcp")]
 async fn watch_pinned_maps(mut cfg: WatchConfig) {
+    // The first tick fires immediately: the probe must be populated and the gate resolved
+    // before `/ready` can flip, otherwise startup reports `capture_absent` and misses SYN
+    // lookups for a whole `capture_poll` even when the agent has been publishing for hours.
     let mut interval = tokio::time::interval(cfg.capture_poll);
     interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
-    interval.tick().await;
 
     let mut last_generation = None;
     let mut stagnant_ticks = 0_u32;
