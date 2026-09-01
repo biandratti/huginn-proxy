@@ -22,7 +22,9 @@ follows [Semantic Versioning](https://semver.org/).
 
 - **`/ready` 503 now reports why:** `proxy_starting` or `proxy_draining` (text: `STARTING` / `DRAINING`). The observability server stays up until after drain.
 
----## [0.0.4-beta.0]
+---
+
+## [0.0.4-beta.0]
 
 ### Added
 
