@@ -23,17 +23,37 @@ pub fn resolve(
     stagnant_ticks: &mut u32,
     stale_ticks: u32,
 ) -> GateState {
-    let state = match read_capture_state(pin_path) {
-        Ok(state) => state,
-        Err(_) => return GateState::Absent,
+    let Ok(state) = read_capture_state(pin_path) else {
+        return GateState::Absent;
     };
+    decide(
+        state,
+        Path::new(link_pin_path).exists(),
+        last_generation,
+        stagnant_ticks,
+        stale_ticks,
+    )
+}
+
+/// The priority itself, over an already-read snapshot.
+///
+/// Separate from [`resolve`] so it can be tested without bpffs: `read_capture_state` needs a
+/// real pinned map, and this ordering is what decides whether the node stays in the load
+/// balancer.
+pub fn decide(
+    state: CaptureState,
+    link_exists: bool,
+    last_generation: &mut Option<u64>,
+    stagnant_ticks: &mut u32,
+    stale_ticks: u32,
+) -> GateState {
     if !state.is_published() {
         return GateState::Absent;
     }
     if state.is_draining() {
         return GateState::Draining;
     }
-    if Path::new(link_pin_path).exists() {
+    if link_exists {
         *last_generation = Some(state.generation);
         *stagnant_ticks = 0;
         return GateState::Ready;

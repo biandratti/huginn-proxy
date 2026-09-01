@@ -22,7 +22,7 @@ use {
 };
 
 #[cfg(feature = "ebpf-tcp")]
-mod gate;
+pub mod gate;
 
 pub struct SynProbeConnect {
     pub syn_probe: Option<SynProbe>,

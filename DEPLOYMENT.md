@@ -190,6 +190,17 @@ Size `drain_delay_secs + shutdown_secs` below `terminationGracePeriodSeconds` (o
 - `/live` - liveness probe (200 while the process is alive)
 - `/metrics` - Prometheus metrics
 
+### Upgrade order: agent first, then proxy
+
+The proxy's capture gate reads the `capture_state` map. An agent image that predates that map
+never publishes it, so a proxy running the gate against an old agent reads `capture_absent` and
+stays 503 even though the SYN maps are fine and fingerprints are being captured. The agent's own
+`/ready` is 200 throughout, because `capture_state` is deliberately excluded from its required
+pins so legacy images do not fail themselves.
+
+Roll the DaemonSet first and wait for it to converge, then roll the proxy. Only affects
+deployments with TCP SYN fingerprinting enabled.
+
 ## Performance Tuning
 
 Key settings for production:

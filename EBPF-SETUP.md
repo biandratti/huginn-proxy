@@ -359,6 +359,30 @@ left behind: the program keeps running on every packet with no userspace owner u
 reinstall (the new agent adopts the pin), or a future explicit cleanup path (not implemented).
 Do not treat leftover datapath as gone after uninstall.
 
+### Agent rollout: a hitless datapath is still a `/ready` blip
+
+A pinned link keeps capturing across an agent restart, but the proxy still reports 503 for the
+gap between the two agent processes. On SIGTERM the agent writes `lifecycle = draining` into
+`capture_state`, and the gate ranks an announced drain **above** the link pin, so every proxy on
+the node answers `capture_draining`. Nothing rewrites that slot until the next agent starts and
+publishes `capturing` with a fresh `agent_boot_id` — the value outlives the process that wrote
+it, and a SIGKILL mid-drain leaves it set.
+
+The window is roughly:
+
+```
+HUGINN_EBPF_DRAIN_DELAY_SECS + HUGINN_EBPF_CAPTURE_POLL_SECS
+  + load-balancer probe interval + new agent pod startup
+```
+
+In-flight connections are unaffected; the load balancer just stops sending **new** traffic to the
+node for that window. Size a DaemonSet rollout accordingly (`maxUnavailable: 1`), and do not read
+"capture never stopped" as "the proxy stayed ready".
+
+Ranking `draining` below a live link pin would remove the blip, at the cost of reporting ready
+against an agent that is on its way out. That is a deliberate design choice, not an oversight;
+the gate ranks announced state first on purpose.
+
 ### Agent restart: map reuse (no reconnection gap)
 
 The agent pins its maps via `map_pin_path` and **leaves the map pins and the capture link pin in

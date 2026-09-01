@@ -13,7 +13,7 @@ follows [Semantic Versioning](https://semver.org/).
 
 - **Two-phase graceful shutdown.** On SIGTERM, `/ready` fails first (`proxy_draining`) while the traffic port still accepts for `timeout.drain_delay_secs` (default `0`). Then accept stops and in-flight connections drain for `shutdown_secs`. `/live` stays 200. See `DEPLOYMENT.md`.
 - **Health body format.** `telemetry.health_format` (`json` default, or `text`) on `/health`, `/ready`, `/live`. Agent: `HUGINN_EBPF_HEALTH_FORMAT`. See `TELEMETRY.md`.
-- **Hitless eBPF attach + capture gate.** Agent pins the capture `bpf_link` (TCX / XDP fd-link) so a restart can replace the program without detaching. Proxy `/ready` ANDs a capture gate (`capture_absent` / `capture_draining` / `capture_detached`; text `NOCAPTURE`) when TCP SYN fingerprinting is on. Roll the agent image first, then the proxy. See `EBPF-SETUP.md`.
+- **Hitless eBPF attach + capture gate.** Agent pins the capture `bpf_link` (TCX / XDP fd-link) so a restart can replace the program without detaching. Proxy `/ready` ANDs a capture gate (`capture_absent` / `capture_draining` / `capture_detached`; text `NOCAPTURE`) when TCP SYN fingerprinting is on. Roll the agent image first, then the proxy. A rollout still blips `/ready` even where the pinned link keeps capturing. See `EBPF-SETUP.md`.
 
 ### Breaking changes
 
