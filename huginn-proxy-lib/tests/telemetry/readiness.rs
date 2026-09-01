@@ -26,6 +26,22 @@ fn mark_draining_uses_drain_reason() {
 }
 
 #[test]
+fn mark_ready_cannot_cancel_draining() {
+    let r = Readiness::new();
+    r.mark_draining();
+    r.mark_ready();
+    assert!(!r.is_ready());
+    assert_eq!(r.not_ready_reason(), Some(NotReadyReason::ProxyDraining));
+}
+
+#[test]
+fn draining_before_listeners_are_up_reports_draining() {
+    let r = Readiness::new();
+    r.mark_draining();
+    assert_eq!(r.not_ready_reason(), Some(NotReadyReason::ProxyDraining));
+}
+
+#[test]
 fn gate_absent_after_mark_ready() {
     let r = Readiness::new();
     r.set_gate(Arc::new(|| GateState::Absent));

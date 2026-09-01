@@ -4,16 +4,24 @@ use huginn_proxy_lib::telemetry::router::dispatch;
 use huginn_proxy_lib::telemetry::{
     health_check_response, live_check_response, ready_check_response,
 };
-use huginn_proxy_lib::{GateState, Readiness};
+use huginn_proxy_lib::{GateState, NotReadyReason, Readiness};
 use hyper::header::CONTENT_TYPE;
 use prometheus::Registry;
 use std::sync::Arc;
 
 type TestResult = Result<(), Box<dyn std::error::Error + Send + Sync>>;
 
+// `ALIVE` / `HEALTHY` / `SERVING` / `NOT_FOUND` / `ERROR` live on crate-private `Status`.
+// `PINS_MISSING` is the agent `NotReadyReason`; this crate cannot name that type.
 const HEALTHY: &[&str] = &["ALIVE", "HEALTHY", "SERVING"];
-const UNHEALTHY: &[&str] =
-    &["STARTING", "DRAINING", "NOCAPTURE", "PINS_MISSING", "NOT_FOUND", "ERROR"];
+const UNHEALTHY: &[&str] = &[
+    NotReadyReason::ProxyStarting.text_token(),
+    NotReadyReason::ProxyDraining.text_token(),
+    NotReadyReason::CaptureAbsent.text_token(),
+    "PINS_MISSING",
+    "NOT_FOUND",
+    "ERROR",
+];
 
 struct Case<'a> {
     path: &'a str,
@@ -135,7 +143,7 @@ async fn golden_bytes_json_and_text() -> TestResult {
             path: "/ready",
             format: HealthFormat::Text,
             readiness: &starting,
-            expected: b"STARTING",
+            expected: NotReadyReason::ProxyStarting.text_token().as_bytes(),
             status: 503,
             content_type: text,
         },
@@ -151,7 +159,7 @@ async fn golden_bytes_json_and_text() -> TestResult {
             path: "/ready",
             format: HealthFormat::Text,
             readiness: &draining,
-            expected: b"DRAINING",
+            expected: NotReadyReason::ProxyDraining.text_token().as_bytes(),
             status: 503,
             content_type: text,
         },
@@ -167,7 +175,7 @@ async fn golden_bytes_json_and_text() -> TestResult {
             path: "/ready",
             format: HealthFormat::Text,
             readiness: &gated,
-            expected: b"NOCAPTURE",
+            expected: NotReadyReason::CaptureAbsent.text_token().as_bytes(),
             status: 503,
             content_type: text,
         },

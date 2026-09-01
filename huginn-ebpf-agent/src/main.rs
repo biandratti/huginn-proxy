@@ -166,6 +166,7 @@ async fn main() -> Result<()> {
         capture_mode = capture_mode_str,
         link_pinned = probe.link_pinned(),
         log_level = cfg.log_level.as_str(),
+        health_format = cfg.health_format.as_str(),
         "eBPF agent ready, waiting for SIGTERM"
     );
 

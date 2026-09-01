@@ -1,6 +1,4 @@
 use std::fs;
-use std::path::PathBuf;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use http_body_util::BodyExt;
 use huginn_ebpf_agent::config::HealthFormat;
@@ -18,16 +16,6 @@ struct Case<'a> {
     expected: &'a [u8],
     status: u16,
     content_type: &'a str,
-}
-
-fn unique_dir() -> Result<PathBuf, Box<dyn std::error::Error + Send + Sync>> {
-    let nanos = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or(Duration::from_secs(0))
-        .as_nanos();
-    let dir = std::env::temp_dir().join(format!("huginn-agent-health-{nanos}"));
-    fs::create_dir_all(&dir)?;
-    Ok(dir)
 }
 
 fn write_required_pins(
@@ -56,10 +44,10 @@ async fn assert_case(registry: &Registry, case: Case<'_>) -> TestResult {
 #[tokio::test]
 async fn golden_bytes_json_and_text() -> TestResult {
     let registry = Registry::new();
-    let pin_dir = unique_dir()?;
-    write_required_pins(&pin_dir)?;
-    let pin = pin_dir.display().to_string();
-    let link = pin_dir.join("capture_link").display().to_string();
+    let pin_dir = tempfile::TempDir::new()?;
+    write_required_pins(pin_dir.path())?;
+    let pin = pin_dir.path().display().to_string();
+    let link = pin_dir.path().join("capture_link").display().to_string();
 
     let serving = AgentHealth::new(pin.clone(), link.clone());
     serving.mark_attached(false);
@@ -71,7 +59,7 @@ async fn golden_bytes_json_and_text() -> TestResult {
     draining.mark_draining();
 
     let missing_pins =
-        AgentHealth::new(pin_dir.join("missing").display().to_string(), link.clone());
+        AgentHealth::new(pin_dir.path().join("missing").display().to_string(), link.clone());
     missing_pins.mark_attached(false);
 
     let json = "application/json";
@@ -194,6 +182,5 @@ async fn golden_bytes_json_and_text() -> TestResult {
         assert_case(&registry, case).await?;
     }
 
-    let _ = fs::remove_dir_all(&pin_dir);
     Ok(())
 }
