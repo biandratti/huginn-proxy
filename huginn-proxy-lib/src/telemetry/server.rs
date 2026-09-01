@@ -8,7 +8,7 @@ use prometheus::Registry;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::net::TcpListener;
-use tokio::signal;
+use tokio::sync::watch;
 use tracing::{info, warn};
 
 /// Start the observability server that handles metrics and health checks
@@ -20,10 +20,14 @@ use tracing::{info, warn};
 ///
 /// `readiness` is flipped to `true` by the proxy once its listeners are accepting
 /// connections and back to `false` during graceful shutdown; `/ready` reflects it.
+///
+/// Shutdown is **not** tied to SIGTERM: the process signal is used for traffic
+/// drain. `main` sends `true` on `stop_rx` after `run()` returns.
 pub async fn start_observability_server(
     port: u16,
     registry: Registry,
     readiness: Readiness,
+    mut stop_rx: watch::Receiver<bool>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let registry = Arc::new(registry);
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
@@ -31,19 +35,10 @@ pub async fn start_observability_server(
 
     info!(?addr, "Observability server started (metrics + health checks)");
 
-    let mut sigterm = signal::unix::signal(signal::unix::SignalKind::terminate())
-        .map_err(|e| std::io::Error::other(format!("Failed to setup SIGTERM handler: {e}")))?;
-    let mut sigint = signal::unix::signal(signal::unix::SignalKind::interrupt())
-        .map_err(|e| std::io::Error::other(format!("Failed to setup SIGINT handler: {e}")))?;
-
     loop {
         tokio::select! {
-            _ = sigterm.recv() => {
-                info!("Observability server: Received SIGTERM, shutting down");
-                break;
-            }
-            _ = sigint.recv() => {
-                info!("Observability server: Received SIGINT, shutting down");
+            _ = stop_rx.wait_for(|stop| *stop) => {
+                info!("Observability server: stop requested, shutting down");
                 break;
             }
             result = listener.accept() => {

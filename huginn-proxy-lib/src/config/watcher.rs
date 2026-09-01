@@ -78,7 +78,7 @@ pub fn spawn_config_watcher(
         loop {
             tokio::select! {
                 biased;
-                _ = shutdown_rx.wait_for(|v| *v) => {
+                _ = shutdown_rx.wait_for(|phase| phase.is_stopping()) => {
                     info!("Config watcher task shutting down");
                     break;
                 }

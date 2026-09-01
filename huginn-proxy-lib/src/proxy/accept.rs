@@ -15,7 +15,6 @@ use crate::tls::setup::SharedServerCrypto;
 use hyper_util::rt::TokioExecutor;
 use hyper_util::server::conn::auto::Builder as ConnBuilder;
 use std::net::SocketAddr;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use tokio::net::TcpListener;
 use tokio::time::{Duration, Instant};
@@ -48,17 +47,16 @@ pub struct AcceptContext {
 pub async fn accept_loop(
     addr: SocketAddr,
     listener: TcpListener,
-    shutdown_signal: Arc<AtomicUsize>,
     mut shutdown_rx: ShutdownWatch,
     connection_manager: Arc<ConnectionManager>,
     ctx: Arc<AcceptContext>,
 ) {
     loop {
-        if shutdown_signal.load(Ordering::Relaxed) != 0 {
+        if shutdown_rx.borrow().is_stopping() {
             break;
         }
 
-        // Exit promptly on shutdown even when no new connections arrive.
+        // Exit promptly on Stopping even when no new connections arrive.
         let (stream, socket_peer) = tokio::select! {
             accepted = listener.accept() => match accepted {
                 Ok(pair) => pair,
@@ -67,7 +65,7 @@ pub async fn accept_loop(
                     continue;
                 }
             },
-            _ = shutdown_rx.changed() => break,
+            _ = shutdown_rx.wait_for(|phase| phase.is_stopping()) => break,
         };
 
         // Count against the socket peer, before spawning, so a full table never spawns doomed tasks.
@@ -84,6 +82,7 @@ pub async fn accept_loop(
         };
 
         let ctx_task = Arc::clone(&ctx);
+        let shutdown_rx = shutdown_rx.clone();
         tokio::spawn(async move {
             let _guard = guard;
             let mut stream = stream;
@@ -160,6 +159,7 @@ pub async fn accept_loop(
                         client_pool: ctx_task.client_pool.load_full(),
                         syn_fingerprint: syn_fingerprint.clone(),
                         upstream: upstream.clone(),
+                        shutdown_rx: shutdown_rx.clone(),
                     },
                 )
                 .await;
@@ -179,6 +179,7 @@ pub async fn accept_loop(
                         client_pool: ctx_task.client_pool.load_full(),
                         syn_fingerprint,
                         upstream,
+                        shutdown_rx,
                     },
                 )
                 .await;

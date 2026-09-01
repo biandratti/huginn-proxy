@@ -66,6 +66,7 @@ fn minimal_config(backend_addr: std::net::SocketAddr, listen_port: u16) -> Confi
         timeout: TimeoutConfig {
             upstream_connect_ms: Some(1000),
             proxy_idle_ms: 5000,
+            drain_delay_secs: 0,
             shutdown_secs: 1,
             tls_handshake_secs: 5,
             connection_handling_secs: 10,

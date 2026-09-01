@@ -5,51 +5,66 @@
 //! ```text
 //! SIGTERM / SIGINT
 //!   │
-//!   └─▶ shutdown_tx.send(true)          (server.rs)
-//!         │
-//!         ├─▶ config-watcher task       (config/watcher.rs)
-//!         │     shutdown_rx.wait_for(true) → break
-//!         │
-//!         ├─▶ metrics-server task       (main.rs)
-//!         │     shutdown_rx.wait_for(true) → break
-//!         │
-//!         ├─▶ ebpf-reconnect task       (ebpf.rs)
-//!         │     shutdown_rx.wait_for(true) → break
-//!         │
-//!         └─▶ wait_for_drain            (server.rs)
-//!               waits for all active HTTP connections to finish,
-//!               then ServiceHandle::shutdown() awaits each background task
+//!   ├─▶ phase = Draining                (server.rs)  /ready = 503
+//!   │     accept loops keep running
+//!   │     sleep drain_delay_secs (second signal skips)
+//!   │
+//!   ├─▶ phase = Stopping
+//!   │     │
+//!   │     ├─▶ accept loops              wait_for(Stopping) → break
+//!   │     ├─▶ config-watcher            wait_for(Stopping) → break
+//!   │     ├─▶ ebpf-reconnect            wait_for(Stopping) → break
+//!   │     └─▶ connections               graceful_shutdown() then wait_for_drain
+//!   │
+//!   └─▶ observability server            stopped by main.rs after run() returns
 //! ```
 //!
-//! Every background task receives a [`ShutdownWatch`] clone and selects on it
-//! against its main work loop. [`ServiceHandle`] wraps the resulting
+//! Every background task receives a [`ShutdownWatch`] clone and selects on
+//! [`ShutdownPhase::Stopping`]. [`ServiceHandle`] wraps the resulting
 //! `JoinHandle` and is awaited in order during drain.
 
 use std::fmt;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
+use crate::telemetry::Readiness;
+use tokio::signal;
 use tokio::sync::watch;
 use tokio::task::JoinHandle;
 use tokio::time::{Duration, Instant};
 use tracing::{info, warn};
 
+/// Two-phase process lifetime. `Draining` fails readiness but keeps accepting;
+/// `Stopping` closes the listen socket and GOAWAYs existing connections.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ShutdownPhase {
+    Running,
+    Draining,
+    Stopping,
+}
+
+impl ShutdownPhase {
+    /// Tasks that must keep working through drain wait for this.
+    pub fn is_stopping(self) -> bool {
+        matches!(self, Self::Stopping)
+    }
+}
+
 /// Canonical shutdown signal type, adapted from Pingora's `ShutdownWatch`.
 ///
-/// Each background task receives a clone and selects on `wait_for(|v| *v)`
-/// against its main work. When `true` is sent, tasks exit their loops
-/// cooperatively and flush any pending log lines before returning.
-pub type ShutdownWatch = watch::Receiver<bool>;
+/// Each background task receives a clone and selects on
+/// `wait_for(|phase| phase.is_stopping())`.
+pub type ShutdownWatch = watch::Receiver<ShutdownPhase>;
 
 /// The sending half of the shutdown channel.
 ///
-/// Owned at the top level (`main.rs`). Calling `send(true)` broadcasts to
-/// every task that holds a `ShutdownWatch` clone.
-pub type ShutdownSender = watch::Sender<bool>;
+/// Owned at the top level (`main.rs`). Broadcasts [`ShutdownPhase`] to every
+/// task that holds a [`ShutdownWatch`] clone.
+pub type ShutdownSender = watch::Sender<ShutdownPhase>;
 
-/// Create the shutdown channel initialised to `false` (not shutting down).
+/// Create the shutdown channel initialised to [`ShutdownPhase::Running`].
 pub fn shutdown_channel() -> (ShutdownSender, ShutdownWatch) {
-    watch::channel(false)
+    watch::channel(ShutdownPhase::Running)
 }
 
 /// Identifies each background service for logging during shutdown.
@@ -102,11 +117,49 @@ impl ServiceHandle {
     }
 }
 
+/// Fail `/ready` and enter [`ShutdownPhase::Draining`]. Accept loops keep running
+/// until `drain_delay` elapses or a second SIGTERM/SIGINT arrives.
+pub async fn begin_shutdown(
+    signal: &str,
+    readiness: &Readiness,
+    shutdown_tx: &ShutdownSender,
+    sigterm: &mut signal::unix::Signal,
+    sigint: &mut signal::unix::Signal,
+    drain_delay: Duration,
+) {
+    info!(signal, "Initiating graceful shutdown");
+    readiness.mark_draining();
+    let _ = shutdown_tx.send(ShutdownPhase::Draining);
+
+    if drain_delay.is_zero() {
+        return;
+    }
+
+    info!(secs = drain_delay.as_secs(), "Failing readiness, still accepting");
+    tokio::select! {
+        _ = tokio::time::sleep(drain_delay) => {
+            info!("Drain delay elapsed");
+        }
+        _ = sigterm.recv() => {
+            info!("Second SIGTERM, skipping remaining drain delay");
+        }
+        _ = sigint.recv() => {
+            info!("Second SIGINT, skipping remaining drain delay");
+        }
+    }
+}
+
+/// Wait until `active_connections` is 0 or `timeout_secs` elapses.
+///
+/// Clears a stale `changed()` notification first so closures that happened
+/// before phase 2 cannot release the drain early.
 pub async fn wait_for_drain(
     mut connections_closed_rx: watch::Receiver<()>,
     active_connections: Arc<AtomicUsize>,
     timeout_secs: u64,
 ) {
+    connections_closed_rx.borrow_and_update();
+
     if active_connections.load(Ordering::Relaxed) == 0 {
         info!("All connections closed, shutdown complete");
         return;
@@ -115,23 +168,36 @@ pub async fn wait_for_drain(
     let start = Instant::now();
     let deadline = crate::utils::deadline_from(start, Duration::from_secs(timeout_secs));
 
-    let timed_out = tokio::select! {
-        _ = connections_closed_rx.changed() => false,
-        _ = tokio::time::sleep_until(deadline) => true,
-    };
+    loop {
+        let active = active_connections.load(Ordering::Relaxed);
+        if active == 0 {
+            info!("All connections closed, shutdown complete");
+            return;
+        }
+        if Instant::now() >= deadline {
+            warn!(
+                active_connections = active,
+                "Shutdown timeout reached, {active} connections still active"
+            );
+            return;
+        }
 
-    let active = active_connections.load(Ordering::Relaxed);
-    if active == 0 {
-        info!("All connections closed, shutdown complete");
-    } else if timed_out {
-        warn!(
-            active_connections = active,
-            "Shutdown timeout reached, {} connections still active", active
-        );
-    } else {
-        warn!(
-            active_connections = active,
-            "Connection closed notification received but {} connections still active", active
-        );
+        tokio::select! {
+            changed = connections_closed_rx.changed() => {
+                if changed.is_err() {
+                    let remaining = active_connections.load(Ordering::Relaxed);
+                    if remaining == 0 {
+                        info!("All connections closed, shutdown complete");
+                    } else {
+                        warn!(
+                            active_connections = remaining,
+                            "Connection-closed watch closed with {remaining} connections still active"
+                        );
+                    }
+                    return;
+                }
+            }
+            _ = tokio::time::sleep_until(deadline) => {}
+        }
     }
 }

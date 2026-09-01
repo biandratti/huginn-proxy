@@ -51,9 +51,26 @@ accounting (still supported but deprecated). Check: `uname -r`.
 
 ### One agent per node
 
-Linux allows only one XDP or TC clsact program attached to a network interface at a time.
-If two agents run on the same node, the second replaces the first's program. Deploy the
-agent as a DaemonSet (K8s) or with `network_mode: "service:proxy"` (Docker Compose).
+Deploy the agent as a DaemonSet (K8s) or with `network_mode: "service:proxy"` (Docker Compose).
+What happens if two agents do land on the same node depends on the backend, and none of the
+outcomes are good:
+
+| Backend                        | Second agent                                                                                                                                                     |
+|--------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `xdp-native`, `xdp-skb`        | Attach fails with `EBUSY`. Only one XDP program per interface without a libxdp dispatcher.                                                                       |
+| `tc` on kernel ≥ 6.6 (TCX)     | **Both stay attached.** The TCX multi-prog API stacks programs on the hook instead of replacing, so both capture and the `syn_captured_*` counters double-count. |
+| `tc` on kernel < 6.6 (netlink) | Both stay attached as separate clsact filters with different priorities. Same double-counting.                                                                   |
+
+The `tc` cases are the dangerous ones: nothing errors and nothing logs, so a duplicated agent
+looks healthy while inflating counters.
+
+### Kernel ≥ 6.6 for TCX (backend `tc` only)
+
+With `HUGINN_EBPF_CAPTURE=tc`, aya picks the attach mechanism at load time based on the running
+kernel — TCX (`bpf_link`, multi-prog API) on ≥ 6.6, legacy netlink clsact filter below. The
+selection is silent: same config, same logs, different mechanism. Both capture SYNs identically,
+so this only matters if you depend on TCX properties (`bpf_link` pinning, explicit ordering,
+`bpf_mprog` queries). Check with `uname -r`.
 
 ### bpffs
 
@@ -77,21 +94,21 @@ do not SNAT.
 
 The agent requires the following Linux capabilities and security settings:
 
-| Capability / Setting | Purpose |
-|---|---|
-| `CAP_BPF` | Create BPF maps and load BPF programs |
-| `CAP_NET_ADMIN` | Attach XDP program to a network interface |
-| `CAP_PERFMON` | Allow pointer arithmetic in BPF verifier |
-| `seccomp: unconfined` | Docker's default seccomp blocks the `bpf()` syscall |
+| Capability / Setting   | Purpose                                                          |
+|------------------------|------------------------------------------------------------------|
+| `CAP_BPF`              | Create BPF maps and load BPF programs                            |
+| `CAP_NET_ADMIN`        | Attach XDP program to a network interface                        |
+| `CAP_PERFMON`          | Allow pointer arithmetic in BPF verifier                         |
+| `seccomp: unconfined`  | Docker's default seccomp blocks the `bpf()` syscall              |
 | `apparmor: unconfined` | Ubuntu/Debian's AppArmor profile blocks bpffs directory creation |
 
 ## Proxy capabilities
 
 The proxy only reads pinned BPF maps:
 
-| Capability | Purpose |
-|---|---|
-| `CAP_BPF` | Open pinned BPF maps via `BPF_OBJ_GET` |
+| Capability | Purpose                                |
+|------------|----------------------------------------|
+| `CAP_BPF`  | Open pinned BPF maps via `BPF_OBJ_GET` |
 
 No `seccomp:unconfined` or `apparmor:unconfined` needed.
 
@@ -101,19 +118,19 @@ No `seccomp:unconfined` or `apparmor:unconfined` needed.
 
 ### Agent environment variables
 
-| Variable | Example | Description |
-|---|---|---|
-| `HUGINN_EBPF_INTERFACE` | `eth0` | Network interface for the capture program (XDP or TC) |
-| `HUGINN_EBPF_DST_IP_V4` | `0.0.0.0` | IPv4 destination filter (`0.0.0.0` = no filter) |
-| `HUGINN_EBPF_DST_IP_V6` | `::` | IPv6 destination filter (`::` = no filter); quote in YAML if needed |
-| `HUGINN_EBPF_DST_PORT` | `7000` | Destination port filter (proxy listen port) |
-| `HUGINN_EBPF_PIN_PATH` | `/sys/fs/bpf/huginn` | Pin directory (default shown) |
-| `HUGINN_EBPF_SYN_MAP_MAX_ENTRIES` | `8192` | LRU map capacity (default shown). Agent-only: the agent publishes this value into the family-agnostic `syn_meta` map, and the proxy reads it from there for its staleness threshold — so it must not be set on the proxy. |
-| `HUGINN_EBPF_CAPTURE` | `xdp-native` | Capture backend: `xdp-native` (driver XDP, default), `xdp-skb` (generic XDP, veth/loopback/VMs), or `tc` (clsact ingress; GRO-safe when native XDP is unavailable, e.g. VLAN/bond on generic XDP). Same BPF maps either way. |
-| `HUGINN_EBPF_LOG_LEVEL` | `off` | Verbosity of in-kernel `aya-log` datapath logging: `off` (default), `error`, `warn`, `info`, `debug`, `trace`. The kernel emits only records at/above the level (`debug` = per-capture, `warn` = map-insert failures), so the level gate runs in-kernel and `off` is zero-cost on the hot path. When non-`off` and `RUST_LOG` is unset, the agent defaults its filter to that level so records are shown. For diagnostics only. |
-| `HUGINN_EBPF_RATE_LIMIT_ENABLED` | `false` | Enable the in-kernel per-source-IP SYN rate limiter. When on, SYNs from an IP exceeding the threshold are skipped (not captured/fingerprinted); the packet still passes to the stack (never dropped). Uses a dual-buffer sliding-window Count-Min Sketch, hashed with a random seed drawn per agent load so the counter layout is not predictable from outside. |
-| `HUGINN_EBPF_RATE_LIMIT_BURST` | `2000` | Max SYNs per window per source IP before its SYNs stop being captured. Range `1..=65534`. Counted **per CPU**, and *not* the proxy's `[security.rate_limit] burst`: size it with [Sizing the SYN rate limiter](#sizing-the-syn-rate-limiter). |
-| `HUGINN_EBPF_RATE_LIMIT_WINDOW_SECONDS` | `1` | Sliding-window length in seconds. Range `1..=3600`. Once a source crosses `burst`, its SYNs are skipped until the window ends, so a long window means a long gap in that source's fingerprints. |
+| Variable                                | Example              | Description                                                                                                                                                                                                                                                                                                                                                                                                                     |
+|-----------------------------------------|----------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `HUGINN_EBPF_INTERFACE`                 | `eth0`               | Network interface for the capture program (XDP or TC)                                                                                                                                                                                                                                                                                                                                                                           |
+| `HUGINN_EBPF_DST_IP_V4`                 | `0.0.0.0`            | IPv4 destination filter (`0.0.0.0` = no filter)                                                                                                                                                                                                                                                                                                                                                                                 |
+| `HUGINN_EBPF_DST_IP_V6`                 | `::`                 | IPv6 destination filter (`::` = no filter); quote in YAML if needed                                                                                                                                                                                                                                                                                                                                                             |
+| `HUGINN_EBPF_DST_PORT`                  | `7000`               | Destination port filter (proxy listen port)                                                                                                                                                                                                                                                                                                                                                                                     |
+| `HUGINN_EBPF_PIN_PATH`                  | `/sys/fs/bpf/huginn` | Pin directory (default shown)                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `HUGINN_EBPF_SYN_MAP_MAX_ENTRIES`       | `8192`               | LRU map capacity (default shown). Agent-only: the agent publishes this value into the family-agnostic `syn_meta` map, and the proxy reads it from there for its staleness threshold — so it must not be set on the proxy.                                                                                                                                                                                                       |
+| `HUGINN_EBPF_CAPTURE`                   | `xdp-native`         | Capture backend: `xdp-native` (driver XDP, default), `xdp-skb` (generic XDP, veth/loopback/VMs), or `tc` (clsact ingress; GRO-safe when native XDP is unavailable, e.g. VLAN/bond on generic XDP). Same BPF maps either way. There is no `tcx` value: `tc` attaches via TCX automatically on kernel ≥ 6.6, see [Kernel ≥ 6.6 for TCX](#kernel--66-for-tcx-backend-tc-only).                                                     |
+| `HUGINN_EBPF_LOG_LEVEL`                 | `off`                | Verbosity of in-kernel `aya-log` datapath logging: `off` (default), `error`, `warn`, `info`, `debug`, `trace`. The kernel emits only records at/above the level (`debug` = per-capture, `warn` = map-insert failures), so the level gate runs in-kernel and `off` is zero-cost on the hot path. When non-`off` and `RUST_LOG` is unset, the agent defaults its filter to that level so records are shown. For diagnostics only. |
+| `HUGINN_EBPF_RATE_LIMIT_ENABLED`        | `false`              | Enable the in-kernel per-source-IP SYN rate limiter. When on, SYNs from an IP exceeding the threshold are skipped (not captured/fingerprinted); the packet still passes to the stack (never dropped). Uses a dual-buffer sliding-window Count-Min Sketch, hashed with a random seed drawn per agent load so the counter layout is not predictable from outside.                                                                 |
+| `HUGINN_EBPF_RATE_LIMIT_BURST`          | `2000`               | Max SYNs per window per source IP before its SYNs stop being captured. Range `1..=65534`. Counted **per CPU**, and *not* the proxy's `[security.rate_limit] burst`: size it with [Sizing the SYN rate limiter](#sizing-the-syn-rate-limiter).                                                                                                                                                                                   |
+| `HUGINN_EBPF_RATE_LIMIT_WINDOW_SECONDS` | `1`                  | Sliding-window length in seconds. Range `1..=3600`. Once a source crosses `burst`, its SYNs are skipped until the window ends, so a long window means a long gap in that source's fingerprints.                                                                                                                                                                                                                                 |
 
 > **Bad rate-limit value stops the agent**, like every other agent variable. An unset variable
 > takes its default; one that is set but unusable exits with a message. Note the proxy waits on
@@ -159,12 +176,12 @@ burst = HUGINN_EBPF_SYN_MAP_MAX_ENTRIES / (4 × cpus)
 so one source's real ceiling is `burst × cpus`. That product is what you are sizing: as cores grow,
 `burst` shrinks and the ceiling stays put.
 
-| LRU | `cpus` | `burst` | Ceiling per source IP |
-|---|---|---|---|
-| 8192 (default) | 1 (veth in a VM) | `2048` | 2048, a quarter of the map |
-| 8192 | 4 queues | `512` | 2048, a quarter of the map |
-| 8192 | 32 queues | `64` | 2048, a quarter of the map |
-| 32768 | 8 queues | `1024` | 8192, a quarter of the map |
+| LRU            | `cpus`           | `burst` | Ceiling per source IP      |
+|----------------|------------------|---------|----------------------------|
+| 8192 (default) | 1 (veth in a VM) | `2048`  | 2048, a quarter of the map |
+| 8192           | 4 queues         | `512`   | 2048, a quarter of the map |
+| 8192           | 32 queues        | `64`    | 2048, a quarter of the map |
+| 32768          | 8 queues         | `1024`  | 8192, a quarter of the map |
 
 The `4 ×` is a conservative default, not a measured one: it caps one source at a quarter of the map
 and leaves the rest for everyone else. Err on the low side. Going over only skips fingerprint
@@ -186,7 +203,8 @@ mechanism differ.
 - **`xdp-skb`** — generic XDP in the kernel stack. Works on veth/loopback/VMs.
 - **`tc`** — TC `clsact` **ingress** classifier. Reads packet bytes via `bpf_skb_load_bytes`
   (GRO-safe) and returns `TC_ACT_OK`, so it **never drops** packets and works on **VLAN/bond**
-  interfaces.
+  interfaces. Attaches via TCX on kernel ≥ 6.6 and via a legacy netlink filter below — see
+  [Kernel ≥ 6.6 for TCX](#kernel--66-for-tcx-backend-tc-only).
 
 > Use `tc` when native XDP is not available and you would otherwise fall back to generic XDP
 > (`xdp-skb`). Generic XDP does not handle GRO-aggregated (multi-buffer) packets: the program
@@ -201,10 +219,10 @@ mechanism differ.
 tcp_enabled = true   # false = no BPF maps opened, no capabilities needed
 ```
 
-| Variable | Example | Description |
-|---|---|---|
-| `HUGINN_EBPF_PIN_PATH` | `/sys/fs/bpf/huginn` | Pin directory to read maps from (default shown) |
-| `HUGINN_EBPF_RECONNECT_POLL_SECS` | `5` | Backstop poll interval for detecting recreated maps (e.g. a capacity change or a wiped bpffs); `0` disables automatic reconnection. Normal agent restarts reuse the same maps and need no reconnection |
+| Variable                          | Example              | Description                                                                                                                                                                                            |
+|-----------------------------------|----------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `HUGINN_EBPF_PIN_PATH`            | `/sys/fs/bpf/huginn` | Pin directory to read maps from (default shown)                                                                                                                                                        |
+| `HUGINN_EBPF_RECONNECT_POLL_SECS` | `5`                  | Backstop poll interval for detecting recreated maps (e.g. a capacity change or a wiped bpffs); `0` disables automatic reconnection. Normal agent restarts reuse the same maps and need no reconnection |
 
 At startup the proxy retries opening the pinned maps with a fixed backoff until the agent has
 pinned them, so the two containers can start in any order. See
@@ -225,13 +243,13 @@ a bpffs Docker volume for map pinning.
 services:
   ebpf-agent:
     network_mode: "service:proxy"
-    cap_add: [CAP_BPF, CAP_NET_ADMIN, CAP_PERFMON]
-    security_opt: [seccomp:unconfined, apparmor:unconfined]
+    cap_add: [ CAP_BPF, CAP_NET_ADMIN, CAP_PERFMON ]
+    security_opt: [ seccomp:unconfined, apparmor:unconfined ]
     volumes:
       - bpffs:/sys/fs/bpf
 
   proxy:
-    cap_add: [CAP_BPF]
+    cap_add: [ CAP_BPF ]
     volumes:
       - bpffs:/sys/fs/bpf
 
@@ -255,7 +273,7 @@ host's bpffs via `hostPath`.
 # Agent DaemonSet (abbreviated)
 securityContext:
   capabilities:
-    add: [BPF, NET_ADMIN, PERFMON]
+    add: [ BPF, NET_ADMIN, PERFMON ]
   seccompProfile:
     type: Unconfined
 volumeMounts:
@@ -270,7 +288,7 @@ volumes:
 # Proxy Deployment (abbreviated)
 securityContext:
   capabilities:
-    add: [BPF]
+    add: [ BPF ]
   seccompProfile:
     type: RuntimeDefault
 volumeMounts:
@@ -347,6 +365,7 @@ accept time and reused for every request on that connection. As a result, **`x-t
 present on all requests** of a keep-alive connection, not just the first.
 
 A `SynResult::Miss` (no header injected) happens when:
+
 - the SYN was not captured (proxy just started, map entry evicted), or
 - the entry is stale (more than `2 x syn_map_max_entries` SYNs arrived since capture). The proxy
   reads `syn_map_max_entries` from the family-agnostic `syn_meta` map the agent publishes, so the

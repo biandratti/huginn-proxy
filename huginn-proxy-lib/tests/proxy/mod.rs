@@ -11,3 +11,4 @@ mod protocol;
 mod reload;
 mod resolve;
 mod router;
+mod shutdown;

@@ -84,6 +84,7 @@ async fn main() -> Result<(), BoxError> {
 
     // Single shutdown channel shared by all background tasks
     let (shutdown_tx, shutdown_rx) = shutdown_channel();
+    let (obs_stop_tx, obs_stop_rx) = tokio::sync::watch::channel(false);
 
     // metrics (Arc<Metrics>) is kept alive for run(); only registry is moved into the spawn.
     let (metrics, registry) =
@@ -97,28 +98,23 @@ async fn main() -> Result<(), BoxError> {
         if let Some(metrics_port) = static_cfg.telemetry.metrics_port {
             info!(port = metrics_port, "Metrics initialized, starting observability server");
             let readiness_for_observability = readiness.clone();
-            let mut metrics_shutdown = shutdown_rx.clone();
             let handle = tokio::spawn(async move {
-                tokio::select! {
-                    biased;
-                    _ = metrics_shutdown.wait_for(|v| *v) => {
-                        info!("Metrics server shutting down");
-                    }
-                    result = start_observability_server(
-                        metrics_port,
-                        registry,
-                        readiness_for_observability,
-                    ) => {
-                        if let Err(e) = result {
-                            tracing::error!(error = %e, "Observability server error");
-                        }
-                    }
+                if let Err(e) = start_observability_server(
+                    metrics_port,
+                    registry,
+                    readiness_for_observability,
+                    obs_stop_rx,
+                )
+                .await
+                {
+                    tracing::error!(error = %e, "Observability server error");
                 }
             });
             Some(ServiceHandle { handle, name: ServiceName::MetricsServer })
         } else {
             info!("Metrics initialized (no metrics_port, Prometheus endpoint disabled)");
             drop(registry);
+            drop(obs_stop_rx);
             None
         };
 
@@ -146,7 +142,8 @@ async fn main() -> Result<(), BoxError> {
     )
     .await;
 
-    // Metrics server already received the shutdown signal (via shutdown_rx clone).
+    // Stop the observability server after drain so `/ready` stayed up through phase 1.
+    let _ = obs_stop_tx.send(true);
     if let Some(svc) = metrics_service {
         svc.shutdown(Duration::from_secs(2)).await;
     }

@@ -332,7 +332,8 @@ Multiple timeout controls to prevent resource exhaustion:
 - `tls_handshake_secs` (default: 15s) — Maximum time for completing TLS handshake.
 - `connection_handling_secs` (default: 300s) — Maximum total time for entire connection lifecycle (read + process +
   write).
-- `shutdown_secs` (default: 30s) — Graceful shutdown window.
+- `drain_delay_secs` (default: 0s) — Fail `/ready` while still accepting. `0` = 503 and stop accept together.
+- `shutdown_secs` (default: 30s) — After drain delay, window for in-flight connections to finish.
 - `keep_alive.upstream_idle_timeout` (default: 60s) — TCP keep-alive interval for proxy → backend connections.
 
 All timeouts are independently configurable.

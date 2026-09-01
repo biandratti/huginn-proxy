@@ -12,7 +12,9 @@ use crate::proxy::protocol::warn_proxy_protocol_trust_gap;
 use crate::proxy::reload::{
     initial_client_pool, initial_rate_limiter, try_reload, SharedDynamicConfig,
 };
-use crate::proxy::shutdown::{wait_for_drain, ServiceHandle, ShutdownSender};
+use crate::proxy::shutdown::{
+    begin_shutdown, wait_for_drain, ServiceHandle, ShutdownPhase, ShutdownSender,
+};
 pub use crate::proxy::watch::WatchOptions;
 use crate::telemetry::{Metrics, Readiness};
 use crate::tls::setup::SharedServerCrypto;
@@ -21,7 +23,6 @@ use arc_swap::ArcSwap;
 use hyper_util::rt::{TokioExecutor, TokioTimer};
 use hyper_util::server::conn::auto::Builder as ConnBuilder;
 use std::net::SocketAddr;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use tokio::net::TcpListener;
 use tokio::runtime::Handle;
@@ -91,11 +92,10 @@ pub async fn run(
         None
     };
 
-    let shutdown_signal = Arc::new(AtomicUsize::new(0));
     let (connections_closed_tx, connections_closed_rx) = watch::channel(());
     let connection_manager = Arc::new(ConnectionManager::new(
         static_cfg.max_connections,
-        shutdown_signal.clone(),
+        shutdown_tx.clone(),
         connections_closed_tx.clone(),
     ));
 
@@ -169,7 +169,6 @@ pub async fn run(
         accept_tasks.spawn(accept_loop(
             addr,
             listener,
-            Arc::clone(&shutdown_signal),
             shutdown_rx.clone(),
             Arc::clone(&connection_manager),
             Arc::clone(&ctx),
@@ -233,24 +232,34 @@ pub async fn run(
                 }
             }
             _ = sigterm.recv() => {
-                info!("Received SIGTERM, initiating graceful shutdown");
-                readiness.mark_not_ready();
-                health_supervisor.shutdown();
-                shutdown_signal.store(1, Ordering::Relaxed);
-                shutdown_tx.send(true).ok();
+                begin_shutdown(
+                    "SIGTERM",
+                    &readiness,
+                    &shutdown_tx,
+                    &mut sigterm,
+                    &mut sigint,
+                    Duration::from_secs(static_cfg.timeout.drain_delay_secs),
+                )
+                .await;
                 break;
             }
             _ = sigint.recv() => {
-                info!("Received SIGINT, initiating graceful shutdown");
-                readiness.mark_not_ready();
-                health_supervisor.shutdown();
-                shutdown_signal.store(1, Ordering::Relaxed);
-                shutdown_tx.send(true).ok();
+                begin_shutdown(
+                    "SIGINT",
+                    &readiness,
+                    &shutdown_tx,
+                    &mut sigterm,
+                    &mut sigint,
+                    Duration::from_secs(static_cfg.timeout.drain_delay_secs),
+                )
+                .await;
                 break;
             }
         }
     }
 
+    health_supervisor.shutdown();
+    let _ = shutdown_tx.send(ShutdownPhase::Stopping);
     accept_tasks.abort_all();
     drop(accept_tasks);
 

@@ -24,6 +24,6 @@ pub use proxy::reload::{
     initial_client_pool, initial_rate_limiter, try_reload, SharedClientPool, SharedRateLimiter,
 };
 pub use proxy::server::{SynProbe, WatchOptions};
-pub use proxy::shutdown::{shutdown_channel, ShutdownSender, ShutdownWatch};
+pub use proxy::shutdown::{shutdown_channel, ShutdownPhase, ShutdownSender, ShutdownWatch};
 pub use proxy::{forwarding, run};
-pub use telemetry::{Metrics, Readiness};
+pub use telemetry::{Metrics, NotReadyReason, Readiness};
