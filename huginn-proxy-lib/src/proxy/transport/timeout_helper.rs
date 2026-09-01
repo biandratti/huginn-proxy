@@ -41,30 +41,32 @@ pub async fn serve_with_timeout<C, Err>(
     C: Future<Output = Result<(), Err>> + GracefulShutdown,
     Err: Display,
 {
-    let mut goaway_sent = false;
-    let start = tokio::time::Instant::now();
-    let deadline = crate::utils::deadline_from(start, timeout_duration);
-
-    loop {
-        tokio::select! {
-            result = serve_fut.as_mut() => {
-                match result {
-                    Ok(()) => {}
-                    Err(e) => {
-                        debug!(?peer, reason = %e, "connection ended");
+    let serve = async {
+        let mut goaway_sent = false;
+        loop {
+            tokio::select! {
+                result = serve_fut.as_mut() => {
+                    match result {
+                        Ok(()) => {}
+                        Err(e) => {
+                            debug!(?peer, reason = %e, "connection ended");
+                        }
                     }
+                    return;
                 }
-                return;
-            }
-            _ = shutdown_rx.wait_for(|phase| phase.is_stopping()), if !goaway_sent => {
-                serve_fut.as_mut().graceful_shutdown();
-                goaway_sent = true;
-            }
-            _ = tokio::time::sleep_until(deadline) => {
-                warn!(?peer, "connection handling timeout");
-                metrics.record_timeout(values::TIMEOUT_CONNECTION_HANDLING);
-                return;
+                _ = shutdown_rx.wait_for(|phase| phase.is_stopping()), if !goaway_sent => {
+                    serve_fut.as_mut().graceful_shutdown();
+                    goaway_sent = true;
+                }
             }
         }
+    };
+
+    if pingora_timeout::timeout(timeout_duration, serve)
+        .await
+        .is_err()
+    {
+        warn!(?peer, "connection handling timeout");
+        metrics.record_timeout(values::TIMEOUT_CONNECTION_HANDLING);
     }
 }
