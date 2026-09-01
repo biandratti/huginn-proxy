@@ -89,13 +89,13 @@ Fingerprints are automatically extracted and injected as headers:
 - **TLS (JA4_s1r)**: `x-tls-ja4-s1r` - raw hex, ephemeral extensions excluded (huginn-net-tls Stable v1)
 - **HTTP/2 (Akamai)**: `x-http2-akamai`: Extracted from HTTP/2 connections only
   using [huginn-net-http](https://crates.io/crates/huginn-net-http)
-- **TCP SYN (p0f-style)**: `x-tcp-p0f` - Raw TCP SYN signature extracted via eBPF (XDP or TC clsact
-  ingress, configured on the agent with `HUGINN_EBPF_CAPTURE`) using
-  [huginn-net-tcp](https://crates.io/crates/huginn-net-tcp). Requires `tcp_enabled = true`
-  and the `ebpf-tcp` feature. Present on all requests of a connection (the fingerprint is
-  captured once at TCP accept time and reused). IPv4 and IPv6 SYNs are captured when the next
-  header after the fixed IPv6 header is TCP (see [FEATURES.md](FEATURES.md)).
-  See [EBPF-SETUP.md](EBPF-SETUP.md) for setup, kernel requirements, and deployment options.
+- **TCP SYN (p0f-style)**: `x-tcp-p0f` - Raw TCP SYN signature via eBPF, using
+  [huginn-net-tcp](https://crates.io/crates/huginn-net-tcp). Agent env `HUGINN_EBPF_CAPTURE`:
+  `xdp-native` (driver XDP), `xdp-skb` (generic XDP; Compose/veth), or `tc` (clsact ingress; Kubernetes).
+  `tc` then attaches internally via TCX (kernel ≥ 6.6) or netlink (older kernels). Requires
+  `tcp_enabled = true` and the `ebpf-tcp` feature. Present on all requests of a connection (looked up
+  once at accept). IPv4 and IPv6 SYNs are captured when the next header after the fixed IPv6 header
+  is TCP (see [FEATURES.md](FEATURES.md)). Setup: [EBPF-SETUP.md](EBPF-SETUP.md).
 - **Spoofing Signature Detection**: `x-fingerprint-spoofing-detected` - If the client sends any
   proxy-authoritative fingerprint header, the proxy strips it unconditionally and forwards a
   comma-separated list of the header names it removed. Injected only when at least one was
