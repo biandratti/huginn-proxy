@@ -2,6 +2,7 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 
 use aya::programs::links::{FdLink, LinkError, PinnedLink};
+use aya::programs::tc::qdisc_add_clsact;
 use aya::programs::tc::{NlOptions, SchedClassifierLinkId, TcAttachOptions};
 use aya::programs::xdp::{XdpLink, XdpLinkId};
 use aya::programs::{LinkOrder, SchedClassifier, TcAttachType, Xdp, XdpMode};
@@ -10,7 +11,6 @@ use aya::util::KernelVersion;
 use aya::Ebpf;
 use huginn_ebpf_common::constants::{TC_SYN_PROGRAM, XDP_SYN_PROGRAM};
 use tracing::{info, warn};
-use aya::programs::tc::qdisc_add_clsact;
 
 use crate::CaptureMode;
 use crate::EbpfError;

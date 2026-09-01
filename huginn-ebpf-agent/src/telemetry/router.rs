@@ -1,11 +1,11 @@
+use super::http::RespBody;
 use crate::config::HealthFormat;
+use crate::healthchecks::AgentHealth;
 use crate::telemetry::status::{Status, StatusBody};
 use crate::telemetry::{health, metrics_handler};
 use hyper::{Response, StatusCode};
 use prometheus::Registry;
 use tracing::{debug, warn};
-use crate::healthchecks::AgentHealth;
-use super::http::RespBody;
 
 /// Route an observability request. Health endpoints are infallible; metrics may fail to
 /// encode and falls back to a JSON/text 500. Unknown paths return a 404.
