@@ -1,3 +1,4 @@
+use crate::config::HealthFormat;
 use crate::telemetry::router::dispatch;
 use hyper::body::Incoming;
 use hyper::Request;
@@ -13,6 +14,7 @@ pub async fn start_observability_server(
     port: u16,
     registry: Arc<Registry>,
     pin_path: String,
+    format: HealthFormat,
 ) -> crate::error::Result<()> {
     let addr = format!("{}:{}", listen_addr, port);
     let listener = TcpListener::bind(&addr).await?;
@@ -33,7 +35,9 @@ pub async fn start_observability_server(
             let svc = hyper::service::service_fn(move |req: Request<Incoming>| {
                 let registry = registry.clone();
                 let pin_path = pin_path.clone();
-                async move { Ok::<_, hyper::Error>(dispatch(req.uri().path(), &registry, &pin_path)) }
+                async move {
+                    Ok::<_, hyper::Error>(dispatch(req.uri().path(), &registry, &pin_path, format))
+                }
             });
 
             let builder = ConnBuilder::new(TokioExecutor::new());

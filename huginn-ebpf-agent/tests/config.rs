@@ -2,7 +2,8 @@ use std::collections::HashMap;
 use std::net::{Ipv4Addr, Ipv6Addr};
 
 use huginn_ebpf_agent::config::{
-    from_env, CaptureBackend, ConfigError, EbpfLogLevel, XdpAttachMode, DEFAULT_PIN_PATH,
+    from_env, CaptureBackend, ConfigError, EbpfLogLevel, HealthFormat, XdpAttachMode,
+    DEFAULT_PIN_PATH,
 };
 
 /// Build a `get_var` closure from a list of (name, value) pairs.
@@ -54,6 +55,7 @@ fn from_env_minimal_applies_defaults() {
     assert!(matches!(cfg.capture, CaptureBackend::Xdp(XdpAttachMode::Native)));
     assert_eq!(cfg.log_level, EbpfLogLevel::Off, "log level must default to off");
     assert!(!cfg.rate_limit.enabled(), "rate limiter must default to disabled");
+    assert_eq!(cfg.health_format, HealthFormat::Json);
 }
 
 #[test]
@@ -64,6 +66,7 @@ fn from_env_full_overrides_every_optional() {
         ("HUGINN_EBPF_SYN_MAP_MAX_ENTRIES", "16384"),
         ("HUGINN_EBPF_CAPTURE", "tc"),
         ("HUGINN_EBPF_LOG_LEVEL", "debug"),
+        ("HUGINN_EBPF_HEALTH_FORMAT", "text"),
     ]));
     assert_eq!(cfg.dst_ip_v6, Ipv6Addr::new(0x2001, 0x0db8, 0, 0, 0, 0, 0, 1));
     assert_eq!(cfg.pin_path, "/run/bpf/huginn");
@@ -74,6 +77,7 @@ fn from_env_full_overrides_every_optional() {
         EbpfLogLevel::Debug,
         "HUGINN_EBPF_LOG_LEVEL=debug should be parsed"
     );
+    assert_eq!(cfg.health_format, HealthFormat::Text);
 }
 
 #[test]
@@ -122,6 +126,7 @@ fn from_env_invalid_values_are_reported() {
         ("HUGINN_EBPF_METRICS_PORT", "-1"),
         ("HUGINN_EBPF_SYN_MAP_MAX_ENTRIES", "lots"),
         ("HUGINN_EBPF_LOG_LEVEL", "verbose"),
+        ("HUGINN_EBPF_HEALTH_FORMAT", "xml"),
     ] {
         let result = from_env(required_with(&[(name, bad)]));
         assert!(

@@ -2,9 +2,12 @@ use huginn_ebpf::pin;
 use std::net::{Ipv4Addr, Ipv6Addr};
 
 mod capture;
+mod health_format;
 mod log_level;
 mod rate_limit;
 pub use capture::resolve_capture_backend;
+use health_format::parse_health_format;
+pub use health_format::HealthFormat;
 use log_level::resolve_log_level;
 use rate_limit::resolve_rate_limit;
 pub use rate_limit::{DEFAULT_BURST, DEFAULT_WINDOW_SECONDS};
@@ -25,6 +28,7 @@ pub struct Config {
     pub metrics_port: u16,
     pub log_level: EbpfLogLevel,
     pub rate_limit: SynRateLimit,
+    pub health_format: HealthFormat,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -99,6 +103,8 @@ pub fn from_env(get_var: impl Fn(&str) -> Option<String>) -> Result<Config, Conf
 
     let rate_limit = resolve_rate_limit(&get_var)?;
 
+    let health_format = parse_health_format(&get_var)?;
+
     Ok(Config {
         interface,
         dst_ip_v4,
@@ -111,5 +117,6 @@ pub fn from_env(get_var: impl Fn(&str) -> Option<String>) -> Result<Config, Conf
         metrics_port,
         log_level,
         rate_limit,
+        health_format,
     })
 }

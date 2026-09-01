@@ -1,5 +1,24 @@
 use serde::{Deserialize, Serialize};
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum HealthFormat {
+    /// `application/json` objects (`{"status":…,"reason":…}`). Default.
+    #[default]
+    Json,
+    /// Exact token, no trailing newline. For load balancers that match a plain body (no `"`).
+    Text,
+}
+
+impl HealthFormat {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Json => "json",
+            Self::Text => "text",
+        }
+    }
+}
+
 /// Telemetry configuration
 /// Controls observability features: metrics, tracing, and OpenTelemetry integration
 #[derive(Debug, Deserialize, Clone, Default, PartialEq)]
@@ -18,6 +37,10 @@ pub struct TelemetryConfig {
     /// Default: "warn" (suppress informational logs from OpenTelemetry SDK)
     #[serde(default = "default_otel_log_level")]
     pub otel_log_level: String,
+    /// Body format for `/health`, `/ready`, `/live`, and observability 404/500.
+    /// Default `json`. Use `text` when the load balancer matches a plain-text body.
+    #[serde(default)]
+    pub health_format: HealthFormat,
 }
 
 fn default_otel_log_level() -> String {
@@ -53,6 +76,7 @@ fn default_false() -> bool {
 pub(crate) struct TelemetryView<'a> {
     metrics_port: Option<u16>,
     otel_log_level: &'a str,
+    health_format: &'a str,
 }
 
 /// Allowlisted effective-config view of [`LoggingConfig`]. Field names are the JSON keys.
@@ -67,6 +91,7 @@ impl TelemetryConfig {
         TelemetryView {
             metrics_port: self.metrics_port,
             otel_log_level: self.otel_log_level.as_str(),
+            health_format: self.health_format.as_str(),
         }
     }
 }

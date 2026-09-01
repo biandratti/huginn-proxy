@@ -2,32 +2,34 @@ use hyper::Response;
 use hyper::StatusCode;
 use tracing::warn;
 
+use crate::config::HealthFormat;
 use crate::telemetry::readiness::NotReadyReason;
 use crate::telemetry::status::{Status, StatusBody};
-use crate::utils::http::{json_response, RespBody};
+use crate::utils::http::RespBody;
 
 /// Health check - always 200 while the process is running.
-pub fn health_check_response() -> Response<RespBody> {
-    json_response(StatusCode::OK, StatusBody::new(Status::Healthy))
+pub fn health_check_response(format: HealthFormat) -> Response<RespBody> {
+    StatusBody::new(Status::Healthy).render(StatusCode::OK, format)
 }
 
 /// Liveness check - always 200 while the process is running.
-pub fn live_check_response() -> Response<RespBody> {
-    json_response(StatusCode::OK, StatusBody::new(Status::Alive))
+pub fn live_check_response(format: HealthFormat) -> Response<RespBody> {
+    StatusBody::new(Status::Alive).render(StatusCode::OK, format)
 }
 
 /// Readiness check - reports whether the proxy has finished starting up and is
 /// accepting connections.
 /// `not_ready_reason` is `None` when ready; otherwise the JSON `reason`
 /// (`proxy_starting` or `proxy_draining`).
-pub fn ready_check_response(not_ready_reason: Option<NotReadyReason>) -> Response<RespBody> {
+pub fn ready_check_response(
+    not_ready_reason: Option<NotReadyReason>,
+    format: HealthFormat,
+) -> Response<RespBody> {
     let Some(reason) = not_ready_reason else {
-        return json_response(StatusCode::OK, StatusBody::new(Status::Ready));
+        return StatusBody::new(Status::Serving).render(StatusCode::OK, format);
     };
 
     warn!(reason = reason.as_str(), "Readiness check failed");
-    json_response(
-        StatusCode::SERVICE_UNAVAILABLE,
-        StatusBody::with_reason(Status::NotReady, reason.as_str()),
-    )
+    StatusBody::with_reason(Status::NotReady, reason)
+        .render(StatusCode::SERVICE_UNAVAILABLE, format)
 }

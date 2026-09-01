@@ -73,7 +73,11 @@ fn minimal_config(backend_addr: std::net::SocketAddr, listen_port: u16) -> Confi
             keep_alive: KeepAliveConfig::default(),
         },
         security: SecurityConfig::default(),
-        telemetry: TelemetryConfig { metrics_port: None, otel_log_level: "warn".to_string() },
+        telemetry: TelemetryConfig {
+            metrics_port: None,
+            otel_log_level: "warn".to_string(),
+            ..Default::default()
+        },
         reload: ReloadConfig::default(),
         headers: None,
         preserve_host: false,

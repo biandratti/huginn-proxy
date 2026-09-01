@@ -1,13 +1,20 @@
 //! Readiness state shared between the proxy and the observability server's `/ready` endpoint.
 
+use serde::Serialize;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
-/// Why `/ready` is 503. Serialized as the JSON `reason` snake_case string at the HTTP edge.
+/// Why `/ready` is 503. JSON `reason` and logs both use [`Self::as_str`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NotReadyReason {
     ProxyStarting,
     ProxyDraining,
+}
+
+impl Serialize for NotReadyReason {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(self.as_str())
+    }
 }
 
 impl NotReadyReason {
@@ -15,6 +22,13 @@ impl NotReadyReason {
         match self {
             Self::ProxyStarting => "proxy_starting",
             Self::ProxyDraining => "proxy_draining",
+        }
+    }
+
+    pub const fn text_token(self) -> &'static str {
+        match self {
+            Self::ProxyStarting => "STARTING",
+            Self::ProxyDraining => "DRAINING",
         }
     }
 }

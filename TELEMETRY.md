@@ -15,6 +15,7 @@ Huginn Proxy provides comprehensive telemetry through:
 - **Health Check Endpoints** - Kubernetes-ready: `/health`, `/ready`, `/live`, `/metrics`. `/ready` is 503 with
   `reason` `proxy_starting` until listeners bind, and `proxy_draining` during graceful shutdown phase 1 (while
   traffic is still accepted). `/live` and `/health` stay 200 while the process is up.
+  Body format is `telemetry.health_format` (`json` default, or `text` tokens — see [Health body format](#health-body-format)).
 - **Structured Logs** - one secret-safe effective-config summary at startup (`info`), with the
   complete redacted effective config available at `debug`
 
@@ -27,7 +28,7 @@ on stderr; stdout remains either `Config OK` or valid effective-config JSON.
 The eBPF agent (DaemonSet) exposes the **same four HTTP endpoints** as the proxy for K8s compatibility, plus its own
 Prometheus metrics:
 
-- **Endpoints** - `/health`, `/ready`, `/live`, `/metrics` (same JSON format as proxy; `/ready` returns 503 when BPF map
+- **Endpoints** - `/health`, `/ready`, `/live`, `/metrics` (same body format as proxy; `/ready` returns 503 when BPF map
   pins are missing)
 - **Metrics** - `tcp_syn_captured_total`, `tcp_syn_insert_failures_total`, `tcp_syn_malformed_total`,
   `tcp_syn_rate_skipped_total`, `tcp_syn_rate_allowed_total`, `tcp_syn_rate_limit_enabled`, `agent_up`,
@@ -42,6 +43,7 @@ Prometheus metrics:
 ```toml
 [telemetry]
 metrics_port = 9090  # Port for metrics and health endpoints (default: disabled)
+health_format = "json"  # json (default) or text; does not affect /metrics
 ```
 
 When `metrics_port` is configured, the following endpoints become available:
@@ -54,6 +56,7 @@ The agent’s observability server is configured via environment variables:
 |----------------------------|----------|---------------------------------|
 | `HUGINN_EBPF_METRICS_ADDR` | Yes      | Bind address (e.g. `127.0.0.1`) |
 | `HUGINN_EBPF_METRICS_PORT` | Yes      | Port (e.g. `9091`)              |
+| `HUGINN_EBPF_HEALTH_FORMAT` | No     | `json` (default) or `text`; does not affect `/metrics` |
 
 ---
 
@@ -65,6 +68,32 @@ The agent’s observability server is configured via environment variables:
 - **Proxy**: `http://<host>:<telemetry.metrics_port>/metrics` (e.g. `http://localhost:9090/metrics`)
 - **eBPF agent**: `http://<HUGINN_EBPF_METRICS_ADDR>:<HUGINN_EBPF_METRICS_PORT>/metrics` (e.g.
   `http://127.0.0.1:9091/metrics`)
+
+## Health body format
+
+`/health`, `/ready`, `/live`, and observability 404/500 share `telemetry.health_format` (proxy) or
+`HUGINN_EBPF_HEALTH_FORMAT` (agent). `/metrics` is always Prometheus text.
+
+| Format | Content-Type | Body |
+|--------|--------------|------|
+| `json` (default) | `application/json` | `{"status":…}` plus `"reason"` when not ready. `/ready` 200 is `{"status":"serving"}`. |
+| `text` | `text/plain; charset=utf-8` | Exact token, **no trailing newline** |
+
+Text tokens:
+
+| Endpoint | HTTP | Token |
+|----------|------|-------|
+| `/live` | 200 | `ALIVE` |
+| `/health` | 200 | `HEALTHY` |
+| `/ready` | 200 | `SERVING` (JSON `{"status":"serving"}`; never token `READY`) |
+| `/ready` (proxy) | 503 | `STARTING` / `DRAINING` |
+| `/ready` (agent) | 503 | `PINS_MISSING` |
+| unknown path | 404 | `NOT_FOUND` |
+| metrics encode failure | 500 | `ERROR` |
+
+Healthy tokens are `[A-Z]+`. No healthy token is a substring of an unhealthy token or vice versa, so a
+load balancer that matches the body (and ignores the status code) cannot treat `STARTING` as `SERVING`.
+Use `health_format = "text"` and match `SERVING` when the balancer cannot parse JSON or quoted strings.
 
 ### Example Prometheus Configuration
 

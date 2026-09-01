@@ -10,7 +10,7 @@ use serde::Serialize;
 pub use fingerprinting::FingerprintConfig;
 pub use listen::{ListenConfig, ProxyProtocolConfig, ProxyProtocolMode};
 pub use reload::ReloadConfig;
-pub use telemetry::{LoggingConfig, TelemetryConfig};
+pub use telemetry::{HealthFormat, LoggingConfig, TelemetryConfig};
 pub use timeout::{KeepAliveConfig, TimeoutConfig};
 pub use tls::{SessionResumptionConfig, TlsConfig, TlsOptions, TlsVersion};
 
