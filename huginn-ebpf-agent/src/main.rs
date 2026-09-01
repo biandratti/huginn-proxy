@@ -119,6 +119,7 @@ async fn main() -> Result<()> {
         dst_port = %cfg.dst_port,
         capture = capture_str,
         log_level = cfg.log_level.as_str(),
+        health_format = cfg.health_format.as_str(),
         "eBPF agent ready, waiting for SIGTERM"
     );
 

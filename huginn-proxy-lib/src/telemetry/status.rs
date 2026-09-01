@@ -1,6 +1,8 @@
-use serde::Serialize;
-
+use crate::config::HealthFormat;
 use crate::telemetry::readiness::NotReadyReason;
+use crate::utils::http::{json_response, text_response, RespBody};
+use hyper::{Response, StatusCode};
+use serde::Serialize;
 
 #[derive(Debug, Clone, Copy, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -29,6 +31,20 @@ impl StatusBody {
         Self { status, reason: Some(reason) }
     }
 
+    pub(crate) fn render(
+        self,
+        http_status: StatusCode,
+        format: HealthFormat,
+    ) -> Response<RespBody> {
+        match format {
+            HealthFormat::Json => json_response(http_status, self),
+            HealthFormat::Text => text_response(http_status, self.proxy_text_token()),
+        }
+    }
+
+    /// Status tokens must stay in lockstep with `agent_text_token` in
+    /// `huginn-ebpf-agent` (`HEALTHY` / `ALIVE` / `SERVING` / `NOT_FOUND` / `ERROR`).
+    /// `NotReady` tokens differ per process (`STARTING` / `DRAINING` vs `PINS_MISSING`).
     pub(crate) fn proxy_text_token(&self) -> &'static str {
         match self.status {
             Status::Healthy => "HEALTHY",

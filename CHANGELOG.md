@@ -7,7 +7,22 @@ follows [Semantic Versioning](https://semver.org/).
 
 ---
 
-## [0.0.4-beta.0]
+## [0.0.5-beta.0]
+
+### Added
+
+- **Two-phase graceful shutdown.** On SIGTERM, `/ready` fails first (`proxy_draining`) while the traffic port still accepts for `timeout.drain_delay_secs` (default `0`). Then accept stops and in-flight connections drain for `shutdown_secs`. `/live` stays 200. See `DEPLOYMENT.md`.
+- **Health body format.** `telemetry.health_format` (`json` default, or `text`) on `/health`, `/ready`, `/live`. Agent: `HUGINN_EBPF_HEALTH_FORMAT`. See `TELEMETRY.md`.
+
+### Breaking changes
+
+- **`/ready` 200 JSON is now `{"status":"serving"}`** (was `ready`). Text token is `SERVING`.
+
+### Changed
+
+- **`/ready` 503 now reports why:** `proxy_starting` or `proxy_draining` (text: `STARTING` / `DRAINING`). The observability server stays up until after drain.
+
+---## [0.0.4-beta.0]
 
 ### Added
 

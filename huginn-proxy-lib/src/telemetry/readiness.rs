@@ -4,12 +4,17 @@ use serde::Serialize;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
-/// Why `/ready` is 503. Serialized as the JSON `reason` snake_case string at the HTTP edge.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "snake_case")]
+/// Why `/ready` is 503. JSON `reason` and logs both use [`Self::as_str`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NotReadyReason {
     ProxyStarting,
     ProxyDraining,
+}
+
+impl Serialize for NotReadyReason {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(self.as_str())
+    }
 }
 
 impl NotReadyReason {
