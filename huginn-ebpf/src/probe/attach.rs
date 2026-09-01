@@ -10,6 +10,7 @@ use aya::util::KernelVersion;
 use aya::Ebpf;
 use huginn_ebpf_common::constants::{TC_SYN_PROGRAM, XDP_SYN_PROGRAM};
 use tracing::{info, warn};
+use aya::programs::tc::qdisc_add_clsact;
 
 use crate::CaptureMode;
 use crate::EbpfError;
@@ -74,7 +75,7 @@ pub(super) fn attach_tc(
     interface: &str,
     link_pin_path: &Path,
 ) -> Result<AttachOutcome, EbpfError> {
-    if let Err(e) = aya::programs::tc::qdisc_add_clsact(interface) {
+    if let Err(e) = qdisc_add_clsact(interface) {
         warn!(interface, error = %e, "clsact qdisc add returned an error (continuing; likely already present)");
     }
 

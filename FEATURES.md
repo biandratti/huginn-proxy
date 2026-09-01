@@ -374,11 +374,12 @@ Request and backend metrics carry a `domain` label so traffic can be broken down
 pattern (e.g. `*.example.com`), keeping cardinality bounded by the number of configured domains rather than by request
 hosts.
 
-Health endpoints: `/health` (general, alias of liveness), `/ready` (Kubernetes readiness), `/live` (Kubernetes
-liveness), `/metrics` (Prometheus). `/live` and `/health` return 200 while the process runs. `/ready` returns 200 once
-the proxy's listeners are accepting connections and 503 while starting up or during graceful shutdown.
-With TCP SYN fingerprinting enabled, `/ready` also ANDs the capture gate (`capture_*` / text `NOCAPTURE`).
-The eBPF agent's `/ready` is 200 when attached, required pins exist, and it is not draining (kubelet, not a second load-balancer monitor).
+Health endpoints: `/health` (alias of liveness), `/ready` (load balancer / Kubernetes readiness), `/live`
+(Kubernetes liveness), `/metrics` (Prometheus). `/live` and `/health` stay 200 while the process runs.
+`/ready` is 200 when listeners are up and the optional capture gate agrees; 503 with
+`proxy_starting` / `proxy_draining`, plus `capture_*` (text `NOCAPTURE`) when TCP SYN fingerprinting is on.
+The eBPF agent's `/ready` is kubelet-only: attached, required pins, not draining, and the link pin still
+present if this process pinned one. Do not AND it with the proxy as a second load-balancer monitor.
 
 For the full metric list, labels, and example queries, see [TELEMETRY.md](TELEMETRY.md).
 

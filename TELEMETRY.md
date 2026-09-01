@@ -29,7 +29,7 @@ on stderr; stdout remains either `Config OK` or valid effective-config JSON.
 The eBPF agent (DaemonSet) exposes the **same four HTTP endpoints** as the proxy for K8s compatibility, plus its own
 Prometheus metrics:
 
-- **Endpoints** - `/health`, `/ready`, `/live`, `/metrics` (same body format as proxy; `/ready` returns 503 unless the program is attached in-process, required pins exist, and the agent is not draining)
+- **Endpoints** - `/health`, `/ready`, `/live`, `/metrics` (same body format as proxy; `/ready` is 200 when attached in-process, required pins exist, the agent is not draining, and if this process pinned a `bpf_link`, that pin still exists)
 - **Metrics** - `tcp_syn_captured_total`, `tcp_syn_insert_failures_total`, `tcp_syn_malformed_total`,
   `tcp_syn_rate_skipped_total`, `tcp_syn_rate_allowed_total`, `tcp_syn_rate_limit_enabled`, `agent_up`,
   `huginn_ebpf_agent_build_info`, `huginn_ebpf_capture_info`

@@ -215,10 +215,7 @@ mechanism differ.
 
 - **`xdp-native`** — driver-level XDP. Lowest overhead. Requires NIC driver XDP support.
 - **`xdp-skb`** — generic XDP in the kernel stack. Works on veth/loopback/VMs.
-- **`tc`** — TC `clsact` **ingress** classifier. Reads packet bytes via `bpf_skb_load_bytes`
-  (GRO-safe) and returns `TC_ACT_OK`, so it **never drops** packets and works on **VLAN/bond**
-  interfaces. Attaches via TCX on kernel ≥ 6.6 and via a legacy netlink filter below — see
-  [Kernel ≥ 6.6 for TCX](#kernel--66-for-tcx-backend-tc-only).
+- **`tc`** — TC classifier on ingress. Use when native XDP is unavailable (VLAN/bond, or when generic XDP would miss GRO packets). Attach is TCX or netlink from the kernel version; see [Kernel ≥ 6.6 for TCX](#kernel--66-for-tcx-backend-tc-only).
 
 > Use `tc` when native XDP is not available and you would otherwise fall back to generic XDP
 > (`xdp-skb`). Generic XDP does not handle GRO-aggregated (multi-buffer) packets: the program
@@ -325,102 +322,61 @@ See [DEPLOYMENT.md](DEPLOYMENT.md) for the full Kubernetes section.
 
 ## Runtime lifecycle and agent restarts
 
-The proxy only reads maps when TCP fingerprinting is active — that is, built with the `ebpf-tcp`
-feature **and** `fingerprint.tcp_enabled = true`. Otherwise no maps are opened and none of the
-behavior below applies.
+This section applies only with `ebpf-tcp` **and** `fingerprint.tcp_enabled = true`.
 
 ### Startup
 
-The proxy binds immediately. Until the agent publishes maps (and a non-zero `agent_boot_id` in
-`capture_state`), `/ready` is 503 with `capture_absent` (after listeners are up). Lookups return
-`SynResult::Miss` until the watcher opens the pins.
+The proxy binds immediately. `/ready` is 503 (`capture_absent`) until the agent publishes
+`capture_state` (non-zero `agent_boot_id`). Lookups miss until the watcher opens the pins.
 
-### Agent crash while the proxy is connected
+### Agent down, proxy still up
 
-The proxy **does not crash** if the agent dies after the maps are connected:
+The proxy keeps its own map FDs. Those maps stay in the kernel even if the agent exits or the pin
+files vanish. A lookup error is `SynResult::Miss` (no `x-tcp-p0f`); HTTP is never blocked.
 
-- The proxy holds its own file descriptors to the map objects. The kernel keeps a map alive while
-  any reference exists, so it survives the agent process exiting and even the pin files being
-  removed.
-- Every lookup degrades gracefully: any read error returns `SynResult::Miss`, so the
-  `x-tcp-p0f` header is simply not injected. Request forwarding is never blocked or dropped.
+| Attach | After the agent dies |
+|--------|----------------------|
+| Pinned `bpf_link` (TCX, XDP fd-link) | Program stays on the interface. The next agent replaces it with `attach_to_link`. |
+| Netlink (TC on kernel &lt; 6.6, or XDP without `bpf_link_create`) | `drop(probe)` detaches. New fingerprints pause until the next agent attaches. |
 
-The trade-off on **netlink** attaches (TC on kernel < 6.6, or XDP when `bpf_link_create` is
-unavailable) is a loss of **fresh** captures: `drop(probe)` detaches the program and no new SYNs
-are written until the next agent attaches. Existing traffic keeps flowing; new connections just
-stop getting a fingerprint.
+`kubectl delete` of the DaemonSet is the same SIGTERM as a rollout: pins stay. The program can
+keep running with no userspace owner until reboot, a new agent adopts the pin, or a future
+`--cleanup` (not implemented). Uninstall does not mean the datapath is gone.
 
-On **pinned-link** attaches (TCX, or XDP fd-link), SIGTERM and SIGKILL do **not** detach: the
-`bpf_link` pin keeps the program running. The next agent opens the pin and calls `attach_to_link`
-(atomic replace, not a second stacked program). Capture continues across the restart.
+### Rollout: capture can continue while `/ready` blips
 
-`kubectl delete` of the DaemonSet sends the same SIGTERM as a rollout, so the link pin is also
-left behind: the program keeps running on every packet with no userspace owner until reboot,
-reinstall (the new agent adopts the pin), or a future explicit cleanup path (not implemented).
-Do not treat leftover datapath as gone after uninstall.
-
-### Agent rollout: a hitless datapath is still a `/ready` blip
-
-A pinned link keeps capturing across an agent restart, but the proxy still reports 503 for the
-gap between the two agent processes. On SIGTERM the agent writes `lifecycle = draining` into
-`capture_state`, and the gate ranks an announced drain **above** the link pin, so every proxy on
-the node answers `capture_draining`. Nothing rewrites that slot until the next agent starts and
-publishes `capturing` with a fresh `agent_boot_id` — the value outlives the process that wrote
-it, and a SIGKILL mid-drain leaves it set.
-
-The window is roughly:
+On SIGTERM the agent writes `lifecycle = draining`. The gate ranks that above a live link pin,
+so every proxy on the node is 503 (`capture_draining`) until the next agent publishes `capturing`
+with a new `agent_boot_id`. A SIGKILL mid-drain leaves the slot set.
 
 ```
 HUGINN_EBPF_DRAIN_DELAY_SECS + HUGINN_EBPF_CAPTURE_POLL_SECS
-  + load-balancer probe interval + new agent pod startup
+  + load-balancer probe interval + new agent startup
 ```
 
-In-flight connections are unaffected; the load balancer just stops sending **new** traffic to the
-node for that window. Size a DaemonSet rollout accordingly (`maxUnavailable: 1`), and do not read
-"capture never stopped" as "the proxy stayed ready".
+In-flight connections keep going; the load balancer stops **new** traffic. Size rollouts with
+`maxUnavailable: 1`. Capture never stopping is not the same as the proxy staying ready.
 
-Ranking `draining` below a live link pin would remove the blip, at the cost of reporting ready
-against an agent that is on its way out. That is a deliberate design choice, not an oversight;
-the gate ranks announced state first on purpose.
+### Maps
 
-### Agent restart: map reuse (no reconnection gap)
+Shutdown leaves map pins and the capture link pin. The next agent reopens the same kernel IDs
+and, if a link pin exists, replaces the program in place.
 
-The agent pins its maps via `map_pin_path` and **leaves the map pins and the capture link pin in
-place on shutdown**. When it restarts it reuses the existing pinned maps (same kernel IDs) and,
-when a link pin exists, replaces the attached program in place.
-
-The only case that recreates the maps is a **capacity change**: if `HUGINN_EBPF_SYN_MAP_MAX_ENTRIES`
-differs from the pinned SYN maps, the agent drops all pins on startup so the loader recreates them
-at the new size (aya would otherwise silently reuse the old capacity). The recreated maps get new
-kernel IDs.
-
-### Automatic reconnection (backstop)
-
-The proxy periodically compares the kernel IDs of the pinned IPv4 and IPv6 SYN maps with the IDs of
-its open maps. If either ID changes — a capacity change as above, or an operator/node wiping bpffs —
-it opens a complete fresh map set and swaps it atomically without dropping connections.
-
-The recovery window for **map ID** changes is bounded by `HUGINN_EBPF_RECONNECT_POLL_SECS` (5 seconds
-by default), evaluated on the same watcher that ticks every `HUGINN_EBPF_CAPTURE_POLL_SECS`. A pin
-that is temporarily absent while the agent is recreating maps is treated as transient: the proxy
-retains its previous maps and retries on the next reconnect interval. Set reconnect to `0` to
-disable automatic reconnection; the capture gate still refreshes.
+Maps are recreated only when `HUGINN_EBPF_SYN_MAP_MAX_ENTRIES` changes (otherwise aya would keep
+the old capacity). New IDs. The proxy compares published vs open IPv4/IPv6 IDs every
+`HUGINN_EBPF_RECONNECT_POLL_SECS` (default 5; `0` disables this, not the capture gate) and swaps
+atomically. A pin missing during recreate is transient: old maps stay until the next reconnect tick.
 
 ---
 
 ## HTTP keep-alives
 
-The capture program intercepts only TCP SYN packets. The fingerprint is looked up once at TCP
-accept time and reused for every request on that connection. As a result, **`x-tcp-p0f` is
-present on all requests** of a keep-alive connection, not just the first.
+Only TCP SYNs are captured. The fingerprint is looked up once at accept and reused for every
+request on that connection, so **`x-tcp-p0f` is on all keep-alive requests**, not just the first.
 
-A `SynResult::Miss` (no header injected) happens when:
+No header (`SynResult::Miss`) means the SYN was never in the map (startup, eviction) or the entry
+is stale (more than `2 × syn_map_max_entries` SYNs since capture). Capacity comes from the agent's
+`syn_meta` map, not from which IP family is enabled.
 
-- the SYN was not captured (proxy just started, map entry evicted), or
-- the entry is stale (more than `2 x syn_map_max_entries` SYNs arrived since capture). The proxy
-  reads `syn_map_max_entries` from the family-agnostic `syn_meta` map the agent publishes, so the
-  threshold always matches the agent's capacity and does not depend on which IP family is enabled.
-
-`force_new_connection = true` is unrelated to fingerprint availability: it controls whether
-the proxy opens a new TCP connection to the **backend** per request, not whether the client
-SYN is re-captured.
+`force_new_connection = true` opens a new TCP connection to the **backend**. It does not
+recapture the client SYN.

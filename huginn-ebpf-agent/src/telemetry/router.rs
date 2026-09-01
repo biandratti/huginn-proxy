@@ -4,7 +4,7 @@ use crate::telemetry::{health, metrics_handler};
 use hyper::{Response, StatusCode};
 use prometheus::Registry;
 use tracing::{debug, warn};
-
+use crate::healthchecks::AgentHealth;
 use super::http::RespBody;
 
 /// Route an observability request. Health endpoints are infallible; metrics may fail to
@@ -16,7 +16,7 @@ use super::http::RespBody;
 pub fn dispatch(
     path: &str,
     registry: &Registry,
-    health: &crate::healthchecks::AgentHealth,
+    health: &AgentHealth,
     format: HealthFormat,
 ) -> Response<RespBody> {
     let response = match path {

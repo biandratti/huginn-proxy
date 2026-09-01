@@ -13,9 +13,10 @@ Image tags and release binaries (GHCR, musl/glibc, eBPF): see [DEPLOYMENT-MATRIX
 
 Use a published image from GHCR (see [DEPLOYMENT-MATRIX.md](DEPLOYMENT-MATRIX.md)). The **`huginn-proxy-plain`** image needs no extra Linux capabilities on the host; the default **`huginn-proxy`** image includes eBPF support for TCP SYN fingerprinting and may need `CAP_BPF` when that feature is enabled.
 
-From the **repository root**, mount a real config **file** on the host. If the path does not exist, Docker creates an empty **directory** with that name and the proxy fails with `Is a directory (os error 21)` — remove any mistaken `config.toml` directory (`rm -rf ./config.toml`) and point at the file under `examples/config/`.
-
-The checked-in example is `examples/config/compose.toml` (same one `examples/docker-compose.ebpf.yml` uses). Backends there are `backend-a` / `backend-b` (Docker Compose DNS names); for a working stack use Compose below, or change backends to addresses reachable from the container.
+Compose mounts `examples/config/compose.yaml` (and optionally `compose.toml`). That path must be a
+**file**. If it is missing, Docker creates a directory there and the proxy exits with `Is a directory
+(os error 21)`. Backends in that example are `backend-a` / `backend-b` (Compose DNS); for a working
+stack use Compose below, or point them at addresses the container can reach.
 
 **Note:** The process runs as user `app` (UID **10001**). Certificate and key files under `/config/certs` must be readable by that user (e.g. `chmod` / `chown` on the host copy).
 
@@ -58,9 +59,19 @@ Two workloads: the eBPF agent as a **DaemonSet** (1 per node) and the proxy as a
 
 ### eBPF Agent (DaemonSet)
 
-Loads the capture program and pins BPF maps (and, when the attach is a `bpf_link`, the capture link) to `/sys/fs/bpf/huginn/`. Exposes `/metrics` and `/ready` on a configurable address and port (env vars `HUGINN_EBPF_METRICS_ADDR`, `HUGINN_EBPF_METRICS_PORT`; e.g. `127.0.0.1:9091`). Use an HTTP readiness probe to the same address and port, path `/ready`. Point the **load balancer at the proxy** (`/live` for process liveness, `/ready` for traffic). The agent's `/ready` is for the kubelet (restart the DaemonSet pod), not a second load-balancer monitor ANDed with the proxy.
+Loads the capture program and pins maps (including `capture_state`) under
+`HUGINN_EBPF_PIN_PATH` (default `/sys/fs/bpf/huginn`). When the attach is a `bpf_link` (TCX or XDP
+fd-link), it also pins that link next to the maps. Observability is
+`HUGINN_EBPF_METRICS_ADDR`:`HUGINN_EBPF_METRICS_PORT` (`/health`, `/ready`, `/live`, `/metrics`).
 
-**Capture backend in Kubernetes:** `tc` is recommended over `xdp-native` for most clusters. CNI overlays (Flannel VXLAN, Weave, Calico VXLAN) place traffic on veth pairs where native XDP driver support is not guaranteed, and generic XDP (`xdp-skb`) drops GRO-aggregated packets. TC clsact ingress runs after GRO and works on any interface. Use `xdp-native` only if you have confirmed driver XDP support on the node's physical NIC and no overlay is involved.
+Point the load balancer at the **proxy**. The agent's `/ready` is a kubelet probe (restart the
+DaemonSet pod), not a second LB monitor. `kubectl delete` of the DaemonSet leaves pins in place;
+see [EBPF-SETUP.md](EBPF-SETUP.md#agent-down-proxy-still-up).
+
+**Capture backend:** `tc` for most clusters. CNI overlays (Flannel / Weave / Calico VXLAN) land on
+veth, where native XDP is unreliable and `xdp-skb` misses GRO packets. `tc` runs after GRO. Use
+`xdp-native` only on a physical NIC with driver XDP and no overlay. `HUGINN_EBPF_CAPTURE=tc` still;
+TCX vs netlink is chosen from the kernel ([EBPF-SETUP.md](EBPF-SETUP.md#kernel--66-for-tcx-backend-tc-only)).
 
 Key security settings:
 
@@ -174,32 +185,43 @@ mounts the same ConfigMap; a parse, unknown-field, or cross-reference error prev
 
 ## Health Check Endpoints
 
+Body format is `telemetry.health_format` (proxy) or `HUGINN_EBPF_HEALTH_FORMAT` (agent): `json`
+default (`/ready` 200 is `{"status":"serving"}`) or `text` (token `SERVING`). `/metrics` is never
+affected. See `TELEMETRY.md`.
+
 ### Proxy (observability server)
 
-- `/health` - general health check (alias of liveness, always 200 while running)
-- `/ready` - Kubernetes `readinessProbe` and load-balancer health: 200 once listeners are accepting connections; 503 while starting up (`proxy_starting` / text `STARTING`) and during graceful shutdown (`proxy_draining` / text `DRAINING`). With TCP SYN capture enabled, also 503 when the capture gate is down (`capture_*` / text `NOCAPTURE`). With `timeout.drain_delay_secs > 0`, `/ready` fails first while the process still accepts traffic so the load balancer can drain; then the listen socket closes. Body format is `telemetry.health_format` (`json` default, `/ready` 200 is `{"status":"serving"}`; `text` is the token `SERVING`).
-- `/live` - Kubernetes `livenessProbe` (200 while the process is alive; stays 200 during drain so kubelet does not SIGKILL the pod)
-- `/metrics` - Prometheus metrics
+- `/health` — alias of liveness; 200 while the process is up
+- `/ready` — load balancer and Kubernetes `readinessProbe`. 200 only when listeners are up **and**
+  the optional capture gate agrees. 503 reasons, in order: `proxy_draining` (text `DRAINING`),
+  `proxy_starting` (text `STARTING`), then with TCP SYN fingerprinting `capture_absent` /
+  `capture_draining` / `capture_detached` (text `NOCAPTURE`).
+- `/live` — Kubernetes `livenessProbe`; stays 200 during drain so kubelet does not SIGKILL the pod
+- `/metrics` — Prometheus
 
-Size `drain_delay_secs + shutdown_secs` below `terminationGracePeriodSeconds` (or systemd `TimeoutStopSec`).
+On SIGTERM, `/ready` fails first (`proxy_draining`) while the traffic port still accepts for
+`timeout.drain_delay_secs` (default `0` = no window). Then accept stops. Size
+`drain_delay_secs + shutdown_secs` below `terminationGracePeriodSeconds` (or systemd
+`TimeoutStopSec`).
 
 ### eBPF agent (observability server)
 
-- `/health` - general health check (alias of liveness, always 200 while running)
-- `/ready` - kubelet readiness probe: 200 if the program is attached in-process, required pins exist, and the agent is not draining; 503 otherwise (`capture_draining` / `capture_detached` / `pins_not_ready`; text `NOCAPTURE` or `PINS_MISSING`). Body format is `HUGINN_EBPF_HEALTH_FORMAT` (`json` default, `/ready` 200 is `{"status":"serving"}`; `text` is `SERVING`). `/metrics` is never affected. Do not AND this with the proxy as a second load-balancer monitor.
-- `/live` - liveness probe (200 while the process is alive)
-- `/metrics` - Prometheus metrics
+- `/health` — alias of liveness; 200 while the process is up
+- `/ready` — kubelet only. 200 when attached in-process, required pins exist, not draining, and if
+  this process pinned a `bpf_link`, that pin file still exists. 503: `capture_draining` /
+  `capture_detached` (text `NOCAPTURE`) or `pins_not_ready` (text `PINS_MISSING`). Do not AND
+  this with the proxy as a second load-balancer monitor.
+- `/live` — 200 while the process is alive
+- `/metrics` — Prometheus
 
 ### Upgrade order: agent first, then proxy
 
-The proxy's capture gate reads the `capture_state` map. An agent image that predates that map
-never publishes it, so a proxy running the gate against an old agent reads `capture_absent` and
-stays 503 even though the SYN maps are fine and fingerprints are being captured. The agent's own
-`/ready` is 200 throughout, because `capture_state` is deliberately excluded from its required
-pins so legacy images do not fail themselves.
+The proxy gate reads `capture_state`. An old agent image never publishes that map, so a new proxy
+stays 503 (`capture_absent`) even while SYN maps and fingerprints are fine. The agent's `/ready`
+stays 200: `capture_state` is not in its required pins, so legacy images do not fail themselves.
 
-Roll the DaemonSet first and wait for it to converge, then roll the proxy. Only affects
-deployments with TCP SYN fingerprinting enabled.
+Roll the DaemonSet, wait until it converges, then roll the proxy. Only with TCP SYN fingerprinting
+enabled.
 
 ## Performance Tuning
 
