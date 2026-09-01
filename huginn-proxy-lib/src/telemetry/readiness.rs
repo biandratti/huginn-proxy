@@ -24,6 +24,40 @@ struct Inner {
     draining: AtomicBool,
 }
 
+/// Shared state behind the observability server's `/ready` endpoint.
+///
+/// Cheap to clone (`Arc` inside). `run()` holds one handle and the observability server
+/// another; both observe the same state.
+///
+/// # Lifecycle
+///
+/// ```text
+/// new()           503 proxy_starting
+/// mark_ready()    200                   listeners bound (server.rs)
+/// mark_draining() 503 proxy_draining    SIGTERM; listeners keep accepting
+/// ```
+///
+/// Draining is terminal: `mark_ready()` cannot undo it. Readiness only fails the probe so
+/// the load balancer stops sending new traffic; closing the listen socket is
+/// [`ShutdownPhase::Stopping`](crate::proxy::shutdown::ShutdownPhase::Stopping)'s job, one
+/// `timeout.drain_delay_secs` later. Letting readiness flip back to 200 inside that window
+/// would hand traffic to a process about to stop accepting.
+///
+/// ```
+/// use huginn_proxy_lib::{NotReadyReason, Readiness};
+///
+/// let readiness = Readiness::new();
+/// assert_eq!(readiness.not_ready_reason(), Some(NotReadyReason::ProxyStarting));
+///
+/// readiness.mark_ready();
+/// assert!(readiness.is_ready());
+///
+/// readiness.mark_draining();
+/// assert_eq!(readiness.not_ready_reason(), Some(NotReadyReason::ProxyDraining));
+///
+/// readiness.mark_ready();
+/// assert_eq!(readiness.not_ready_reason(), Some(NotReadyReason::ProxyDraining));
+/// ```
 #[derive(Clone)]
 pub struct Readiness(Arc<Inner>);
 
@@ -43,17 +77,15 @@ impl Readiness {
     }
 
     /// Mark the proxy as ready to accept traffic (`/ready` -> 200).
+    ///
+    /// Does not clear `draining`: once shutdown starts there is no way back to 200.
     pub fn mark_ready(&self) {
-        self.0.draining.store(false, Ordering::Release);
         self.0.ready.store(true, Ordering::Release);
     }
 
-    /// Mark the proxy as not ready (`/ready` -> 503), e.g. during graceful shutdown.
-    pub fn mark_not_ready(&self) {
-        self.0.ready.store(false, Ordering::Release);
-    }
-
     /// Fail `/ready` with `proxy_draining` while listeners still accept.
+    ///
+    /// Terminal: no other method leaves this state.
     pub fn mark_draining(&self) {
         self.0.draining.store(true, Ordering::Release);
         self.0.ready.store(false, Ordering::Release);
@@ -66,12 +98,14 @@ impl Readiness {
     }
 
     /// `None` when ready; otherwise why `/ready` is 503.
+    ///
+    /// Draining is checked first so it outranks every other reason.
     pub fn not_ready_reason(&self) -> Option<NotReadyReason> {
-        if self.0.ready.load(Ordering::Acquire) {
-            return None;
-        }
         if self.0.draining.load(Ordering::Acquire) {
-            Some(NotReadyReason::ProxyDraining)
+            return Some(NotReadyReason::ProxyDraining);
+        }
+        if self.0.ready.load(Ordering::Acquire) {
+            None
         } else {
             Some(NotReadyReason::ProxyStarting)
         }
