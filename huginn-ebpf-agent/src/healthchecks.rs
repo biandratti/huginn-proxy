@@ -51,12 +51,17 @@ impl AgentHealth {
         &self.pin_path
     }
 
+    /// Record a successful attach. Does not clear `draining`: once SIGTERM lands there is no
+    /// way back to 200, same contract as `Readiness::mark_ready` on the proxy side.
     pub fn mark_attached(&self, link_pinned: bool) {
         self.expect_link_pin.store(link_pinned, Ordering::Release);
         self.attached.store(true, Ordering::Release);
-        self.draining.store(false, Ordering::Release);
     }
 
+    /// Fail `/ready` with `capture_draining`. Terminal: no other method leaves this state.
+    ///
+    /// Process-local, unlike the `capture_state` lifecycle this agent also writes to bpffs,
+    /// which outlives the process and is only reset by the next agent.
     pub fn mark_draining(&self) {
         self.draining.store(true, Ordering::Release);
     }

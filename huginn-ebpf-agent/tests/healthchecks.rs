@@ -36,6 +36,15 @@ fn draining_outranks_detached() {
 }
 
 #[test]
+fn mark_attached_cannot_cancel_draining() {
+    let health = AgentHealth::new("/no/such/pins".into(), "/no/such/link".into());
+    health.mark_draining();
+    health.mark_attached(false);
+    assert!(!health.is_ready());
+    assert_eq!(health.not_ready_reason(), Some(NotReadyReason::CaptureDraining));
+}
+
+#[test]
 fn attached_without_pins_is_pins_not_ready() {
     let health = AgentHealth::new("/no/such/pins".into(), "/no/such/link".into());
     health.mark_attached(false);
