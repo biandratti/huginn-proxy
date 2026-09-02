@@ -56,14 +56,7 @@ impl AgentHealth {
     pub fn mark_attached(&self, link_pinned: bool) {
         self.expect_link_pin.store(link_pinned, Ordering::Release);
         self.attached.store(true, Ordering::Release);
-        match self.not_ready_reason() {
-            None => tracing::info!(link_pinned, "agent ready"),
-            Some(reason) => tracing::info!(
-                link_pinned,
-                reason = reason.as_str(),
-                "capture attached, agent not ready yet"
-            ),
-        }
+        self.log_transition();
     }
 
     /// Fail `/ready` with `capture_draining`. Terminal: no other method leaves this state.
@@ -72,9 +65,18 @@ impl AgentHealth {
     /// which outlives the process and is only reset by the next agent.
     pub fn mark_draining(&self) {
         self.draining.store(true, Ordering::Release);
+        self.log_transition();
+    }
+
+    /// One event for every readiness change, so a single filter follows the whole timeline.
+    /// `reason` is omitted when ready.
+    fn log_transition(&self) {
+        let reason = self.not_ready_reason();
         tracing::info!(
-            reason = NotReadyReason::CaptureDraining.as_str(),
-            "agent draining, no longer ready"
+            ready = reason.is_none(),
+            link_pinned = self.expect_link_pin.load(Ordering::Acquire),
+            reason = reason.map(NotReadyReason::as_str),
+            "agent readiness changed"
         );
     }
 

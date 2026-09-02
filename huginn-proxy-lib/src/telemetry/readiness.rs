@@ -154,12 +154,7 @@ impl Readiness {
     /// Does not clear `draining`: once shutdown starts there is no way back to 200.
     pub fn mark_ready(&self) {
         self.0.ready.store(true, Ordering::Release);
-        match self.not_ready_reason() {
-            None => tracing::info!("proxy ready"),
-            Some(reason) => {
-                tracing::info!(reason = reason.as_str(), "listeners up, proxy not ready yet")
-            }
-        }
+        self.log_transition();
     }
 
     /// Fail `/ready` with `proxy_draining` while listeners still accept.
@@ -168,9 +163,17 @@ impl Readiness {
     pub fn mark_draining(&self) {
         self.0.draining.store(true, Ordering::Release);
         self.0.ready.store(false, Ordering::Release);
+        self.log_transition();
+    }
+
+    /// One event for every readiness change, so a single filter follows the whole timeline.
+    /// `reason` is omitted when ready.
+    fn log_transition(&self) {
+        let reason = self.not_ready_reason();
         tracing::info!(
-            reason = NotReadyReason::ProxyDraining.as_str(),
-            "proxy draining, no longer ready"
+            ready = reason.is_none(),
+            reason = reason.map(NotReadyReason::as_str),
+            "proxy readiness changed"
         );
     }
 
