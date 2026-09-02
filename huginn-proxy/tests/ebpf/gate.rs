@@ -1,6 +1,9 @@
 use huginn_ebpf::{pin, CaptureState};
-use huginn_proxy::ebpf::gate::decide;
+use huginn_proxy::ebpf::gate::{decide, load_gate, store_gate};
 use huginn_proxy_lib::GateState;
+use std::io::Write;
+use std::sync::atomic::AtomicU8;
+use std::sync::{Arc, Mutex};
 
 const STALE_TICKS: u32 = 3;
 
@@ -79,4 +82,60 @@ fn a_resumed_heartbeat_recovers_from_detached() {
     }
     assert_eq!(heartbeat.tick(CaptureState::capturing(7, 42), false), GateState::Detached);
     assert_eq!(heartbeat.tick(CaptureState::capturing(7, 43), false), GateState::Ready);
+}
+
+/// `MakeWriter` that captures every line the `fmt` subscriber writes.
+#[derive(Clone, Default)]
+struct LogCapture(Arc<Mutex<Vec<u8>>>);
+
+impl LogCapture {
+    fn snapshot(&self) -> String {
+        String::from_utf8_lossy(&self.0.lock().unwrap_or_else(|p| p.into_inner())).to_string()
+    }
+}
+
+impl Write for LogCapture {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        self.0
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .extend_from_slice(buf);
+        Ok(buf.len())
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+impl<'a> tracing_subscriber::fmt::MakeWriter<'a> for LogCapture {
+    type Writer = LogCapture;
+    fn make_writer(&'a self) -> Self::Writer {
+        self.clone()
+    }
+}
+
+/// The watcher re-resolves the gate on every poll tick, so only a change may log. Logging every
+/// tick would emit a line per `HUGINN_EBPF_CAPTURE_POLL_SECS` for the life of a healthy proxy.
+#[test]
+fn only_a_changed_gate_logs() {
+    let capture = LogCapture::default();
+    let subscriber = tracing_subscriber::fmt()
+        .with_writer(capture.clone())
+        .with_max_level(tracing::Level::INFO)
+        .with_ansi(false)
+        .without_time()
+        .finish();
+    let _guard = tracing::subscriber::set_default(subscriber);
+
+    let slot = Arc::new(AtomicU8::new(GateState::Absent as u8));
+    store_gate(&slot, GateState::Ready);
+    store_gate(&slot, GateState::Ready);
+    store_gate(&slot, GateState::Ready);
+    store_gate(&slot, GateState::Draining);
+
+    let logged = capture.snapshot();
+    assert_eq!(logged.lines().count(), 2, "one line per transition only: {logged}");
+    assert!(logged.contains(r#"from="absent" to="ready""#), "{logged}");
+    assert!(logged.contains(r#"from="ready" to="draining""#), "{logged}");
+    assert_eq!(load_gate(&slot), GateState::Draining);
 }

@@ -6,7 +6,10 @@ use huginn_ebpf::{pin, read_capture_state, CaptureState};
 use huginn_proxy_lib::GateState;
 
 pub fn store_gate(slot: &AtomicU8, state: GateState) {
-    slot.store(state as u8, Ordering::Release);
+    let previous = GateState::from_u8(slot.swap(state as u8, Ordering::Release));
+    if previous != state {
+        tracing::info!(from = previous.as_str(), to = state.as_str(), "capture gate changed");
+    }
 }
 
 pub fn load_gate(slot: &Arc<AtomicU8>) -> GateState {

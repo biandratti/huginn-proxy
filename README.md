@@ -151,7 +151,8 @@ and [EBPF-SETUP.md](EBPF-SETUP.md); local Compose under [`examples/`](examples/)
 
 ## Architecture
 
-For module structure and design decisions, see [ARCHITECTURE.md](ARCHITECTURE.md).
+For module structure and design decisions, see [ARCHITECTURE.md](ARCHITECTURE.md); for startup,
+readiness, and shutdown (with and without the eBPF agent), see [LIFECYCLE.md](LIFECYCLE.md).
 
 | Fingerprint     | Header           | eBPF agent required                 |
 |-----------------|------------------|-------------------------------------|
