@@ -60,6 +60,7 @@ fn load_probe(
         capture,
         EbpfLogLevel::Off,
         &pin_base,
+        &huginn_ebpf::pin::capture_link_path(&pin_base),
         rate_limit,
     )
     .unwrap_or_else(|e| {

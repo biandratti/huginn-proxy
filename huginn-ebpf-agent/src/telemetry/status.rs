@@ -3,9 +3,11 @@ use crate::telemetry::http::{json_response, text_response, RespBody};
 use hyper::{Response, StatusCode};
 use serde::Serialize;
 
-#[derive(Debug, Clone, Copy)]
-pub(crate) enum NotReadyReason {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NotReadyReason {
     PinsNotReady,
+    CaptureDraining,
+    CaptureDetached,
 }
 
 impl Serialize for NotReadyReason {
@@ -18,12 +20,15 @@ impl NotReadyReason {
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::PinsNotReady => "pins_not_ready",
+            Self::CaptureDraining => "capture_draining",
+            Self::CaptureDetached => "capture_detached",
         }
     }
 
     pub const fn text_token(self) -> &'static str {
         match self {
             Self::PinsNotReady => "PINS_MISSING",
+            Self::CaptureDraining | Self::CaptureDetached => "NOCAPTURE",
         }
     }
 }
@@ -68,7 +73,8 @@ impl StatusBody {
 
     /// Status tokens must stay in lockstep with `proxy_text_token` in
     /// `huginn-proxy-lib` (`HEALTHY` / `ALIVE` / `SERVING` / `NOT_FOUND` / `ERROR`).
-    /// `NotReady` tokens differ per process (`PINS_MISSING` vs `STARTING` / `DRAINING`).
+    /// `NotReady` tokens differ per process (`PINS_MISSING` / `NOCAPTURE` vs
+    /// `STARTING` / `DRAINING` / `NOCAPTURE`).
     pub(crate) fn agent_text_token(&self) -> &'static str {
         match self.status {
             Status::Healthy => "HEALTHY",

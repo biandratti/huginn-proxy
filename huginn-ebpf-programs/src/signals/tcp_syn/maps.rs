@@ -27,6 +27,13 @@ pub static syn_counter: Array<u64> = Array::with_max_entries(1, 0);
 #[allow(non_upper_case_globals)]
 pub static syn_meta: Array<u64> = Array::with_max_entries(1, 0);
 
+/// Userspace heartbeat / drain flag / boot id (see `huginn_ebpf::pin` slot constants).
+/// Not read by the datapath; `#[used]` keeps the linker from stripping it.
+#[used]
+#[map]
+#[allow(non_upper_case_globals)]
+pub static capture_state: Array<u64> = Array::with_max_entries(3, 0);
+
 #[map]
 #[allow(non_upper_case_globals)]
 pub static syn_insert_failures_v4: PerCpuArray<u64> = PerCpuArray::with_max_entries(1, 0);

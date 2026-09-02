@@ -2,13 +2,61 @@
 
 use serde::Serialize;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
+
+/// Result of an optional extra readiness check (e.g. capture health).
+///
+/// The proxy library does not know what the check is; the binary injects a
+/// [`ReadinessGate`] when a feature needs to AND another condition into `/ready`.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[repr(u8)]
+pub enum GateState {
+    Ready = 0,
+    Absent = 1,
+    Draining = 2,
+    Detached = 3,
+}
+
+impl GateState {
+    pub fn from_u8(value: u8) -> Self {
+        match value {
+            0 => Self::Ready,
+            2 => Self::Draining,
+            3 => Self::Detached,
+            _ => Self::Absent,
+        }
+    }
+
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Ready => "ready",
+            Self::Absent => "absent",
+            Self::Draining => "draining",
+            Self::Detached => "detached",
+        }
+    }
+
+    pub fn reason(self) -> Option<NotReadyReason> {
+        match self {
+            Self::Ready => None,
+            Self::Absent => Some(NotReadyReason::CaptureAbsent),
+            Self::Draining => Some(NotReadyReason::CaptureDraining),
+            Self::Detached => Some(NotReadyReason::CaptureDetached),
+        }
+    }
+}
+
+/// Lock-free extra check consulted after the proxy's own starting/draining flags.
+pub type ReadinessGate = Arc<dyn Fn() -> GateState + Send + Sync>;
 
 /// Why `/ready` is 503. JSON `reason` and logs both use [`Self::as_str`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NotReadyReason {
     ProxyStarting,
     ProxyDraining,
+    CaptureAbsent,
+    CaptureDraining,
+    CaptureDetached,
 }
 
 impl Serialize for NotReadyReason {
@@ -22,6 +70,9 @@ impl NotReadyReason {
         match self {
             Self::ProxyStarting => "proxy_starting",
             Self::ProxyDraining => "proxy_draining",
+            Self::CaptureAbsent => "capture_absent",
+            Self::CaptureDraining => "capture_draining",
+            Self::CaptureDetached => "capture_detached",
         }
     }
 
@@ -29,6 +80,7 @@ impl NotReadyReason {
         match self {
             Self::ProxyStarting => "STARTING",
             Self::ProxyDraining => "DRAINING",
+            Self::CaptureAbsent | Self::CaptureDraining | Self::CaptureDetached => "NOCAPTURE",
         }
     }
 }
@@ -36,6 +88,7 @@ impl NotReadyReason {
 struct Inner {
     ready: AtomicBool,
     draining: AtomicBool,
+    gate: OnceLock<ReadinessGate>,
 }
 
 /// Shared state behind the observability server's `/ready` endpoint.
@@ -80,6 +133,7 @@ impl Default for Readiness {
         Self(Arc::new(Inner {
             ready: AtomicBool::new(false),
             draining: AtomicBool::new(false),
+            gate: OnceLock::new(),
         }))
     }
 }
@@ -90,11 +144,17 @@ impl Readiness {
         Self::default()
     }
 
-    /// Mark the proxy as ready to accept traffic (`/ready` -> 200).
+    /// Install an extra AND-ed check. Call once; later calls are ignored.
+    pub fn set_gate(&self, gate: ReadinessGate) {
+        let _ = self.0.gate.set(gate);
+    }
+
+    /// Mark the proxy as ready to accept traffic (`/ready` -> 200 if the gate agrees).
     ///
     /// Does not clear `draining`: once shutdown starts there is no way back to 200.
     pub fn mark_ready(&self) {
         self.0.ready.store(true, Ordering::Release);
+        self.log_transition();
     }
 
     /// Fail `/ready` with `proxy_draining` while listeners still accept.
@@ -103,6 +163,18 @@ impl Readiness {
     pub fn mark_draining(&self) {
         self.0.draining.store(true, Ordering::Release);
         self.0.ready.store(false, Ordering::Release);
+        self.log_transition();
+    }
+
+    /// One event for every readiness change, so a single filter follows the whole timeline.
+    /// `reason` is omitted when ready.
+    fn log_transition(&self) {
+        let reason = self.not_ready_reason();
+        tracing::info!(
+            ready = reason.is_none(),
+            reason = reason.map(NotReadyReason::as_str),
+            "proxy readiness changed"
+        );
     }
 
     /// Whether `/ready` would return 200. Same source of truth as the HTTP probe
@@ -113,15 +185,14 @@ impl Readiness {
 
     /// `None` when ready; otherwise why `/ready` is 503.
     ///
-    /// Draining is checked first so it outranks every other reason.
+    /// Priority: `proxy_draining`, then `proxy_starting`, then the optional gate.
     pub fn not_ready_reason(&self) -> Option<NotReadyReason> {
         if self.0.draining.load(Ordering::Acquire) {
             return Some(NotReadyReason::ProxyDraining);
         }
-        if self.0.ready.load(Ordering::Acquire) {
-            None
-        } else {
-            Some(NotReadyReason::ProxyStarting)
+        if !self.0.ready.load(Ordering::Acquire) {
+            return Some(NotReadyReason::ProxyStarting);
         }
+        self.0.gate.get().and_then(|gate| gate().reason())
     }
 }

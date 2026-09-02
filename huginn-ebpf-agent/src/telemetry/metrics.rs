@@ -3,7 +3,7 @@ use huginn_ebpf::{
     syn_insert_failures_v4_count_from_path, syn_insert_failures_v6_count_from_path,
     syn_malformed_v4_count_from_path, syn_malformed_v6_count_from_path,
     syn_rate_allowed_v4_count_from_path, syn_rate_allowed_v6_count_from_path,
-    syn_rate_skipped_v4_count_from_path, syn_rate_skipped_v6_count_from_path,
+    syn_rate_skipped_v4_count_from_path, syn_rate_skipped_v6_count_from_path, CaptureMode,
 };
 use opentelemetry::global;
 use opentelemetry::metrics::{Gauge, Meter};
@@ -19,6 +19,8 @@ pub mod labels {
     pub const FAMILY: &str = "family";
     pub const FAMILY_V4: &str = "ipv4";
     pub const FAMILY_V6: &str = "ipv6";
+    pub const CAPTURE_MODE: &str = "capture_mode";
+    pub const LINK_PINNED: &str = "link_pinned";
 }
 
 #[derive(Clone)]
@@ -26,6 +28,7 @@ pub struct Metrics {
     pub agent_up: Gauge<u64>,
     pub build_info: Gauge<u64>,
     pub rate_limit_enabled: Gauge<u64>,
+    pub capture_info: Gauge<u64>,
 }
 
 impl Metrics {
@@ -33,7 +36,7 @@ impl Metrics {
         Self {
             agent_up: meter
                 .u64_gauge("agent_up")
-                .with_description("1 if the agent has pinned maps and is running")
+                .with_description("1 if the agent is attached, pins exist, and it is not draining")
                 .build(),
             build_info: meter
                 .u64_gauge("huginn_ebpf_agent_build_info")
@@ -43,19 +46,31 @@ impl Metrics {
                 .u64_gauge("tcp_syn_rate_limit_enabled")
                 .with_description("1 if the per-source-IP SYN rate limiter is enabled")
                 .build(),
+            capture_info: meter
+                .u64_gauge("huginn_ebpf_capture_info")
+                .with_description(
+                    "1 labelled with the effective attach mechanism and whether the bpf_link is pinned",
+                )
+                .build(),
         }
     }
 
-    pub fn set_ready(&self) {
-        self.agent_up.record(1, &[]);
-    }
-
-    pub fn set_not_ready(&self) {
-        self.agent_up.record(0, &[]);
+    pub fn set_ready(&self, up: bool) {
+        self.agent_up.record(u64::from(up), &[]);
     }
 
     pub fn set_rate_limit_enabled(&self, enabled: bool) {
         self.rate_limit_enabled.record(u64::from(enabled), &[]);
+    }
+
+    pub fn set_capture_info(&self, mode: CaptureMode, link_pinned: bool) {
+        self.capture_info.record(
+            1,
+            &[
+                KeyValue::new(labels::CAPTURE_MODE, mode.as_str()),
+                KeyValue::new(labels::LINK_PINNED, if link_pinned { "true" } else { "false" }),
+            ],
+        );
     }
 
     pub fn set_build_info(&self) {

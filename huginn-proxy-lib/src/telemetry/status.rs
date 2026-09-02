@@ -44,7 +44,8 @@ impl StatusBody {
 
     /// Status tokens must stay in lockstep with `agent_text_token` in
     /// `huginn-ebpf-agent` (`HEALTHY` / `ALIVE` / `SERVING` / `NOT_FOUND` / `ERROR`).
-    /// `NotReady` tokens differ per process (`STARTING` / `DRAINING` vs `PINS_MISSING`).
+    /// `NotReady` tokens differ per process (`STARTING` / `DRAINING` / `NOCAPTURE` vs
+    /// `PINS_MISSING` / `NOCAPTURE`).
     pub(crate) fn proxy_text_token(&self) -> &'static str {
         match self.status {
             Status::Healthy => "HEALTHY",

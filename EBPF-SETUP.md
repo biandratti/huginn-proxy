@@ -58,7 +58,7 @@ outcomes are good:
 | Backend                        | Second agent                                                                                                                                                     |
 |--------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `xdp-native`, `xdp-skb`        | Attach fails with `EBUSY`. Only one XDP program per interface without a libxdp dispatcher.                                                                       |
-| `tc` on kernel ≥ 6.6 (TCX)     | **Both stay attached.** The TCX multi-prog API stacks programs on the hook instead of replacing, so both capture and the `syn_captured_*` counters double-count. |
+| `tc` on kernel ≥ 6.6 (TCX) | If they share the same link pin, the second `attach_to_link` **replaces** the first program (last writer wins). If they attach without a shared pin, both stay attached and `syn_captured_*` double-count. |
 | `tc` on kernel < 6.6 (netlink) | Both stay attached as separate clsact filters with different priorities. Same double-counting.                                                                   |
 
 The `tc` cases are the dangerous ones: nothing errors and nothing logs, so a duplicated agent
@@ -66,11 +66,21 @@ looks healthy while inflating counters.
 
 ### Kernel ≥ 6.6 for TCX (backend `tc` only)
 
-With `HUGINN_EBPF_CAPTURE=tc`, aya picks the attach mechanism at load time based on the running
-kernel — TCX (`bpf_link`, multi-prog API) on ≥ 6.6, legacy netlink clsact filter below. The
-selection is silent: same config, same logs, different mechanism. Both capture SYNs identically,
-so this only matters if you depend on TCX properties (`bpf_link` pinning, explicit ordering,
-`bpf_mprog` queries). Check with `uname -r`.
+With `HUGINN_EBPF_CAPTURE=tc`, the agent chooses the attach mechanism at load time from the
+running kernel and **logs + exports the result** as `capture_mode`:
+
+| Kernel | `capture_mode` | Pinned `bpf_link` | Agent restart |
+|---|---|---|---|
+| ≥ 6.6 | `tcx` | yes (`{pin_path}/capture_link`, override with `HUGINN_EBPF_LINK_PIN_PATH`) | hitless: `attach_to_link` replaces the program on the same link |
+| < 6.6 (or unreadable `uname`) | `netlink` | no (warning at start) | `drop(probe)` detaches; fresh captures pause until the new agent attaches |
+
+There is no `tcx` value of `HUGINN_EBPF_CAPTURE`. Check with `uname -r` and the
+`huginn_ebpf_capture_info` metric (`capture_mode`, `link_pinned`).
+
+XDP (`xdp-native` / `xdp-skb`) uses aya's `bpf_link_create` path when the kernel accepts it
+(typically ≥ 5.9) and pins that fd link the same way. If the kernel falls back to netlink XDP,
+the agent logs a warning, does not pin, and restart detaches as before. Do not assume XDP
+rollouts are hitless until `link_pinned="true"`.
 
 ### bpffs
 
@@ -125,8 +135,11 @@ No `seccomp:unconfined` or `apparmor:unconfined` needed.
 | `HUGINN_EBPF_DST_IP_V6`                 | `::`                 | IPv6 destination filter (`::` = no filter); quote in YAML if needed                                                                                                                                                                                                                                                                                                                                                             |
 | `HUGINN_EBPF_DST_PORT`                  | `7000`               | Destination port filter (proxy listen port)                                                                                                                                                                                                                                                                                                                                                                                     |
 | `HUGINN_EBPF_PIN_PATH`                  | `/sys/fs/bpf/huginn` | Pin directory (default shown)                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `HUGINN_EBPF_LINK_PIN_PATH`            | `{HUGINN_EBPF_PIN_PATH}/capture_link` | Pin path for the capture `bpf_link` (not a BPF map). Left in place on SIGTERM so the next agent can atomically replace the program. Unused on netlink attaches. Also the attach signal the proxy gate `stat()`s. |
+| `HUGINN_EBPF_DRAIN_DELAY_SECS`         | `0` | Agent phase 1: publish `capture_state` draining and wait before `drop(probe)`. Size with `capture_poll_secs` + load-balancer detection + margin |
+| `HUGINN_EBPF_HEARTBEAT_SECS`           | `1` | How often userspace bumps `capture_state.generation`. Must be a positive integer; used on the netlink path when there is no link pin |
 | `HUGINN_EBPF_SYN_MAP_MAX_ENTRIES`       | `8192`               | LRU map capacity (default shown). Agent-only: the agent publishes this value into the family-agnostic `syn_meta` map, and the proxy reads it from there for its staleness threshold — so it must not be set on the proxy.                                                                                                                                                                                                       |
-| `HUGINN_EBPF_CAPTURE`                   | `xdp-native`         | Capture backend: `xdp-native` (driver XDP, default), `xdp-skb` (generic XDP, veth/loopback/VMs), or `tc` (clsact ingress; GRO-safe when native XDP is unavailable, e.g. VLAN/bond on generic XDP). Same BPF maps either way. There is no `tcx` value: `tc` attaches via TCX automatically on kernel ≥ 6.6, see [Kernel ≥ 6.6 for TCX](#kernel--66-for-tcx-backend-tc-only).                                                     |
+| `HUGINN_EBPF_CAPTURE`                   | `xdp-native`         | Capture backend: `xdp-native` (driver XDP, default), `xdp-skb` (generic XDP, veth/loopback/VMs), or `tc` (clsact ingress; GRO-safe when native XDP is unavailable, e.g. VLAN/bond on generic XDP). Same BPF maps either way. There is no `tcx` value: `tc` attaches via TCX on kernel ≥ 6.6 and netlink below; the effective mechanism is `capture_mode` (see [Kernel ≥ 6.6 for TCX](#kernel--66-for-tcx-backend-tc-only)). |
 | `HUGINN_EBPF_LOG_LEVEL`                 | `off`                | Verbosity of in-kernel `aya-log` datapath logging: `off` (default), `error`, `warn`, `info`, `debug`, `trace`. The kernel emits only records at/above the level (`debug` = per-capture, `warn` = map-insert failures), so the level gate runs in-kernel and `off` is zero-cost on the hot path. When non-`off` and `RUST_LOG` is unset, the agent defaults its filter to that level so records are shown. For diagnostics only. |
 | `HUGINN_EBPF_HEALTH_FORMAT`            | `json`               | Body of `/health`, `/ready`, `/live`, and observability 404/500: `json` (default) or `text`. `/metrics` is never affected. See [TELEMETRY.md](TELEMETRY.md#health-body-format). |
 | `HUGINN_EBPF_RATE_LIMIT_ENABLED`        | `false`              | Enable the in-kernel per-source-IP SYN rate limiter. When on, SYNs from an IP exceeding the threshold are skipped (not captured/fingerprinted); the packet still passes to the stack (never dropped). Uses a dual-buffer sliding-window Count-Min Sketch, hashed with a random seed drawn per agent load so the counter layout is not predictable from outside.                                                                 |
@@ -134,9 +147,9 @@ No `seccomp:unconfined` or `apparmor:unconfined` needed.
 | `HUGINN_EBPF_RATE_LIMIT_WINDOW_SECONDS` | `1`                  | Sliding-window length in seconds. Range `1..=3600`. Once a source crosses `burst`, its SYNs are skipped until the window ends, so a long window means a long gap in that source's fingerprints.                                                                                                                                                                                                                                 |
 
 > **Bad rate-limit value stops the agent**, like every other agent variable. An unset variable
-> takes its default; one that is set but unusable exits with a message. Note the proxy waits on
-> pinned maps that never appear, so a typo here also blocks TCP fingerprinting until the agent
-> starts. Check the agent log first if the proxy sits in `eBPF agent maps not available yet`.
+> takes its default; one that is set but unusable exits with a message. With TCP fingerprinting
+> on, the proxy `/ready` stays 503 (`capture_absent`) until the agent publishes `capture_state`.
+> Check the agent log first if the proxy sits not-ready with that reason.
 
 > **Scope and limits.** This shields the capture LRU from one loud source IP. It is **not** a
 > network-level DoS defense, and it does nothing against a distributed flood where each source stays
@@ -202,10 +215,7 @@ mechanism differ.
 
 - **`xdp-native`** — driver-level XDP. Lowest overhead. Requires NIC driver XDP support.
 - **`xdp-skb`** — generic XDP in the kernel stack. Works on veth/loopback/VMs.
-- **`tc`** — TC `clsact` **ingress** classifier. Reads packet bytes via `bpf_skb_load_bytes`
-  (GRO-safe) and returns `TC_ACT_OK`, so it **never drops** packets and works on **VLAN/bond**
-  interfaces. Attaches via TCX on kernel ≥ 6.6 and via a legacy netlink filter below — see
-  [Kernel ≥ 6.6 for TCX](#kernel--66-for-tcx-backend-tc-only).
+- **`tc`** — TC classifier on ingress. Use when native XDP is unavailable (VLAN/bond, or when generic XDP would miss GRO packets). Attach is TCX or netlink from the kernel version; see [Kernel ≥ 6.6 for TCX](#kernel--66-for-tcx-backend-tc-only).
 
 > Use `tc` when native XDP is not available and you would otherwise fall back to generic XDP
 > (`xdp-skb`). Generic XDP does not handle GRO-aggregated (multi-buffer) packets: the program
@@ -223,12 +233,15 @@ tcp_enabled = true   # false = no BPF maps opened, no capabilities needed
 | Variable                          | Example              | Description                                                                                                                                                                                            |
 |-----------------------------------|----------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `HUGINN_EBPF_PIN_PATH`            | `/sys/fs/bpf/huginn` | Pin directory to read maps from (default shown)                                                                                                                                                        |
-| `HUGINN_EBPF_RECONNECT_POLL_SECS` | `5`                  | Backstop poll interval for detecting recreated maps (e.g. a capacity change or a wiped bpffs); `0` disables automatic reconnection. Normal agent restarts reuse the same maps and need no reconnection |
+| `HUGINN_EBPF_LINK_PIN_PATH`       | `{pin_path}/capture_link` | Path the capture gate `stat()`s as proof of attach (same default as the agent) |
+| `HUGINN_EBPF_CAPTURE_POLL_SECS`   | `1`                  | How often the capture gate refreshes. Minimum `1`; `0` is a startup error |
+| `HUGINN_EBPF_CAPTURE_STALE_TICKS` | `3`                  | Polls without a `generation` bump before `capture_detached` (netlink path only) |
+| `HUGINN_EBPF_RECONNECT_POLL_SECS` | `5`                  | Backstop poll interval for detecting recreated maps (e.g. a capacity change or a wiped bpffs); `0` disables automatic reconnection but **does not** stop the capture gate |
 
-At startup the proxy retries opening the pinned maps with a fixed backoff until the agent has
-pinned them, so the two containers can start in any order. See
-[Runtime lifecycle and agent restarts](#runtime-lifecycle-and-agent-restarts) for how the proxy
-behaves once connected.
+The proxy binds immediately. Until the agent publishes maps (and a non-zero `agent_boot_id` in
+`capture_state`), `/ready` is 503 with `capture_absent` (after listeners are up). Lookups return
+`SynResult::Miss` until the watcher opens the pins. See
+[Runtime lifecycle and agent restarts](#runtime-lifecycle-and-agent-restarts).
 
 ---
 
@@ -309,69 +322,61 @@ See [DEPLOYMENT.md](DEPLOYMENT.md) for the full Kubernetes section.
 
 ## Runtime lifecycle and agent restarts
 
-The proxy only reads maps when TCP fingerprinting is active — that is, built with the `ebpf-tcp`
-feature **and** `fingerprint.tcp_enabled = true`. Otherwise no maps are opened and none of the
-behavior below applies.
+This section applies only with `ebpf-tcp` **and** `fingerprint.tcp_enabled = true`.
 
 ### Startup
 
-The proxy retries `from_pinned` with a fixed backoff until the agent's pins appear. This wait
-only affects the proxy's own readiness (it does not mark `/ready` until listeners are accepting);
-the observability server is already up and answering `/health` and `/metrics` during the wait.
+The proxy binds immediately. `/ready` is 503 (`capture_absent`) until the agent publishes
+`capture_state` (non-zero `agent_boot_id`). Lookups miss until the watcher opens the pins.
 
-### Agent crash while the proxy is connected
+### Agent down, proxy still up
 
-The proxy **does not crash** if the agent dies after the maps are connected:
+The proxy keeps its own map FDs. Those maps stay in the kernel even if the agent exits or the pin
+files vanish. A lookup error is `SynResult::Miss` (no `x-tcp-p0f`); HTTP is never blocked.
 
-- The proxy holds its own file descriptors to the map objects. The kernel keeps a map alive while
-  any reference exists, so it survives the agent process exiting and even the pin files being
-  removed.
-- Every lookup degrades gracefully: any read error returns `SynResult::Miss`, so the
-  `x-tcp-p0f` header is simply not injected. Request forwarding is never blocked or dropped.
+| Attach | After the agent dies |
+|--------|----------------------|
+| Pinned `bpf_link` (TCX, XDP fd-link) | Program stays on the interface. The next agent replaces it with `attach_to_link`. |
+| Netlink (TC on kernel &lt; 6.6, or XDP without `bpf_link_create`) | `drop(probe)` detaches. New fingerprints pause until the next agent attaches. |
 
-The trade-off is a loss of **fresh** captures: the agent owns the attached XDP/TC program, so when
-it exits the program is detached and no new SYNs are written. Existing traffic keeps flowing;
-new connections just stop getting a fingerprint until a healthy agent is capturing again.
+`kubectl delete` of the DaemonSet is the same SIGTERM as a rollout: pins stay. The program can
+keep running with no userspace owner until reboot, a new agent adopts the pin, or a future
+`--cleanup` (not implemented). Uninstall does not mean the datapath is gone.
 
-### Agent restart: map reuse (no reconnection gap)
+### Rollout: capture can continue while `/ready` blips
 
-The agent pins its maps via `map_pin_path` and **leaves the pins in place on shutdown**. When it
-restarts it reuses the existing pinned maps instead of creating new ones, so the kernel IDs stay
-the same and the maps keep their contents. A proxy that already holds those maps therefore needs to
-do nothing, there is no reconnection window, and captures written just before and after the
-restart share one continuous map.
+On SIGTERM the agent writes `lifecycle = draining`. The gate ranks that above a live link pin,
+so every proxy on the node is 503 (`capture_draining`) until the next agent publishes `capturing`
+with a new `agent_boot_id`. A SIGKILL mid-drain leaves the slot set.
 
-The only case that recreates the maps is a **capacity change**: if `HUGINN_EBPF_SYN_MAP_MAX_ENTRIES`
-differs from the pinned SYN maps, the agent drops all pins on startup so the loader recreates them
-at the new size (aya would otherwise silently reuse the old capacity). The recreated maps get new
-kernel IDs.
+```
+HUGINN_EBPF_DRAIN_DELAY_SECS + HUGINN_EBPF_CAPTURE_POLL_SECS
+  + load-balancer probe interval + new agent startup
+```
 
-### Automatic reconnection (backstop)
+In-flight connections keep going; the load balancer stops **new** traffic. Size rollouts with
+`maxUnavailable: 1`. Capture never stopping is not the same as the proxy staying ready.
 
-The proxy periodically compares the kernel IDs of the pinned IPv4 and IPv6 SYN maps with the IDs of
-its open maps. If either ID changes — a capacity change as above, or an operator/node wiping bpffs —
-it opens a complete fresh map set and swaps it atomically without dropping connections.
+### Maps
 
-The recovery window is bounded by `HUGINN_EBPF_RECONNECT_POLL_SECS` (5 seconds by default). A pin
-that is temporarily absent while the agent is recreating maps is treated as transient: the proxy
-retains its previous maps and retries on the next poll. Set the interval to `0` to disable automatic
-reconnection; in that mode a map recreation again requires restarting the proxy.
+Shutdown leaves map pins and the capture link pin. The next agent reopens the same kernel IDs
+and, if a link pin exists, replaces the program in place.
+
+Maps are recreated only when `HUGINN_EBPF_SYN_MAP_MAX_ENTRIES` changes (otherwise aya would keep
+the old capacity). New IDs. The proxy compares published vs open IPv4/IPv6 IDs every
+`HUGINN_EBPF_RECONNECT_POLL_SECS` (default 5; `0` disables this, not the capture gate) and swaps
+atomically. A pin missing during recreate is transient: old maps stay until the next reconnect tick.
 
 ---
 
 ## HTTP keep-alives
 
-The capture program intercepts only TCP SYN packets. The fingerprint is looked up once at TCP
-accept time and reused for every request on that connection. As a result, **`x-tcp-p0f` is
-present on all requests** of a keep-alive connection, not just the first.
+Only TCP SYNs are captured. The fingerprint is looked up once at accept and reused for every
+request on that connection, so **`x-tcp-p0f` is on all keep-alive requests**, not just the first.
 
-A `SynResult::Miss` (no header injected) happens when:
+No header (`SynResult::Miss`) means the SYN was never in the map (startup, eviction) or the entry
+is stale (more than `2 × syn_map_max_entries` SYNs since capture). Capacity comes from the agent's
+`syn_meta` map, not from which IP family is enabled.
 
-- the SYN was not captured (proxy just started, map entry evicted), or
-- the entry is stale (more than `2 x syn_map_max_entries` SYNs arrived since capture). The proxy
-  reads `syn_map_max_entries` from the family-agnostic `syn_meta` map the agent publishes, so the
-  threshold always matches the agent's capacity and does not depend on which IP family is enabled.
-
-`force_new_connection = true` is unrelated to fingerprint availability: it controls whether
-the proxy opens a new TCP connection to the **backend** per request, not whether the client
-SYN is re-captured.
+`force_new_connection = true` opens a new TCP connection to the **backend**. It does not
+recapture the client SYN.

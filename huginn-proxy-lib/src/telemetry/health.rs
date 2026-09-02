@@ -18,9 +18,8 @@ pub fn live_check_response(format: HealthFormat) -> Response<RespBody> {
 }
 
 /// Readiness check - reports whether the proxy has finished starting up and is
-/// accepting connections.
-/// `not_ready_reason` is `None` when ready; otherwise the JSON `reason`
-/// (`proxy_starting` or `proxy_draining`).
+/// accepting connections. `not_ready_reason` is `None` when ready; otherwise the
+/// JSON `reason` (`proxy_starting`, `proxy_draining`, or `capture_*` from the gate).
 pub fn ready_check_response(
     not_ready_reason: Option<NotReadyReason>,
     format: HealthFormat,

@@ -11,11 +11,12 @@ use crate::EbpfError;
 use super::EbpfProbe;
 
 impl EbpfProbe {
-    /// Remove pinned map files.
+    /// Remove pinned **map** files.
     ///
-    /// Not part of the normal shutdown path: pins are intentionally left in
-    /// place so the next agent instance reuses the same maps (see
-    /// [`EbpfProbe::new`]). Exposed for manual cleanup / tests.
+    /// Not the normal shutdown path: maps stay so the next agent reuses the same kernel IDs
+    /// (see [`EbpfProbe::new`]). The capture `bpf_link` pin is not in [`pin::ALL_NAMES`] and is
+    /// not removed: deleting it would detach the program. There is no `--cleanup` yet; leftover
+    /// datapath after uninstall is documented in `EBPF-SETUP.md`.
     pub fn unpin_maps(base_path: &str) {
         remove_all_pins(base_path);
         warn!(base_path, "BPF map pins removed");
@@ -72,6 +73,8 @@ fn syn_pin_capacity_mismatch(path: PathBuf, expected: u32) -> bool {
     }
 }
 
+/// Drop every pinned **map**. Does not unlink [`pin::CAPTURE_LINK_NAME`]: that pin is what
+/// keeps the program on the interface across agent restart and map recreate.
 fn remove_all_pins(base_path: &str) {
     for name in pin::ALL_NAMES {
         let _ = std::fs::remove_file(Path::new(base_path).join(name));

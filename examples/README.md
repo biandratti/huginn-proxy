@@ -213,7 +213,7 @@ matches; you may still need to accept the browser warning unless you use `mkcert
 | Proxy      | `http://127.0.0.1:9090/live`    | Liveness                          |
 | Proxy      | `http://127.0.0.1:9090/metrics` | Prometheus metrics                |
 | eBPF Agent | `http://127.0.0.1:9091/health`  | Health (liveness alias)           |
-| eBPF Agent | `http://127.0.0.1:9091/ready`   | Readiness (BPF pins loaded)       |
+| eBPF Agent | `http://127.0.0.1:9091/ready`   | Readiness (attached + pins; kubelet) |
 | eBPF Agent | `http://127.0.0.1:9091/live`    | Liveness                          |
 | eBPF Agent | `http://127.0.0.1:9091/metrics` | Prometheus metrics                |
 

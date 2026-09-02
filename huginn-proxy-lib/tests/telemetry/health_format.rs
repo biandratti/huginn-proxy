@@ -4,9 +4,10 @@ use huginn_proxy_lib::telemetry::router::dispatch;
 use huginn_proxy_lib::telemetry::{
     health_check_response, live_check_response, ready_check_response,
 };
-use huginn_proxy_lib::{NotReadyReason, Readiness};
+use huginn_proxy_lib::{GateState, NotReadyReason, Readiness};
 use hyper::header::CONTENT_TYPE;
 use prometheus::Registry;
+use std::sync::Arc;
 
 type TestResult = Result<(), Box<dyn std::error::Error + Send + Sync>>;
 
@@ -16,6 +17,7 @@ const HEALTHY: &[&str] = &["ALIVE", "HEALTHY", "SERVING"];
 const UNHEALTHY: &[&str] = &[
     NotReadyReason::ProxyStarting.text_token(),
     NotReadyReason::ProxyDraining.text_token(),
+    NotReadyReason::CaptureAbsent.text_token(),
     "PINS_MISSING",
     "NOT_FOUND",
     "ERROR",
@@ -73,6 +75,9 @@ async fn golden_bytes_json_and_text() -> TestResult {
     let draining = Readiness::new();
     draining.mark_ready();
     draining.mark_draining();
+    let gated = Readiness::new();
+    gated.set_gate(Arc::new(|| GateState::Absent));
+    gated.mark_ready();
 
     let json = "application/json";
     let text = "text/plain; charset=utf-8";
@@ -155,6 +160,22 @@ async fn golden_bytes_json_and_text() -> TestResult {
             format: HealthFormat::Text,
             readiness: &draining,
             expected: NotReadyReason::ProxyDraining.text_token().as_bytes(),
+            status: 503,
+            content_type: text,
+        },
+        Case {
+            path: "/ready",
+            format: HealthFormat::Json,
+            readiness: &gated,
+            expected: br#"{"status":"not_ready","reason":"capture_absent"}"#,
+            status: 503,
+            content_type: json,
+        },
+        Case {
+            path: "/ready",
+            format: HealthFormat::Text,
+            readiness: &gated,
+            expected: NotReadyReason::CaptureAbsent.text_token().as_bytes(),
             status: 503,
             content_type: text,
         },

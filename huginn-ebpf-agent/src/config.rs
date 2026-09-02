@@ -22,12 +22,15 @@ pub struct Config {
     pub dst_ip_v6: Ipv6Addr,
     pub dst_port: u16,
     pub pin_path: String,
+    pub link_pin_path: String,
     pub syn_map_max_entries: u32,
     pub capture: CaptureBackend,
     pub metrics_listen_addr: String,
     pub metrics_port: u16,
     pub log_level: EbpfLogLevel,
     pub rate_limit: SynRateLimit,
+    pub drain_delay_secs: u64,
+    pub heartbeat_secs: u64,
     pub health_format: HealthFormat,
 }
 
@@ -75,6 +78,21 @@ pub fn from_env(get_var: impl Fn(&str) -> Option<String>) -> Result<Config, Conf
 
     let pin_path = get_var("HUGINN_EBPF_PIN_PATH").unwrap_or_else(|| DEFAULT_PIN_PATH.to_string());
 
+    let link_pin_path = match get_var("HUGINN_EBPF_LINK_PIN_PATH") {
+        Some(s) => {
+            let trimmed = s.trim();
+            if trimmed.is_empty() {
+                return Err(ConfigError::Invalid {
+                    name: "HUGINN_EBPF_LINK_PIN_PATH".to_string(),
+                    value: s,
+                    reason: "must be a non-empty bpffs path".to_string(),
+                });
+            }
+            trimmed.to_string()
+        }
+        None => pin::capture_link_path(&pin_path).display().to_string(),
+    };
+
     let syn_map_max_entries = get_var("HUGINN_EBPF_SYN_MAP_MAX_ENTRIES")
         .map(|s| {
             s.parse().map_err(|_| ConfigError::Invalid {
@@ -103,6 +121,9 @@ pub fn from_env(get_var: impl Fn(&str) -> Option<String>) -> Result<Config, Conf
 
     let rate_limit = resolve_rate_limit(&get_var)?;
 
+    let drain_delay_secs = parse_optional_u64(&get_var, "HUGINN_EBPF_DRAIN_DELAY_SECS", 0, false)?;
+    let heartbeat_secs = parse_optional_u64(&get_var, "HUGINN_EBPF_HEARTBEAT_SECS", 1, true)?;
+
     let health_format = parse_health_format(&get_var)?;
 
     Ok(Config {
@@ -111,12 +132,39 @@ pub fn from_env(get_var: impl Fn(&str) -> Option<String>) -> Result<Config, Conf
         dst_ip_v6,
         dst_port,
         pin_path,
+        link_pin_path,
         syn_map_max_entries,
         capture,
         metrics_listen_addr,
         metrics_port,
         log_level,
         rate_limit,
+        drain_delay_secs,
+        heartbeat_secs,
         health_format,
     })
+}
+
+fn parse_optional_u64(
+    get_var: &impl Fn(&str) -> Option<String>,
+    name: &str,
+    default: u64,
+    reject_zero: bool,
+) -> Result<u64, ConfigError> {
+    let Some(raw) = get_var(name) else {
+        return Ok(default);
+    };
+    let parsed = raw.parse::<u64>().map_err(|_| ConfigError::Invalid {
+        name: name.to_string(),
+        value: raw.clone(),
+        reason: "must be a non-negative integer".to_string(),
+    })?;
+    if reject_zero && parsed == 0 {
+        return Err(ConfigError::Invalid {
+            name: name.to_string(),
+            value: raw,
+            reason: "must be a positive integer".to_string(),
+        });
+    }
+    Ok(parsed)
 }

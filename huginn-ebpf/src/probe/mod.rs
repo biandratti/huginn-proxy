@@ -15,12 +15,17 @@ use crate::EbpfLogLevel;
 use crate::SynRateLimit;
 
 mod attach;
+mod capture_state;
 mod counters;
 mod keys;
 mod lookup;
 mod maps;
 mod seed;
 
+pub use capture_state::{
+    bump_capture_generation, new_agent_boot_id, publish_capture_draining, read_capture_state,
+    write_capture_state, CaptureState,
+};
 pub use counters::{
     is_stale, syn_captured_v4_count_from_path, syn_captured_v6_count_from_path,
     syn_insert_failures_v4_count_from_path, syn_insert_failures_v6_count_from_path,
@@ -41,8 +46,11 @@ static BPF_OBJECT_BYTES: &[u8] = aya::include_bytes_aligned!(env!("BPF_OBJECT_PA
 pub const DEFAULT_SYN_MAP_MAX_ENTRIES: u32 = 8192;
 
 enum ProbeInner {
-    /// Used by `huginn-ebpf-agent`: owns the BPF object and the attached capture program.
-    /// Dropping detaches the program from the interface.
+    /// Used by `huginn-ebpf-agent`: owns the BPF object.
+    ///
+    /// When the capture `bpf_link` is pinned, dropping this does **not** detach the program
+    /// (the pin keeps the attach alive for the next agent). Netlink attaches are still owned
+    /// by the program and detach on drop.
     Embedded { ebpf: Ebpf },
     /// Used by `huginn-proxy`: reads maps pinned by the agent.
     Pinned(Box<PinnedMaps>),
@@ -77,6 +85,8 @@ pub struct EbpfProbe {
     interface: String,
     syn_map_max_entries: u32,
     log_level: EbpfLogLevel,
+    capture_mode: Option<crate::CaptureMode>,
+    link_pinned: bool,
 }
 
 /// Ring-buffer drain handle for `aya-log`. Caller must poll the fd and call [`flush`](Self::flush).
@@ -122,6 +132,9 @@ impl EbpfProbe {
     ///   When non-off, drain the records via [`take_debug_log_poller`](Self::take_debug_log_poller).
     /// - `pin_base`: bpffs directory where maps are pinned (e.g. `/sys/fs/bpf/huginn`). Reuses
     ///   existing pins on restart; drops them first when `syn_map_max_entries` changed.
+    /// - `link_pin_path`: bpffs path for the capture `bpf_link` (default `{pin_base}/capture_link`).
+    ///   Not a map pin; used for atomic replace on agent restart (TCX / XDP fd-link). Absent or
+    ///   unusable on netlink attaches.
     /// - `rate_limit`: per-source-IP SYN rate limit. Use [`SynRateLimit::disabled`] to capture
     ///   every SYN. Over-limit SYNs are skipped (not captured); the packet is never dropped.
     #[allow(clippy::too_many_arguments)]
@@ -134,6 +147,7 @@ impl EbpfProbe {
         capture: CaptureBackend,
         log_level: EbpfLogLevel,
         pin_base: &str,
+        link_pin_path: &Path,
         rate_limit: SynRateLimit,
     ) -> Result<Self, EbpfError> {
         // The BPF program compares ip->daddr and tcp->dest (both network-byte-order fields)
@@ -207,10 +221,13 @@ impl EbpfProbe {
         // aya creates pins as 0600 root:root; relax them for the proxy process.
         maps::chmod_pins(pin_base);
 
-        let mode_str = match capture {
-            CaptureBackend::Xdp(xdp_mode) => attach::attach_xdp(&mut ebpf, interface, xdp_mode)?,
-            CaptureBackend::Tc => attach::attach_tc(&mut ebpf, interface)?,
+        let outcome = match capture {
+            CaptureBackend::Xdp(xdp_mode) => {
+                attach::attach_xdp(&mut ebpf, interface, xdp_mode, link_pin_path)?
+            }
+            CaptureBackend::Tc => attach::attach_tc(&mut ebpf, interface, link_pin_path)?,
         };
+        let mode_str = outcome.mode.as_str();
 
         let filter_ip_v4 = if dst_ip_v4.is_unspecified() {
             "any".to_string()
@@ -228,6 +245,7 @@ impl EbpfProbe {
             filter_ip_v6,
             dst_port,
             mode = mode_str,
+            link_pinned = outcome.link_pinned,
             rate_limit_enabled = rate_limit.enabled(),
             rate_limit_threshold = rate_limit.threshold(),
             rate_limit_window_ns = rate_limit.window_ns(),
@@ -239,6 +257,8 @@ impl EbpfProbe {
             interface: interface.to_string(),
             syn_map_max_entries,
             log_level,
+            capture_mode: Some(outcome.mode),
+            link_pinned: outcome.link_pinned,
         })
     }
 
@@ -297,6 +317,8 @@ impl EbpfProbe {
             interface: String::new(),
             syn_map_max_entries,
             log_level: EbpfLogLevel::Off,
+            capture_mode: None,
+            link_pinned: false,
         })
     }
 
@@ -403,5 +425,15 @@ impl EbpfProbe {
 
     pub fn interface(&self) -> &str {
         &self.interface
+    }
+
+    /// Effective attach mechanism (`tcx` / `netlink` / `xdp-*`). `None` in pinned-map (proxy) mode.
+    pub fn capture_mode(&self) -> Option<crate::CaptureMode> {
+        self.capture_mode
+    }
+
+    /// Whether this process pinned a `bpf_link` so capture survives `drop(probe)`.
+    pub fn link_pinned(&self) -> bool {
+        self.link_pinned
     }
 }

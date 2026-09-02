@@ -19,10 +19,14 @@ services:
       - "HUGINN_EBPF_DST_IP_V6=::"
       - HUGINN_EBPF_DST_PORT=7000
       - HUGINN_EBPF_PIN_PATH=/sys/fs/bpf/huginn
+      - HUGINN_EBPF_LINK_PIN_PATH=/sys/fs/bpf/huginn/capture_link
       - HUGINN_EBPF_SYN_MAP_MAX_ENTRIES=8192
       - HUGINN_EBPF_CAPTURE=${HUGINN_EBPF_CAPTURE:-xdp-skb}
+      - HUGINN_EBPF_DRAIN_DELAY_SECS=0
+      - HUGINN_EBPF_HEARTBEAT_SECS=1
       - HUGINN_EBPF_METRICS_ADDR=0.0.0.0
       - HUGINN_EBPF_METRICS_PORT=9091
+      - HUGINN_EBPF_HEALTH_FORMAT=json
       - HUGINN_EBPF_RATE_LIMIT_ENABLED=false
       - HUGINN_EBPF_RATE_LIMIT_BURST=2000
       - HUGINN_EBPF_RATE_LIMIT_WINDOW_SECONDS=1
@@ -43,6 +47,9 @@ services:
       - HUGINN_CONFIG_PATH=/config/compose.yaml
       - RUST_LOG=${RUST_LOG:-info}
       - HUGINN_EBPF_PIN_PATH=/sys/fs/bpf/huginn
+      - HUGINN_EBPF_LINK_PIN_PATH=/sys/fs/bpf/huginn/capture_link
+      - HUGINN_EBPF_CAPTURE_POLL_SECS=1
+      - HUGINN_EBPF_CAPTURE_STALE_TICKS=3
       - HUGINN_EBPF_RECONNECT_POLL_SECS=5
     volumes:
       #- ./config/compose.toml:/config/compose.toml:ro

@@ -1,11 +1,11 @@
+use super::http::RespBody;
 use crate::config::HealthFormat;
+use crate::healthchecks::AgentHealth;
 use crate::telemetry::status::{Status, StatusBody};
 use crate::telemetry::{health, metrics_handler};
 use hyper::{Response, StatusCode};
 use prometheus::Registry;
 use tracing::{debug, warn};
-
-use super::http::RespBody;
 
 /// Route an observability request. Health endpoints are infallible; metrics may fail to
 /// encode and falls back to a JSON/text 500. Unknown paths return a 404.
@@ -16,7 +16,7 @@ use super::http::RespBody;
 pub fn dispatch(
     path: &str,
     registry: &Registry,
-    pin_path: &str,
+    health: &AgentHealth,
     format: HealthFormat,
 ) -> Response<RespBody> {
     let response = match path {
@@ -25,7 +25,7 @@ pub fn dispatch(
             StatusBody::new(Status::Error).render(StatusCode::INTERNAL_SERVER_ERROR, format)
         }),
         "/health" => health::health_check_response(format),
-        "/ready" => health::ready_check_response(pin_path, format),
+        "/ready" => health::ready_check_response(health, format),
         "/live" => health::live_check_response(format),
         _ => StatusBody::new(Status::NotFound).render(StatusCode::NOT_FOUND, format),
     };
