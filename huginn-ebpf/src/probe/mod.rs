@@ -23,8 +23,8 @@ mod maps;
 mod seed;
 
 pub use capture_state::{
-    bump_capture_generation, new_agent_boot_id, read_capture_state, write_capture_state,
-    CaptureState,
+    bump_capture_generation, new_agent_boot_id, publish_capture_draining, read_capture_state,
+    write_capture_state, CaptureState,
 };
 pub use counters::{
     is_stale, syn_captured_v4_count_from_path, syn_captured_v6_count_from_path,

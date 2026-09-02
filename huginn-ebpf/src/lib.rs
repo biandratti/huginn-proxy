@@ -12,8 +12,8 @@ pub use config::{CaptureBackend, CaptureMode, SynRateLimit, XdpAttachMode};
 pub use error::EbpfError;
 pub use log_level::EbpfLogLevel;
 pub use probe::{
-    bump_capture_generation, is_stale, new_agent_boot_id, read_capture_state,
-    syn_captured_v4_count_from_path, syn_captured_v6_count_from_path,
+    bump_capture_generation, is_stale, new_agent_boot_id, publish_capture_draining,
+    read_capture_state, syn_captured_v4_count_from_path, syn_captured_v6_count_from_path,
     syn_insert_failures_v4_count_from_path, syn_insert_failures_v6_count_from_path,
     syn_malformed_v4_count_from_path, syn_malformed_v6_count_from_path,
     syn_rate_allowed_v4_count_from_path, syn_rate_allowed_v6_count_from_path,

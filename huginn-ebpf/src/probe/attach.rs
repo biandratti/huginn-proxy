@@ -4,7 +4,7 @@ use std::path::Path;
 use aya::programs::links::{FdLink, LinkError, PinnedLink};
 use aya::programs::tc::qdisc_add_clsact;
 use aya::programs::tc::{NlOptions, SchedClassifierLinkId, TcAttachOptions};
-use aya::programs::xdp::{XdpLink, XdpLinkId};
+use aya::programs::xdp::XdpLinkId;
 use aya::programs::{LinkOrder, SchedClassifier, TcAttachType, Xdp, XdpMode};
 use aya::sys::SyscallError;
 use aya::util::KernelVersion;
@@ -42,18 +42,14 @@ pub(super) fn attach_xdp(
     let mode = CaptureMode::from_xdp(xdp_mode);
     info!(interface, capture_mode = mode.as_str(), "eBPF XDP attaching");
 
-    let (already_pinned, link_id) = match open_pinned_fd_link(link_pin_path) {
-        Ok(Some(old)) => {
-            let link: XdpLink = FdLink::from(old).try_into()?;
-            (true, program.attach_to_link(link).map_err(EbpfError::Attach)?)
-        }
-        Ok(None) => (
+    let (already_pinned, link_id) = match adopt_pinned_link(link_pin_path)? {
+        Some(link) => (true, program.attach_to_link(link).map_err(EbpfError::Attach)?),
+        None => (
             false,
             program
                 .attach(interface, aya_mode)
                 .map_err(EbpfError::Attach)?,
         ),
-        Err(e) => return Err(e),
     };
 
     let link_pinned =
@@ -103,12 +99,9 @@ pub(super) fn attach_tc(
     info!(interface, capture_mode = mode.as_str(), "eBPF TC clsact ingress attaching");
 
     if use_tcx {
-        let (already_pinned, link_id) = match open_pinned_fd_link(link_pin_path) {
-            Ok(Some(old)) => {
-                let link = FdLink::from(old).try_into()?;
-                (true, program.attach_to_link(link).map_err(EbpfError::Attach)?)
-            }
-            Ok(None) => {
+        let (already_pinned, link_id) = match adopt_pinned_link(link_pin_path)? {
+            Some(link) => (true, program.attach_to_link(link).map_err(EbpfError::Attach)?),
+            None => {
                 let link_id = program
                     .attach_with_options(
                         interface,
@@ -118,7 +111,6 @@ pub(super) fn attach_tc(
                     .map_err(EbpfError::Attach)?;
                 (false, link_id)
             }
-            Err(e) => return Err(e),
         };
         persist_tc_link(program, link_id, link_pin_path, already_pinned)?;
         Ok(AttachOutcome { mode, link_pinned: true })
@@ -163,6 +155,34 @@ fn open_pinned_fd_link(path: &Path) -> Result<Option<PinnedLink>, EbpfError> {
     match PinnedLink::from_pin(path) {
         Ok(link) => Ok(Some(link)),
         Err(err) if link_pin_missing(&err) => Ok(None),
+        Err(err) => Err(EbpfError::Link(err)),
+    }
+}
+
+/// Open the pinned capture link if it is valid for this program type.
+///
+/// `InvalidLink` is a stale pin (wrong kind, leftover file). Unlink it and attach fresh rather
+/// than failing agent start. `TryFrom<FdLink>` drops the fd on failure, so the pin must go too
+/// or the next `pin()` hits EEXIST.
+fn adopt_pinned_link<L>(path: &Path) -> Result<Option<L>, EbpfError>
+where
+    L: TryFrom<FdLink, Error = LinkError>,
+{
+    let Some(old) = open_pinned_fd_link(path)? else {
+        return Ok(None);
+    };
+    match L::try_from(FdLink::from(old)) {
+        Ok(link) => Ok(Some(link)),
+        Err(LinkError::InvalidLink) => {
+            warn!(
+                path = %path.display(),
+                "stale capture link pin; removing and attaching fresh"
+            );
+            if let Err(error) = std::fs::remove_file(path) {
+                warn!(path = %path.display(), %error, "failed to remove stale capture link pin");
+            }
+            Ok(None)
+        }
         Err(err) => Err(EbpfError::Link(err)),
     }
 }

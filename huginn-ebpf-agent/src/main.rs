@@ -1,7 +1,7 @@
 //! eBPF agent: loads the capture program, pins maps, serves metrics.
 
 use huginn_ebpf::{
-    bump_capture_generation, new_agent_boot_id, read_capture_state, write_capture_state,
+    bump_capture_generation, new_agent_boot_id, publish_capture_draining, write_capture_state,
     CaptureState, EbpfLogLevel, EbpfLogPoller, EbpfProbe,
 };
 use huginn_ebpf_agent::config::from_env;
@@ -126,7 +126,7 @@ async fn main() -> Result<()> {
                 if stop.load(Ordering::Acquire) {
                     break;
                 }
-                if let Err(error) = bump_capture_generation(&pin) {
+                if let Err(error) = bump_capture_generation(&pin, boot_id) {
                     tracing::debug!(%error, "failed to bump capture_state generation");
                 }
                 metrics.set_ready(health.is_ready());
@@ -174,11 +174,12 @@ async fn main() -> Result<()> {
 
     stop_heartbeat.store(true, Ordering::Release);
     health.mark_draining();
-    if let Ok(mut state) = read_capture_state(&cfg.pin_path) {
-        state.lifecycle = huginn_ebpf::pin::CAPTURE_LIFECYCLE_DRAINING;
-        if let Err(error) = write_capture_state(&cfg.pin_path, state) {
-            tracing::warn!(%error, "failed to publish capture_state draining");
+    match publish_capture_draining(&cfg.pin_path, boot_id) {
+        Ok(true) => {}
+        Ok(false) => {
+            tracing::info!(boot_id, "capture_state belongs to another agent; not announcing drain")
         }
+        Err(error) => tracing::warn!(%error, "failed to publish capture_state draining"),
     }
     metrics.set_ready(health.is_ready());
 
