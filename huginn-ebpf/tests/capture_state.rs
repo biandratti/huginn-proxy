@@ -1,7 +1,3 @@
-//! `capture_state` is what the proxy gate reads to decide whether the node stays in the load
-//! balancer, so ownership and lifecycle are pinned here. The map reads themselves need bpffs and
-//! live in the `#[ignore]` attach tests.
-
 use huginn_ebpf::{pin, CaptureState};
 
 const BOOT_ID: u64 = 0xC0FFEE;
