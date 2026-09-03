@@ -965,6 +965,8 @@ fingerprint:
 | `level`       | string | `"info"` | Log level: `"trace"`, `"debug"`, `"info"`, `"warn"`, `"error"`. Overridable with the `RUST_LOG` environment variable. |
 | `show_target` | bool   | `false`  | Include the Rust module path in log lines (useful for debugging).                                                     |
 
+Routine TLS client noise (peer abort, unmatched SNI, non-TLS bytes) logs at `debug`; handshake timeouts and cert/mTLS failures stay at `warn`. `huginn-net-tls` JA4 parse logs above `debug` are suppressed.
+
 When the proxy becomes ready, `info` logs one safe effective-config summary containing listener,
 domain, route, backend, trusted-proxy and max-connection counts plus key feature flags. At `debug`,
 it also logs the complete `EffectiveConfigView` as compact JSON. The debug view uses the same

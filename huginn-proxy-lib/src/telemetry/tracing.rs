@@ -1,5 +1,21 @@
+use tracing::Metadata;
+use tracing_subscriber::filter::filter_fn;
+use tracing_subscriber::filter::FilterFn;
 use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::Layer;
 use tracing_subscriber::Registry;
+
+/// `huginn-net-tls` logs `ERROR TLS plaintext parsing failed` for HTTP/garbage on the
+/// TLS port (JA4 parse). That is client noise, not a proxy failure. Keep its
+/// `debug`/`trace` lines when the process log level allows them.
+fn suppress_huginn_net_tls_noise() -> FilterFn<impl Fn(&Metadata<'_>) -> bool + Clone> {
+    filter_fn(|meta: &Metadata<'_>| {
+        if meta.target().starts_with("huginn_net_tls") {
+            return *meta.level() > tracing::Level::INFO;
+        }
+        true
+    })
+}
 
 /// Initialize warning-level tracing for one-shot CLI validation.
 ///
@@ -10,7 +26,8 @@ pub fn init_validation_tracing() -> Result<(), Box<dyn std::error::Error + Send 
         .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("warn"));
     let fmt_layer = tracing_subscriber::fmt::layer()
         .with_target(false)
-        .with_writer(std::io::stderr);
+        .with_writer(std::io::stderr)
+        .with_filter(suppress_huginn_net_tls_noise());
     let subscriber = Registry::default().with(env_filter).with(fmt_layer);
 
     tracing::subscriber::set_global_default(subscriber)
@@ -27,7 +44,9 @@ pub fn init_tracing_with_otel(
     let filter_str = format!("{log_level},opentelemetry={otel_log_level}");
     let env_filter = tracing_subscriber::EnvFilter::try_from_default_env()
         .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new(filter_str));
-    let fmt_layer = tracing_subscriber::fmt::layer().with_target(show_target);
+    let fmt_layer = tracing_subscriber::fmt::layer()
+        .with_target(show_target)
+        .with_filter(suppress_huginn_net_tls_noise());
 
     let subscriber = Registry::default().with(env_filter).with(fmt_layer);
 

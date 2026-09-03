@@ -21,6 +21,7 @@ follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- **TLS accept noise is `debug`.** Routine client noise (peer abort, unmatched SNI, non-TLS bytes) no longer logs at `warn`; timeouts and cert/mTLS failures stay `warn`. `huginn_tls_handshake_errors_total` is unchanged; `huginn-net-tls` JA4 parse logs above `debug` are suppressed.
 - **`/ready` 503 now reports why:** `proxy_starting` or `proxy_draining` (text: `STARTING` / `DRAINING`). With TCP fingerprinting, also `capture_*` (text: `NOCAPTURE`). The observability server stays up until after drain.
 - **Agent `/ready`** is attached + required pins + not draining (not pins-only). kubelet only; do not AND it with the proxy as a second load-balancer monitor.
 
