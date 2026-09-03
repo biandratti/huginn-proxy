@@ -8,10 +8,11 @@ use crate::proxy::connection::{PrefixedStream, TlsConnectionGuard};
 use crate::proxy::handler::request::handle_proxy_request;
 use crate::proxy::synthetic_response::synthetic_error_response;
 use crate::proxy::ClientPool;
+use crate::telemetry::metrics::values;
 use crate::telemetry::Metrics;
-use crate::tls::is_expected_tls_accept_failure;
 use crate::tls::record_tls_handshake_metrics;
 use crate::tls::setup::SharedServerCrypto;
+use crate::tls::TlsAcceptFailure;
 use http::StatusCode;
 use hyper_util::rt::{TokioExecutor, TokioIo};
 use hyper_util::server::conn::auto::Builder as ConnBuilder;
@@ -55,7 +56,7 @@ pub async fn handle_tls_connection(
                 Ok(v) => v,
                 Err(e) => {
                     warn!(?peer, error = %e, "failed to read client hello");
-                    metrics.tls_handshake_errors_total.add(1, &[]);
+                    metrics.record_tls_handshake_error(values::TLS_ERROR_CLIENT_HELLO);
                     return;
                 }
             };
@@ -100,18 +101,19 @@ pub async fn handle_tls_connection(
         let tls = match tls_accept_result {
             Ok(Ok(tls)) => tls,
             Ok(Err(e)) => {
-                if is_expected_tls_accept_failure(&e, unmatched_sni) {
+                let failure = TlsAcceptFailure::classify(&e, unmatched_sni);
+                if failure.is_expected() {
                     debug!(?peer, sni = sni_field, mtls = selected_mtls, error = %e, "TLS accept failed");
                 } else {
                     warn!(?peer, sni = sni_field, mtls = selected_mtls, error = %e, "TLS accept failed");
                 }
-                metrics.record_tls_handshake_error();
+                metrics.record_tls_handshake_error(failure.error_type());
                 return;
             }
             Err(_) => {
                 warn!(?peer, sni = sni_field, mtls = selected_mtls, "TLS handshake timeout");
                 metrics.record_timeout("tls_handshake");
-                metrics.record_tls_handshake_error();
+                metrics.record_tls_handshake_error(values::TLS_ERROR_HANDSHAKE_TIMEOUT);
                 return;
             }
         };
