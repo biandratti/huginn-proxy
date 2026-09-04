@@ -75,7 +75,8 @@ impl TlsAcceptFailure {
     pub fn is_expected(self) -> bool {
         !matches!(self.severity(), FailureSeverity::Warn)
     }
-    
+
+    /// Value for the `error_type` label on `huginn_tls_handshake_errors_total`.
     pub fn error_type(self) -> &'static str {
         match self {
             Self::PeerEof => values::TLS_ERROR_PEER_EOF,

@@ -134,7 +134,7 @@ pub async fn handle_tls_connection(
             }
             Err(_) => {
                 warn!(?peer, sni = sni_field, mtls = selected_mtls, "TLS handshake timeout");
-                metrics.record_timeout("tls_handshake");
+                metrics.record_timeout(values::TIMEOUT_TLS_HANDSHAKE);
                 metrics.record_tls_handshake_error(values::TLS_ERROR_HANDSHAKE_TIMEOUT);
                 return;
             }
