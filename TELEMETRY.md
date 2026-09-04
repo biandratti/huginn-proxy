@@ -317,14 +317,15 @@ sum by (route) (rate(huginn_requests_total{status_code=~"5.."}[5m]))
 
 - `tls_version`: TLS version negotiated (`TLS1.2`, `TLS1.3`)
 - `cipher_suite`: TLS cipher suite used (e.g., `TLS_AES_256_GCM_SHA384`)
-- `error_type`: Why the handshake failed. Bounded set: `client_hello_read`, `peer_eof` (client went away
-  mid-handshake), `unmatched_sni` (no domain matched the ClientHello SNI), `not_tls` (non-TLS bytes on the
-  TLS port), `handshake_timeout`, `other` (certificate/mTLS/protocol failure).
+- `error_type`: Why the handshake failed. Bounded set: `peer_eof` (client went away mid-handshake, by clean
+  close or reset), `unmatched_sni` (no domain matched the ClientHello SNI), `not_tls` (non-TLS bytes on the
+  TLS port), `handshake_timeout`, `client_hello_read` (I/O fault reading the ClientHello that is *not* the
+  peer disconnecting), `other` (certificate/mTLS/protocol failure).
 - `timeout_type`: Timeout type (`tls_handshake`, `connection`, `idle`)
 
-`peer_eof`, `unmatched_sni` and `not_tls` are routine on a public listener and log at `debug`, so this label
-is the primary signal for them. A sustained `unmatched_sni` rate against a name you expect to serve usually
-means the domain is missing from the config rather than scanner traffic.
+`peer_eof` and `not_tls` are routine on a public listener and log at `debug`, so this label is the primary
+signal for them. `unmatched_sni` logs at `info` instead: a sustained rate against a name you expect to serve
+usually means the domain is missing from the config rather than scanner traffic.
 
 **Example queries**:
 

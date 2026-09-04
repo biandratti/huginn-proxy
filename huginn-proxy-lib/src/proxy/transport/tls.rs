@@ -12,7 +12,7 @@ use crate::telemetry::metrics::values;
 use crate::telemetry::Metrics;
 use crate::tls::record_tls_handshake_metrics;
 use crate::tls::setup::SharedServerCrypto;
-use crate::tls::TlsAcceptFailure;
+use crate::tls::{FailureSeverity, TlsAcceptFailure};
 use http::StatusCode;
 use hyper_util::rt::{TokioExecutor, TokioIo};
 use hyper_util::server::conn::auto::Builder as ConnBuilder;
@@ -20,7 +20,7 @@ use tokio::net::TcpStream;
 use tokio::time::Instant;
 use tokio_rustls::rustls::server::Acceptor;
 use tokio_rustls::LazyConfigAcceptor;
-use tracing::{debug, warn};
+use tracing::{debug, info, warn};
 
 /// Configuration for handling TLS connections
 pub struct TlsConnectionConfig {
@@ -55,8 +55,26 @@ pub async fn handle_tls_connection(
             match read_client_hello(&mut stream, Arc::clone(&metrics)).await {
                 Ok(v) => v,
                 Err(e) => {
-                    warn!(?peer, error = %e, "failed to read client hello");
-                    metrics.record_tls_handshake_error(values::TLS_ERROR_CLIENT_HELLO);
+                    // A peer that vanished mid-read is the same noise the accept path
+                    // below demotes; anything else is a genuine read fault worth a warn.
+                    let failure = TlsAcceptFailure::classify(&e, false);
+                    match failure.severity() {
+                        FailureSeverity::Debug => {
+                            debug!(?peer, error = %e, "failed to read client hello")
+                        }
+                        FailureSeverity::Info => {
+                            info!(?peer, error = %e, "failed to read client hello")
+                        }
+                        FailureSeverity::Warn => {
+                            warn!(?peer, error = %e, "failed to read client hello")
+                        }
+                    }
+                    let error_type = if failure.is_expected() {
+                        failure.error_type()
+                    } else {
+                        values::TLS_ERROR_CLIENT_HELLO
+                    };
+                    metrics.record_tls_handshake_error(error_type);
                     return;
                 }
             };
@@ -102,10 +120,16 @@ pub async fn handle_tls_connection(
             Ok(Ok(tls)) => tls,
             Ok(Err(e)) => {
                 let failure = TlsAcceptFailure::classify(&e, unmatched_sni);
-                if failure.is_expected() {
-                    debug!(?peer, sni = sni_field, mtls = selected_mtls, error = %e, "TLS accept failed");
-                } else {
-                    warn!(?peer, sni = sni_field, mtls = selected_mtls, error = %e, "TLS accept failed");
+                match failure.severity() {
+                    FailureSeverity::Debug => {
+                        debug!(?peer, sni = sni_field, mtls = selected_mtls, error = %e, "TLS accept failed")
+                    }
+                    FailureSeverity::Info => {
+                        info!(?peer, sni = sni_field, mtls = selected_mtls, error = %e, "TLS accept failed")
+                    }
+                    FailureSeverity::Warn => {
+                        warn!(?peer, sni = sni_field, mtls = selected_mtls, error = %e, "TLS accept failed")
+                    }
                 }
                 metrics.record_tls_handshake_error(failure.error_type());
                 return;

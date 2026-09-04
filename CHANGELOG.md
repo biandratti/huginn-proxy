@@ -21,7 +21,7 @@ follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
-- **TLS accept noise is `debug`.** Routine client noise (peer abort, unmatched SNI, non-TLS bytes) no longer logs at `warn`; timeouts and cert/mTLS failures stay `warn`. The `huginn-net-tls` target, which logs a JA4 parse `error` per non-TLS byte, is off in the default log filter and can be restored with `RUST_LOG`.
+- **TLS accept noise is `debug`.** Routine client noise (peer abort or reset, including during the ClientHello read, plus non-TLS bytes) no longer logs at `warn`. An unmatched SNI drops to `info` rather than `debug`, since it usually means a missing domain; timeouts and cert/mTLS failures stay `warn`. The `huginn-net-tls` target, which logs a JA4 parse `error` per non-TLS byte, is off in the default log filter and can be restored with `RUST_LOG`.
 - **`huginn_tls_handshake_errors_total` now carries `error_type`** (`client_hello_read`, `peer_eof`, `unmatched_sni`, `not_tls`, `handshake_timeout`, `other`), so causes demoted to `debug` stay diagnosable — a missing domain shows up as `unmatched_sni`. The label was already documented but never emitted; queries that sum the metric are unaffected.
 - **`/ready` 503 now reports why:** `proxy_starting` or `proxy_draining` (text: `STARTING` / `DRAINING`). With TCP fingerprinting, also `capture_*` (text: `NOCAPTURE`). The observability server stays up until after drain.
 - **Agent `/ready`** is attached + required pins + not draining (not pins-only). kubelet only; do not AND it with the proxy as a second load-balancer monitor.

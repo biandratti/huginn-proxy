@@ -9,11 +9,12 @@ use crate::telemetry::metrics::values;
 ///
 /// Unmatched SNI is decided by the accept path (`ServerCryptoMap::select` returned
 /// `None`), not by parsing rustls `Error::General`. `tokio-rustls` maps a
-/// mid-handshake TCP close to `ErrorKind::UnexpectedEof`. Non-TLS bytes become
-/// `InvalidMessage::InvalidContentType`.
+/// mid-handshake TCP close to `ErrorKind::UnexpectedEof`, while a peer that resets the
+/// connection surfaces as `ConnectionReset`/`ConnectionAborted`/`BrokenPipe`. Non-TLS
+/// bytes become `InvalidMessage::InvalidContentType`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TlsAcceptFailure {
-    /// Peer went away mid-handshake.
+    /// Peer went away mid-handshake, whether by clean close or by reset.
     PeerEof,
     /// No domain matched the ClientHello SNI.
     UnmatchedSni,
@@ -23,6 +24,19 @@ pub enum TlsAcceptFailure {
     Other,
 }
 
+/// How loudly an accept failure is reported.
+///
+/// Three levels rather than a quiet/loud flag because an unmatched SNI sits between the
+/// two: it is not a proxy fault, but it is usually a domain missing from the config, so
+/// hiding it at `debug` would make a real misconfiguration invisible. `rpxy` draws the
+/// same line.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FailureSeverity {
+    Debug,
+    Info,
+    Warn,
+}
+
 impl TlsAcceptFailure {
     /// Classify a `tokio-rustls` accept error. `unmatched_sni` wins over the transport
     /// error because a rejected SNI is the cause of whatever alert or close follows.
@@ -30,7 +44,15 @@ impl TlsAcceptFailure {
         if unmatched_sni {
             return Self::UnmatchedSni;
         }
-        if err.kind() == ErrorKind::UnexpectedEof {
+        // Connect-then-reset is what most scanners and some load-balancer health checks
+        // do, so it must be classified alongside a clean mid-handshake close.
+        if matches!(
+            err.kind(),
+            ErrorKind::UnexpectedEof
+                | ErrorKind::ConnectionReset
+                | ErrorKind::ConnectionAborted
+                | ErrorKind::BrokenPipe
+        ) {
             return Self::PeerEof;
         }
         match rustls_error(err) {
@@ -39,9 +61,19 @@ impl TlsAcceptFailure {
         }
     }
 
-    /// Routine client/scanner behavior rather than a proxy or certificate bug.
+    /// Log level for this failure.
+    pub fn severity(self) -> FailureSeverity {
+        match self {
+            Self::PeerEof | Self::NotTls => FailureSeverity::Debug,
+            Self::UnmatchedSni => FailureSeverity::Info,
+            Self::Other => FailureSeverity::Warn,
+        }
+    }
+
+    /// Routine client/scanner behavior rather than a proxy or certificate bug. Derived
+    /// from [`Self::severity`] so the two cannot drift.
     pub fn is_expected(self) -> bool {
-        !matches!(self, Self::Other)
+        !matches!(self.severity(), FailureSeverity::Warn)
     }
 
     /// Value for the `error_type` label on `huginn_tls_handshake_errors_total`.
