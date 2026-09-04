@@ -1,13 +1,28 @@
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::Registry;
 
+/// Targets silenced by default because they log client-controlled input as failures.
+///
+/// `huginn-net-tls` emits `ERROR TLS plaintext parsing failed` for every HTTP request or
+/// stray byte that reaches the TLS port (JA4 parse), which is client noise rather than a
+/// proxy fault.
+const QUIET_TARGETS: &str = "huginn_net_tls=off";
+
+/// Compose the log filter used when `RUST_LOG` is unset.
+///
+/// Appends `huginn_net_tls=off`. `RUST_LOG` replaces this string wholesale, so
+/// `RUST_LOG=info,huginn_net_tls=debug` brings those events back.
+pub fn default_log_filter(base: &str) -> String {
+    format!("{base},{QUIET_TARGETS}")
+}
+
 /// Initialize warning-level tracing for one-shot CLI validation.
 ///
 /// Diagnostics go to stderr so stdout remains valid machine-readable output when printing the
 /// effective configuration.
 pub fn init_validation_tracing() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let env_filter = tracing_subscriber::EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("warn"));
+        .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new(default_log_filter("warn")));
     let fmt_layer = tracing_subscriber::fmt::layer()
         .with_target(false)
         .with_writer(std::io::stderr);
@@ -24,7 +39,7 @@ pub fn init_tracing_with_otel(
     show_target: bool,
     otel_log_level: String,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let filter_str = format!("{log_level},opentelemetry={otel_log_level}");
+    let filter_str = default_log_filter(&format!("{log_level},opentelemetry={otel_log_level}"));
     let env_filter = tracing_subscriber::EnvFilter::try_from_default_env()
         .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new(filter_str));
     let fmt_layer = tracing_subscriber::fmt::layer().with_target(show_target);

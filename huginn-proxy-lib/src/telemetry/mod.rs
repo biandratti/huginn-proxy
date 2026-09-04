@@ -12,4 +12,6 @@ pub use metrics::{init_metrics, values, Metrics};
 pub use metrics_handler::handle_metrics;
 pub use readiness::{GateState, NotReadyReason, Readiness, ReadinessGate};
 pub use server::start_observability_server;
-pub use tracing::{init_tracing_with_otel, init_validation_tracing, shutdown_tracing};
+pub use tracing::{
+    default_log_filter, init_tracing_with_otel, init_validation_tracing, shutdown_tracing,
+};

@@ -317,8 +317,20 @@ sum by (route) (rate(huginn_requests_total{status_code=~"5.."}[5m]))
 
 - `tls_version`: TLS version negotiated (`TLS1.2`, `TLS1.3`)
 - `cipher_suite`: TLS cipher suite used (e.g., `TLS_AES_256_GCM_SHA384`)
-- `error_type`: Error type (`handshake_timeout`, `invalid_certificate`, `protocol_error`, etc.)
+- `error_type`: Why the handshake failed. Bounded set: `peer_eof` (client went away mid-handshake, by clean
+  close or reset), `unmatched_sni` (no domain matched the ClientHello SNI), `not_tls` (non-TLS bytes on the
+  TLS port), `handshake_timeout`, `client_hello_read` (I/O fault reading the ClientHello that is *not* the
+  peer disconnecting), `other` (certificate/mTLS/protocol failure).
 - `timeout_type`: Timeout type (`tls_handshake`, `connection`, `idle`)
+
+`peer_eof` and `not_tls` are routine on a public listener and log at `debug`, so this label is the primary
+signal for them. `unmatched_sni` logs at `info` instead: a sustained rate against a name you expect to serve
+usually means the domain is missing from the config rather than scanner traffic.
+
+A handshake timeout increments **both** `huginn_tls_handshake_errors_total{error_type="handshake_timeout"}`
+and `huginn_timeouts_total{timeout_type="tls_handshake"}`. This is deliberate, so that summing
+`huginn_tls_handshake_errors_total` by `error_type` still adds up to the total handshake failures. Do not add
+the two metrics together in a dashboard — you would count every timeout twice.
 
 **Example queries**:
 
@@ -334,6 +346,12 @@ sum by (cipher_suite) (rate(huginn_tls_handshakes_total[5m]))
 
 # TLS error rate
 rate(huginn_tls_handshake_errors_total[5m])
+
+# TLS errors by cause: separates real failures from scanner noise
+sum by (error_type) (rate(huginn_tls_handshake_errors_total[5m]))
+
+# Handshake failures worth paging on (excludes routine client noise)
+sum(rate(huginn_tls_handshake_errors_total{error_type=~"other|handshake_timeout"}[5m]))
 
 # P95 handshake duration
 histogram_quantile(0.95, rate(huginn_tls_handshake_duration_seconds_bucket[5m]))
@@ -679,9 +697,9 @@ sum by (protocol) (rate(huginn_mtls_connections_total[5m]))
 **Note**:
 
 - This metric only counts successful TLS handshakes where a client certificate was present and verified.
-- mTLS verification failures are captured in `huginn_tls_handshake_errors_total`.
+- mTLS verification failures are captured in `huginn_tls_handshake_errors_total{error_type="other"}`.
 - When mTLS is required but client certificate is invalid/absent, the TLS handshake fails before this metric is
-  recorded. In that case the `TLS accept failed` / `TLS handshake timeout` **warning logs** carry `mtls=true` and the
+  recorded. In that case the `TLS accept failed` / `TLS handshake timeout` logs carry `mtls=true` and the
   selected `sni`, so a failure against a domain that required a client certificate can be attributed per-domain (the
   mTLS flag comes from the per-SNI config picked from the ClientHello, so it is known even though the handshake never
   completed).

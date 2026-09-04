@@ -44,6 +44,14 @@ pub mod values {
     pub const REASON_SHUTDOWN: &str = "shutdown";
     pub const HEALTH_PROBE_OK: &str = "ok";
     pub const HEALTH_PROBE_FAIL: &str = "fail";
+    /// TLS failure kinds for `tls_handshake_errors_total{error_type=...}`. Bounded set:
+    /// every accept failure maps to exactly one of these.
+    pub const TLS_ERROR_CLIENT_HELLO: &str = "client_hello_read";
+    pub const TLS_ERROR_PEER_EOF: &str = "peer_eof";
+    pub const TLS_ERROR_UNMATCHED_SNI: &str = "unmatched_sni";
+    pub const TLS_ERROR_NOT_TLS: &str = "not_tls";
+    pub const TLS_ERROR_HANDSHAKE_TIMEOUT: &str = "handshake_timeout";
+    pub const TLS_ERROR_OTHER: &str = "other";
     /// PROXY protocol drop reasons for `proxy_protocol_dropped_total{reason=...}`.
     pub const PROXY_PROTOCOL_DROP_UNTRUSTED_REQUIRE: &str = "untrusted_require";
     pub const PROXY_PROTOCOL_DROP_BAD_HEADER: &str = "bad_header";
@@ -690,8 +698,14 @@ impl Metrics {
             .add(1, &[KeyValue::new(labels::ERROR_TYPE, error_type.to_string())]);
     }
 
-    pub fn record_tls_handshake_error(&self) {
-        self.tls_handshake_errors_total.add(1, &[]);
+    /// Count one failed TLS handshake under `error_type`.
+    ///
+    /// `error_type` comes from a bounded set (`values::TLS_ERROR_*`), so a config
+    /// mistake such as a missing domain stays distinguishable from scanner traffic
+    /// even though both are logged at `debug`.
+    pub fn record_tls_handshake_error(&self, error_type: &str) {
+        self.tls_handshake_errors_total
+            .add(1, &[KeyValue::new(labels::ERROR_TYPE, error_type.to_string())]);
     }
 
     pub fn record_timeout(&self, timeout_type: &str) {

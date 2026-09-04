@@ -965,6 +965,16 @@ fingerprint:
 | `level`       | string | `"info"` | Log level: `"trace"`, `"debug"`, `"info"`, `"warn"`, `"error"`. Overridable with the `RUST_LOG` environment variable. |
 | `show_target` | bool   | `false`  | Include the Rust module path in log lines (useful for debugging).                                                     |
 
+Routine TLS client noise (peer abort or reset, non-TLS bytes) logs at `debug`. An unmatched SNI logs at
+`info`, because it usually means a domain is missing from the config rather than a client misbehaving.
+Handshake timeouts and cert/mTLS failures stay at `warn`. All of them increment
+`huginn_tls_handshake_errors_total{error_type=...}`, so the demoted causes remain visible in metrics — see
+`TELEMETRY.md`.
+
+The `huginn-net-tls` target is off by default, because it logs a JA4 parse `error` for every
+non-TLS byte that reaches the TLS port. It is a default rather than a hard filter: `RUST_LOG`
+replaces the whole filter, so `RUST_LOG=info,huginn_net_tls=debug` brings those events back.
+
 When the proxy becomes ready, `info` logs one safe effective-config summary containing listener,
 domain, route, backend, trusted-proxy and max-connection counts plus key feature flags. At `debug`,
 it also logs the complete `EffectiveConfigView` as compact JSON. The debug view uses the same

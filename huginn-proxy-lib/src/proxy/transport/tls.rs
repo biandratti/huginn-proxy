@@ -8,9 +8,11 @@ use crate::proxy::connection::{PrefixedStream, TlsConnectionGuard};
 use crate::proxy::handler::request::handle_proxy_request;
 use crate::proxy::synthetic_response::synthetic_error_response;
 use crate::proxy::ClientPool;
+use crate::telemetry::metrics::values;
 use crate::telemetry::Metrics;
 use crate::tls::record_tls_handshake_metrics;
 use crate::tls::setup::SharedServerCrypto;
+use crate::tls::{FailureSeverity, TlsAcceptFailure};
 use http::StatusCode;
 use hyper_util::rt::{TokioExecutor, TokioIo};
 use hyper_util::server::conn::auto::Builder as ConnBuilder;
@@ -18,7 +20,7 @@ use tokio::net::TcpStream;
 use tokio::time::Instant;
 use tokio_rustls::rustls::server::Acceptor;
 use tokio_rustls::LazyConfigAcceptor;
-use tracing::warn;
+use tracing::{debug, info, warn};
 
 /// Configuration for handling TLS connections
 pub struct TlsConnectionConfig {
@@ -53,8 +55,24 @@ pub async fn handle_tls_connection(
             match read_client_hello(&mut stream, Arc::clone(&metrics)).await {
                 Ok(v) => v,
                 Err(e) => {
-                    warn!(?peer, error = %e, "failed to read client hello");
-                    metrics.tls_handshake_errors_total.add(1, &[]);
+                    let failure = TlsAcceptFailure::classify(&e, false);
+                    match failure.severity() {
+                        FailureSeverity::Debug => {
+                            debug!(?peer, error = %e, "failed to read client hello")
+                        }
+                        FailureSeverity::Info => {
+                            info!(?peer, error = %e, "failed to read client hello")
+                        }
+                        FailureSeverity::Warn => {
+                            warn!(?peer, error = %e, "failed to read client hello")
+                        }
+                    }
+                    let error_type = if failure.is_expected() {
+                        failure.error_type()
+                    } else {
+                        values::TLS_ERROR_CLIENT_HELLO
+                    };
+                    metrics.record_tls_handshake_error(error_type);
                     return;
                 }
             };
@@ -65,6 +83,7 @@ pub async fn handle_tls_connection(
         // client that omitted a required client cert). Mirrors rpxy's failure log.
         let mut selected_sni: Option<String> = None;
         let mut selected_mtls = false;
+        let mut unmatched_sni = false;
         // Two-phase handshake: `LazyConfigAcceptor` reads the ClientHello (replayed
         // from the prefix), then we pick the per-SNI `ServerConfig` and finish. The
         // whole exchange is bounded by the single handshake timeout.
@@ -84,7 +103,10 @@ pub async fn handle_tls_connection(
                         selected_mtls = picked.is_mutual_tls;
                         picked.config
                     }
-                    None => crypto.reject_config(),
+                    None => {
+                        unmatched_sni = true;
+                        crypto.reject_config()
+                    }
                 }
             };
             start.into_stream(server_config).await
@@ -95,14 +117,25 @@ pub async fn handle_tls_connection(
         let tls = match tls_accept_result {
             Ok(Ok(tls)) => tls,
             Ok(Err(e)) => {
-                warn!(?peer, sni = sni_field, mtls = selected_mtls, error = %e, "TLS accept failed");
-                metrics.record_tls_handshake_error();
+                let failure = TlsAcceptFailure::classify(&e, unmatched_sni);
+                match failure.severity() {
+                    FailureSeverity::Debug => {
+                        debug!(?peer, sni = sni_field, mtls = selected_mtls, error = %e, "TLS accept failed")
+                    }
+                    FailureSeverity::Info => {
+                        info!(?peer, sni = sni_field, mtls = selected_mtls, error = %e, "TLS accept failed")
+                    }
+                    FailureSeverity::Warn => {
+                        warn!(?peer, sni = sni_field, mtls = selected_mtls, error = %e, "TLS accept failed")
+                    }
+                }
+                metrics.record_tls_handshake_error(failure.error_type());
                 return;
             }
             Err(_) => {
                 warn!(?peer, sni = sni_field, mtls = selected_mtls, "TLS handshake timeout");
-                metrics.record_timeout("tls_handshake");
-                metrics.record_tls_handshake_error();
+                metrics.record_timeout(values::TIMEOUT_TLS_HANDSHAKE);
+                metrics.record_tls_handshake_error(values::TLS_ERROR_HANDSHAKE_TIMEOUT);
                 return;
             }
         };
