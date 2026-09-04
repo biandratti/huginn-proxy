@@ -10,8 +10,8 @@ const QUIET_TARGETS: &str = "huginn_net_tls=off";
 
 /// Compose the log filter used when `RUST_LOG` is unset.
 ///
-/// `RUST_LOG` replaces this string wholesale, which is the escape hatch for the targets in
-/// [`QUIET_TARGETS`]: `RUST_LOG=info,huginn_net_tls=debug` brings those events back.
+/// Appends `huginn_net_tls=off`. `RUST_LOG` replaces this string wholesale, so
+/// `RUST_LOG=info,huginn_net_tls=debug` brings those events back.
 pub fn default_log_filter(base: &str) -> String {
     format!("{base},{QUIET_TARGETS}")
 }
