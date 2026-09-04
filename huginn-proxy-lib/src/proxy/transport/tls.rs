@@ -55,8 +55,6 @@ pub async fn handle_tls_connection(
             match read_client_hello(&mut stream, Arc::clone(&metrics)).await {
                 Ok(v) => v,
                 Err(e) => {
-                    // A peer that vanished mid-read is the same noise the accept path
-                    // below demotes; anything else is a genuine read fault worth a warn.
                     let failure = TlsAcceptFailure::classify(&e, false);
                     match failure.severity() {
                         FailureSeverity::Debug => {

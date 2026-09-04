@@ -35,7 +35,6 @@ impl<'a> MakeWriter<'a> for CaptureMakeWriter {
     }
 }
 
-/// Emit events under `filter` and return everything the fmt layer actually wrote.
 fn captured_logs(filter: &str, emit: impl FnOnce()) -> String {
     let buffer: Buffer = Arc::new(Mutex::new(Vec::new()));
     let fmt_layer = tracing_subscriber::fmt::layer()
@@ -76,16 +75,13 @@ fn default_filter_drops_huginn_net_tls_events() {
     );
 }
 
-/// `RUST_LOG` replaces the default filter wholesale, so an operator can always opt the
-/// silenced target back in. Without this, the suppression would be unreachable.
+/// `RUST_LOG` unset must fall through to our default filter. If `try_from_default_env`
+/// ever returned `Ok` for a missing variable, the `unwrap_or_else` below it would never
+/// run and `QUIET_TARGETS` would silently stop being applied.
 #[test]
-fn rust_log_can_restore_the_silenced_target() {
-    let logs = captured_logs("info,huginn_net_tls=error", || {
-        tracing::error!(target: "huginn_net_tls", "TLS plaintext parsing failed");
-    });
-
+fn unset_rust_log_falls_through_to_the_default_filter() {
     assert!(
-        logs.contains("TLS plaintext parsing failed"),
-        "operator opt-in via RUST_LOG did not restore the target: {logs}"
+        tracing_subscriber::EnvFilter::try_from_default_env().is_err(),
+        "the default filter is only installed when try_from_default_env fails"
     );
 }

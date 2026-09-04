@@ -327,6 +327,11 @@ sum by (route) (rate(huginn_requests_total{status_code=~"5.."}[5m]))
 signal for them. `unmatched_sni` logs at `info` instead: a sustained rate against a name you expect to serve
 usually means the domain is missing from the config rather than scanner traffic.
 
+A handshake timeout increments **both** `huginn_tls_handshake_errors_total{error_type="handshake_timeout"}`
+and `huginn_timeouts_total{timeout_type="tls_handshake"}`. This is deliberate, so that summing
+`huginn_tls_handshake_errors_total` by `error_type` still adds up to the total handshake failures. Do not add
+the two metrics together in a dashboard — you would count every timeout twice.
+
 **Example queries**:
 
 ```promql

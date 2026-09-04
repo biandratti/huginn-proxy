@@ -54,7 +54,7 @@ fn unmatched_sni_is_expected_regardless_of_rustls_error() {
 }
 
 /// An unmatched SNI is usually a domain missing from the config, so unlike the rest of
-/// the routine noise it stays visible at the default log level. Same call as rpxy makes.
+/// the routine noise it stays visible at the default log level.
 #[test]
 fn unmatched_sni_stays_visible_at_info() {
     let err = wrap(RustlsError::AlertReceived(
