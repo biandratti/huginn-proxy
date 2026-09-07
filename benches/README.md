@@ -341,7 +341,7 @@ All fingerprint checks are **on by default**. Disable individual checks with env
 
 | Variable                | Default                      | Description                                                                 |
 |-------------------------|------------------------------|-----------------------------------------------------------------------------|
-| `NO_CHECK_JA4=true`     | off                          | Skip JA4 TLS fingerprint checks (`ja4`, `ja4_r`, `ja4_o`, `ja4_or`)         |
+| `NO_CHECK_JA4=true`     | off                          | Skip JA4 TLS fingerprint checks (`ja4`, `ja4_r`, `ja4_o`, `ja4_ro`)         |
 | `NO_CHECK_AKAMAI=true`  | off                          | Skip Akamai HTTP/2 fingerprint check (auto-skipped when `K6_NO_HTTP2=true`) |
 | `NO_CHECK_TCP_SYN=true` | off                          | Skip TCP SYN fingerprint check — use when running without the eBPF agent    |
 | `K6_CHECKS_RATE`        | `0.99`                       | Minimum required check success rate (e.g. `0.995`)                          |

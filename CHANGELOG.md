@@ -18,6 +18,7 @@ follows [Semantic Versioning](https://semver.org/).
 ### Breaking changes
 
 - **`/ready` 200 JSON is now `{"status":"serving"}`** (was `ready`). Text token is `SERVING`.
+- **JA4 raw-order headers follow FoxIO 2.2 names.** `x-tls-ja4-or` → `x-tls-ja4-ro`, `x-tls-ja4-s1r` → `x-tls-ja4-rs1` (`huginn-net-tls` 2.2). Backends that key on the old names must update.
 
 ### Changed
 

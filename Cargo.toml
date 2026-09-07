@@ -40,13 +40,13 @@ huginn-certs = { path = "huginn-certs" }
 huginn-ebpf = { path = "huginn-ebpf" }
 huginn-ebpf-common = { path = "huginn-ebpf-common" }
 huginn-ebpf-rate-limit = { path = "huginn-ebpf-rate-limit" }
-huginn-net-http = { version = "2.1.0", features = ["akamai"] }
-huginn-net-tcp = { version = "2.1.0", features = ["syn"] }
-huginn-net-tls = { version = "2.1.0", features = ["stable-v1"] }
+huginn-net-http = { version = "2.2.0", features = ["akamai"] }
+huginn-net-tcp = { version = "2.2.0", features = ["syn"] }
+huginn-net-tls = { version = "2.2.0", features = ["stable-v1"] }
 huginn-proxy-lib = { path = "huginn-proxy-lib" }
 hyper = { version = "1.11.1", features = ["full"] }
 hyper-util = { version = "0.1.20", features = ["full"] }
-ipnet = "2.12.1"
+ipnet = "2.12.2"
 libc = "0.2.189"
 log = "0.4.34"
 notify = "8.2.0"
@@ -69,7 +69,7 @@ tempfile = "3.27.0"
 thirtyfour = "0.37.5"
 thiserror = "2.0.20"
 tokio = { version = "1.53.1", features = ["net", "time", "io-util", "macros", "rt-multi-thread", "sync", "signal", "fs"] }
-tokio-rustls = "0.26.4"
+tokio-rustls = "0.26.5"
 tokio-util = { version = "0.7.19", features = ["rt"] }
 toml = "1.1.2"
 tracing = "0.1.44"

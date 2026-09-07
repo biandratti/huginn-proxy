@@ -100,9 +100,9 @@ fn fingerprints_list_covers_all_authoritative_headers() {
         names::TLS_JA4,
         names::TLS_JA4_R,
         names::TLS_JA4_O,
-        names::TLS_JA4_OR,
+        names::TLS_JA4_RO,
         names::TLS_JA4_S1,
-        names::TLS_JA4_S1R,
+        names::TLS_JA4_RS1,
         names::HTTP2_AKAMAI,
         names::TCP_SYN,
     ]

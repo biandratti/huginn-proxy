@@ -103,10 +103,10 @@ async fn test_firefox_fingerprint() -> Result<(), Box<dyn std::error::Error>> {
             .map(|s| s.as_str())
             .ok_or(format!("Missing {} header", names::TLS_JA4_S1))?;
 
-        let ja4_fp_s1r = headers
-            .get(names::TLS_JA4_S1R)
+        let ja4_fp_rs1 = headers
+            .get(names::TLS_JA4_RS1)
             .map(|s| s.as_str())
-            .ok_or(format!("Missing {} header", names::TLS_JA4_S1R))?;
+            .ok_or(format!("Missing {} header", names::TLS_JA4_RS1))?;
 
         let tcp_syn_fp = headers
             .get(names::TCP_SYN)
@@ -122,12 +122,12 @@ async fn test_firefox_fingerprint() -> Result<(), Box<dyn std::error::Error>> {
         println!("  TLS JA4: {}", ja4_fp);
         println!("  TLS JA4_r: {}", ja4_fp_r);
         println!("  TLS JA4_s1: {}", ja4_fp_s1);
-        println!("  TLS JA4_s1r: {}", ja4_fp_s1r);
+        println!("  TLS JA4_rs1: {}", ja4_fp_rs1);
         println!("  HTTP/2: {}", http2_fp);
         println!("  TCP SYN: {}", tcp_syn_fp);
 
         assert!(!ja4_fp_r.is_empty(), "JA4_r fingerprint should not be empty");
-        assert!(!ja4_fp_s1r.is_empty(), "JA4_s1r fingerprint should not be empty");
+        assert!(!ja4_fp_rs1.is_empty(), "JA4_rs1 fingerprint should not be empty");
 
         assert_eq!(
             ja4_fp, FIREFOX_FINGERPRINTS.tls_ja4,

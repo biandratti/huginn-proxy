@@ -18,8 +18,8 @@ pub struct BrowserFingerprints {
 pub const CHROME_FINGERPRINTS: BrowserFingerprints = BrowserFingerprints {
     version: "latest",
     http2_akamai: "1:65536;2:0;4:6291456;6:262144|15663105|0|m,a,s,p",
-    tls_ja4: "t13d1516h2_8daaf6152771_806a8c22fdea",
-    tls_ja4_s1: "t13d1515h2_8daaf6152771_54d72502093d",
+    tls_ja4: "t13d1517h2_8daaf6152771_cb7bf5808d99",
+    tls_ja4_s1: "t13d1516h2_8daaf6152771_22db41f7518f",
 };
 
 pub const FIREFOX_FINGERPRINTS: BrowserFingerprints = BrowserFingerprints {
@@ -85,9 +85,9 @@ pub fn verify_fingerprint_headers(
         names::TLS_JA4,
         names::TLS_JA4_R,
         names::TLS_JA4_O,
-        names::TLS_JA4_OR,
+        names::TLS_JA4_RO,
         names::TLS_JA4_S1,
-        names::TLS_JA4_S1R,
+        names::TLS_JA4_RS1,
     ] {
         if !headers.contains_key(key) {
             return Err(format!("Missing {key} header").into());
