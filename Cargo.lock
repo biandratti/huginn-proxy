@@ -550,9 +550,9 @@ dependencies = [
 
 [[package]]
 name = "crossbeam-channel"
-version = "0.5.16"
+version = "0.5.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d85363c37faeca707aef026efa9f3b34d077bce547e48f770770625c6013679e"
+checksum = "98b0cc327b5bc766e7fda9c9260cc0fa81b43a8e240440422dff70788e3f9ef1"
 dependencies = [
  "crossbeam-utils",
 ]
@@ -1077,9 +1077,9 @@ version = "0.0.4-beta.0"
 
 [[package]]
 name = "huginn-net-http"
-version = "2.1.0"
+version = "2.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b196d02f55492562e26f713c3ce5cf26a6bb0d1857f431f3679a6b5db185eb91"
+checksum = "fa865c5e982215cfc1ba33782f13a80677c19f0e0d4bc1053ac80c16a9e7b012"
 dependencies = [
  "crossbeam-channel",
  "hpack-patched",
@@ -1094,9 +1094,9 @@ dependencies = [
 
 [[package]]
 name = "huginn-net-tcp"
-version = "2.1.0"
+version = "2.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "228ba01c3c31bafa9197ea44c7b05e57f32e0729c0e5966d96f6bcdcc3b2385e"
+checksum = "b507cb9d5f2b9dc83ca1c9fa398c08af0760a56361919328af6dae20fcdec5a0"
 dependencies = [
  "crossbeam-channel",
  "pcap-file",
@@ -1107,9 +1107,9 @@ dependencies = [
 
 [[package]]
 name = "huginn-net-tls"
-version = "2.1.0"
+version = "2.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2a080695d07c4005482377758c7593915a39c14275a6f8b15df53ec03371964e"
+checksum = "1950c46b42fa20553ae7dba6aaf6cf4e0b627b6b081ccf10450da4f1619c7c4a"
 dependencies = [
  "crossbeam-channel",
  "pcap-file",
@@ -1387,9 +1387,9 @@ dependencies = [
 
 [[package]]
 name = "ipnet"
-version = "2.12.1"
+version = "2.12.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6a756c3fac73139e83f14c2d742155dd2b78d3ee56597b419a0579b7bdd6dd78"
+checksum = "791930b43c0d5973160d90a8f3894509f2b273430f5c5c73b668636d0287c5c0"
 
 [[package]]
 name = "ipnetwork"
@@ -3219,9 +3219,9 @@ dependencies = [
 
 [[package]]
 name = "tokio-rustls"
-version = "0.26.4"
+version = "0.26.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1729aa945f29d91ba541258c8df89027d5792d85a8841fb65e8bf0f4ede4ef61"
+checksum = "b0c85f2c3ef0b1cd58b36682f4b17aaa995f0e5db534d85692b4903abce21f67"
 dependencies = [
  "rustls",
  "tokio",

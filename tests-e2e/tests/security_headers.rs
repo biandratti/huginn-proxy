@@ -13,9 +13,9 @@ fn assert_injected_fingerprint_headers(echo: &BackendEcho, ipv6: bool) {
         ("JA4", names::TLS_JA4),
         ("JA4_r", names::TLS_JA4_R),
         ("JA4_o", names::TLS_JA4_O),
-        ("JA4_or", names::TLS_JA4_OR),
+        ("JA4_ro", names::TLS_JA4_RO),
         ("JA4_s1", names::TLS_JA4_S1),
-        ("JA4_s1r", names::TLS_JA4_S1R),
+        ("JA4_rs1", names::TLS_JA4_RS1),
     ];
 
     for (label, name) in tls {

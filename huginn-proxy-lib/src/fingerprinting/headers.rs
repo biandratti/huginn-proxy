@@ -21,28 +21,29 @@ pub mod names {
     /// It is injected for all TLS connections when fingerprinting is enabled.
     pub const TLS_JA4_O: &str = "x-tls-ja4-o";
 
-    /// Header name for TLS JA4_or fingerprint injection (FoxIO naming)
+    /// Header name for TLS JA4_ro fingerprint injection (FoxIO naming)
     ///
-    /// JA4_or: cipher suites and extensions in original ClientHello, raw (not hashed) hex values.
+    /// JA4_ro: cipher suites and extensions in original ClientHello, raw (not hashed) hex values.
     /// Combines original order and raw values - maximum detail for analysis.
     /// It is injected for all TLS connections when fingerprinting is enabled.
-    pub const TLS_JA4_OR: &str = "x-tls-ja4-or";
+    pub const TLS_JA4_RO: &str = "x-tls-ja4-ro";
 
     /// Header name for TLS JA4_s1 stable fingerprint injection (huginn-net-tls Stable v1)
     ///
-    /// JA4_s1: cipher suites and extensions sorted, SHA-256 hashed, ephemeral extensions
-    /// excluded (session ticket 0x0023, pre-shared key 0x0029, padding 0x0015).
+    /// JA4_s1: cipher suites and extensions sorted, SHA-256 hashed, session extensions
+    /// excluded (`S1_SESSION_EXTENSIONS`: padding 0x0015, session ticket 0x0023,
+    /// pre-shared key 0x0029, early_data 0x002a).
     /// Yields more consistent fingerprints across resumptions from
     /// the same client than plain JA4, at the cost of omitting signal from those extensions.
     /// It is injected for all TLS connections when fingerprinting is enabled.
     pub const TLS_JA4_S1: &str = "x-tls-ja4-s1";
 
-    /// Header name for TLS JA4_s1r stable fingerprint injection (raw variant)
+    /// Header name for TLS JA4_rs1 stable fingerprint injection (raw variant)
     ///
-    /// JA4_s1r: same ephemeral-extension filtering as JA4_s1, cipher suites and extensions
+    /// JA4_rs1: same session-extension filtering as JA4_s1, cipher suites and extensions
     /// sorted, raw (not hashed) hex values.
     /// It is injected for all TLS connections when fingerprinting is enabled.
-    pub const TLS_JA4_S1R: &str = "x-tls-ja4-s1r";
+    pub const TLS_JA4_RS1: &str = "x-tls-ja4-rs1";
 
     /// Header name for HTTP/2 (Akamai) fingerprint injection
     ///
@@ -67,9 +68,9 @@ pub mod names {
         TLS_JA4,
         TLS_JA4_R,
         TLS_JA4_O,
-        TLS_JA4_OR,
+        TLS_JA4_RO,
         TLS_JA4_S1,
-        TLS_JA4_S1R,
+        TLS_JA4_RS1,
         HTTP2_AKAMAI,
         TCP_SYN,
     ];

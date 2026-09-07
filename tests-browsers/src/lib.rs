@@ -85,9 +85,9 @@ pub fn verify_fingerprint_headers(
         names::TLS_JA4,
         names::TLS_JA4_R,
         names::TLS_JA4_O,
-        names::TLS_JA4_OR,
+        names::TLS_JA4_RO,
         names::TLS_JA4_S1,
-        names::TLS_JA4_S1R,
+        names::TLS_JA4_RS1,
     ] {
         if !headers.contains_key(key) {
             return Err(format!("Missing {key} header").into());
