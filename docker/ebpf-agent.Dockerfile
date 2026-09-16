@@ -19,18 +19,16 @@ RUN tar -xzf /tmp/cargo-binstall-${TARGETARCH}.tgz -C /usr/local/cargo/bin cargo
     && cargo binstall bpf-linker --no-confirm
 WORKDIR /app
 COPY . .
+RUN rustc --edition=2021 -O docker/healthcheck.rs -o /healthcheck
 RUN cargo build --release -p huginn-ebpf-agent
 
 # ── runtime ─────────────────────────────────────────────────────
-# debian:trixie-slim — matches rust:1.94.1-slim base (Debian 13, glibc 2.38+).
-FROM debian:trixie-slim@sha256:d7e12182ce18b85b93007c1dedf31f2d29e01ccf3182cc4017c709b6259bc132
+FROM gcr.io/distroless/cc-debian13:latest@sha256:4594d59540d1948417f6ca2829ddd9294493a7c68b7528f4dd459de7f203a750
 LABEL org.opencontainers.image.description="eBPF XDP agent for huginn-proxy — loads XDP program and pins BPF maps"
 COPY --from=builder /app/target/release/huginn-ebpf-agent /usr/local/bin/huginn-ebpf-agent
-RUN apt-get update -q && apt-get install -y --no-install-recommends curl \
-    && rm -rf /var/lib/apt/lists/* \
-    && chmod 555 /usr/local/bin/huginn-ebpf-agent \
-    && rm -f /usr/bin/apt-get /usr/bin/apt /usr/bin/dpkg
+COPY --from=builder /healthcheck /usr/local/bin/healthcheck
 # Runs as root: bpffs (/sys/fs/bpf) is owned by root and BPF syscalls
 # require CAP_BPF + CAP_NET_ADMIN + CAP_PERFMON. The agent has no open
 # ports, so the attack surface is the same regardless of UID.
+USER 0
 CMD ["/usr/local/bin/huginn-ebpf-agent"]

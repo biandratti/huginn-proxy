@@ -125,7 +125,7 @@ jobs:
           platforms: linux/amd64
           push: false
           load: true
-          tags: local-scan:${{ matrix.name }}-${{ github.sha }}
+          tags: ${{ inputs.registry || 'ghcr.io' }}/${{ inputs.image_name || github.repository }}${{ matrix.image_repo_suffix }}:scan-${{ github.sha }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=docker-${{ matrix.name }}
           cache-to: type=gha,mode=max,scope=docker-${{ matrix.name }}
@@ -134,7 +134,7 @@ jobs:
         continue-on-error: true
         uses: aquasecurity/trivy-action@v0.36.0
         with:
-          image-ref: local-scan:${{ matrix.name }}-${{ github.sha }}
+          image-ref: ${{ inputs.registry || 'ghcr.io' }}/${{ inputs.image_name || github.repository }}${{ matrix.image_repo_suffix }}:scan-${{ github.sha }}
           format: sarif
           output: trivy-${{ matrix.name }}.sarif
           severity: CRITICAL,HIGH,MEDIUM
