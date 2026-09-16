@@ -1,4 +1,3 @@
-use std::sync::Arc;
 use tokio::time::Instant;
 
 use super::ja4::Ja4Fingerprints;
@@ -7,7 +6,7 @@ use crate::telemetry::Metrics;
 /// Reads TLS ClientHello from the stream and extracts JA4 fingerprint
 pub async fn read_client_hello(
     stream: &mut tokio::net::TcpStream,
-    metrics: Arc<Metrics>,
+    metrics: &Metrics,
 ) -> std::io::Result<(Vec<u8>, Option<Ja4Fingerprints>)> {
     use huginn_net_tls::tls_process::parse_tls_client_hello;
     use tokio::io::AsyncReadExt;
