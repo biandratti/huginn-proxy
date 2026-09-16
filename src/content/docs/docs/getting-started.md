@@ -12,7 +12,7 @@ Inspired by production-grade proxies like [Pingora](https://github.com/cloudflar
 ## Prerequisites
 
 - Obtain a binary or image: use the [**latest releases**](https://github.com/biandratti/huginn-proxy/releases) on GitHub; see [Artifacts](/huginn-proxy/docs/artifacts/) for GHCR image names and [Containers](/huginn-proxy/docs/containers/) to run with Docker Compose.
-- Linux (kernel ≥ 5.11) is required for TCP SYN / eBPF fingerprinting; TLS and HTTP/2 fingerprints work on other platforms when eBPF is disabled.
+- TCP SYN / eBPF needs Linux (kernel ≥ 5.11). TLS and HTTP/2 fingerprints work without eBPF (plain Linux builds and macOS).
 
 ## Scope and limitations
 
