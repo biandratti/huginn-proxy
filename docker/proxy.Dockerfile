@@ -14,6 +14,7 @@ RUN apt-get update -q && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY . .
+RUN rustc --edition=2021 -O docker/healthcheck.rs -o /healthcheck
 
 # ── plain builder ───────────────────────────────────────────────
 FROM builder-base AS builder-plain
@@ -32,36 +33,22 @@ RUN tar -xzf /tmp/cargo-binstall-${TARGETARCH}.tgz -C /usr/local/cargo/bin cargo
 RUN cargo build --release -p huginn-proxy --features ebpf-tcp
 
 # ── runtime base ────────────────────────────────────────────────
-# debian:trixie-slim — matches rust:1.94.1-slim base (Debian 13, glibc 2.38+).
-FROM debian:trixie-slim@sha256:d7e12182ce18b85b93007c1dedf31f2d29e01ccf3182cc4017c709b6259bc132 AS runtime-base
-RUN apt-get update -q && apt-get install -y --no-install-recommends \
-    ca-certificates curl \
-    && rm -rf /var/lib/apt/lists/*
-RUN useradd --system --no-create-home --uid 10001 app
+# Distroless contains only the glibc/libgcc runtime and CA store needed by the binaries.
+FROM gcr.io/distroless/cc-debian13:latest@sha256:4594d59540d1948417f6ca2829ddd9294493a7c68b7528f4dd459de7f203a750 AS runtime-base
+COPY --from=builder-base /healthcheck /usr/local/bin/healthcheck
 
 # ── plain target ────────────────────────────────────────────────
 FROM runtime-base AS plain
 LABEL org.opencontainers.image.description="High-performance reverse proxy with passive fingerprinting capabilities powered by Huginn Net (no eBPF/XDP)"
 COPY --from=builder-plain /app/target/release/huginn-proxy /usr/local/bin/huginn-proxy
-RUN chmod 555 /usr/local/bin/huginn-proxy \
-    && rm -f /usr/bin/apt-get /usr/bin/apt /usr/bin/dpkg
 USER 10001
 CMD ["/usr/local/bin/huginn-proxy", "/config/config.toml"]
 
 # ── ebpf target (default) ──────────────────────────────────────
 FROM runtime-base AS ebpf
 LABEL org.opencontainers.image.description="High-performance reverse proxy with passive fingerprinting capabilities powered by Huginn Net"
-RUN apt-get update -q && apt-get install -y --no-install-recommends \
-    libcap2-bin \
-    && rm -rf /var/lib/apt/lists/*
 COPY --from=builder-ebpf /app/target/release/huginn-proxy /usr/local/bin/huginn-proxy
-# cap_bpf: open pinned BPF maps for reading (TCP SYN fingerprinting).
-# The proxy never loads XDP — cap_net_admin and cap_perfmon are NOT needed.
-# docker-compose.yml must declare cap_add: [CAP_BPF] for the bounding set.
-RUN setcap cap_bpf+eip /usr/local/bin/huginn-proxy \
-    && chmod 555 /usr/local/bin/huginn-proxy \
-    && apt-get purge -y --auto-remove libcap2-bin \
-    && rm -rf /var/lib/apt/lists/* /var/cache/apt \
-    && rm -f /usr/bin/apt-get /usr/bin/apt /usr/bin/dpkg
+# The runtime must grant CAP_BPF (Compose cap_add / Kubernetes securityContext).
+# The proxy only reads pinned maps; CAP_NET_ADMIN and CAP_PERFMON are not needed.
 USER 10001
 CMD ["/usr/local/bin/huginn-proxy", "/config/config.toml"]

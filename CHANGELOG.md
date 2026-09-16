@@ -22,6 +22,9 @@ follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- **Container runtimes are distroless.** Published images no longer include a shell, package
+  manager, curl, Perl, SQLite, PCRE2, or gzip. Compose healthchecks use the included minimal
+  HTTP probe, and eBPF capabilities must be granted at runtime rather than stored on the binary.
 - **TLS accept noise is `debug`.** Routine client noise (peer abort or reset, including during the ClientHello read, plus non-TLS bytes) no longer logs at `warn`. An unmatched SNI drops to `info` rather than `debug`, since it usually means a missing domain; timeouts and cert/mTLS failures stay `warn`. The `huginn-net-tls` target, which logs a JA4 parse `error` per non-TLS byte, is off in the default log filter and can be restored with `RUST_LOG`.
 - **`huginn_tls_handshake_errors_total` now carries `error_type`** (`client_hello_read`, `peer_eof`, `unmatched_sni`, `not_tls`, `handshake_timeout`, `other`), so causes demoted to `debug` stay diagnosable — a missing domain shows up as `unmatched_sni`. The label was already documented but never emitted; queries that sum the metric are unaffected.
 - **`/ready` 503 now reports why:** `proxy_starting` or `proxy_draining` (text: `STARTING` / `DRAINING`). With TCP fingerprinting, also `capture_*` (text: `NOCAPTURE`). The observability server stays up until after drain.

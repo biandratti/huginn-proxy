@@ -31,6 +31,8 @@ services:
       - HUGINN_EBPF_RATE_LIMIT_BURST=2000
       - HUGINN_EBPF_RATE_LIMIT_WINDOW_SECONDS=1
     healthcheck:
+      # TODO: After publishing the distroless release, replace with:
+      # ["CMD", "/usr/local/bin/healthcheck", "127.0.0.1:9091", "/ready"]
       test: ["CMD-SHELL", "curl -sf http://127.0.0.1:9091/ready || exit 1"]
       interval: 2s
       timeout: 1s
@@ -70,7 +72,9 @@ services:
         soft: 65536
         hard: 65536
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:9090/health || exit 1"]
+      # TODO: After publishing the distroless release, replace with:
+      # ["CMD", "/usr/local/bin/healthcheck", "127.0.0.1:9090", "/health"]
+      test: ["CMD-SHELL", "curl -sf http://127.0.0.1:9090/health || exit 1"]
       interval: 5s
       timeout: 3s
       retries: 12

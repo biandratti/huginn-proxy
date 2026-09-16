@@ -23,7 +23,7 @@ services:
         soft: 65536
         hard: 65536
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://127.0.0.1:9090/health || exit 1"]
+      test: ["CMD", "/usr/local/bin/healthcheck", "127.0.0.1:9090", "/health"]
       interval: 5s
       timeout: 3s
       retries: 12

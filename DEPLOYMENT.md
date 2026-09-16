@@ -18,7 +18,11 @@ Compose mounts `examples/config/compose.yaml` (and optionally `compose.toml`). T
 (os error 21)`. Backends in that example are `backend-a` / `backend-b` (Compose DNS); for a working
 stack use Compose below, or point them at addresses the container can reach.
 
-**Note:** The process runs as user `app` (UID **10001**). Certificate and key files under `/config/certs` must be readable by that user (e.g. `chmod` / `chown` on the host copy).
+**Note:** The proxy process runs as numeric UID **10001**. Certificate and key files under
+`/config/certs` must be readable by that UID (e.g. `chmod` / `chown` on the host copy).
+The runtime image is shell-free distroless: use `docker exec` only for the included application
+and `/usr/local/bin/healthcheck`; utilities such as `sh`, `curl`, `apt`, and `dpkg` are intentionally
+absent. Compose healthchecks invoke the included probe directly.
 
 ### Docker Compose
 
@@ -321,7 +325,7 @@ No restart required.
 
 ### Certificate Permissions
 
-**Docker:** Certificates must be readable by user `app` (UID `10001`). Tightening the mode without
+**Docker:** Certificates must be readable by UID `10001`. Tightening the mode without
 also transferring ownership makes the key unreadable inside the container, and every handshake then
 fails with `no server certificate chain resolved`.
 

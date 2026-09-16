@@ -120,7 +120,8 @@ The proxy only reads pinned BPF maps:
 |------------|----------------------------------------|
 | `CAP_BPF`  | Open pinned BPF maps via `BPF_OBJ_GET` |
 
-No `seccomp:unconfined` or `apparmor:unconfined` needed.
+Grant `CAP_BPF` at runtime (`cap_add` / `securityContext.capabilities`). No file capabilities,
+`setcap`, `seccomp:unconfined`, or `apparmor:unconfined` are needed.
 
 ---
 

@@ -10,11 +10,16 @@ Local: [`examples/`](examples/) (Docker Compose). Published runtime images (`lin
 
 | Image | Base | User | Capabilities |
 | --- | --- | --- | --- |
-| `ghcr.io/biandratti/huginn-proxy:latest` | `debian:trixie-slim` (Debian 13) | `10001` | Proxy (eBPF build) — reads pinned maps — `CAP_BPF` |
-| `ghcr.io/biandratti/huginn-proxy-plain:latest` | `debian:trixie-slim` (Debian 13) | `10001` | Proxy without eBPF in the binary |
-| `ghcr.io/biandratti/huginn-proxy-ebpf-agent:latest` | `debian:trixie-slim` (Debian 13) | `root` | Agent loads XDP — `CAP_BPF` `CAP_NET_ADMIN` `CAP_PERFMON` |
+| `ghcr.io/biandratti/huginn-proxy:latest` | `gcr.io/distroless/cc-debian13` | `10001` | Proxy (eBPF build) — reads pinned maps — `CAP_BPF` |
+| `ghcr.io/biandratti/huginn-proxy-plain:latest` | `gcr.io/distroless/cc-debian13` | `10001` | Proxy without eBPF in the binary |
+| `ghcr.io/biandratti/huginn-proxy-ebpf-agent:latest` | `gcr.io/distroless/cc-debian13` | `root` | Agent loads XDP — `CAP_BPF` `CAP_NET_ADMIN` `CAP_PERFMON` |
 
-Runtime images use the same base as [`docker/proxy.Dockerfile`](docker/proxy.Dockerfile) and [`docker/ebpf-agent.Dockerfile`](docker/ebpf-agent.Dockerfile) (`FROM debian:trixie-slim@…`).
+Runtime images use the same digest-pinned, shell-free base as
+[`docker/proxy.Dockerfile`](docker/proxy.Dockerfile) and
+[`docker/ebpf-agent.Dockerfile`](docker/ebpf-agent.Dockerfile)
+(`FROM gcr.io/distroless/cc-debian13@…`). They contain the application binary, a minimal
+HTTP healthcheck binary, the CA store, and required glibc/libgcc runtime libraries; package
+managers, shells, curl, Perl, and other general-purpose utilities are not included.
 
 Three **separate** GHCR packages; each uses the same tags `latest` and `vX.Y.Z` (no `plain-` / `ebpf-agent-` prefix on the tag). Version pins: [GitHub Releases](https://github.com/biandratti/huginn-proxy/releases).
 
