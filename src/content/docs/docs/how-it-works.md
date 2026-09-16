@@ -18,8 +18,7 @@ JA4 and Akamai always come from the **proxy process**; only the SYN fingerprint 
 
 ## Fingerprint timing
 
-- **TLS (JA4):** Computed from the ClientHello; in typical use, **once per TLS session** and reused for requests on that session.
-- **TLS (JA4-S v1):** Same ClientHello source, but ephemeral extensions (e.g. `session_ticket`, `padding`) are stripped before hashing, producing a **stable fingerprint** that does not change across reconnects caused by those extensions. Emitted as `x-tls-ja4-sv1` and `x-tls-ja4-sv1r`.
+- **TLS (JA4 / JA4_s1):** From the ClientHello; in typical use, **once per TLS session** and reused for requests on that session. Header names and the stable variant: [Fingerprinting](/huginn-proxy/docs/fingerprinting/).
 - **HTTP/2 (Akamai):** From HTTP/2 SETTINGS / control frames on that connection.
 - **TCP SYN:** From the initial SYN when eBPF is enabled; applies to the TCP connection, not each HTTP request on keep-alive.
 

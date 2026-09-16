@@ -38,6 +38,7 @@ Two processes cooperate:
 | `HUGINN_EBPF_DST_IP_V4` | IPv4 destination filter (`0.0.0.0` = no filter). |
 | `HUGINN_EBPF_DST_IP_V6` | IPv6 counterpart (`::` = no filter; quote in YAML if needed). |
 | `HUGINN_EBPF_PIN_PATH` | Directory under bpffs where maps are pinned (e.g. `/sys/fs/bpf/huginn`). **Same** on proxy. |
+| `HUGINN_EBPF_LINK_PIN_PATH` | Pin path for the capture `bpf_link` (TCX / XDP fd-link) so an agent restart can replace the program without detaching. |
 | `HUGINN_EBPF_SYN_MAP_MAX_ENTRIES` | LRU map capacity. **Agent-only**: published into `syn_meta` for the proxy; do **not** set this on the proxy. |
 | `HUGINN_EBPF_CAPTURE` | Capture backend: `xdp-native` (default), `xdp-skb`, or `tc`. See [Choosing a capture backend](#choosing-a-capture-backend). |
 | `HUGINN_EBPF_LOG_LEVEL` | In-kernel datapath log level: `off` (default), `error`, `warn`, `info`, `debug`, `trace`. Diagnostics only. |
@@ -45,6 +46,8 @@ Two processes cooperate:
 | `HUGINN_EBPF_RATE_LIMIT_BURST` | Max SYNs per window per source before skipping capture (`1..=65534`, default `2000`). Counted **per CPU**; size against `SYN_MAP_MAX_ENTRIES`, not the proxy’s `[security.rate_limit]`. |
 | `HUGINN_EBPF_RATE_LIMIT_WINDOW_SECONDS` | Sliding window length in seconds (`1..=3600`, default `1`). |
 | `HUGINN_EBPF_METRICS_ADDR` / `HUGINN_EBPF_METRICS_PORT` | Where the **agent** binds `/metrics`, `/health`, `/ready`, `/live`. |
+| `HUGINN_EBPF_HEALTH_FORMAT` | `json` (default) or `text` for those health bodies. |
+| `HUGINN_EBPF_DRAIN_DELAY_SECS` | Agent drain window before detach (pair with proxy `timeout.drain_delay_secs`). |
 
 > A bad rate-limit value fails agent startup (same as other agent vars). Unset → defaults. Size `BURST` with the formula in [EBPF-SETUP.md](https://github.com/biandratti/huginn-proxy/blob/master/EBPF-SETUP.md#sizing-the-syn-rate-limiter). Metrics: `tcp_syn_rate_skipped_total` / `tcp_syn_rate_allowed_total` / `tcp_syn_rate_limit_enabled` in [TELEMETRY.md](https://github.com/biandratti/huginn-proxy/blob/master/TELEMETRY.md).
 
@@ -53,7 +56,9 @@ Two processes cooperate:
 | Variable | Role |
 | --- | --- |
 | `HUGINN_EBPF_PIN_PATH` | Pin directory to read maps from (must match the agent). |
+| `HUGINN_EBPF_LINK_PIN_PATH` | Same capture-link pin as the agent. Proxy `/ready` ANDs a capture gate when TCP SYN fingerprinting is on. |
 | `HUGINN_EBPF_RECONNECT_POLL_SECS` | Poll interval for detecting recreated maps (default `5`; `0` disables). Normal agent restarts reuse the same maps and need no reconnection. |
+| `HUGINN_EBPF_CAPTURE_POLL_SECS` / `HUGINN_EBPF_CAPTURE_STALE_TICKS` | How the proxy decides the capture path is live vs `capture_detached`. |
 
 Also set `fingerprint.tcp_enabled = true` in config. Full stack layout (Compose, caps, volumes): [`examples/docker-compose.ebpf.yml`](https://github.com/biandratti/huginn-proxy/blob/master/examples/docker-compose.ebpf.yml) and [`examples/docker-compose.release-ebpf.yml`](https://github.com/biandratti/huginn-proxy/blob/master/examples/docker-compose.release-ebpf.yml).
 
@@ -78,7 +83,7 @@ Both hooks live in the same BPF object and share identical maps. Only the kernel
 
 - **`network_mode: "service:proxy"`** on the agent puts the agent in the **proxy’s network namespace**, so the interface name (`eth0`) and destination filter match the traffic the proxy actually receives.
 - **`bpffs`** must be mounted into **both** containers at `/sys/fs/bpf` (or adjust paths consistently).
-- **Health:** agent `/ready` should succeed when maps are pinned; proxy `/health` on `telemetry.metrics_port` is separate.
+- **Health:** agent `/ready` is attached + required pins + not draining (kubelet only). Proxy `/ready` on `telemetry.metrics_port` also requires the capture gate when `fingerprint.tcp_enabled` is on (`capture_absent` / `capture_draining` / `capture_detached`). A rollout still blips proxy `/ready` even where the pinned link keeps capturing. Roll the **agent image first**, then the proxy.
 
 See [Containers](/huginn-proxy/docs/containers/) for the two Compose layouts (eBPF vs plain) and [Artifacts](/huginn-proxy/docs/artifacts/) for GHCR image names.
 
@@ -90,4 +95,4 @@ The SYN map is keyed by **source IP and port** as seen on the wire. CNIs that SN
 
 - **Startup:** the proxy retries opening pinned maps until the agent has pinned them (start order does not matter).
 - **Agent crash:** the proxy does **not** crash; lookups miss and `x-tcp-p0f` is simply omitted. Fresh captures stop until a healthy agent is attached again.
-- **Agent restart:** pins are left in place and reused, so there is normally **no** reconnection gap. Maps are only recreated when `HUGINN_EBPF_SYN_MAP_MAX_ENTRIES` changes (or bpffs is wiped); then the proxy’s reconnect watcher adopts the new maps within `HUGINN_EBPF_RECONNECT_POLL_SECS`.
+- **Agent restart:** the capture `bpf_link` is pinned so the program can be replaced without detaching. Maps stay in place and are reused, so there is normally **no** reconnection gap. Maps are only recreated when `HUGINN_EBPF_SYN_MAP_MAX_ENTRIES` changes (or bpffs is wiped); then the proxy’s reconnect watcher adopts the new maps within `HUGINN_EBPF_RECONNECT_POLL_SECS`.

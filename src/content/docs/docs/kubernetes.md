@@ -20,6 +20,8 @@ Images and capabilities: [Artifacts](/huginn-proxy/docs/artifacts/). Capture bac
 
 TCP SYN fingerprinting needs both on the same node when the proxy reads pinned maps from that node's bpffs. Without TCP SYN (`tcp_enabled = false` / plain image), skip the agent entirely. On virtual networks / CNI overlays, you will likely need `HUGINN_EBPF_CAPTURE=tc` (see [eBPF TCP setup](/huginn-proxy/docs/ebpf-setup/#choosing-a-capture-backend)).
 
+Roll the **agent** image first, then the proxy, so the pinned capture link stays attached. Size `timeout.drain_delay_secs + timeout.shutdown_secs` (and `HUGINN_EBPF_DRAIN_DELAY_SECS`) below `terminationGracePeriodSeconds`. Point kubelet **readiness** at proxy `/ready` (200 body `serving` / `SERVING`); do not AND agent `/ready` as a second Service monitor.
+
 ## Client IP and port must match the wire
 
 The SYN map is keyed by `(src_ip, src_port)` as seen on the interface the agent attaches to. The proxy looks up the same tuple for the accepted connection. If those do not match, `x-tcp-p0f` misses.

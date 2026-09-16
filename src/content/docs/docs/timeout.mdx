@@ -1,6 +1,6 @@
 ---
 title: Timeout
-description: Connect, idle, TLS handshake, shutdown, and HTTP/1.1 keep-alive. Static.
+description: Connect, idle, TLS handshake, two-phase drain, shutdown, and HTTP/1.1 keep-alive. Static.
 sidebar:
   order: 3
 ---
@@ -15,7 +15,8 @@ The **`[timeout]`** section sets connection timeouts and graceful shutdown behav
 | `proxy_idle_ms` | `60000` | Inbound idle timeout (ms). |
 | `tls_handshake_secs` | `15` | Max time for client TLS handshake. |
 | `connection_handling_secs` | `300` | Max time for full request/response on a connection. |
-| `shutdown_secs` | `30` | Graceful shutdown window. |
+| `drain_delay_secs` | `0` | Phase 1 of shutdown: fail `/ready` (`proxy_draining`) while the traffic port still accepts. `0` = fail readiness and stop accept together. Size so `drain_delay_secs + shutdown_secs` is below the orchestrator stop grace. |
+| `shutdown_secs` | `30` | Phase 2: stop accept and drain in-flight connections. `/live` stays 200 until exit. |
 
 <Tabs syncKey="huginn-config">
  <TabItem label="YAML">
@@ -24,6 +25,7 @@ The **`[timeout]`** section sets connection timeouts and graceful shutdown behav
 timeout:
   upstream_connect_ms: 5000
   proxy_idle_ms: 60000
+  drain_delay_secs: 1
   tls_handshake_secs: 15
   connection_handling_secs: 300
   shutdown_secs: 30
@@ -39,6 +41,7 @@ timeout:
 [timeout]
 upstream_connect_ms = 5000
 proxy_idle_ms = 60000
+drain_delay_secs = 1
 tls_handshake_secs = 15
 connection_handling_secs = 300
 shutdown_secs = 30
@@ -50,6 +53,8 @@ upstream_idle_timeout = 60
 
  </TabItem>
 </Tabs>
+
+On **SIGTERM** / **SIGINT**, `/ready` fails first (`proxy_draining`) for `drain_delay_secs`, then accept stops and in-flight work drains for `shutdown_secs`. The observability listener stays up until after drain. See [Telemetry](/huginn-proxy/docs/telemetry/) for `/ready` bodies.
 
 ### `[timeout.keep_alive]`
 

@@ -15,9 +15,9 @@ Runtime images are published for `linux/amd64` and `linux/arm64`. There are **th
 
 | Image | Base | User | Capabilities |
 | --- | --- | --- | --- |
-| `ghcr.io/biandratti/huginn-proxy:latest` | `debian:trixie-slim` (Debian 13) | `10001` | Proxy (eBPF build); reads pinned maps; `CAP_BPF` |
-| `ghcr.io/biandratti/huginn-proxy-plain:latest` | `debian:trixie-slim` (Debian 13) | `10001` | Proxy without eBPF in the binary |
-| `ghcr.io/biandratti/huginn-proxy-ebpf-agent:latest` | `debian:trixie-slim` (Debian 13) | `root` | Agent loads XDP/TC; `CAP_BPF` `CAP_NET_ADMIN` `CAP_PERFMON` |
+| `ghcr.io/biandratti/huginn-proxy:latest` | `gcr.io/distroless/cc-debian13` | `10001` | Proxy (eBPF build); reads pinned maps; `CAP_BPF` |
+| `ghcr.io/biandratti/huginn-proxy-plain:latest` | `gcr.io/distroless/cc-debian13` | `10001` | Proxy without eBPF in the binary |
+| `ghcr.io/biandratti/huginn-proxy-ebpf-agent:latest` | `gcr.io/distroless/cc-debian13` | `root` | Agent loads XDP/TC; `CAP_BPF` `CAP_NET_ADMIN` `CAP_PERFMON` |
 
 Replace `:latest` with `:vX.Y.Z` to pin a release.
 
