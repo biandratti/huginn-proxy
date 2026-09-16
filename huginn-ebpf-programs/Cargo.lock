@@ -141,11 +141,11 @@ dependencies = [
 
 [[package]]
 name = "huginn-ebpf-common"
-version = "0.0.4-beta.0"
+version = "0.0.5-rc.0"
 
 [[package]]
 name = "huginn-ebpf-programs"
-version = "0.0.4-beta.0"
+version = "0.0.5-rc.0"
 dependencies = [
  "aya-ebpf",
  "aya-log-ebpf",
@@ -155,7 +155,7 @@ dependencies = [
 
 [[package]]
 name = "huginn-ebpf-rate-limit"
-version = "0.0.4-beta.0"
+version = "0.0.5-rc.0"
 
 [[package]]
 name = "itoa"

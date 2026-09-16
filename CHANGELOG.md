@@ -7,7 +7,7 @@ follows [Semantic Versioning](https://semver.org/).
 
 ---
 
-## [0.0.5-beta.0]
+## [0.0.5-rc.0]
 
 ### Added
 
