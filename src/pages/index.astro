@@ -40,12 +40,12 @@ const github = 'https://github.com/biandratti/huginn-proxy';
 						<span class="hp-badge">{releaseTag}</span>
 						<h1 class="hp-title">Huginn Proxy</h1>
 						<p class="hp-tagline">
-							High-performance reverse proxy: passive TLS, HTTP/2, and TCP SYN (eBPF) fingerprints, injected as trusted headers for your backends.
+							Reverse proxy for the hot path: passive TLS, HTTP/2, and TCP SYN (eBPF) fingerprints, injected as trusted headers. Load-tested under concurrent HTTPS — tens of thousands of requests per second with fingerprinting on.
 						</p>
 						<p class="hp-lede">
-							<strong>100% open source.</strong> Fingerprints come from{' '}
-							<a href="https://github.com/biandratti/huginn-net">Huginn Net</a>; proxy and signature path are both
-							MIT/Apache. No proprietary fingerprint stack, no extra license for commercial use.
+							<strong>Open source all the way down.</strong> Fingerprints come from{' '}
+							<a href="https://github.com/biandratti/huginn-net">Huginn Net</a> — proxy and signature engine alike,
+							dual-licensed MIT/Apache-2.0. No proprietary core, no separate license for commercial use.
 						</p>
 						<div class="hp-actions">
 							<a class="hp-btn hp-btn--primary" href={docs}>Documentation</a>
@@ -74,11 +74,11 @@ const github = 'https://github.com/biandratti/huginn-proxy';
 						</thead>
 						<tbody>
 							<tr>
-								<td><code>x-tls-ja4</code> (+ <code>-r</code> / <code>-o</code> / <code>-or</code>)</td>
+								<td><code>x-tls-ja4</code> (+ <code>-r</code> / <code>-o</code> / <code>-ro</code>)</td>
 								<td>TLS ClientHello: FoxIO-LLC JA4 family (hashed &amp; raw variants)</td>
 							</tr>
 							<tr>
-								<td><code>x-tls-ja4-sv1</code> (+ <code>-sv1r</code>)</td>
+								<td><code>x-tls-ja4-s1</code> (+ <code>-rs1</code>)</td>
 								<td>TLS ClientHello: stable JA4 (ephemeral extensions excluded)</td>
 							</tr>
 							<tr>

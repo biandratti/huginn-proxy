@@ -20,9 +20,13 @@ Derived from the TLS ClientHello (via [huginn-net-tls](https://crates.io/crates/
 | Header | Role |
 | --- | --- |
 | `x-tls-ja4` | Sorted cipher suites and extensions, SHA-256 hashed (FoxIO JA4) |
-| `x-tls-ja4-r` | Original ClientHello order, hashed (JA4_r) |
-| `x-tls-ja4-o` | Sorted, raw hex (JA4_o), useful for debugging |
-| `x-tls-ja4-or` | Original order, raw hex (JA4_or) |
+| `x-tls-ja4-r` | Sorted, raw hex (JA4_r) |
+| `x-tls-ja4-o` | Original ClientHello order, hashed (JA4_o) |
+| `x-tls-ja4-ro` | Original order, raw hex (JA4_ro) |
+| `x-tls-ja4-s1` | [JA4_s1](https://github.com/biandratti/huginn-net/blob/master/huginn-net-tls/JA4S1.md): session extensions excluded, sorted, hashed |
+| `x-tls-ja4-rs1` | JA4_s1 raw |
+
+`JA4_s1` / `JA4_rs1` are huginn-only (`stable-v1`); they are not in the FoxIO JA4 spec. [JA4S1.md](https://github.com/biandratti/huginn-net/blob/master/huginn-net-tls/JA4S1.md).
 
 TLS fingerprints are usually **once per TLS session**. For debugging per-connection variation (e.g. extension order randomization), you may need to force new connections or adjust ALPN / keep-alive. That is not generally recommended for production.
 

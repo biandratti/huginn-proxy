@@ -21,6 +21,7 @@ Configured under **`[telemetry]`** in the config file. **Static**: the listener 
 | --- | --- | --- |
 | `metrics_port` | omitted (disabled) | Port for Prometheus + health HTTP server (`/metrics`, `/health`, `/ready`, `/live`). |
 | `otel_log_level` | `"warn"` | OpenTelemetry SDK internal log level (not application logs). |
+| `health_format` | `"json"` | Body of `/health`, `/ready`, `/live` (and observability 404/500). `"json"` or `"text"`. Does not affect `/metrics`. |
 
 <Tabs syncKey="huginn-config">
  <TabItem label="YAML">
@@ -29,6 +30,7 @@ Configured under **`[telemetry]`** in the config file. **Static**: the listener 
 telemetry:
   metrics_port: 9090
   otel_log_level: "warn"
+  health_format: json
 ```
 
  </TabItem>
@@ -38,6 +40,7 @@ telemetry:
 [telemetry]
 metrics_port = 9090
 otel_log_level = "warn"
+health_format = "json"
 ```
 
  </TabItem>
@@ -48,11 +51,11 @@ otel_log_level = "warn"
 | Path | Role |
 | --- | --- |
 | `/health` | Process is running |
-| `/ready` | Ready to serve (listeners accepting; independent of backend health) |
-| `/live` | Liveness |
+| `/ready` | Ready to serve. **200** JSON is `{"status":"serving"}` (text token `SERVING`). **503** reports why: `proxy_starting` or `proxy_draining` (text `STARTING` / `DRAINING`). With TCP SYN fingerprinting, also `capture_absent` / `capture_draining` / `capture_detached` (text `NOCAPTURE`). Independent of backend health. |
+| `/live` | Liveness; stays 200 during drain |
 | `/metrics` | Prometheus text |
 
-Health responses are JSON; `/metrics` is Prometheus exposition format.
+`health_format` is `json` (default) or `text` (single token, no trailing newline). Use `text` when the balancer matches the body and ignores the status code.
 
 **Scrape URL:** `http://<host>:<metrics_port>/metrics` (e.g. `http://localhost:9090/metrics`).
 
@@ -70,8 +73,9 @@ Only when the **TCP SYN** path is enabled. Configured with **environment variabl
 | --- | --- |
 | `HUGINN_EBPF_METRICS_ADDR` | Bind address for the agent HTTP server |
 | `HUGINN_EBPF_METRICS_PORT` | Port (often `9091`) |
+| `HUGINN_EBPF_HEALTH_FORMAT` | Same `json` / `text` bodies as proxy `health_format`. |
 
-Same **four paths** as the proxy (`/health`, `/ready`, `/live`, `/metrics`) for Kubernetes-style probes. **`/ready`** may return 503 until BPF maps are pinned.
+Same **four paths** as the proxy (`/health`, `/ready`, `/live`, `/metrics`) for Kubernetes-style probes. **`/ready`** is attached + required pins + not draining (not pins-only). Use it for **kubelet** only; do not AND it with the proxy as a second load-balancer monitor.
 
 **Agent-only** metrics (examples): `tcp_syn_captured_total`, `tcp_syn_insert_failures_total`, `tcp_syn_malformed_total`, `tcp_syn_rate_skipped_total`, `tcp_syn_rate_allowed_total`, `tcp_syn_rate_limit_enabled`, `agent_up`, `huginn_ebpf_agent_build_info`: full list in [TELEMETRY.md: eBPF Agent Metrics](https://github.com/biandratti/huginn-proxy/blob/master/TELEMETRY.md#ebpf-agent-metrics).
 
