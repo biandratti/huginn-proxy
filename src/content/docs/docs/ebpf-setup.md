@@ -122,4 +122,4 @@ Two processes, **not a joint shutdown**. They start and stop in any order; neith
 
 ## Keep-alives and misses
 
-The SYN is looked up once at accept and reused, so `x-tcp-p0f` is present on **every** keep-alive request, not just the first. A missing header means the SYN was never captured (startup, eviction) or the entry is stale (more than `2 × syn_map_max_entries` SYNs since capture). `force_new_connection = true` opens a new connection to the **backend**; it does not recapture the client SYN.
+The SYN is looked up once at accept and reused, so `x-tcp-p0f` is present on **every** keep-alive request, not just the first. A missing header means the SYN was never captured (startup, eviction) or the entry is stale (more than `2 × syn_map_max_entries` SYNs since capture).
