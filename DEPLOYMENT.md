@@ -24,8 +24,7 @@ stack use Compose below, or point them at addresses the container can reach.
 Runtime images are distroless (no shell, no `curl`). Compose therefore healthchecks with
 `/usr/local/bin/healthcheck` (`CMD`, not `CMD-SHELL`) — a small HTTP GET baked into the image so
 the probe does not depend on utilities the runtime will never ship. Kubernetes can keep using
-`httpGet` and does not need that binary. The `release-*` Compose files still use `curl` until the
-first distroless image is on GHCR; TODOs in those files mark the switch.
+`httpGet` and does not need that binary.
 
 ### Docker Compose
 
