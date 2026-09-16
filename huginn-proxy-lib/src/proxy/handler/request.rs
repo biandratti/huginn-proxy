@@ -47,7 +47,7 @@ pub fn strip_client_fingerprints(headers: &mut HeaderMap) -> Vec<&'static str> {
 fn check_ip_access(
     peer: std::net::SocketAddr,
     ip_filter: &crate::config::IpFilterConfig,
-    metrics: &Arc<Metrics>,
+    metrics: &Metrics,
 ) -> HttpResult<()> {
     let client_ip = peer.ip();
 
@@ -66,7 +66,7 @@ fn check_ip_access(
 fn enforce_ip_access(
     peer: std::net::SocketAddr,
     ip_filter: &crate::config::IpFilterConfig,
-    metrics: &Arc<Metrics>,
+    metrics: &Metrics,
     method: &str,
     protocol: &str,
 ) -> HttpResult<()> {
@@ -95,11 +95,11 @@ pub async fn handle_proxy_request(
     syn_fingerprint: Option<TcpObservation>,
     keep_alive: &KeepAliveConfig,
     security: &crate::proxy::SecurityContext,
-    metrics: Arc<Metrics>,
+    metrics: &Metrics,
     peer: std::net::SocketAddr,
     is_https: bool,
     preserve_host: bool,
-    client_pool: &Arc<ClientPool>,
+    client_pool: &ClientPool,
     upstream: &UpstreamGateway,
     connection_sni: Option<&str>,
 ) -> HttpResult<hyper::Response<RespBody>> {
@@ -136,7 +136,7 @@ pub async fn handle_proxy_request(
         let domain_ip_filter = domain_security
             .and_then(|s| s.ip_filter.as_ref())
             .unwrap_or(&security.ip_filter);
-        enforce_ip_access(peer, domain_ip_filter, &metrics, &method, &protocol)?;
+        enforce_ip_access(peer, domain_ip_filter, metrics, &method, &protocol)?;
     }
 
     // Misdirected-request enforcement (RFC 9110 §15.5.20 / RFC 7540 §9.1.2), always on,
@@ -211,7 +211,7 @@ pub async fn handle_proxy_request(
 
     // Deferred route-level IP check, before backend selection (blocked client never hits upstream).
     if defer_ip_check {
-        enforce_ip_access(peer, effective.ip_filter, &metrics, &method, &protocol)?;
+        enforce_ip_access(peer, effective.ip_filter, metrics, &method, &protocol)?;
     }
 
     let selected_upstream = match upstream.selector.select(
@@ -251,7 +251,7 @@ pub async fn handle_proxy_request(
         &route_match,
         peer,
         req.headers(),
-        &metrics,
+        metrics,
         domain_label,
         &security.trusted_proxies,
     ) {
@@ -374,7 +374,7 @@ pub async fn handle_proxy_request(
         security.global_header_manipulation.as_ref(),
         domain_headers,
         route_match.headers,
-        &metrics,
+        metrics,
     );
 
     let result = forward(
@@ -383,7 +383,7 @@ pub async fn handle_proxy_request(
         crate::proxy::forwarding::ForwardConfig {
             backends: &backends,
             keep_alive,
-            metrics: Arc::clone(&metrics),
+            metrics,
             matched_prefix: route_match.matched_prefix,
             replace_path: route_match.replace_path,
             security_headers: Some(effective.security_headers),
@@ -412,7 +412,7 @@ pub async fn handle_proxy_request(
             security.global_header_manipulation.as_ref(),
             domain_headers,
             route_match.headers,
-            &metrics,
+            metrics,
         );
     }
 

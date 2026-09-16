@@ -9,7 +9,6 @@ use hyper_util::server::conn::auto::{Connection, HttpServerConnExec};
 use std::fmt::Display;
 use std::future::Future;
 use std::pin::Pin;
-use std::sync::Arc;
 use tracing::{debug, warn};
 
 /// HTTP connection future that can emit GOAWAY / `Connection: close`.
@@ -35,7 +34,7 @@ pub async fn serve_with_timeout<C, Err>(
     mut serve_fut: Pin<Box<C>>,
     timeout_duration: tokio::time::Duration,
     mut shutdown_rx: ShutdownWatch,
-    metrics: Arc<Metrics>,
+    metrics: &Metrics,
     peer: std::net::SocketAddr,
 ) where
     C: Future<Output = Result<(), Err>> + GracefulShutdown,

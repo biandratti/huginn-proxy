@@ -202,7 +202,6 @@ pub async fn handle_tls_connection(
                     let connection_sni = connection_sni.clone();
 
                     async move {
-                        let metrics_for_match = metrics.clone();
                         let preserve_host = config.preserve_host;
                         let http_result = handle_proxy_request(
                             req,
@@ -213,7 +212,7 @@ pub async fn handle_tls_connection(
                             syn_fingerprint,
                             &keep_alive,
                             &security,
-                            metrics,
+                            &metrics,
                             peer,
                             true,
                             preserve_host,
@@ -228,7 +227,7 @@ pub async fn handle_tls_connection(
                             Err(e) => {
                                 e.log_with_peer(peer);
                                 let code = StatusCode::from(e.clone());
-                                metrics_for_match.record_error(e.error_type());
+                                metrics.record_error(e.error_type());
                                 match synthetic_error_response(code) {
                                     Ok(resp) => Ok(resp),
                                     Err(e) => Ok(crate::utils::http::json_error(
@@ -252,7 +251,7 @@ pub async fn handle_tls_connection(
                 serve_fut,
                 config.connection_handling_timeout,
                 config.shutdown_rx.clone(),
-                config.metrics,
+                &config.metrics,
                 peer,
             )
             .await;
@@ -279,7 +278,6 @@ pub async fn handle_tls_connection(
 
                     async move {
                         let preserve_host = config.preserve_host;
-                        let metrics_for_match = metrics.clone();
                         let http_result = handle_proxy_request(
                             req,
                             domains,
@@ -289,7 +287,7 @@ pub async fn handle_tls_connection(
                             syn_fingerprint,
                             &keep_alive,
                             &security,
-                            metrics,
+                            &metrics,
                             peer,
                             true,
                             preserve_host,
@@ -304,7 +302,7 @@ pub async fn handle_tls_connection(
                             Err(e) => {
                                 e.log_with_peer(peer);
                                 let code = StatusCode::from(e.clone());
-                                metrics_for_match.record_error(e.error_type());
+                                metrics.record_error(e.error_type());
                                 match synthetic_error_response(code) {
                                     Ok(resp) => Ok(resp),
                                     Err(e) => Ok(crate::utils::http::json_error(
@@ -328,7 +326,7 @@ pub async fn handle_tls_connection(
                 serve_fut,
                 config.connection_handling_timeout,
                 config.shutdown_rx,
-                config.metrics,
+                &config.metrics,
                 peer,
             )
             .await;
