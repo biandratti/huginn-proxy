@@ -22,7 +22,6 @@ rust-version = "1.94.1"
 license = "MIT OR Apache-2.0"
 authors = ["Maximiliano Biandratti"]
 repository = "https://github.com/biandratti/huginn-proxy"
-homepage = "https://github.com/biandratti/huginn-proxy"
 
 [workspace.dependencies]
 ahash = "0.8.12"
