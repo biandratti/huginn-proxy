@@ -56,7 +56,7 @@ impl ConnectionManager {
     pub fn try_accept(
         &self,
         peer: std::net::SocketAddr,
-        metrics: &Arc<Metrics>,
+        metrics: &Metrics,
     ) -> Result<ConnectionGuard, ConnectionError> {
         if self.is_shutdown() {
             return Err(ConnectionError::Shutdown);

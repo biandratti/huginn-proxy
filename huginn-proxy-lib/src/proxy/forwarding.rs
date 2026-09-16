@@ -6,13 +6,12 @@ use crate::utils::http::RespBody;
 use http::{Request, Response, Version};
 use http_body_util::BodyExt;
 use hyper::body::Incoming;
-use std::sync::Arc;
 use tokio::time::Instant;
 
 pub struct ForwardConfig<'a> {
     pub backends: &'a [crate::config::Backend],
     pub keep_alive: &'a KeepAliveConfig,
-    pub metrics: Arc<Metrics>,
+    pub metrics: &'a Metrics,
     pub matched_prefix: &'a str,
     pub replace_path: Option<&'a str>,
     pub security_headers: Option<&'a crate::config::SecurityHeaders>,
@@ -20,7 +19,7 @@ pub struct ForwardConfig<'a> {
     pub preserve_host: bool,
     pub route: &'a str,
     pub domain: &'a str,
-    pub client_pool: &'a Arc<ClientPool>,
+    pub client_pool: &'a ClientPool,
     pub force_new_connection: bool,
 }
 

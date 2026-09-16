@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use crate::telemetry::Metrics;
 
 pub fn extract_tls_info<S>(tls: &tokio_rustls::server::TlsStream<S>) -> (String, String) {
@@ -21,7 +19,7 @@ pub fn extract_tls_info<S>(tls: &tokio_rustls::server::TlsStream<S>) -> (String,
 pub fn record_tls_handshake_metrics<S>(
     tls: &tokio_rustls::server::TlsStream<S>,
     handshake_duration: f64,
-    metrics: &Arc<Metrics>,
+    metrics: &Metrics,
 ) {
     let (tls_version, cipher_suite) = extract_tls_info(tls);
     let (_, connection) = tls.get_ref();

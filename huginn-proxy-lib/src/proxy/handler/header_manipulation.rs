@@ -2,7 +2,6 @@ use crate::config::{HeaderManipulation, HeaderManipulationGroup};
 use crate::telemetry::metrics::values;
 use crate::telemetry::Metrics;
 use http::{HeaderMap, HeaderName, HeaderValue};
-use std::sync::Arc;
 
 /// Apply header manipulation group (add and remove headers)
 ///
@@ -28,7 +27,7 @@ pub fn apply_header_manipulation_group(
     headers: &mut HeaderMap,
     manipulation: &HeaderManipulationGroup,
     context: &str,
-    metrics: &Arc<Metrics>,
+    metrics: &Metrics,
 ) {
     // Remove headers first
     if !manipulation.remove.is_empty() {
@@ -63,7 +62,7 @@ pub fn apply_request_header_manipulation(
     global_manipulation: Option<&HeaderManipulation>,
     domain_manipulation: Option<&HeaderManipulation>,
     route_manipulation: Option<&HeaderManipulation>,
-    metrics: &Arc<Metrics>,
+    metrics: &Metrics,
 ) {
     if let Some(global) = global_manipulation {
         apply_header_manipulation_group(headers, &global.request, values::CONTEXT_REQUEST, metrics);
@@ -93,7 +92,7 @@ pub fn apply_response_header_manipulation(
     global_manipulation: Option<&HeaderManipulation>,
     domain_manipulation: Option<&HeaderManipulation>,
     route_manipulation: Option<&HeaderManipulation>,
-    metrics: &Arc<Metrics>,
+    metrics: &Metrics,
 ) {
     if let Some(global) = global_manipulation {
         apply_header_manipulation_group(

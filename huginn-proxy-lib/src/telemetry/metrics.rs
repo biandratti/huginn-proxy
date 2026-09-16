@@ -693,9 +693,9 @@ impl Metrics {
     ///
     /// Call site is the transport's `Err` arm only, which sees every error the handler
     /// returns: one count per failed request, comparable across `error_type`.
-    pub fn record_error(&self, error_type: &str) {
+    pub fn record_error(&self, error_type: &'static str) {
         self.errors_total
-            .add(1, &[KeyValue::new(labels::ERROR_TYPE, error_type.to_string())]);
+            .add(1, &[KeyValue::new(labels::ERROR_TYPE, error_type)]);
     }
 
     /// Count one failed TLS handshake under `error_type`.
@@ -703,14 +703,14 @@ impl Metrics {
     /// `error_type` comes from a bounded set (`values::TLS_ERROR_*`), so a config
     /// mistake such as a missing domain stays distinguishable from scanner traffic
     /// even though both are logged at `debug`.
-    pub fn record_tls_handshake_error(&self, error_type: &str) {
+    pub fn record_tls_handshake_error(&self, error_type: &'static str) {
         self.tls_handshake_errors_total
-            .add(1, &[KeyValue::new(labels::ERROR_TYPE, error_type.to_string())]);
+            .add(1, &[KeyValue::new(labels::ERROR_TYPE, error_type)]);
     }
 
-    pub fn record_timeout(&self, timeout_type: &str) {
+    pub fn record_timeout(&self, timeout_type: &'static str) {
         self.timeouts_total
-            .add(1, &[KeyValue::new(labels::TIMEOUT_TYPE, timeout_type.to_string())]);
+            .add(1, &[KeyValue::new(labels::TIMEOUT_TYPE, timeout_type)]);
     }
 
     pub fn record_backend_selection(&self, backend: &str) {
@@ -806,8 +806,8 @@ impl Metrics {
     /// - `"hit"`       - fingerprint found and injected (`SynResult::Hit`)
     /// - `"miss"`      - no BPF map entry (keep-alive reuse, IPv6 peer, stale)
     /// - `"malformed"` - BPF map entry present but TCP options bytes were undecodable
-    pub fn record_tcp_syn_fingerprint(&self, result: &str, duration_secs: f64) {
-        let attrs = &[KeyValue::new(labels::REASON, result.to_string())];
+    pub fn record_tcp_syn_fingerprint(&self, result: &'static str, duration_secs: f64) {
+        let attrs = &[KeyValue::new(labels::REASON, result)];
         self.tcp_syn_fingerprints_total.add(1, attrs);
         self.tcp_syn_fingerprint_duration_seconds
             .record(duration_secs, attrs);

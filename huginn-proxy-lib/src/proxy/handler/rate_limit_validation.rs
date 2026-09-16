@@ -21,7 +21,7 @@ pub fn check_rate_limit(
     route_match: &RouteMatch,
     peer: std::net::SocketAddr,
     headers: &http::HeaderMap,
-    metrics: &Arc<Metrics>,
+    metrics: &Metrics,
     domain: &str,
     trusted_proxies: &TrustedProxiesConfig,
 ) -> Option<Response<RespBody>> {

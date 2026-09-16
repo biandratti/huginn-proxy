@@ -51,31 +51,30 @@ pub async fn handle_tls_connection(
     let crypto = config.server_crypto.load_full();
     {
         let handshake_start = Instant::now();
-        let (prefix, ja4_fingerprints) =
-            match read_client_hello(&mut stream, Arc::clone(&metrics)).await {
-                Ok(v) => v,
-                Err(e) => {
-                    let failure = TlsAcceptFailure::classify(&e, false);
-                    match failure.severity() {
-                        FailureSeverity::Debug => {
-                            debug!(?peer, error = %e, "failed to read client hello")
-                        }
-                        FailureSeverity::Info => {
-                            info!(?peer, error = %e, "failed to read client hello")
-                        }
-                        FailureSeverity::Warn => {
-                            warn!(?peer, error = %e, "failed to read client hello")
-                        }
+        let (prefix, ja4_fingerprints) = match read_client_hello(&mut stream, &metrics).await {
+            Ok(v) => v,
+            Err(e) => {
+                let failure = TlsAcceptFailure::classify(&e, false);
+                match failure.severity() {
+                    FailureSeverity::Debug => {
+                        debug!(?peer, error = %e, "failed to read client hello")
                     }
-                    let error_type = if failure.is_expected() {
-                        failure.error_type()
-                    } else {
-                        values::TLS_ERROR_CLIENT_HELLO
-                    };
-                    metrics.record_tls_handshake_error(error_type);
-                    return;
+                    FailureSeverity::Info => {
+                        info!(?peer, error = %e, "failed to read client hello")
+                    }
+                    FailureSeverity::Warn => {
+                        warn!(?peer, error = %e, "failed to read client hello")
+                    }
                 }
-            };
+                let error_type = if failure.is_expected() {
+                    failure.error_type()
+                } else {
+                    values::TLS_ERROR_CLIENT_HELLO
+                };
+                metrics.record_tls_handshake_error(error_type);
+                return;
+            }
+        };
 
         let prefixed = PrefixedStream::new(prefix, stream);
         // SNI and whether the selected domain requires mTLS, captured at config
@@ -203,7 +202,6 @@ pub async fn handle_tls_connection(
                     let connection_sni = connection_sni.clone();
 
                     async move {
-                        let metrics_for_match = metrics.clone();
                         let preserve_host = config.preserve_host;
                         let http_result = handle_proxy_request(
                             req,
@@ -214,7 +212,7 @@ pub async fn handle_tls_connection(
                             syn_fingerprint,
                             &keep_alive,
                             &security,
-                            metrics,
+                            &metrics,
                             peer,
                             true,
                             preserve_host,
@@ -229,7 +227,7 @@ pub async fn handle_tls_connection(
                             Err(e) => {
                                 e.log_with_peer(peer);
                                 let code = StatusCode::from(e.clone());
-                                metrics_for_match.record_error(e.error_type());
+                                metrics.record_error(e.error_type());
                                 match synthetic_error_response(code) {
                                     Ok(resp) => Ok(resp),
                                     Err(e) => Ok(crate::utils::http::json_error(
@@ -253,7 +251,7 @@ pub async fn handle_tls_connection(
                 serve_fut,
                 config.connection_handling_timeout,
                 config.shutdown_rx.clone(),
-                config.metrics,
+                &config.metrics,
                 peer,
             )
             .await;
@@ -280,7 +278,6 @@ pub async fn handle_tls_connection(
 
                     async move {
                         let preserve_host = config.preserve_host;
-                        let metrics_for_match = metrics.clone();
                         let http_result = handle_proxy_request(
                             req,
                             domains,
@@ -290,7 +287,7 @@ pub async fn handle_tls_connection(
                             syn_fingerprint,
                             &keep_alive,
                             &security,
-                            metrics,
+                            &metrics,
                             peer,
                             true,
                             preserve_host,
@@ -305,7 +302,7 @@ pub async fn handle_tls_connection(
                             Err(e) => {
                                 e.log_with_peer(peer);
                                 let code = StatusCode::from(e.clone());
-                                metrics_for_match.record_error(e.error_type());
+                                metrics.record_error(e.error_type());
                                 match synthetic_error_response(code) {
                                     Ok(resp) => Ok(resp),
                                     Err(e) => Ok(crate::utils::http::json_error(
@@ -329,7 +326,7 @@ pub async fn handle_tls_connection(
                 serve_fut,
                 config.connection_handling_timeout,
                 config.shutdown_rx,
-                config.metrics,
+                &config.metrics,
                 peer,
             )
             .await;
