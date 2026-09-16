@@ -20,9 +20,12 @@ stack use Compose below, or point them at addresses the container can reach.
 
 **Note:** The proxy process runs as numeric UID **10001**. Certificate and key files under
 `/config/certs` must be readable by that UID (e.g. `chmod` / `chown` on the host copy).
-The runtime image is shell-free distroless: use `docker exec` only for the included application
-and `/usr/local/bin/healthcheck`; utilities such as `sh`, `curl`, `apt`, and `dpkg` are intentionally
-absent. Compose healthchecks invoke the included probe directly.
+
+Runtime images are distroless (no shell, no `curl`). Compose therefore healthchecks with
+`/usr/local/bin/healthcheck` (`CMD`, not `CMD-SHELL`) — a small HTTP GET baked into the image so
+the probe does not depend on utilities the runtime will never ship. Kubernetes can keep using
+`httpGet` and does not need that binary. The `release-*` Compose files still use `curl` until the
+first distroless image is on GHCR; TODOs in those files mark the switch.
 
 ### Docker Compose
 
