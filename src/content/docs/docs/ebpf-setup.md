@@ -110,9 +110,12 @@ The SYN map is keyed by **source IP and port** as seen on the wire. CNIs that SN
 
 ## Runtime lifecycle
 
-- **Startup:** the proxy binds immediately. `/ready` is 503 (`capture_absent`) until the agent publishes `capture_state` with a non-zero `agent_boot_id`; lookups miss until the watcher opens the pins. Start order does not matter.
-- **Agent down:** the proxy keeps its own map FDs and does **not** crash; lookups return a miss and `x-tcp-p0f` is omitted. HTTP is never blocked. With a pinned link the program stays on the interface; on netlink it detaches and fresh captures pause.
-- **Rollout:** on SIGTERM the agent publishes `draining`, which the gate ranks above a live link pin, so every proxy on the node goes 503 (`capture_draining`) until the next agent publishes `capturing`. **Capture can continue while `/ready` blips.** Use `maxUnavailable: 1`.
+Two processes, **not a joint shutdown**. They start and stop in any order; neither waits for the other. The load balancer sees one probe: proxy `/ready`. Agent drain fails that probe (`capture_draining`) so **new** traffic stops while capture can stay attached. Size `timeout.drain_delay_secs` and `HUGINN_EBPF_DRAIN_DELAY_SECS` together below the orchestrator grace — two clocks, not a barrier. Tables: [LIFECYCLE.md](https://github.com/biandratti/huginn-proxy/blob/master/LIFECYCLE.md).
+
+- **Startup:** the proxy binds immediately. `/ready` is 503 (`capture_absent`) until the agent publishes `capture_state` with a non-zero `agent_boot_id`; lookups miss until the watcher opens the pins.
+- **Proxy SIGTERM:** the agent is untouched. `/ready` is `proxy_draining` for `drain_delay_secs`, then accept stops. Capture keeps running.
+- **Agent SIGTERM:** publishes `draining`, which the gate ranks above a live link pin, so every proxy on the node is 503 (`capture_draining`) until the next agent publishes `capturing`. **Capture can continue while `/ready` blips.** Use `maxUnavailable: 1`. Roll the **agent image first**.
+- **Agent crash (no SIGTERM):** with a pinned link the program stays on the interface and proxy `/ready` stays 200. On netlink it detaches; after `CAPTURE_STALE_TICKS` the proxy is `capture_detached`. Lookups that miss omit `x-tcp-p0f`; HTTP is never blocked.
 - **Maps:** shutdown leaves the map pins and the link pin; the next agent reopens the same kernel IDs. Maps are recreated only when `HUGINN_EBPF_SYN_MAP_MAX_ENTRIES` changes (or bpffs is wiped); the proxy then swaps atomically within `HUGINN_EBPF_RECONNECT_POLL_SECS`.
 
 > Deleting the DaemonSet is the same SIGTERM as a rollout: **pins stay**. The program can keep running with no userspace owner until reboot or until a new agent adopts the pin. Uninstalling does not remove the datapath.
