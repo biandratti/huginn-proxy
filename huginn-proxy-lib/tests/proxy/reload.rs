@@ -1,10 +1,10 @@
 use std::sync::Arc;
 
 use arc_swap::ArcSwap;
-use huginn_proxy_lib::config::{load_from_path, ConfigParts, DynamicConfig};
+use huginn_proxy_lib::config::{ConfigParts, DynamicConfig, load_from_path};
 use huginn_proxy_lib::{
-    initial_client_pool, initial_rate_limiter, try_reload, HealthCheckSupervisor, HealthRegistry,
-    Metrics, SharedClientPool, SharedRateLimiter, StaticConfig,
+    HealthCheckSupervisor, HealthRegistry, Metrics, SharedClientPool, SharedRateLimiter,
+    StaticConfig, initial_client_pool, initial_rate_limiter, try_reload,
 };
 
 type TestResult = Result<(), Box<dyn std::error::Error + Send + Sync>>;

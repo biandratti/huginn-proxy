@@ -1,4 +1,4 @@
-use huginn_ebpf::types::{parse_syn_v4, parse_syn_v6, quirk_bits, SynRawDataV4, SynRawDataV6};
+use huginn_ebpf::types::{SynRawDataV4, SynRawDataV6, parse_syn_v4, parse_syn_v6, quirk_bits};
 use huginn_net_tcp::tcp::{IpVersion, PayloadSize, Quirk};
 
 type TestResult = Result<(), Box<dyn std::error::Error + Send + Sync>>;

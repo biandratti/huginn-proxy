@@ -8,11 +8,11 @@ use tracing::{debug, trace, warn};
 
 use crate::config::{ProxyProtocolConfig, ProxyProtocolMode, TrustedProxiesConfig};
 use crate::proxy::protocol::{
-    detect_proxy_protocol, normalize_mapped_ipv4, read_proxy_header_v1, read_proxy_header_v2,
-    ProxyProtocolDetection, ProxyProtocolError, ProxySource,
+    ProxyProtocolDetection, ProxyProtocolError, ProxySource, detect_proxy_protocol,
+    normalize_mapped_ipv4, read_proxy_header_v1, read_proxy_header_v2,
 };
-use crate::telemetry::values as metric_values;
 use crate::telemetry::Metrics;
+use crate::telemetry::values as metric_values;
 
 /// Runtime form of `listen.proxy_protocol`: the mode plus the effective header-read timeout,
 /// resolved once in `server::run` rather than on every accepted connection.

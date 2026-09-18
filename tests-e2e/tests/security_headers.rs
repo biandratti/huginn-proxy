@@ -2,8 +2,8 @@ use huginn_proxy_lib::names;
 use reqwest::Client;
 
 use tests_e2e::common::{
-    parse_backend_echo, wait_for_service, BackendEcho, DEFAULT_SERVICE_TIMEOUT_SECS,
-    PROXY_HTTPS_URL_IPV4, PROXY_HTTPS_URL_IPV6,
+    BackendEcho, DEFAULT_SERVICE_TIMEOUT_SECS, PROXY_HTTPS_URL_IPV4, PROXY_HTTPS_URL_IPV6,
+    parse_backend_echo, wait_for_service,
 };
 
 fn assert_injected_fingerprint_headers(echo: &BackendEcho, ipv6: bool) {
@@ -119,8 +119,8 @@ async fn test_csp_header() -> Result<(), Box<dyn std::error::Error + Send + Sync
 }
 
 #[tokio::test]
-async fn test_security_headers_with_fingerprinting(
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+async fn test_security_headers_with_fingerprinting()
+-> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let client = Client::builder()
         .danger_accept_invalid_certs(true)
         .build()
@@ -171,8 +171,8 @@ async fn test_hsts_header_ipv6() -> Result<(), Box<dyn std::error::Error + Send 
 }
 
 #[tokio::test]
-async fn test_security_headers_with_fingerprinting_ipv6(
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+async fn test_security_headers_with_fingerprinting_ipv6()
+-> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let client = Client::builder()
         .danger_accept_invalid_certs(true)
         .build()

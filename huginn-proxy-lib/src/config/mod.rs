@@ -10,8 +10,8 @@ mod loader;
 mod root;
 
 pub use audit::{
-    all_warnings, header_config_warnings, proxy_protocol_trust_warnings, rate_limit_warnings,
-    security_override_warnings, trusted_proxies_warnings, ConfigWarning,
+    ConfigWarning, all_warnings, header_config_warnings, proxy_protocol_trust_warnings,
+    rate_limit_warnings, security_override_warnings, trusted_proxies_warnings,
 };
 pub use dynamic::security::{
     CspConfig, DomainSecurityConfig, HstsConfig, IpFilterConfig, IpFilterMode, LimitBy,
@@ -19,9 +19,9 @@ pub use dynamic::security::{
     TrustedProxiesConfig,
 };
 pub use dynamic::{
-    sort_domain_routes, sort_routes, Backend, BackendHttpVersion, BackendPoolConfig, CustomHeader,
-    Domain, DynamicConfig, HeaderManipulation, HeaderManipulationGroup, HealthCheckConfig,
-    HealthCheckType, Route, DEFAULT_DOMAIN_LABEL, DEFAULT_FINGERPRINTING,
+    Backend, BackendHttpVersion, BackendPoolConfig, CustomHeader, DEFAULT_DOMAIN_LABEL,
+    DEFAULT_FINGERPRINTING, Domain, DynamicConfig, HeaderManipulation, HeaderManipulationGroup,
+    HealthCheckConfig, HealthCheckType, Route, sort_domain_routes, sort_routes,
 };
 pub use effective::{EffectiveConfigSummary, EffectiveConfigView};
 pub use loader::load_from_path;

@@ -27,8 +27,8 @@ fn test_session_resumption_config_defaults() {
 }
 
 #[test]
-fn test_session_resumption_config_toml_deserialization(
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+fn test_session_resumption_config_toml_deserialization()
+-> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let deserialized: SessionResumptionConfig = toml::from_str("enabled = true\n")?;
     assert!(deserialized.enabled);
     Ok(())

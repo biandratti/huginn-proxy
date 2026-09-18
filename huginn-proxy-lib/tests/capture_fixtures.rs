@@ -113,8 +113,8 @@ async fn capture_fingerprint_values() -> Result<(), Box<dyn std::error::Error + 
 
     use bytes::Bytes;
     use http_body_util::Full;
-    use hyper::service::service_fn;
     use hyper::Response;
+    use hyper::service::service_fn;
     use hyper_util::rt::{TokioExecutor, TokioIo};
     use hyper_util::server::conn::auto::Builder as ConnBuilder;
 

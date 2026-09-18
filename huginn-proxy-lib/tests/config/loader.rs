@@ -222,8 +222,8 @@ host = "API.Example.COM."
 }
 
 #[test]
-fn rejects_duplicate_domain_host_with_and_without_trailing_dot(
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+fn rejects_duplicate_domain_host_with_and_without_trailing_dot()
+-> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let path = tmp_path("dup-host-trailing-dot");
     let toml = r#"
 listen = { addrs = ["127.0.0.1:0"] }
@@ -457,8 +457,8 @@ policy = "default-src 'none'"
 }
 
 #[test]
-fn rejects_domain_certs_without_a_tls_section(
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+fn rejects_domain_certs_without_a_tls_section()
+-> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let cert_path = tmp_path("no-tls.crt");
     let key_path = tmp_path("no-tls.key");
     fs::write(&cert_path, "dummy cert")?;
@@ -493,8 +493,8 @@ key_path  = "{}"
 }
 
 #[test]
-fn accepts_a_plain_domain_without_a_tls_section(
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+fn accepts_a_plain_domain_without_a_tls_section()
+-> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let path = tmp_path("plain-domain");
     let toml = r#"
 listen = { addrs = ["127.0.0.1:0"] }
@@ -515,8 +515,8 @@ routes = [{ prefix = "/", backend = "b:9000" }]
 }
 
 #[test]
-fn rejects_invalid_health_check_timeout_greater_than_interval(
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+fn rejects_invalid_health_check_timeout_greater_than_interval()
+-> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let path = tmp_path("bad-hc");
     let toml = r#"
 listen = { addrs = ["127.0.0.1:0"] }

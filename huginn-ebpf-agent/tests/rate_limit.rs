@@ -1,13 +1,13 @@
 use std::collections::HashMap;
 
 use huginn_ebpf_agent::config::{
-    from_env, ConfigError, SynRateLimit, DEFAULT_BURST, DEFAULT_WINDOW_SECONDS,
+    ConfigError, DEFAULT_BURST, DEFAULT_WINDOW_SECONDS, SynRateLimit, from_env,
 };
 
 const NANOS_PER_SEC: u64 = 1_000_000_000;
 
 /// Build a `get_var` closure from a list of (name, value) pairs.
-fn env_of(pairs: &[(&'static str, &'static str)]) -> impl Fn(&str) -> Option<String> {
+fn env_of(pairs: &[(&'static str, &'static str)]) -> impl Fn(&str) -> Option<String> + use<> {
     let map: HashMap<String, String> = pairs
         .iter()
         .map(|(k, v)| ((*k).to_string(), (*v).to_string()))
@@ -25,7 +25,9 @@ const REQUIRED: &[(&str, &str)] = &[
 ];
 
 /// `REQUIRED` plus the given extra pairs.
-fn required_with(extra: &[(&'static str, &'static str)]) -> impl Fn(&str) -> Option<String> {
+fn required_with(
+    extra: &[(&'static str, &'static str)],
+) -> impl Fn(&str) -> Option<String> + use<> {
     let mut pairs: Vec<(&'static str, &'static str)> = REQUIRED.to_vec();
     pairs.extend_from_slice(extra);
     env_of(&pairs)

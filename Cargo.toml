@@ -17,8 +17,8 @@ resolver = "2"
 
 [workspace.package]
 version = "0.0.5-rc.0"
-edition = "2021"
-rust-version = "1.94.1"
+edition = "2024"
+rust-version = "1.98.0"
 license = "MIT OR Apache-2.0"
 authors = ["Maximiliano Biandratti"]
 repository = "https://github.com/biandratti/huginn-proxy"

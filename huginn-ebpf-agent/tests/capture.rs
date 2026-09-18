@@ -1,9 +1,9 @@
 use huginn_ebpf_agent::config::{
-    resolve_capture_backend, CaptureBackend, ConfigError, XdpAttachMode,
+    CaptureBackend, ConfigError, XdpAttachMode, resolve_capture_backend,
 };
 
 /// Build a `get_var` closure from a list of (name, value) pairs.
-fn env_of(pairs: &[(&'static str, &'static str)]) -> impl Fn(&str) -> Option<String> {
+fn env_of(pairs: &[(&'static str, &'static str)]) -> impl Fn(&str) -> Option<String> + use<> {
     use std::collections::HashMap;
     let map: HashMap<String, String> = pairs
         .iter()

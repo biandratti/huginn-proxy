@@ -11,13 +11,13 @@
 //! bucket fills normally and the 4th request gets 429.
 
 use reqwest::StatusCode;
-use tests_e2e::common::{wait_for_service, DEFAULT_SERVICE_TIMEOUT_SECS, PROXY_HTTPS_URL_IPV4};
+use tests_e2e::common::{DEFAULT_SERVICE_TIMEOUT_SECS, PROXY_HTTPS_URL_IPV4, wait_for_service};
 
 const BURST: usize = 3;
 
 #[tokio::test]
-async fn test_rate_limit_xff_rotation_does_not_bypass(
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+async fn test_rate_limit_xff_rotation_does_not_bypass()
+-> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let client = reqwest::Client::builder()
         .danger_accept_invalid_certs(true)
         .build()

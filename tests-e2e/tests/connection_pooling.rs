@@ -1,13 +1,13 @@
 use std::time::Instant;
-use tests_e2e::common::{wait_for_service, DEFAULT_SERVICE_TIMEOUT_SECS, PROXY_HTTPS_URL_IPV4};
+use tests_e2e::common::{DEFAULT_SERVICE_TIMEOUT_SECS, PROXY_HTTPS_URL_IPV4, wait_for_service};
 
 /// Test the /fingerprint route with force_new_connection enabled
 /// This route forces new backend connections per request (bypassing connection pool)
 /// Note: Fingerprint headers (names::TLS_JA4, names::HTTP2_AKAMAI) are extracted from client→proxy connection,
 /// not from proxy→backend connection. The force_new_connection setting affects only proxy→backend.
 #[tokio::test]
-async fn test_fingerprint_route_with_force_new_connection(
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+async fn test_fingerprint_route_with_force_new_connection()
+-> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     assert!(
         wait_for_service(PROXY_HTTPS_URL_IPV4, DEFAULT_SERVICE_TIMEOUT_SECS).await?,
         "Proxy should be ready"
@@ -45,8 +45,8 @@ async fn test_fingerprint_route_with_force_new_connection(
 /// Compare performance between pooled and non-pooled routes
 /// This test demonstrates the latency difference between routes with and without pooling
 #[tokio::test]
-async fn test_pooling_vs_force_new_performance(
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+async fn test_pooling_vs_force_new_performance()
+-> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     assert!(
         wait_for_service(PROXY_HTTPS_URL_IPV4, DEFAULT_SERVICE_TIMEOUT_SECS).await?,
         "Proxy should be ready"
@@ -94,8 +94,8 @@ async fn test_pooling_vs_force_new_performance(
 /// Note: This test assumes the proxy is already running with connection pooling enabled
 /// (force_new_connection = false, which is the default)
 #[tokio::test]
-async fn test_connection_pooling_multiple_requests(
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+async fn test_connection_pooling_multiple_requests()
+-> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     assert!(
         wait_for_service(PROXY_HTTPS_URL_IPV4, DEFAULT_SERVICE_TIMEOUT_SECS).await?,
         "Proxy should be ready"
@@ -144,8 +144,8 @@ async fn test_connection_pooling_multiple_requests(
 /// Test that concurrent requests work correctly with connection pooling
 /// Multiple concurrent requests should share the connection pool efficiently
 #[tokio::test]
-async fn test_connection_pooling_concurrent_requests(
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+async fn test_connection_pooling_concurrent_requests()
+-> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     assert!(
         wait_for_service(PROXY_HTTPS_URL_IPV4, DEFAULT_SERVICE_TIMEOUT_SECS).await?,
         "Proxy should be ready"

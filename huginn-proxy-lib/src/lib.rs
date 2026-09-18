@@ -14,16 +14,16 @@ pub use backend::{
     BackendSelector, HealthCheckSupervisor, HealthRegistry, RoundRobin, UpstreamHealth,
 };
 pub use config::{
-    load_from_path, Backend, BackendHttpVersion, Config, DynamicConfig, Route, StaticConfig,
-    TlsConfig,
+    Backend, BackendHttpVersion, Config, DynamicConfig, Route, StaticConfig, TlsConfig,
+    load_from_path,
 };
 pub use error::{ProxyError, Result};
 pub use fingerprinting::SynResult;
-pub use fingerprinting::{forwarded, names, read_client_hello, CapturingStream, Ja4Fingerprints};
+pub use fingerprinting::{CapturingStream, Ja4Fingerprints, forwarded, names, read_client_hello};
 pub use proxy::reload::{
-    initial_client_pool, initial_rate_limiter, try_reload, SharedClientPool, SharedRateLimiter,
+    SharedClientPool, SharedRateLimiter, initial_client_pool, initial_rate_limiter, try_reload,
 };
 pub use proxy::server::{SynProbe, WatchOptions};
-pub use proxy::shutdown::{shutdown_channel, ShutdownPhase, ShutdownSender, ShutdownWatch};
+pub use proxy::shutdown::{ShutdownPhase, ShutdownSender, ShutdownWatch, shutdown_channel};
 pub use proxy::{forwarding, run};
 pub use telemetry::{GateState, Metrics, NotReadyReason, Readiness, ReadinessGate};

@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use huginn_proxy_lib::backend::health_check::{check_tcp, ConsecutiveCounter};
+use huginn_proxy_lib::backend::health_check::{ConsecutiveCounter, check_tcp};
 
 type TestError = Box<dyn std::error::Error + Send + Sync>;
 

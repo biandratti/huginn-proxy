@@ -2,12 +2,12 @@ use std::collections::HashMap;
 use std::net::{Ipv4Addr, Ipv6Addr};
 
 use huginn_ebpf_agent::config::{
-    from_env, CaptureBackend, ConfigError, EbpfLogLevel, HealthFormat, XdpAttachMode,
-    DEFAULT_PIN_PATH,
+    CaptureBackend, ConfigError, DEFAULT_PIN_PATH, EbpfLogLevel, HealthFormat, XdpAttachMode,
+    from_env,
 };
 
 /// Build a `get_var` closure from a list of (name, value) pairs.
-fn env_of(pairs: &[(&'static str, &'static str)]) -> impl Fn(&str) -> Option<String> {
+fn env_of(pairs: &[(&'static str, &'static str)]) -> impl Fn(&str) -> Option<String> + use<> {
     let map: HashMap<String, String> = pairs
         .iter()
         .map(|(k, v)| ((*k).to_string(), (*v).to_string()))
@@ -27,7 +27,9 @@ const REQUIRED: &[(&str, &str)] = &[
 ];
 
 /// `REQUIRED` plus the given extra pairs.
-fn required_with(extra: &[(&'static str, &'static str)]) -> impl Fn(&str) -> Option<String> {
+fn required_with(
+    extra: &[(&'static str, &'static str)],
+) -> impl Fn(&str) -> Option<String> + use<> {
     let mut pairs: Vec<(&'static str, &'static str)> = REQUIRED.to_vec();
     pairs.extend_from_slice(extra);
     env_of(&pairs)

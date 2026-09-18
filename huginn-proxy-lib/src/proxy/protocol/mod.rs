@@ -27,9 +27,9 @@ mod detect;
 mod v1;
 mod v2;
 
-pub use detect::{detect_proxy_protocol, ProxyProtocolDetection};
-pub use v1::{read_proxy_header_v1, V1_PREFIX};
-pub use v2::{read_proxy_header_v2, V2_SIGNATURE};
+pub use detect::{ProxyProtocolDetection, detect_proxy_protocol};
+pub use v1::{V1_PREFIX, read_proxy_header_v1};
+pub use v2::{V2_SIGNATURE, read_proxy_header_v2};
 
 use std::fmt;
 use std::net::{IpAddr, SocketAddr};
@@ -118,7 +118,7 @@ pub(crate) fn warn_proxy_protocol_trust_gap(
     mode: ProxyProtocolMode,
     trusted_proxies: &TrustedProxiesConfig,
 ) {
-    use crate::config::audit::proxy_protocol::{trust_gap, TrustGap};
+    use crate::config::audit::proxy_protocol::{TrustGap, trust_gap};
 
     match trust_gap(mode, trusted_proxies.has_trust()) {
         Some(gap @ TrustGap::RequireDropsAll) => error!("{}", gap.message()),

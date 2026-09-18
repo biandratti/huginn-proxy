@@ -1,7 +1,7 @@
 use huginn_proxy::ebpf::config::{
-    capture_poll_secs_from_env, capture_stale_ticks_from_env, reconnect_poll_secs_from_env,
-    ParseError, DEFAULT_CAPTURE_POLL_SECS, DEFAULT_CAPTURE_STALE_TICKS,
-    DEFAULT_RECONNECT_POLL_SECS,
+    DEFAULT_CAPTURE_POLL_SECS, DEFAULT_CAPTURE_STALE_TICKS, DEFAULT_RECONNECT_POLL_SECS,
+    ParseError, capture_poll_secs_from_env, capture_stale_ticks_from_env,
+    reconnect_poll_secs_from_env,
 };
 
 #[test]

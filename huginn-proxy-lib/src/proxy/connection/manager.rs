@@ -1,12 +1,12 @@
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use thiserror::Error;
 use tokio::sync::watch;
 use tracing::warn;
 
 use crate::proxy::shutdown::{ShutdownPhase, ShutdownSender};
-use crate::telemetry::metrics::values;
 use crate::telemetry::Metrics;
+use crate::telemetry::metrics::values;
 
 use super::guards::ConnectionGuard;
 

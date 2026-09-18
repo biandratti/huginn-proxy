@@ -2,8 +2,8 @@
 
 use huginn_ebpf::pin;
 use std::path::Path;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 pub use crate::telemetry::status::NotReadyReason;
 

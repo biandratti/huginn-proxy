@@ -1,7 +1,7 @@
 use crate::backend::health_check::HealthCheckSupervisor;
 use crate::config::{
-    load_from_path, Backend, BackendPoolConfig, Domain, DynamicConfig, RateLimitConfig,
-    StaticConfig,
+    Backend, BackendPoolConfig, Domain, DynamicConfig, RateLimitConfig, StaticConfig,
+    load_from_path,
 };
 use crate::proxy::client_pool::ClientPool;
 use crate::proxy::protocol::warn_proxy_protocol_trust_gap;
@@ -193,15 +193,15 @@ fn audit_config_changes(old: &DynamicConfig, new: &DynamicConfig) {
         info!(host = host, "Config diff: domain added");
     }
     for domain in new.domains.iter() {
-        if let Some(old_domain) = old.domains.iter().find(|d| d.host == domain.host) {
-            if old_domain != domain {
-                info!(host = domain.label(), "Config diff: domain changed");
-                if old_domain.security != domain.security {
-                    info!(
-                        host = domain.label(),
-                        "Config diff: domain security policy changed (ip_filter / rate_limit / headers)"
-                    );
-                }
+        if let Some(old_domain) = old.domains.iter().find(|d| d.host == domain.host)
+            && old_domain != domain
+        {
+            info!(host = domain.label(), "Config diff: domain changed");
+            if old_domain.security != domain.security {
+                info!(
+                    host = domain.label(),
+                    "Config diff: domain security policy changed (ip_filter / rate_limit / headers)"
+                );
             }
         }
     }

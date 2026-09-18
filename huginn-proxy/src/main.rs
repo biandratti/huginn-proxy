@@ -9,13 +9,13 @@ use std::sync::Arc;
 use arc_swap::ArcSwap;
 use clap::Parser;
 use huginn_proxy::ebpf;
+use huginn_proxy_lib::WatchOptions;
 use huginn_proxy_lib::config::load_from_path;
-use huginn_proxy_lib::proxy::shutdown::{shutdown_channel, ServiceHandle, ServiceName};
+use huginn_proxy_lib::proxy::shutdown::{ServiceHandle, ServiceName, shutdown_channel};
 use huginn_proxy_lib::run;
 use huginn_proxy_lib::telemetry::{
-    init_metrics, init_tracing_with_otel, shutdown_tracing, start_observability_server, Readiness,
+    Readiness, init_metrics, init_tracing_with_otel, shutdown_tracing, start_observability_server,
 };
-use huginn_proxy_lib::WatchOptions;
 use tokio::time::Duration;
 use tracing::info;
 

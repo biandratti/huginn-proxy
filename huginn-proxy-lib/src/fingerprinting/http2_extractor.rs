@@ -1,6 +1,6 @@
 use std::pin::Pin;
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::task::{Context, Poll};
 
 use huginn_net_http::akamai_extractor::extract_akamai_fingerprint;
@@ -146,10 +146,14 @@ impl<S: AsyncRead + Unpin> AsyncRead for CapturingStream<S> {
                                             self.metrics.record_http2_fingerprint_failure();
                                         }
                                         Err(HuginnNetHttpError::NoSettingsFrame) => {
-                                            debug!("CapturingStream: SETTINGS frame not yet received, will retry on next read");
+                                            debug!(
+                                                "CapturingStream: SETTINGS frame not yet received, will retry on next read"
+                                            );
                                         }
                                         Err(e) => {
-                                            debug!("CapturingStream: fingerprint extraction error: {e}");
+                                            debug!(
+                                                "CapturingStream: fingerprint extraction error: {e}"
+                                            );
                                         }
                                     }
                                 }

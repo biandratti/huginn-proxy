@@ -6,8 +6,8 @@ use arc_swap::ArcSwap;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 
-use huginn_proxy_lib::config::load_from_path;
 use huginn_proxy_lib::WatchOptions;
+use huginn_proxy_lib::config::load_from_path;
 
 type BoxError = Box<dyn std::error::Error + Send + Sync>;
 type TestResult = Result<(), BoxError>;

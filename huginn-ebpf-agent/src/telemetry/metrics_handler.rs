@@ -1,5 +1,5 @@
 use crate::error::{AgentError, Result};
-use crate::telemetry::http::{full_body, RespBody};
+use crate::telemetry::http::{RespBody, full_body};
 use hyper::Response;
 use hyper::StatusCode;
 use prometheus::{Encoder, Registry, TextEncoder};

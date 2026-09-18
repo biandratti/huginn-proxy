@@ -1,4 +1,4 @@
-use huginn_ebpf::{pin, CaptureState};
+use huginn_ebpf::{CaptureState, pin};
 
 const BOOT_ID: u64 = 0xC0FFEE;
 

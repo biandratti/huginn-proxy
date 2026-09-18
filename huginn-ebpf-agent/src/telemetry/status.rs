@@ -1,5 +1,5 @@
 use crate::config::HealthFormat;
-use crate::telemetry::http::{json_response, text_response, RespBody};
+use crate::telemetry::http::{RespBody, json_response, text_response};
 use hyper::{Response, StatusCode};
 use serde::Serialize;
 

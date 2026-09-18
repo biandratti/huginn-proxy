@@ -1,8 +1,9 @@
 use super::host::extract_request_host;
 use crate::backend::UpstreamGateway;
-use crate::config::{Backend, Domain, KeepAliveConfig, DEFAULT_DOMAIN_LABEL};
-use crate::fingerprinting::names;
+use crate::config::{Backend, DEFAULT_DOMAIN_LABEL, Domain, KeepAliveConfig};
 use crate::fingerprinting::TcpObservation;
+use crate::fingerprinting::names;
+use crate::proxy::ClientPool;
 use crate::proxy::forwarding::forward;
 use crate::proxy::handler::header_manipulation::{
     apply_request_header_manipulation, apply_response_header_manipulation,
@@ -11,14 +12,13 @@ use crate::proxy::handler::headers::{add_forwarded_headers, akamai_header_value}
 use crate::proxy::handler::rate_limit_validation::check_rate_limit;
 use crate::proxy::handler::resolve::{domain_defers_ip_filter, resolve_security};
 use crate::proxy::http_result::{HttpError, HttpResult};
-use crate::proxy::ClientPool;
 use crate::telemetry::Metrics;
 use http::HeaderMap;
 use http::StatusCode;
 use http::Version;
+use hyper::Request;
 use hyper::body::Incoming;
 use hyper::header::HeaderName;
-use hyper::Request;
 use std::sync::Arc;
 use tokio::sync::watch;
 use tokio::time::Instant;
@@ -107,12 +107,11 @@ pub async fn handle_proxy_request(
     let method = req.method().to_string();
     let protocol = format!("{:?}", req.version());
 
-    if let Some(content_length) = req.headers().get(hyper::header::CONTENT_LENGTH) {
-        if let Ok(length_str) = content_length.to_str() {
-            if let Ok(length) = length_str.parse::<u64>() {
-                metrics.record_bytes_received(length, &protocol);
-            }
-        }
+    if let Some(content_length) = req.headers().get(hyper::header::CONTENT_LENGTH)
+        && let Ok(length_str) = content_length.to_str()
+        && let Ok(length) = length_str.parse::<u64>()
+    {
+        metrics.record_bytes_received(length, &protocol);
     }
 
     let path = req.uri().path();
@@ -146,19 +145,19 @@ pub async fn handle_proxy_request(
     // by a *different* certificate (same-cert / wildcard / SAN coalescing is allowed). Only
     // fires on TLS connections that presented an SNI; runs after the IP filter so a blocked
     // client never learns whether a host exists.
-    if let Some(sni) = connection_sni {
-        if !crate::proxy::handler::authority_matches_sni(&domains, sni, &host) {
-            debug!(
-                ?peer,
-                sni,
-                host = %host,
-                "421 Misdirected Request: host not covered by the connection's certificate (SNI)"
-            );
-            let error = HttpError::MisdirectedRequest;
-            let status_code = StatusCode::from(error.clone()).as_u16();
-            metrics.record_entrypoint_request(&method, status_code, &protocol);
-            return Err(error);
-        }
+    if let Some(sni) = connection_sni
+        && !crate::proxy::handler::authority_matches_sni(&domains, sni, &host)
+    {
+        debug!(
+            ?peer,
+            sni,
+            host = %host,
+            "421 Misdirected Request: host not covered by the connection's certificate (SNI)"
+        );
+        let error = HttpError::MisdirectedRequest;
+        let status_code = StatusCode::from(error.clone()).as_u16();
+        metrics.record_entrypoint_request(&method, status_code, &protocol);
+        return Err(error);
     }
 
     // Client authentication is per-domain: the verifier is bound to the `ServerConfig` the
@@ -167,25 +166,25 @@ pub async fn handle_proxy_request(
     // every transport (plaintext and no-SNI included, which is half the exposure) and the
     // shared-certificate allowance does not apply, since two domains can share one
     // certificate while only one of them demands a client certificate.
-    if let Some(domain) = domain {
-        if !crate::proxy::handler::mutual_tls_session_matches(
+    if let Some(domain) = domain
+        && !crate::proxy::handler::mutual_tls_session_matches(
             &domains,
             domain,
             is_https,
             connection_sni,
-        ) {
-            let error = HttpError::MutualTlsHostInconsistency;
-            debug!(
-                ?peer,
-                sni = connection_sni.unwrap_or("<none>"),
-                host = %host,
-                https = is_https,
-                "421 Misdirected Request: host requires client authentication this session did not perform"
-            );
-            let status_code = StatusCode::from(error.clone()).as_u16();
-            metrics.record_entrypoint_request(&method, status_code, &protocol);
-            return Err(error);
-        }
+        )
+    {
+        let error = HttpError::MutualTlsHostInconsistency;
+        debug!(
+            ?peer,
+            sni = connection_sni.unwrap_or("<none>"),
+            host = %host,
+            https = is_https,
+            "421 Misdirected Request: host requires client authentication this session did not perform"
+        );
+        let status_code = StatusCode::from(error.clone()).as_u16();
+        metrics.record_entrypoint_request(&method, status_code, &protocol);
+        return Err(error);
     }
 
     let route_match = match domain {
@@ -330,7 +329,9 @@ pub async fn handle_proxy_request(
                     req.headers_mut()
                         .insert(HeaderName::from_static(names::HTTP2_AKAMAI), hv);
                 } else {
-                    debug!("Handler: no HTTP fingerprint header to inject (HTTP/2 connection but fingerprint not extracted)");
+                    debug!(
+                        "Handler: no HTTP fingerprint header to inject (HTTP/2 connection but fingerprint not extracted)"
+                    );
                     metrics.record_http2_fingerprint_failure();
                 }
             } else {
@@ -357,11 +358,11 @@ pub async fn handle_proxy_request(
     // Signal which fingerprint signatures the client attempted to spoof.
     // Runs outside the fingerprinting gate so backends on fingerprinting=false routes
     // also receive the detection signal.
-    if !spoofed.is_empty() {
-        if let Ok(hv) = hyper::header::HeaderValue::from_str(&spoofed.join(",")) {
-            req.headers_mut()
-                .insert(HeaderName::from_static(names::SPOOFING_DETECTED), hv);
-        }
+    if !spoofed.is_empty()
+        && let Ok(hv) = hyper::header::HeaderValue::from_str(&spoofed.join(","))
+    {
+        req.headers_mut()
+            .insert(HeaderName::from_static(names::SPOOFING_DETECTED), hv);
     }
 
     // Add X-Forwarded-* headers after fingerprinting. X-Forwarded-Host mirrors the resolved
@@ -399,12 +400,11 @@ pub async fn handle_proxy_request(
 
     let mut result = result;
     if let Ok(ref mut response) = result {
-        if let Some(content_length) = response.headers().get(hyper::header::CONTENT_LENGTH) {
-            if let Ok(length_str) = content_length.to_str() {
-                if let Ok(length) = length_str.parse::<u64>() {
-                    metrics.record_bytes_sent(length, &protocol);
-                }
-            }
+        if let Some(content_length) = response.headers().get(hyper::header::CONTENT_LENGTH)
+            && let Ok(length_str) = content_length.to_str()
+            && let Ok(length) = length_str.parse::<u64>()
+        {
+            metrics.record_bytes_sent(length, &protocol);
         }
 
         apply_response_header_manipulation(

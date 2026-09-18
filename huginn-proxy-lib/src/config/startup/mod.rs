@@ -19,7 +19,7 @@ use listen::ListenView;
 use reload::ReloadView;
 use telemetry::{LoggingView, TelemetryView};
 use timeout::TimeoutView;
-use tls::{effective_tls_view, TlsView};
+use tls::{TlsView, effective_tls_view};
 
 /// Static configuration read once at startup, requires restart to change.
 ///

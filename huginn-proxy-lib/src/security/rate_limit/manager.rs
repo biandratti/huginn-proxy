@@ -95,17 +95,14 @@ impl RateLimitManager {
     ) -> RateLimitResult {
         // A route-level override is authoritative: an enabled limiter is checked, an explicit
         // disable allows the request, and neither falls through to the domain/global limiter.
-        if let Some(prefix) = route_prefix {
-            if let Some(by_prefix) = self.route_limiters.get(domain_label) {
-                if let Some(slot) = by_prefix.get(prefix) {
-                    return match slot {
-                        Some(limiter) => limiter.check(key),
-                        None => {
-                            RateLimitResult::Allowed { remaining: isize::MAX, limit: isize::MAX }
-                        }
-                    };
-                }
-            }
+        if let Some(prefix) = route_prefix
+            && let Some(by_prefix) = self.route_limiters.get(domain_label)
+            && let Some(slot) = by_prefix.get(prefix)
+        {
+            return match slot {
+                Some(limiter) => limiter.check(key),
+                None => RateLimitResult::Allowed { remaining: isize::MAX, limit: isize::MAX },
+            };
         }
 
         // A domain-level override is authoritative: an enabled limiter is checked, an explicit
@@ -150,14 +147,14 @@ fn resolve_client_ip(
     if !trusted_proxies.trusts(&peer_ip) {
         return peer_ip.to_string();
     }
-    if let Some(xff) = headers.get("x-forwarded-for") {
-        if let Ok(xff_str) = xff.to_str() {
-            for raw in xff_str.rsplit(',') {
-                if let Ok(ip) = raw.trim().parse::<IpAddr>() {
-                    if !trusted_proxies.trusts(&ip) {
-                        return ip.to_string();
-                    }
-                }
+    if let Some(xff) = headers.get("x-forwarded-for")
+        && let Ok(xff_str) = xff.to_str()
+    {
+        for raw in xff_str.rsplit(',') {
+            if let Ok(ip) = raw.trim().parse::<IpAddr>()
+                && !trusted_proxies.trusts(&ip)
+            {
+                return ip.to_string();
             }
         }
     }
@@ -187,12 +184,11 @@ pub fn extract_rate_limit_key(
     match limit_by {
         LimitBy::Ip => resolve_client_ip(peer, headers, trusted_proxies),
         LimitBy::Header => {
-            if let Some(name) = header_name {
-                if let Some(value) = headers.get(name) {
-                    if let Ok(value_str) = value.to_str() {
-                        return value_str.to_string();
-                    }
-                }
+            if let Some(name) = header_name
+                && let Some(value) = headers.get(name)
+                && let Ok(value_str) = value.to_str()
+            {
+                return value_str.to_string();
             }
             peer.ip().to_string()
         }

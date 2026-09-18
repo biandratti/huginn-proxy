@@ -18,15 +18,15 @@ use std::time::Duration;
 use arc_swap::ArcSwap;
 use bytes::Bytes;
 use http_body_util::Full;
-use hyper::service::service_fn;
 use hyper::Response;
+use hyper::service::service_fn;
 use hyper_util::rt::{TokioExecutor, TokioIo};
 use hyper_util::server::conn::auto::Builder as ConnBuilder;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
+use tokio_rustls::TlsConnector;
 use tokio_rustls::rustls::pki_types::ServerName;
 use tokio_rustls::rustls::{ClientConfig, RootCertStore};
-use tokio_rustls::TlsConnector;
 
 use huginn_proxy_lib::config::load_from_path;
 use huginn_proxy_lib::config::{
@@ -71,8 +71,8 @@ fn proxy_v2_ipv6(src_ip: Ipv6Addr, src_port: u16, dst_ip: Ipv6Addr, dst_port: u1
 }
 
 /// Backend that echoes the `X-Forwarded-For` / `X-Forwarded-Port` it received into the body.
-async fn spawn_echo_backend(
-) -> Result<(SocketAddr, tokio::task::AbortHandle), Box<dyn std::error::Error + Send + Sync>> {
+async fn spawn_echo_backend()
+-> Result<(SocketAddr, tokio::task::AbortHandle), Box<dyn std::error::Error + Send + Sync>> {
     let listener = TcpListener::bind("127.0.0.1:0").await?;
     let addr = listener.local_addr()?;
 

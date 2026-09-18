@@ -1,6 +1,6 @@
 use crate::config::HealthFormat;
 use crate::telemetry::readiness::NotReadyReason;
-use crate::utils::http::{json_response, text_response, RespBody};
+use crate::utils::http::{RespBody, json_response, text_response};
 use hyper::{Response, StatusCode};
 use serde::Serialize;
 

@@ -1,5 +1,5 @@
 use tests_e2e::common::{
-    wait_for_service, DEFAULT_SERVICE_TIMEOUT_SECS, METRICS_URL, PROXY_HTTPS_URL_IPV4,
+    DEFAULT_SERVICE_TIMEOUT_SECS, METRICS_URL, PROXY_HTTPS_URL_IPV4, wait_for_service,
 };
 
 async fn fetch_metrics() -> Result<String, Box<dyn std::error::Error + Send + Sync>> {

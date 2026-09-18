@@ -20,8 +20,8 @@
 use std::str::FromStr;
 
 use serde::{Deserialize, Serialize};
-use tokio_rustls::rustls::crypto::aws_lc_rs::kx_group;
 use tokio_rustls::rustls::crypto::SupportedKxGroup;
+use tokio_rustls::rustls::crypto::aws_lc_rs::kx_group;
 
 /// A selectable key-exchange group in `[tls.options].curve_preferences`.
 ///

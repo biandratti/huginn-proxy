@@ -1,5 +1,5 @@
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use tokio::sync::watch;
 
 /// Guard to decrement active connections counter when dropped.
@@ -25,10 +25,10 @@ impl Drop for ConnectionGuard {
         let remaining = self.counter.fetch_sub(1, Ordering::Relaxed);
         self.connections_active.add(-1, &[]);
         // Notify when the last connection closes
-        if remaining == 1 {
-            if let Some(ref tx) = self.notifier {
-                let _ = tx.send(());
-            }
+        if remaining == 1
+            && let Some(ref tx) = self.notifier
+        {
+            let _ = tx.send(());
         }
     }
 }
