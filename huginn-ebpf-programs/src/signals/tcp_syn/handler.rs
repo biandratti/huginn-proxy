@@ -10,7 +10,7 @@ use huginn_ebpf_common::headers::{Ip4Hdr, Ip6Hdr, TcpHdr};
 use huginn_ebpf_common::quirk_bits::{
     compute_v4 as compute_quirks_v4, compute_v6 as compute_quirks_v6,
 };
-use huginn_ebpf_common::{make_key_v4, make_key_v6, SynRawDataV4, SynRawDataV6};
+use huginn_ebpf_common::{SynRawDataV4, SynRawDataV6, make_key_v4, make_key_v6};
 
 #[derive(Clone, Copy)]
 pub enum TcpSynError {
