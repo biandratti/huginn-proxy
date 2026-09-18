@@ -38,19 +38,19 @@ pub static syn_rate_allowed_v4: PerCpuArray<u64> = PerCpuArray::with_max_entries
 pub static syn_rate_allowed_v6: PerCpuArray<u64> = PerCpuArray::with_max_entries(1, 0);
 
 #[allow(unsafe_code)]
-#[export_name = "syn_rate_enabled"]
+#[unsafe(export_name = "syn_rate_enabled")]
 static SYN_RATE_ENABLED: u8 = 0;
 
 #[allow(unsafe_code)]
-#[export_name = "syn_rate_threshold"]
+#[unsafe(export_name = "syn_rate_threshold")]
 static SYN_RATE_THRESHOLD: u32 = 0;
 
 #[allow(unsafe_code)]
-#[export_name = "syn_rate_window_ns"]
+#[unsafe(export_name = "syn_rate_window_ns")]
 static SYN_RATE_WINDOW_NS: u64 = 0;
 
 #[allow(unsafe_code)]
-#[export_name = "syn_rate_seed"]
+#[unsafe(export_name = "syn_rate_seed")]
 static SYN_RATE_SEED: u64 = 0;
 
 #[allow(unsafe_code)]

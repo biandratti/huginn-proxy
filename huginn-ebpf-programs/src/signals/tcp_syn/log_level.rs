@@ -1,7 +1,7 @@
 //! Loader-patched `log_level` global (`log::LevelFilter` encoding).
 
 #[allow(unsafe_code)]
-#[export_name = "log_level"]
+#[unsafe(export_name = "log_level")]
 static LOG_LEVEL: u8 = 0;
 
 #[allow(unsafe_code)]
