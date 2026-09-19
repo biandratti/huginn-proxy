@@ -1,6 +1,6 @@
 use crate::config::{HeaderManipulation, HeaderManipulationGroup};
-use crate::telemetry::metrics::values;
 use crate::telemetry::Metrics;
+use crate::telemetry::metrics::values;
 use http::{HeaderMap, HeaderName, HeaderValue};
 
 /// Apply header manipulation group (add and remove headers)

@@ -3,7 +3,7 @@ use crate::proxy::shutdown::{ServiceHandle, ServiceName, ShutdownWatch};
 use notify::{Config, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use std::path::PathBuf;
 use tokio::sync::mpsc::UnboundedSender;
-use tokio::time::{sleep_until, Duration, Instant};
+use tokio::time::{Duration, Instant, sleep_until};
 use tracing::{error, info};
 
 /// Spawn a background task that watches `config_path` for filesystem changes and
@@ -36,13 +36,11 @@ pub fn spawn_config_watcher(
 
     let mut watcher = RecommendedWatcher::new(
         move |result: Result<notify::Event, notify::Error>| {
-            if let Ok(event) = result {
-                if matches!(event.kind, EventKind::Modify(_) | EventKind::Create(_)) {
-                    let is_config = event.paths.iter().any(|p| p == &config_path_for_watcher);
-                    if is_config {
-                        let _ = event_tx.send(());
-                    }
-                }
+            if let Ok(event) = result
+                && matches!(event.kind, EventKind::Modify(_) | EventKind::Create(_))
+                && event.paths.iter().any(|p| p == &config_path_for_watcher)
+            {
+                let _ = event_tx.send(());
             }
         },
         Config::default(),

@@ -5,11 +5,11 @@
 //! the global `headers` block or `security.headers`, so it proves domain-level headers
 //! are actually applied. (They used to be parsed and silently ignored.)
 
-use tests_e2e::common::{wait_for_service, DEFAULT_SERVICE_TIMEOUT_SECS, PROXY_HTTPS_URL_IPV4};
+use tests_e2e::common::{DEFAULT_SERVICE_TIMEOUT_SECS, PROXY_HTTPS_URL_IPV4, wait_for_service};
 
 #[tokio::test]
-async fn domain_level_response_header_is_applied(
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+async fn domain_level_response_header_is_applied()
+-> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     assert!(
         wait_for_service(PROXY_HTTPS_URL_IPV4, DEFAULT_SERVICE_TIMEOUT_SECS).await?,
         "Proxy should be ready"

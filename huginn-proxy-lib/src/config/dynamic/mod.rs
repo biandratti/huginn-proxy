@@ -2,8 +2,8 @@ pub mod backend;
 pub mod headers;
 pub mod security;
 pub use backend::{
-    sort_domain_routes, sort_routes, Backend, BackendHttpVersion, BackendPoolConfig, Domain,
-    HealthCheckConfig, HealthCheckType, Route, DEFAULT_DOMAIN_LABEL, DEFAULT_FINGERPRINTING,
+    Backend, BackendHttpVersion, BackendPoolConfig, DEFAULT_DOMAIN_LABEL, DEFAULT_FINGERPRINTING,
+    Domain, HealthCheckConfig, HealthCheckType, Route, sort_domain_routes, sort_routes,
 };
 pub use headers::{CustomHeader, HeaderManipulation, HeaderManipulationGroup};
 pub use security::{

@@ -11,7 +11,7 @@
 mod maps;
 
 use aya_ebpf::helpers::bpf_ktime_get_ns;
-use huginn_ebpf_rate_limit::{key_v4, key_v6, Sketch};
+use huginn_ebpf_rate_limit::{Sketch, key_v4, key_v6};
 
 use maps::{
     increment_syn_rate_allowed_v4, increment_syn_rate_allowed_v6, increment_syn_rate_skipped_v4,

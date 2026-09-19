@@ -2,10 +2,10 @@ use huginn_proxy_lib::config::{
     Domain, DomainSecurityConfig, HstsConfig, IpFilterConfig, IpFilterMode, RateLimitConfig, Route,
     RouteSecurityConfig, SecurityHeaders, TrustedProxiesConfig,
 };
+use huginn_proxy_lib::proxy::SecurityContext;
 use huginn_proxy_lib::proxy::handler::resolve::domain_defers_ip_filter;
 use huginn_proxy_lib::proxy::handler::resolve_security;
 use huginn_proxy_lib::proxy::router::pick_route_with_fingerprinting;
-use huginn_proxy_lib::proxy::SecurityContext;
 
 type R = Result<(), Box<dyn std::error::Error + Send + Sync>>;
 

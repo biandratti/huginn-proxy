@@ -28,7 +28,7 @@ use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, OnceLock};
 
 use rustls_pki_types::CertificateDer;
-use tokio_rustls::rustls::crypto::{aws_lc_rs, CryptoProvider};
+use tokio_rustls::rustls::crypto::{CryptoProvider, aws_lc_rs};
 use tokio_rustls::rustls::server::{
     ClientHello, NoServerSessionStorage, ProducesTickets, ResolvesServerCert, WebPkiClientVerifier,
 };
@@ -453,10 +453,8 @@ async fn build_entry_config(
     // Stateless tickets only: never a server-side cache. mTLS domains get neither, so
     // the client cert is verified on every connection (no resumption bypass).
     config.session_storage = Arc::new(NoServerSessionStorage {});
-    if !is_mutual_tls {
-        if let Some(ticketer) = ticketer {
-            config.ticketer = Arc::clone(ticketer);
-        }
+    if !is_mutual_tls && let Some(ticketer) = ticketer {
+        config.ticketer = Arc::clone(ticketer);
     }
 
     Ok((ServerCryptoForSni { config: Arc::new(config), is_mutual_tls }, cert_hash))

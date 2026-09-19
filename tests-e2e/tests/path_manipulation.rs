@@ -1,6 +1,6 @@
 use tests_e2e::common::{
-    parse_backend_echo, wait_for_service, DEFAULT_SERVICE_TIMEOUT_SECS, PROXY_HTTPS_URL_IPV4,
-    PROXY_HTTPS_URL_IPV6,
+    DEFAULT_SERVICE_TIMEOUT_SECS, PROXY_HTTPS_URL_IPV4, PROXY_HTTPS_URL_IPV6, parse_backend_echo,
+    wait_for_service,
 };
 
 #[tokio::test]
@@ -31,8 +31,8 @@ async fn test_path_stripping() -> Result<(), Box<dyn std::error::Error + Send + 
 }
 
 #[tokio::test]
-async fn test_path_stripping_with_query_params(
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+async fn test_path_stripping_with_query_params()
+-> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     assert!(
         wait_for_service(PROXY_HTTPS_URL_IPV4, DEFAULT_SERVICE_TIMEOUT_SECS).await?,
         "Proxy should be ready"
@@ -87,8 +87,8 @@ async fn test_path_rewriting() -> Result<(), Box<dyn std::error::Error + Send + 
 }
 
 #[tokio::test]
-async fn test_path_rewriting_with_query_params(
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+async fn test_path_rewriting_with_query_params()
+-> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     assert!(
         wait_for_service(PROXY_HTTPS_URL_IPV4, DEFAULT_SERVICE_TIMEOUT_SECS).await?,
         "Proxy should be ready"
@@ -115,8 +115,8 @@ async fn test_path_rewriting_with_query_params(
 }
 
 #[tokio::test]
-async fn test_path_rewriting_to_versioned_api(
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+async fn test_path_rewriting_to_versioned_api()
+-> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     assert!(
         wait_for_service(PROXY_HTTPS_URL_IPV4, DEFAULT_SERVICE_TIMEOUT_SECS).await?,
         "Proxy should be ready"
@@ -143,8 +143,8 @@ async fn test_path_rewriting_to_versioned_api(
 }
 
 #[tokio::test]
-async fn test_path_manipulation_preserves_headers(
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+async fn test_path_manipulation_preserves_headers()
+-> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     assert!(
         wait_for_service(PROXY_HTTPS_URL_IPV4, DEFAULT_SERVICE_TIMEOUT_SECS).await?,
         "Proxy should be ready"
@@ -321,7 +321,7 @@ async fn test_path_manipulation_preserves_headers_impl(
 }
 
 #[tokio::test]
-async fn test_path_manipulation_preserves_headers_ipv6(
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+async fn test_path_manipulation_preserves_headers_ipv6()
+-> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     test_path_manipulation_preserves_headers_impl(PROXY_HTTPS_URL_IPV6).await
 }

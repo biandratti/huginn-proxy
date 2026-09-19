@@ -26,8 +26,8 @@ backends = [{ address = "backend:9000" }]
 }
 
 #[test]
-fn optional_with_empty_trusted_proxies_warns(
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+fn optional_with_empty_trusted_proxies_warns()
+-> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let toml = r#"
 listen = { addrs = ["127.0.0.1:0"], proxy_protocol = { mode = "optional" } }
 backends = [{ address = "backend:9000" }]
@@ -47,8 +47,8 @@ backends = [{ address = "backend:9000" }]
 }
 
 #[test]
-fn require_with_trusted_proxies_does_not_warn(
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+fn require_with_trusted_proxies_does_not_warn()
+-> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let toml = r#"
 listen = { addrs = ["127.0.0.1:0"], proxy_protocol = { mode = "require" } }
 backends = [{ address = "backend:9000" }]

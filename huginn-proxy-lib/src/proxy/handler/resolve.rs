@@ -1,6 +1,6 @@
-use crate::config::{Domain, IpFilterConfig, SecurityHeaders, DEFAULT_FINGERPRINTING};
-use crate::proxy::router::RouteMatch;
+use crate::config::{DEFAULT_FINGERPRINTING, Domain, IpFilterConfig, SecurityHeaders};
 use crate::proxy::SecurityContext;
+use crate::proxy::router::RouteMatch;
 
 /// Effective per-request security policy after whole-block resolution.
 ///

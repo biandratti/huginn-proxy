@@ -25,13 +25,13 @@ impl AsyncRead for MockStream {
         _cx: &mut std::task::Context<'_>,
         buf: &mut tokio::io::ReadBuf<'_>,
     ) -> std::task::Poll<std::io::Result<()>> {
-        if let Some(fail_pos) = self.fail_at {
-            if self.pos >= fail_pos {
-                return std::task::Poll::Ready(Err(std::io::Error::new(
-                    std::io::ErrorKind::ConnectionAborted,
-                    "Simulated connection failure",
-                )));
-            }
+        if let Some(fail_pos) = self.fail_at
+            && self.pos >= fail_pos
+        {
+            return std::task::Poll::Ready(Err(std::io::Error::new(
+                std::io::ErrorKind::ConnectionAborted,
+                "Simulated connection failure",
+            )));
         }
 
         let remaining = self.data.len().saturating_sub(self.pos);
@@ -135,8 +135,8 @@ async fn test_invalid_frame_data() -> Result<(), Box<dyn std::error::Error + Sen
 }
 
 #[tokio::test]
-async fn test_connection_failure_during_read(
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+async fn test_connection_failure_during_read()
+-> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let (tx, rx) = watch::channel(None);
     let http2_preface = b"PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n";
     // Set failure at position 5 to ensure it happens during first read

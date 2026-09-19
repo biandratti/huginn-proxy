@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use huginn_proxy_lib::backend::{check_http, HealthCheckHttpClient};
+use huginn_proxy_lib::backend::{HealthCheckHttpClient, check_http};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 type TestErr = Box<dyn std::error::Error + Send + Sync>;

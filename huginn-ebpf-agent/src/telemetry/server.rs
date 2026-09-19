@@ -1,8 +1,8 @@
 use crate::config::HealthFormat;
 use crate::healthchecks::AgentHealth;
 use crate::telemetry::router::dispatch;
-use hyper::body::Incoming;
 use hyper::Request;
+use hyper::body::Incoming;
 use hyper_util::rt::{TokioExecutor, TokioIo};
 use hyper_util::server::conn::auto::Builder as ConnBuilder;
 use prometheus::Registry;

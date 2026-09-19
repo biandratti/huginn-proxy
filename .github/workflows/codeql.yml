@@ -33,7 +33,7 @@ jobs:
       - name: Setup eBPF build dependencies
         uses: ./.github/actions/setup-ebpf-build
 
-      - name: Install Rust stable
+      - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
       - name: Build

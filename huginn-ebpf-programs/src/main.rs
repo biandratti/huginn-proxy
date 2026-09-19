@@ -4,7 +4,7 @@
 #![deny(unsafe_code)]
 
 use aya_ebpf::{
-    bindings::{xdp_action::XDP_PASS, TC_ACT_OK},
+    bindings::{TC_ACT_OK, xdp_action::XDP_PASS},
     macros::{classifier, xdp},
     programs::{TcContext, XdpContext},
 };

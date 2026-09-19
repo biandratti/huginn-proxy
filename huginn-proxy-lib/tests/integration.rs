@@ -1,15 +1,17 @@
 use huginn_proxy_lib::config::{
-    load_from_path, Backend, Config, FingerprintConfig, KeepAliveConfig, ListenConfig,
-    LoggingConfig, ReloadConfig, SecurityConfig, TelemetryConfig, TimeoutConfig,
+    Backend, Config, FingerprintConfig, KeepAliveConfig, ListenConfig, LoggingConfig, ReloadConfig,
+    SecurityConfig, TelemetryConfig, TimeoutConfig, load_from_path,
 };
 use std::io::Write;
 
 fn create_test_config(listen: &str, backends: Vec<Backend>) -> Config {
     Config {
         listen: ListenConfig {
-            addrs: vec![listen
-                .parse()
-                .unwrap_or_else(|_| panic!("Invalid listen address: {listen}"))],
+            addrs: vec![
+                listen
+                    .parse()
+                    .unwrap_or_else(|_| panic!("Invalid listen address: {listen}")),
+            ],
             ..Default::default()
         },
         backends,
@@ -151,8 +153,8 @@ fn test_config_with_custom_max_connections() {
 }
 
 #[tokio::test]
-async fn test_config_loads_security_settings(
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+async fn test_config_loads_security_settings()
+-> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let mut file = tempfile::Builder::new().suffix(".toml").tempfile()?;
     writeln!(
         file,
@@ -185,8 +187,8 @@ fn test_config_keep_alive_defaults() {
 }
 
 #[tokio::test]
-async fn test_config_loads_keep_alive_settings(
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+async fn test_config_loads_keep_alive_settings()
+-> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let mut file = tempfile::Builder::new().suffix(".toml").tempfile()?;
     writeln!(
         file,

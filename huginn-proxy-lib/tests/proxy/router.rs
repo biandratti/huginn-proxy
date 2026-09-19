@@ -1,4 +1,4 @@
-use huginn_proxy_lib::config::{sort_domain_routes, sort_routes, Domain, Route};
+use huginn_proxy_lib::config::{Domain, Route, sort_domain_routes, sort_routes};
 use huginn_proxy_lib::proxy::router::{
     pick_domain, pick_route, pick_route_with_fingerprinting, prefix_matches,
 };

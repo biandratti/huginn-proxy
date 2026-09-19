@@ -1,8 +1,8 @@
 use serde::Serialize;
 
+use super::DynamicConfig;
 use super::dynamic::DynamicView;
 use super::startup::{StaticConfig, StaticView};
-use super::DynamicConfig;
 
 /// Serializable, secret-safe representation of the effective runtime configuration.
 ///

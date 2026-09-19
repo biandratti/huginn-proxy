@@ -1,8 +1,8 @@
 use huginn_proxy_lib::tls::cert_chain_hash;
 
 #[test]
-fn cert_chain_hash_changes_when_certificate_chain_changes(
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+fn cert_chain_hash_changes_when_certificate_chain_changes()
+-> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     use rustls_pki_types::CertificateDer;
 
     let key_a = rcgen::generate_simple_self_signed(vec!["a.test".to_string()])?;

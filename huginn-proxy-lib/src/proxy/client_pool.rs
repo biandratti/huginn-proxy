@@ -1,8 +1,8 @@
 use crate::config::{BackendPoolConfig, KeepAliveConfig};
 use http::Version;
 use hyper::body::Incoming;
-use hyper_util::client::legacy::connect::HttpConnector;
 use hyper_util::client::legacy::Client;
+use hyper_util::client::legacy::connect::HttpConnector;
 use hyper_util::rt::TokioExecutor;
 use std::sync::Arc;
 use std::time::Duration;

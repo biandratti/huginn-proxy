@@ -25,8 +25,6 @@ permissions:
 
 env:
   CARGO_TERM_COLOR: always
-  rust_stable: stable
-  rust_min: '1.94.1'
 
 jobs:
   chrome-tests:
@@ -51,10 +49,8 @@ jobs:
             ${{ runner.os }}-cargo-browser-
             ${{ runner.os }}-cargo-
 
-      - name: Install Rust ${{ env.rust_stable }}
+      - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: ${{ env.rust_stable }}
 
       - name: Setup Docker Compose services
         uses: ./.github/actions/setup-docker-compose
@@ -93,10 +89,8 @@ jobs:
             ${{ runner.os }}-cargo-browser-
             ${{ runner.os }}-cargo-
 
-      - name: Install Rust ${{ env.rust_stable }}
+      - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: ${{ env.rust_stable }}
 
       - name: Setup Docker Compose services
         uses: ./.github/actions/setup-docker-compose

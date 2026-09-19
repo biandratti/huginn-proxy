@@ -7,11 +7,11 @@
 //! (whole-block override), not globally.
 
 use reqwest::StatusCode;
-use tests_e2e::common::{wait_for_service, DEFAULT_SERVICE_TIMEOUT_SECS, PROXY_HTTPS_URL_IPV4};
+use tests_e2e::common::{DEFAULT_SERVICE_TIMEOUT_SECS, PROXY_HTTPS_URL_IPV4, wait_for_service};
 
 #[tokio::test]
-async fn test_route_ip_filter_blocks_only_its_route(
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+async fn test_route_ip_filter_blocks_only_its_route()
+-> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let client = reqwest::Client::builder()
         .danger_accept_invalid_certs(true)
         .build()

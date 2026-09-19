@@ -5,9 +5,9 @@ use tracing::{debug, warn};
 
 use crate::types::{SynRawDataV4, SynRawDataV6};
 
+use super::EbpfProbe;
 use super::counters::is_stale;
 use super::keys::{make_bpf_key_v4, make_bpf_key_v6};
-use super::EbpfProbe;
 
 impl EbpfProbe {
     /// Look up the TCP SYN data for an IPv6 client connection.
@@ -40,17 +40,17 @@ impl EbpfProbe {
             return None;
         }
 
-        if let Some(current_tick) = self.read_current_tick() {
-            if is_stale(val.tick, current_tick, self.syn_map_max_entries) {
-                warn!(
-                    ?src_ip,
-                    src_port,
-                    stored_tick = val.tick,
-                    current_tick,
-                    "SYN v6 map entry is stale - discarding"
-                );
-                return None;
-            }
+        if let Some(current_tick) = self.read_current_tick()
+            && is_stale(val.tick, current_tick, self.syn_map_max_entries)
+        {
+            warn!(
+                ?src_ip,
+                src_port,
+                stored_tick = val.tick,
+                current_tick,
+                "SYN v6 map entry is stale - discarding"
+            );
+            return None;
         }
 
         Some(val)
@@ -85,17 +85,17 @@ impl EbpfProbe {
             return None;
         }
 
-        if let Some(current_tick) = self.read_current_tick() {
-            if is_stale(val.tick, current_tick, self.syn_map_max_entries) {
-                warn!(
-                    ?src_ip,
-                    src_port,
-                    stored_tick = val.tick,
-                    current_tick,
-                    "SYN map entry is stale - discarding"
-                );
-                return None;
-            }
+        if let Some(current_tick) = self.read_current_tick()
+            && is_stale(val.tick, current_tick, self.syn_map_max_entries)
+        {
+            warn!(
+                ?src_ip,
+                src_port,
+                stored_tick = val.tick,
+                current_tick,
+                "SYN map entry is stale - discarding"
+            );
+            return None;
         }
 
         Some(val)

@@ -1,6 +1,6 @@
 use crate::config::{BackendHttpVersion, KeepAliveConfig};
-use crate::proxy::http_result::{HttpError, HttpResult};
 use crate::proxy::ClientPool;
+use crate::proxy::http_result::{HttpError, HttpResult};
 use crate::telemetry::Metrics;
 use crate::utils::http::RespBody;
 use http::{Request, Response, Version};
@@ -106,17 +106,13 @@ pub async fn forward(
 
     let (mut parts, body) = req.into_parts();
 
-    if let Some(content_length) = parts.headers.get(hyper::header::CONTENT_LENGTH) {
-        if let Ok(length_str) = content_length.to_str() {
-            if let Ok(length) = length_str.parse::<u64>() {
-                config.metrics.record_backend_bytes_sent(
-                    length,
-                    &backend,
-                    config.route,
-                    config.domain,
-                );
-            }
-        }
+    if let Some(content_length) = parts.headers.get(hyper::header::CONTENT_LENGTH)
+        && let Ok(length_str) = content_length.to_str()
+        && let Ok(length) = length_str.parse::<u64>()
+    {
+        config
+            .metrics
+            .record_backend_bytes_sent(length, &backend, config.route, config.domain);
     }
 
     // The client's raw `Host` header, unnormalized (case, trailing dot). Deliberate:
@@ -149,17 +145,16 @@ pub async fn forward(
         Ok(mut resp) => {
             let status_code = resp.status().as_u16();
 
-            if let Some(content_length) = resp.headers().get(hyper::header::CONTENT_LENGTH) {
-                if let Ok(length_str) = content_length.to_str() {
-                    if let Ok(length) = length_str.parse::<u64>() {
-                        config.metrics.record_backend_bytes_received(
-                            length,
-                            &backend,
-                            config.route,
-                            config.domain,
-                        );
-                    }
-                }
+            if let Some(content_length) = resp.headers().get(hyper::header::CONTENT_LENGTH)
+                && let Ok(length_str) = content_length.to_str()
+                && let Ok(length) = length_str.parse::<u64>()
+            {
+                config.metrics.record_backend_bytes_received(
+                    length,
+                    &backend,
+                    config.route,
+                    config.domain,
+                );
             }
 
             crate::security::apply_security_headers(

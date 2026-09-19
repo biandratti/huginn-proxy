@@ -1,7 +1,7 @@
 use std::path::Path;
 
-use huginn_proxy_lib::config::parser::{ConfigFormat, TomlParser, YamlParser};
 use huginn_proxy_lib::config::ConfigParser;
+use huginn_proxy_lib::config::parser::{ConfigFormat, TomlParser, YamlParser};
 
 type TestResult = Result<(), Box<dyn std::error::Error + Send + Sync>>;
 

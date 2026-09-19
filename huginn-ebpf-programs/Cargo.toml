@@ -2,7 +2,7 @@
 name = "huginn-ebpf-programs"
 # Not a root workspace member (nightly + bpfel); bump alongside [workspace.package] in root Cargo.toml.
 version = "0.0.5-rc.0"
-edition = "2021"
+edition = "2024"
 publish = false
 
 # Empty [workspace] table tells Cargo this is a standalone crate,

@@ -5,9 +5,9 @@ use tracing::debug;
 
 use crate::config::{RateLimitConfig, TrustedProxiesConfig};
 use crate::proxy::router::RouteMatch;
-use crate::security::{extract_rate_limit_key, RateLimitManager, RateLimitResult};
+use crate::security::{RateLimitManager, RateLimitResult, extract_rate_limit_key};
 use crate::telemetry::Metrics;
-use crate::utils::http::{json_error, RespBody};
+use crate::utils::http::{RespBody, json_error};
 
 /// Check rate limiting for incoming request.
 ///

@@ -3,7 +3,7 @@ use hyper::StatusCode;
 use prometheus::{Encoder, TextEncoder};
 
 use crate::error::Result;
-use crate::utils::http::{full_body, RespBody};
+use crate::utils::http::{RespBody, full_body};
 
 pub fn handle_metrics(registry: &prometheus::Registry) -> Result<Response<RespBody>> {
     let encoder = TextEncoder::new();

@@ -22,8 +22,8 @@
 //! ```
 
 use tests_browsers::{
-    get_chrome_json, names, parse_backend_echo, verify_chrome_version, verify_fingerprint_headers,
-    CHROME_FINGERPRINTS, PROXY_URL,
+    CHROME_FINGERPRINTS, PROXY_URL, get_chrome_json, names, parse_backend_echo,
+    verify_chrome_version, verify_fingerprint_headers,
 };
 use thirtyfour::prelude::*;
 

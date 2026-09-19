@@ -5,8 +5,8 @@ use huginn_proxy_lib::config::{load_from_path, security_override_warnings};
 use crate::config::tmp_path;
 
 #[test]
-fn audit_warns_when_domain_override_disables_enabled_global_rate_limit(
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+fn audit_warns_when_domain_override_disables_enabled_global_rate_limit()
+-> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let path = tmp_path("audit-domain-rl");
     let toml = r#"
 listen = { addrs = ["127.0.0.1:0"] }
@@ -36,8 +36,8 @@ enabled = false
 }
 
 #[test]
-fn audit_warns_when_route_headers_override_drops_global_csp(
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+fn audit_warns_when_route_headers_override_drops_global_csp()
+-> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let path = tmp_path("audit-route-csp");
     let toml = r#"
 listen = { addrs = ["127.0.0.1:0"] }
@@ -71,8 +71,8 @@ enabled = true
 }
 
 #[test]
-fn audit_silent_when_override_tightens_or_parent_inactive(
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+fn audit_silent_when_override_tightens_or_parent_inactive()
+-> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let path = tmp_path("audit-silent");
     // Global rate limit disabled; domain ENABLES it (tightening) → no footgun.
     let toml = r#"

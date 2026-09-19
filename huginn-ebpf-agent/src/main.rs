@@ -1,18 +1,18 @@
 //! eBPF agent: loads the capture program, pins maps, serves metrics.
 
 use huginn_ebpf::{
-    bump_capture_generation, new_agent_boot_id, publish_capture_draining, write_capture_state,
-    CaptureState, EbpfLogLevel, EbpfLogPoller, EbpfProbe,
+    CaptureState, EbpfLogLevel, EbpfLogPoller, EbpfProbe, bump_capture_generation,
+    new_agent_boot_id, publish_capture_draining, write_capture_state,
 };
 use huginn_ebpf_agent::config::from_env;
 use huginn_ebpf_agent::error::Result;
 use huginn_ebpf_agent::healthchecks::AgentHealth;
 use std::env;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
-use tokio::io::unix::AsyncFd;
 use tokio::io::Interest;
+use tokio::io::unix::AsyncFd;
 use tokio::signal;
 
 /// Drain the eBPF log ring buffer when its fd is readable.

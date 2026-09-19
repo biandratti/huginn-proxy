@@ -2,8 +2,8 @@ use std::sync::Arc;
 
 use arc_swap::ArcSwap;
 use huginn_certs::{ServerCryptoMap, TlsBuildOptions};
-use tokio_rustls::rustls::version::{TLS12, TLS13};
 use tokio_rustls::rustls::SupportedProtocolVersion;
+use tokio_rustls::rustls::version::{TLS12, TLS13};
 
 use crate::config::{TlsConfig, TlsOptions, TlsVersion};
 

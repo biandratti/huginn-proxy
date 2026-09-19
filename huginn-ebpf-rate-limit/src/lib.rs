@@ -5,7 +5,7 @@
 
 mod sketch;
 
-pub use sketch::{cell_indices, key_v4, key_v6, Sketch, SketchKey};
+pub use sketch::{Sketch, SketchKey, cell_indices, key_v4, key_v6};
 
 /// Number of rows in the grid (how many times each IP gets hashed).
 pub const HASHES: usize = 4;

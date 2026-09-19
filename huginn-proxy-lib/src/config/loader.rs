@@ -2,9 +2,9 @@ use std::collections::HashSet;
 use std::fs;
 use std::path::Path;
 
+use crate::config::Config;
 use crate::config::audit;
 use crate::config::parser::ConfigFormat;
-use crate::config::Config;
 use crate::error::{ProxyError, Result};
 
 pub fn load_from_path<P: AsRef<Path>>(p: P) -> Result<Config> {

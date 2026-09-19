@@ -1,5 +1,5 @@
 use tests_e2e::common::{
-    parse_backend_echo, wait_for_service, DEFAULT_SERVICE_TIMEOUT_SECS, PROXY_HTTPS_URL_IPV4,
+    DEFAULT_SERVICE_TIMEOUT_SECS, PROXY_HTTPS_URL_IPV4, parse_backend_echo, wait_for_service,
 };
 
 #[tokio::test]
@@ -185,8 +185,8 @@ async fn test_header_override_behavior() -> Result<(), Box<dyn std::error::Error
 }
 
 #[tokio::test]
-async fn test_case_insensitive_header_removal(
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+async fn test_case_insensitive_header_removal()
+-> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let client = reqwest::Client::builder()
         .danger_accept_invalid_certs(true)
         .http2_prior_knowledge()

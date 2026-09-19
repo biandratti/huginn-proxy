@@ -8,9 +8,9 @@ mod common;
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use common::{ensure_crypto_provider, TestResult};
+use common::{TestResult, ensure_crypto_provider};
 use huginn_certs::{
-    build_server_crypto, CertEntry, CertError, CryptoSource, ServerCertsKeys, TlsBuildOptions,
+    CertEntry, CertError, CryptoSource, ServerCertsKeys, TlsBuildOptions, build_server_crypto,
 };
 use rustls_pki_types::pem::PemObject;
 use rustls_pki_types::{CertificateDer, PrivateKeyDer};

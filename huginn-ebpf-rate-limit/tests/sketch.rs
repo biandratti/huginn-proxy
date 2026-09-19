@@ -1,5 +1,5 @@
 use huginn_ebpf_rate_limit::{
-    cell_indices, key_v4, key_v6, Sketch, SketchKey, MAX_THRESHOLD, SLOTS, SLOT_LEN,
+    MAX_THRESHOLD, SLOT_LEN, SLOTS, Sketch, SketchKey, cell_indices, key_v4, key_v6,
 };
 
 const WINDOW: u64 = 1_000_000_000; // 1s in ns

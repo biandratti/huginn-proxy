@@ -1,6 +1,6 @@
 use tests_e2e::common::{
-    parse_backend_echo, wait_for_service, DEFAULT_SERVICE_TIMEOUT_SECS, PROXY_HTTPS_URL_IPV4,
-    PROXY_HTTPS_URL_IPV6,
+    DEFAULT_SERVICE_TIMEOUT_SECS, PROXY_HTTPS_URL_IPV4, PROXY_HTTPS_URL_IPV6, parse_backend_echo,
+    wait_for_service,
 };
 
 async fn test_round_robin_load_balance_impl(

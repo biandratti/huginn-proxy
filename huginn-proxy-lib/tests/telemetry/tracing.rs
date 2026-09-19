@@ -47,11 +47,10 @@ fn captured_logs(filter: &str, emit: impl FnOnce()) -> String {
 
     tracing::subscriber::with_default(subscriber, emit);
 
-    let logs = match buffer.lock() {
+    match buffer.lock() {
         Ok(guard) => String::from_utf8_lossy(&guard).into_owned(),
         Err(poisoned) => String::from_utf8_lossy(&poisoned.into_inner()).into_owned(),
-    };
-    logs
+    }
 }
 
 /// The whole point of the default filter: `huginn-net-tls` logs a JA4 parse `error` for

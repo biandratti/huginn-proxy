@@ -1,12 +1,12 @@
 use huginn_proxy_lib::fingerprinting::names;
 use tests_e2e::common::{
-    parse_backend_echo, wait_for_service, DEFAULT_SERVICE_TIMEOUT_SECS, PROXY_HTTPS_URL_IPV4,
-    PROXY_HTTPS_URL_IPV6,
+    DEFAULT_SERVICE_TIMEOUT_SECS, PROXY_HTTPS_URL_IPV4, PROXY_HTTPS_URL_IPV6, parse_backend_echo,
+    wait_for_service,
 };
 
 #[tokio::test]
-async fn test_tls_with_configured_cipher_suites(
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+async fn test_tls_with_configured_cipher_suites()
+-> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let client = reqwest::Client::builder()
         .danger_accept_invalid_certs(true)
         .http1_only()
@@ -98,13 +98,13 @@ async fn test_tls_with_cipher_suites_impl(
 }
 
 #[tokio::test]
-async fn test_tls_with_configured_cipher_suites_ipv6(
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+async fn test_tls_with_configured_cipher_suites_ipv6()
+-> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     test_tls_with_cipher_suites_impl(PROXY_HTTPS_URL_IPV6).await
 }
 
 #[tokio::test]
-async fn test_tls_with_configured_curves_ipv6(
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+async fn test_tls_with_configured_curves_ipv6()
+-> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     test_tls_with_cipher_suites_impl(PROXY_HTTPS_URL_IPV6).await
 }

@@ -3,12 +3,12 @@ use crate::backend::{BackendSelector, UpstreamGateway};
 use crate::config::{FingerprintConfig, KeepAliveConfig};
 use crate::fingerprinting::{SynResult, TcpObservation};
 use crate::proxy::connection::{ConnectionError, ConnectionManager};
-use crate::proxy::peer_resolution::{resolve_peer, ResolvedProxyProtocol};
+use crate::proxy::peer_resolution::{ResolvedProxyProtocol, resolve_peer};
 use crate::proxy::reload::{SharedClientPool, SharedDynamicConfig, SharedRateLimiter};
 use crate::proxy::security_context::SecurityContext;
 use crate::proxy::shutdown::ShutdownWatch;
 use crate::proxy::transport::{
-    handle_plain_connection, handle_tls_connection, PlainConnectionConfig, TlsConnectionConfig,
+    PlainConnectionConfig, TlsConnectionConfig, handle_plain_connection, handle_tls_connection,
 };
 use crate::telemetry::Metrics;
 use crate::tls::setup::SharedServerCrypto;

@@ -8,7 +8,7 @@
 ///
 /// Full enforcement of TLS version restrictions requires rustls APIs
 /// that are not yet available in version 0.23.
-use tests_e2e::common::{wait_for_service, DEFAULT_SERVICE_TIMEOUT_SECS, PROXY_HTTPS_URL_IPV4};
+use tests_e2e::common::{DEFAULT_SERVICE_TIMEOUT_SECS, PROXY_HTTPS_URL_IPV4, wait_for_service};
 
 #[tokio::test]
 async fn test_tls_1_2_and_1_3_supported() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -41,8 +41,8 @@ async fn test_tls_1_2_and_1_3_supported() -> Result<(), Box<dyn std::error::Erro
 }
 
 #[tokio::test]
-async fn test_tls_connection_uses_secure_version(
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+async fn test_tls_connection_uses_secure_version()
+-> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     // Test that TLS connections use secure versions (1.2 or 1.3)
     // We can't directly verify the negotiated version with reqwest,
     // but we can verify that insecure versions (like TLS 1.0/1.1) are rejected
@@ -75,8 +75,8 @@ async fn test_tls_connection_uses_secure_version(
 }
 
 #[tokio::test]
-async fn test_tls_handshake_succeeds_with_default_config(
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+async fn test_tls_handshake_succeeds_with_default_config()
+-> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     // Test that TLS handshake succeeds with default configuration
     // This verifies that the proxy accepts connections even when
     // no explicit TLS version restrictions are configured

@@ -14,13 +14,13 @@ use huginn_proxy_lib::config::{Backend, BackendHttpVersion};
 use huginn_proxy_lib::proxy::forwarding::determine_http_version;
 use hyper::body::Incoming;
 use hyper::service::service_fn;
-use hyper_util::client::legacy::connect::HttpConnector;
 use hyper_util::client::legacy::Client;
+use hyper_util::client::legacy::connect::HttpConnector;
 use hyper_util::rt::{TokioExecutor, TokioIo};
 use std::convert::Infallible;
 use std::sync::{
-    atomic::{AtomicBool, Ordering},
     Arc,
+    atomic::{AtomicBool, Ordering},
 };
 use tokio::net::TcpListener;
 

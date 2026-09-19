@@ -1,12 +1,12 @@
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 
-use aya::maps::{Array, Map, MapData, MapInfo};
 use aya::Ebpf;
+use aya::maps::{Array, Map, MapData, MapInfo};
 use tracing::{info, warn};
 
-use crate::pin;
 use crate::EbpfError;
+use crate::pin;
 
 use super::EbpfProbe;
 

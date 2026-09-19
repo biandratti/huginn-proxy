@@ -1,9 +1,9 @@
 pub mod config;
 
+use huginn_proxy_lib::SynProbe;
 use huginn_proxy_lib::config::StaticConfig;
 use huginn_proxy_lib::proxy::shutdown::{ServiceHandle, ShutdownWatch};
 use huginn_proxy_lib::telemetry::Metrics;
-use huginn_proxy_lib::SynProbe;
 use std::sync::Arc;
 
 #[cfg(feature = "ebpf-tcp")]
@@ -13,7 +13,7 @@ use {
     },
     self::gate::{default_link_pin_path, load_gate, resolve as resolve_gate, store_gate},
     arc_swap::ArcSwap,
-    huginn_ebpf::{parse_syn_v4, parse_syn_v6, EbpfProbe},
+    huginn_ebpf::{EbpfProbe, parse_syn_v4, parse_syn_v6},
     huginn_proxy_lib::fingerprinting::SynResult,
     huginn_proxy_lib::proxy::shutdown::ServiceName,
     huginn_proxy_lib::{GateState, ReadinessGate},

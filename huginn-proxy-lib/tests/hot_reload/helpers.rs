@@ -7,13 +7,13 @@ use std::time::Duration;
 use arc_swap::ArcSwap;
 use bytes::Bytes;
 use http_body_util::Full;
-use hyper::service::service_fn;
 use hyper::Response;
+use hyper::service::service_fn;
 use hyper_util::rt::{TokioExecutor, TokioIo};
 use hyper_util::server::conn::auto::Builder as ConnBuilder;
 use tokio::net::TcpListener;
 
-use huginn_proxy_lib::{config::load_from_path, Metrics, WatchOptions};
+use huginn_proxy_lib::{Metrics, WatchOptions, config::load_from_path};
 
 /// Grab an ephemeral port then release it so the proxy (or backend) can bind
 /// to it immediately after. There is a small TOCTOU window, acceptable in
@@ -191,10 +191,10 @@ pub async fn wait_for_backend(
     let expected = expected_backend.to_string();
     tokio::time::timeout(Duration::from_secs(timeout_secs), async move {
         loop {
-            if let Ok((200, Some(ref b))) = http_get(addr, path).await {
-                if b == &expected {
-                    return;
-                }
+            if let Ok((200, Some(ref b))) = http_get(addr, path).await
+                && b == &expected
+            {
+                return;
             }
             tokio::time::sleep(Duration::from_millis(100)).await;
         }
@@ -214,7 +214,7 @@ pub async fn wait_for_backend(
 /// Returns `true` if the signal was delivered successfully.
 #[cfg(unix)]
 pub fn send_sighup() -> bool {
-    extern "C" {
+    unsafe extern "C" {
         fn kill(pid: i32, sig: i32) -> i32;
     }
     let ret = unsafe { kill(std::process::id() as i32, 1) }; // SIGHUP = 1

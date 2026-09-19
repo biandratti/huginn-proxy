@@ -1,4 +1,4 @@
-use huginn_ebpf::{pin, CaptureState};
+use huginn_ebpf::{CaptureState, pin};
 use huginn_proxy::ebpf::gate::{decide, load_gate, store_gate};
 use huginn_proxy_lib::GateState;
 use std::io::Write;

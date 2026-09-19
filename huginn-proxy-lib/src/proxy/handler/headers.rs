@@ -1,7 +1,7 @@
 use huginn_net_http::AkamaiFingerprint;
+use hyper::Request;
 use hyper::body::Incoming;
 use hyper::header::HeaderValue;
-use hyper::Request;
 use std::net::SocketAddr;
 
 use crate::fingerprinting::headers::forwarded;
@@ -53,10 +53,10 @@ pub fn add_forwarded_headers(
     // connections where `:authority` differs from the connection's SNI. If the resolved host
     // is empty (e.g. an IP client that sent no authority/Host), leave the header unset.
     req.headers_mut().remove(forwarded::HOST);
-    if !forwarded_host.is_empty() {
-        if let Ok(header_value) = HeaderValue::from_str(forwarded_host) {
-            req.headers_mut().insert(forwarded::HOST, header_value);
-        }
+    if !forwarded_host.is_empty()
+        && let Ok(header_value) = HeaderValue::from_str(forwarded_host)
+    {
+        req.headers_mut().insert(forwarded::HOST, header_value);
     }
 
     // X-Forwarded-Port: Use the port from peer SocketAddr

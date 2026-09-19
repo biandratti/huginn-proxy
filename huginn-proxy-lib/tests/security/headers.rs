@@ -56,18 +56,22 @@ fn test_hsts_header_https_only() {
     // HSTS should be added for HTTPS
     let mut response_https = Response::new("body");
     apply_security_headers(&mut response_https, Some(&config), true);
-    assert!(response_https
-        .headers()
-        .get("strict-transport-security")
-        .is_some());
+    assert!(
+        response_https
+            .headers()
+            .get("strict-transport-security")
+            .is_some()
+    );
 
     // HSTS should NOT be added for HTTP
     let mut response_http = Response::new("body");
     apply_security_headers(&mut response_http, Some(&config), false);
-    assert!(response_http
-        .headers()
-        .get("strict-transport-security")
-        .is_none());
+    assert!(
+        response_http
+            .headers()
+            .get("strict-transport-security")
+            .is_none()
+    );
 }
 
 #[test]

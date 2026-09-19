@@ -1,6 +1,6 @@
 //! Count-Min Sketch implementation. See the crate README for the algorithm description.
 
-use crate::{HASHES, SLOTS, SLOTS_BITS, SLOT_LEN, TOTAL_COUNTERS};
+use crate::{HASHES, SLOT_LEN, SLOTS, SLOTS_BITS, TOTAL_COUNTERS};
 
 /// A source address already mixed with the per-load seed.
 ///

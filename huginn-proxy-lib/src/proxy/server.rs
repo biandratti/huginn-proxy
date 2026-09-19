@@ -1,19 +1,19 @@
-use crate::backend::health_check::{HealthCheckSupervisor, HealthRegistry};
 use crate::backend::BackendSelector;
+use crate::backend::health_check::{HealthCheckSupervisor, HealthRegistry};
 use crate::config::watcher::spawn_config_watcher;
 use crate::config::{EffectiveConfigSummary, EffectiveConfigView, StaticConfig};
 use crate::error::Result;
 pub use crate::proxy::accept::SynProbe;
-use crate::proxy::accept::{accept_loop, AcceptContext};
+use crate::proxy::accept::{AcceptContext, accept_loop};
 use crate::proxy::connection::ConnectionManager;
 use crate::proxy::listener::{bind_listener, register_signal};
 use crate::proxy::peer_resolution::ResolvedProxyProtocol;
 use crate::proxy::protocol::warn_proxy_protocol_trust_gap;
 use crate::proxy::reload::{
-    initial_client_pool, initial_rate_limiter, try_reload, SharedDynamicConfig,
+    SharedDynamicConfig, initial_client_pool, initial_rate_limiter, try_reload,
 };
 use crate::proxy::shutdown::{
-    begin_shutdown, wait_for_drain, ServiceHandle, ShutdownPhase, ShutdownSender,
+    ServiceHandle, ShutdownPhase, ShutdownSender, begin_shutdown, wait_for_drain,
 };
 pub use crate::proxy::watch::WatchOptions;
 use crate::telemetry::{Metrics, Readiness};

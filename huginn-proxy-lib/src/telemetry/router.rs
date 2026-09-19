@@ -5,7 +5,7 @@ use tracing::{debug, warn};
 use crate::config::HealthFormat;
 use crate::telemetry::status::{Status, StatusBody};
 use crate::telemetry::{
-    handle_metrics, health_check_response, live_check_response, ready_check_response, Readiness,
+    Readiness, handle_metrics, health_check_response, live_check_response, ready_check_response,
 };
 use crate::utils::http::RespBody;
 

@@ -31,20 +31,21 @@ pub fn apply_security_headers<T>(
         }
     }
 
-    if is_https && config.hsts.enabled {
-        if let Ok(hsts_value) = build_hsts_header(&config.hsts) {
-            response
-                .headers_mut()
-                .insert(HeaderName::from_static("strict-transport-security"), hsts_value);
-        }
+    if is_https
+        && config.hsts.enabled
+        && let Ok(hsts_value) = build_hsts_header(&config.hsts)
+    {
+        response
+            .headers_mut()
+            .insert(HeaderName::from_static("strict-transport-security"), hsts_value);
     }
 
-    if config.csp.enabled {
-        if let Ok(csp_value) = HeaderValue::from_str(config.csp.policy.expose()) {
-            response
-                .headers_mut()
-                .insert(HeaderName::from_static("content-security-policy"), csp_value);
-        }
+    if config.csp.enabled
+        && let Ok(csp_value) = HeaderValue::from_str(config.csp.policy.expose())
+    {
+        response
+            .headers_mut()
+            .insert(HeaderName::from_static("content-security-policy"), csp_value);
     }
 }
 

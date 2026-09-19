@@ -1,5 +1,5 @@
 use crate::error::{ProxyError, ProxyResult};
-use crate::utils::http::{empty_body, RespBody};
+use crate::utils::http::{RespBody, empty_body};
 use http::StatusCode;
 use hyper::Response;
 

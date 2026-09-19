@@ -1,8 +1,8 @@
 use aya::maps::{Array, Map, MapData};
 use std::path::Path;
 
-use crate::pin;
 use crate::EbpfError;
+use crate::pin;
 
 /// Snapshot of the pinned `capture_state` array.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

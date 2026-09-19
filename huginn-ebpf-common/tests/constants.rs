@@ -4,8 +4,8 @@
 //! network-byte-order representation as read by a little-endian CPU.
 
 use huginn_ebpf_common::constants::{
-    ETH_P_8021AD, ETH_P_8021Q, ETH_P_IPV4, ETH_P_IPV6, IPPROTO_TCP, IP_DF, IP_MF, IP_OFFSET, IP_RF,
-    IP_TOS_CE, IP_TOS_ECT, TCPOPT_MAXLEN, TCP_SYN_MAP_V4_MAX_ENTRIES, TCP_SYN_MAP_V6_MAX_ENTRIES,
+    ETH_P_8021AD, ETH_P_8021Q, ETH_P_IPV4, ETH_P_IPV6, IP_DF, IP_MF, IP_OFFSET, IP_RF, IP_TOS_CE,
+    IP_TOS_ECT, IPPROTO_TCP, TCP_SYN_MAP_V4_MAX_ENTRIES, TCP_SYN_MAP_V6_MAX_ENTRIES, TCPOPT_MAXLEN,
 };
 
 // ── EtherType ─────────────────────────────────────────────────────────────────

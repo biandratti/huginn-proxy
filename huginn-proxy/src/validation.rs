@@ -2,7 +2,7 @@ use std::io::{self, Write};
 use std::path::Path;
 
 use huginn_proxy_lib::config::{
-    all_warnings, load_from_path, proxy_protocol_trust_warnings, EffectiveConfigView,
+    EffectiveConfigView, all_warnings, load_from_path, proxy_protocol_trust_warnings,
 };
 use huginn_proxy_lib::telemetry::{init_validation_tracing, shutdown_tracing};
 

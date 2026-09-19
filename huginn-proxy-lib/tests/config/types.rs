@@ -3,8 +3,8 @@ use huginn_proxy_lib::config::{
 };
 
 #[test]
-fn test_backend_http_version_deserialization(
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+fn test_backend_http_version_deserialization()
+-> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let toml = r#"address = "backend:9000"
 http_version = "http11""#;
     let backend: Backend = toml::from_str(toml)?;
@@ -144,8 +144,8 @@ tls_handshake_secs = 15
 }
 
 #[test]
-fn test_backend_without_health_check_is_none(
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+fn test_backend_without_health_check_is_none()
+-> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let toml = r#"
 listen = { addrs = ["0.0.0.0:7000"] }
 backends = [{ address = "backend:9000" }]
@@ -156,8 +156,8 @@ backends = [{ address = "backend:9000" }]
 }
 
 #[test]
-fn test_backend_health_check_defaults_from_empty_table(
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+fn test_backend_health_check_defaults_from_empty_table()
+-> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let toml = r#"
 listen = { addrs = ["0.0.0.0:7000"] }
 backends = [{ address = "backend:9000", health_check = {} }]
@@ -232,8 +232,8 @@ backends = [
 }
 
 #[test]
-fn test_backend_health_check_http_expected_status_defaults(
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+fn test_backend_health_check_http_expected_status_defaults()
+-> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let toml = r#"
 listen = { addrs = ["0.0.0.0:7000"] }
 backends = [
@@ -250,8 +250,8 @@ backends = [
 }
 
 #[test]
-fn telemetry_health_format_defaults_to_json_and_accepts_text(
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+fn telemetry_health_format_defaults_to_json_and_accepts_text()
+-> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let toml = r#"
 listen = { addrs = ["0.0.0.0:7000"] }
 backends = [{ address = "backend:9000" }]
