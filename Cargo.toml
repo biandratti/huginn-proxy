@@ -75,8 +75,8 @@ tracing-subscriber = { version = "0.3.23", features = ["fmt", "env-filter"] }
 x509-parser = "0.18.1"
 
 [profile.release]
-codegen-units = 4
-incremental = true
+codegen-units = 1
+incremental = false
 lto = "thin"
 opt-level = 3
 panic = "abort"
