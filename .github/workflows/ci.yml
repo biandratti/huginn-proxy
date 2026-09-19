@@ -15,8 +15,7 @@ permissions:
 
 env:
   CARGO_TERM_COLOR: always
-  rust_stable: stable
-  rust_min: '1.98.0'
+  rust_pin: '1.98.1'
 
 jobs:
   
@@ -35,10 +34,10 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-
-      - name: Install Rust ${{ env.rust_stable }}
+      - name: Install Rust ${{ env.rust_pin }}
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: ${{ env.rust_stable }}
+          toolchain: ${{ env.rust_pin }}
       - name: Setup eBPF build dependencies
         uses: ./.github/actions/setup-ebpf-build
       - name: Build workspace
@@ -59,17 +58,17 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-
-      - name: Install Rust ${{ env.rust_stable }}
+      - name: Install Rust ${{ env.rust_pin }}
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: ${{ env.rust_stable }}
+          toolchain: ${{ env.rust_pin }}
           components: rustfmt
       - name: Check code formatting
         run: cargo fmt --all -- --check
       - name: Check code formatting (huginn-ebpf-programs)
         run: |
           cd huginn-ebpf-programs
-          cargo +stable fmt --all -- --check
+          cargo +${{ env.rust_pin }} fmt --all -- --check
 
   cargo-sort:
     runs-on: ubuntu-latest
@@ -86,10 +85,10 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-
-      - name: Install Rust ${{ env.rust_stable }}
+      - name: Install Rust ${{ env.rust_pin }}
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: ${{ env.rust_stable }}
+          toolchain: ${{ env.rust_pin }}
       - name: Install cargo-sort
         run: cargo install cargo-sort
       - name: Check Cargo.toml sorting
@@ -97,7 +96,7 @@ jobs:
       - name: Check Cargo.toml sorting (huginn-ebpf-programs)
         run: |
           cd huginn-ebpf-programs
-          cargo +stable sort --check
+          cargo +${{ env.rust_pin }} sort --check
   
   lint:
     runs-on: ubuntu-latest
@@ -114,10 +113,10 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-
-      - name: Install Rust ${{ env.rust_stable }}
+      - name: Install Rust ${{ env.rust_pin }}
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: ${{ env.rust_stable }}
+          toolchain: ${{ env.rust_pin }}
           components: clippy
       - name: Setup eBPF build dependencies
         uses: ./.github/actions/setup-ebpf-build
@@ -167,10 +166,10 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-
-      - name: Install Rust ${{ env.rust_stable }}
+      - name: Install Rust ${{ env.rust_pin }}
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: ${{ env.rust_stable }}
+          toolchain: ${{ env.rust_pin }}
       - name: Setup eBPF build dependencies
         uses: ./.github/actions/setup-ebpf-build
       - name: Build documentation
@@ -204,41 +203,16 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-
-      - name: Install Rust ${{ env.rust_stable }}
+      - name: Install Rust ${{ env.rust_pin }}
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: ${{ env.rust_stable }}
+          toolchain: ${{ env.rust_pin }}
       - name: Setup eBPF build dependencies
         uses: ./.github/actions/setup-ebpf-build
       - name: Test ${{ matrix.crate }}
         run: cargo test -p ${{ matrix.crate }} --all-features
       - name: Check ${{ matrix.crate }}
         run: cargo check -p ${{ matrix.crate }} --all-features
-
-  minrust:
-    name: minrust
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-      - name: Cache cargo
-        uses: actions/cache@v6
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-
-      - name: Install Rust ${{ env.rust_min }}
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: ${{ env.rust_min }}
-      - name: Setup eBPF build dependencies
-        uses: ./.github/actions/setup-ebpf-build
-      - name: Check MSRV
-        run: cargo check --workspace --all-features
 
   test-beta:
     name: Test Beta
@@ -284,10 +258,10 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-
-      - name: Install Rust ${{ env.rust_stable }}
+      - name: Install Rust ${{ env.rust_pin }}
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: ${{ env.rust_stable }}
+          toolchain: ${{ env.rust_pin }}
       - name: Setup eBPF build dependencies
         uses: ./.github/actions/setup-ebpf-build
       - name: Install cargo-tarpaulin
@@ -316,10 +290,10 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-
-      - name: Install Rust ${{ env.rust_stable }}
+      - name: Install Rust ${{ env.rust_pin }}
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: ${{ env.rust_stable }}
+          toolchain: ${{ env.rust_pin }}
       - name: Setup Docker Compose services
         uses: ./.github/actions/setup-docker-compose
       - name: Run E2E tests

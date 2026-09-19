@@ -33,8 +33,10 @@ jobs:
       - name: Setup eBPF build dependencies
         uses: ./.github/actions/setup-ebpf-build
 
-      - name: Install Rust stable
+      - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.98.1"
 
       - name: Build
         run: cargo build --workspace

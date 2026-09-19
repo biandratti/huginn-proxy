@@ -14,7 +14,7 @@ RUN apt-get update -q && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY . .
-RUN rustc --edition=2021 -O docker/healthcheck.rs -o /healthcheck
+RUN rustc --edition=2024 -O docker/healthcheck.rs -o /healthcheck
 
 # ── plain builder ───────────────────────────────────────────────
 FROM builder-base AS builder-plain
