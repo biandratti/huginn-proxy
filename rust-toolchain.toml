@@ -1,3 +1,5 @@
+# Userspace pin. CI (dtolnay/rust-toolchain) reads this file.
+# Docker images are a separate pin: rust:1.98.1-slim (Renovate).
 [toolchain]
 channel = "1.98.1"
 components = ["rustfmt", "clippy"]

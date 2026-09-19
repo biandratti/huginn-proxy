@@ -175,8 +175,6 @@ jobs:
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: "1.98.1"
 
       - name: Install cargo-zigbuild
         # cargo-zigbuild uses Zig as a cross C compiler, which has built-in support for all
@@ -248,8 +246,6 @@ jobs:
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: "1.98.1"
 
       - name: Add Rust target
         shell: bash
