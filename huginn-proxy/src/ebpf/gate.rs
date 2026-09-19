@@ -1,8 +1,8 @@
 use std::path::Path;
-use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU8, Ordering};
 
-use huginn_ebpf::{pin, read_capture_state, CaptureState};
+use huginn_ebpf::{CaptureState, pin, read_capture_state};
 use huginn_proxy_lib::GateState;
 
 pub fn store_gate(slot: &AtomicU8, state: GateState) {

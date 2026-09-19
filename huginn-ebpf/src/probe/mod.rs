@@ -8,11 +8,11 @@ use aya_log::EbpfLogger;
 use log::Log;
 use tracing::info;
 
-use crate::pin;
 use crate::CaptureBackend;
 use crate::EbpfError;
 use crate::EbpfLogLevel;
 use crate::SynRateLimit;
+use crate::pin;
 
 mod attach;
 mod capture_state;
@@ -23,8 +23,8 @@ mod maps;
 mod seed;
 
 pub use capture_state::{
-    bump_capture_generation, new_agent_boot_id, publish_capture_draining, read_capture_state,
-    write_capture_state, CaptureState,
+    CaptureState, bump_capture_generation, new_agent_boot_id, publish_capture_draining,
+    read_capture_state, write_capture_state,
 };
 pub use counters::{
     is_stale, syn_captured_v4_count_from_path, syn_captured_v6_count_from_path,

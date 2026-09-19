@@ -5,8 +5,8 @@ use huginn_proxy_lib::config::{header_config_warnings, load_from_path};
 use crate::config::tmp_path;
 
 #[test]
-fn header_audit_warns_on_duplicate_add_and_add_remove_conflict(
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+fn header_audit_warns_on_duplicate_add_and_add_remove_conflict()
+-> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let path = tmp_path("hdr-dup");
     let toml = r#"
 listen = { addrs = ["127.0.0.1:0"] }
@@ -29,20 +29,24 @@ add = [{ name = "X-Bar", value = "1" }]
     let warnings = header_config_warnings(&cfg);
     assert_eq!(warnings.len(), 2, "expected dup + conflict, got: {warnings:?}");
     assert!(warnings.iter().all(|w| w.scope == "global headers"));
-    assert!(warnings
-        .iter()
-        .any(|w| w.message.contains("added more than once")));
-    assert!(warnings
-        .iter()
-        .any(|w| w.message.contains("both added and removed")));
+    assert!(
+        warnings
+            .iter()
+            .any(|w| w.message.contains("added more than once"))
+    );
+    assert!(
+        warnings
+            .iter()
+            .any(|w| w.message.contains("both added and removed"))
+    );
 
     let _ = fs::remove_file(&path);
     Ok(())
 }
 
 #[test]
-fn header_audit_warns_on_duplicate_custom_security_header(
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+fn header_audit_warns_on_duplicate_custom_security_header()
+-> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let path = tmp_path("hdr-custom-dup");
     let toml = r#"
 listen = { addrs = ["127.0.0.1:0"] }
@@ -67,8 +71,8 @@ custom = [
 }
 
 #[test]
-fn header_audit_silent_on_cross_scope_override(
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+fn header_audit_silent_on_cross_scope_override()
+-> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let path = tmp_path("hdr-cross-scope");
     // Same header name at global and domain scope is an intentional override, not a duplicate.
     let toml = r#"

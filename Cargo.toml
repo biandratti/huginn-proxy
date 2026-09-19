@@ -13,12 +13,11 @@ members = [
 # huginn-ebpf-programs is intentionally NOT a workspace member:
 # it uses a different toolchain (nightly) and target (bpfel-unknown-none),
 # and is compiled independently by huginn-ebpf's build.rs.
-resolver = "2"
+resolver = "3"
 
 [workspace.package]
 version = "0.0.5-rc.0"
-edition = "2021"
-rust-version = "1.94.1"
+edition = "2024"
 license = "MIT OR Apache-2.0"
 authors = ["Maximiliano Biandratti"]
 repository = "https://github.com/biandratti/huginn-proxy"
@@ -76,8 +75,8 @@ tracing-subscriber = { version = "0.3.23", features = ["fmt", "env-filter"] }
 x509-parser = "0.18.1"
 
 [profile.release]
-codegen-units = 4
-incremental = true
+codegen-units = 1
+incremental = false
 lto = "thin"
 opt-level = 3
 panic = "abort"

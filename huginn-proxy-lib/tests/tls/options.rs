@@ -1,9 +1,9 @@
 use huginn_proxy_lib::config::{SessionResumptionConfig, TlsConfig, TlsOptions, TlsVersion};
 use huginn_proxy_lib::tls::{
-    supported_cipher_suites, supported_curves, tls_build_options, CipherSuiteName, KxGroupName,
+    CipherSuiteName, KxGroupName, supported_cipher_suites, supported_curves, tls_build_options,
 };
-use tokio_rustls::rustls::version::{TLS12, TLS13};
 use tokio_rustls::rustls::SupportedProtocolVersion;
+use tokio_rustls::rustls::version::{TLS12, TLS13};
 
 /// Resolve `TlsOptions` into the effective protocol-version list the cert builder
 /// receives (via the public `tls_build_options` projection).

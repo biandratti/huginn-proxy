@@ -1,4 +1,4 @@
-use huginn_proxy_lib::config::{load_from_path, HeaderManipulation, HeaderManipulationGroup};
+use huginn_proxy_lib::config::{HeaderManipulation, HeaderManipulationGroup, load_from_path};
 use std::io::Write;
 
 #[test]
@@ -15,8 +15,8 @@ fn test_header_manipulation_defaults() {
 }
 
 #[tokio::test]
-async fn test_header_manipulation_only_request_add(
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+async fn test_header_manipulation_only_request_add()
+-> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let mut file = tempfile::Builder::new().suffix(".toml").tempfile()?;
     writeln!(
         file,
@@ -52,8 +52,8 @@ add = [
 }
 
 #[tokio::test]
-async fn test_header_manipulation_only_request_remove(
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+async fn test_header_manipulation_only_request_remove()
+-> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let mut file = tempfile::Builder::new().suffix(".toml").tempfile()?;
     writeln!(
         file,
@@ -86,8 +86,8 @@ remove = ["Server", "X-Powered-By"]
 }
 
 #[tokio::test]
-async fn test_header_manipulation_only_response_add(
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+async fn test_header_manipulation_only_response_add()
+-> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let mut file = tempfile::Builder::new().suffix(".toml").tempfile()?;
     writeln!(
         file,
@@ -123,8 +123,8 @@ add = [
 }
 
 #[tokio::test]
-async fn test_header_manipulation_only_response_remove(
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+async fn test_header_manipulation_only_response_remove()
+-> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let mut file = tempfile::Builder::new().suffix(".toml").tempfile()?;
     writeln!(
         file,
@@ -157,8 +157,8 @@ remove = ["Server"]
 }
 
 #[tokio::test]
-async fn test_header_manipulation_mixed_request_response(
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+async fn test_header_manipulation_mixed_request_response()
+-> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let mut file = tempfile::Builder::new().suffix(".toml").tempfile()?;
     writeln!(
         file,
@@ -190,8 +190,8 @@ remove = ["Server"]
 }
 
 #[tokio::test]
-async fn test_header_manipulation_per_route_defaults(
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+async fn test_header_manipulation_per_route_defaults()
+-> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let mut file = tempfile::Builder::new().suffix(".toml").tempfile()?;
     writeln!(
         file,

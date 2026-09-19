@@ -38,8 +38,8 @@ mod counter;
 mod health;
 mod registry;
 
-pub use check_http::check_http;
 pub use check_http::HealthCheckHttpClient;
+pub use check_http::check_http;
 pub use check_tcp::check_tcp;
 pub use checker::HealthCheckSupervisor;
 pub use counter::ConsecutiveCounter;

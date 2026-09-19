@@ -53,8 +53,8 @@
 
 use serial_test::serial;
 use tests_browsers::{
-    get_chrome_json, get_firefox_json, get_http2_fingerprint, names, parse_backend_echo,
-    verify_fingerprint_headers, verify_firefox_version, FIREFOX_FINGERPRINTS, PROXY_URL,
+    FIREFOX_FINGERPRINTS, PROXY_URL, get_chrome_json, get_firefox_json, get_http2_fingerprint,
+    names, parse_backend_echo, verify_fingerprint_headers, verify_firefox_version,
 };
 use thirtyfour::prelude::*;
 

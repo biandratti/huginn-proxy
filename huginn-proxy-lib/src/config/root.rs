@@ -3,17 +3,17 @@ use std::sync::Arc;
 
 use serde::Deserialize;
 
+use super::dynamic::DynamicConfig;
 use super::dynamic::backend::{Backend, BackendPoolConfig, Domain};
 use super::dynamic::headers::HeaderManipulation;
 use super::dynamic::security::{SecurityConfig, SecurityDynamicConfig};
-use super::dynamic::DynamicConfig;
+use super::startup::StaticConfig;
 use super::startup::fingerprinting::FingerprintConfig;
 use super::startup::listen::ListenConfig;
 use super::startup::reload::ReloadConfig;
 use super::startup::telemetry::{LoggingConfig, TelemetryConfig};
 use super::startup::timeout::TimeoutConfig;
 use super::startup::tls::TlsConfig;
-use super::startup::StaticConfig;
 
 /// Main configuration structure, the TOML deserialization target.
 #[derive(Debug, Deserialize, Clone)]

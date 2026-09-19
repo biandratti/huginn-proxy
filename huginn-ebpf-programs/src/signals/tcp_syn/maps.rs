@@ -153,15 +153,15 @@ pub fn increment_syn_malformed_v6() {
 // Loader-patched globals; read via read_volatile so the compiler cannot cache pre-patch values.
 
 #[allow(unsafe_code)]
-#[export_name = "dst_port"]
+#[unsafe(export_name = "dst_port")]
 static DST_PORT: u16 = 0;
 
 #[allow(unsafe_code)]
-#[export_name = "dst_ip_v4"]
+#[unsafe(export_name = "dst_ip_v4")]
 static DST_IP_V4: u32 = 0;
 
 #[allow(unsafe_code)]
-#[export_name = "dst_ip_v6"]
+#[unsafe(export_name = "dst_ip_v6")]
 static DST_IP_V6: [u8; 16] = [0u8; 16];
 
 #[allow(unsafe_code)]

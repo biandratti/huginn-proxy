@@ -5,8 +5,8 @@ use huginn_proxy_lib::config::{load_from_path, trusted_proxies_warnings};
 use crate::config::tmp_path;
 
 #[test]
-fn trusted_proxies_audit_warns_on_trust_all_and_broad_range(
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+fn trusted_proxies_audit_warns_on_trust_all_and_broad_range()
+-> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let path = tmp_path("tp-broad");
     let toml = r#"
 listen = { addrs = ["127.0.0.1:0"] }
@@ -30,17 +30,19 @@ cidrs = ["0.0.0.0/0", "11.0.0.0/6", "::/0"]
         2,
         "0.0.0.0/0 and ::/0 are both trust-all: {warnings:?}"
     );
-    assert!(warnings
-        .iter()
-        .any(|w| w.message.contains("very large address range")));
+    assert!(
+        warnings
+            .iter()
+            .any(|w| w.message.contains("very large address range"))
+    );
 
     let _ = fs::remove_file(&path);
     Ok(())
 }
 
 #[test]
-fn insecure_opt_in_silences_trust_all_warning(
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+fn insecure_opt_in_silences_trust_all_warning()
+-> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let path = tmp_path("tp-optin");
     // insecure acknowledges the /0 footgun, but a broad non-/0 range still warns.
     let toml = r#"
@@ -69,8 +71,8 @@ cidrs = ["0.0.0.0/0", "11.0.0.0/6"]
 }
 
 #[test]
-fn trusted_proxies_audit_silent_on_private_ranges(
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+fn trusted_proxies_audit_silent_on_private_ranges()
+-> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let path = tmp_path("tp-private");
     let toml = r#"
 listen = { addrs = ["127.0.0.1:0"] }

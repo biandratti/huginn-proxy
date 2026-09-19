@@ -8,8 +8,8 @@
 //! keeping the crate free of any dependency on `config` or `telemetry`.
 
 use huginn_certs::{
-    build_server_crypto, CertEntry, CertReloadReport, CryptoFileSource, ServerCryptoMap,
-    TlsBuildOptions,
+    CertEntry, CertReloadReport, CryptoFileSource, ServerCryptoMap, TlsBuildOptions,
+    build_server_crypto,
 };
 use std::sync::Arc;
 use tracing::{error, info};

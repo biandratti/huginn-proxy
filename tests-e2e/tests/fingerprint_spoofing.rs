@@ -7,7 +7,7 @@
 
 use huginn_proxy_lib::fingerprinting::names;
 use tests_e2e::common::{
-    parse_backend_echo, wait_for_service, DEFAULT_SERVICE_TIMEOUT_SECS, PROXY_HTTPS_URL_IPV4,
+    DEFAULT_SERVICE_TIMEOUT_SECS, PROXY_HTTPS_URL_IPV4, parse_backend_echo, wait_for_service,
 };
 
 /// Parse [`names::SPOOFING_DETECTED`] value into a sorted vec of header names.
@@ -18,8 +18,8 @@ fn detected_list(value: &str) -> Vec<&str> {
 }
 
 #[tokio::test]
-async fn test_spoof_akamai_and_p0f_over_http1(
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+async fn test_spoof_akamai_and_p0f_over_http1()
+-> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let client = reqwest::Client::builder()
         .danger_accept_invalid_certs(true)
         .http1_only()
@@ -121,8 +121,8 @@ async fn test_spoof_p0f_over_http2() -> Result<(), Box<dyn std::error::Error + S
 }
 
 #[tokio::test]
-async fn test_spoof_on_no_fingerprinting_route(
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+async fn test_spoof_on_no_fingerprinting_route()
+-> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let static_url = format!("{PROXY_HTTPS_URL_IPV4}/static");
 
     let client = reqwest::Client::builder()
@@ -182,8 +182,8 @@ async fn test_spoof_on_no_fingerprinting_route(
 }
 
 #[tokio::test]
-async fn test_no_spoofing_detection_on_clean_request(
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+async fn test_no_spoofing_detection_on_clean_request()
+-> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let client = reqwest::Client::builder()
         .danger_accept_invalid_certs(true)
         .http2_prior_knowledge()
@@ -216,8 +216,8 @@ async fn test_no_spoofing_detection_on_clean_request(
 }
 
 #[tokio::test]
-async fn test_forged_ja4_replaced_by_real_value(
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+async fn test_forged_ja4_replaced_by_real_value()
+-> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     const FORGED_JA4: &str = "t00000000000000000000000000000000_FORGED";
 
     let client = reqwest::Client::builder()
@@ -264,8 +264,8 @@ async fn test_forged_ja4_replaced_by_real_value(
 }
 
 #[tokio::test]
-async fn test_forged_detection_header_stripped(
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+async fn test_forged_detection_header_stripped()
+-> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let client = reqwest::Client::builder()
         .danger_accept_invalid_certs(true)
         .http2_prior_knowledge()

@@ -2,5 +2,5 @@ pub mod plain;
 mod timeout_helper;
 pub mod tls;
 
-pub use plain::{handle_plain_connection, PlainConnectionConfig};
-pub use tls::{handle_tls_connection, TlsConnectionConfig};
+pub use plain::{PlainConnectionConfig, handle_plain_connection};
+pub use tls::{TlsConnectionConfig, handle_tls_connection};

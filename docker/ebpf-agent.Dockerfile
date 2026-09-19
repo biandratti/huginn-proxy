@@ -19,7 +19,7 @@ RUN tar -xzf /tmp/cargo-binstall-${TARGETARCH}.tgz -C /usr/local/cargo/bin cargo
     && cargo binstall bpf-linker --no-confirm
 WORKDIR /app
 COPY . .
-RUN rustc --edition=2021 -O docker/healthcheck.rs -o /healthcheck
+RUN rustc --edition=2024 -O docker/healthcheck.rs -o /healthcheck
 RUN cargo build --release -p huginn-ebpf-agent
 
 # ── runtime ─────────────────────────────────────────────────────

@@ -24,8 +24,8 @@
 //! `JoinHandle` and is awaited in order during drain.
 
 use std::fmt;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use crate::telemetry::Readiness;
 use tokio::signal;

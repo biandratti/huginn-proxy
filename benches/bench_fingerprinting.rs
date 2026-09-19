@@ -14,7 +14,7 @@
 //! cargo test -p huginn-proxy-lib --test capture_fixtures -- --nocapture
 //! ```
 
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, criterion_group, criterion_main};
 use huginn_net_http::akamai_extractor::extract_akamai_fingerprint_from_bytes;
 use huginn_net_tls::tls_process::parse_tls_client_hello;
 

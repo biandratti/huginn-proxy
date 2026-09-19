@@ -1,4 +1,4 @@
-use huginn_proxy_lib::proxy::protocol::{read_proxy_header_v1, ProxyProtocolError, ProxySource};
+use huginn_proxy_lib::proxy::protocol::{ProxyProtocolError, ProxySource, read_proxy_header_v1};
 use std::io::Cursor;
 use tokio::io::AsyncReadExt;
 

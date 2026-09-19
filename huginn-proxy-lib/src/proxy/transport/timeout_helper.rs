@@ -1,6 +1,6 @@
 use crate::proxy::shutdown::ShutdownWatch;
-use crate::telemetry::metrics::values;
 use crate::telemetry::Metrics;
+use crate::telemetry::metrics::values;
 use hyper::body::{Body, Incoming};
 use hyper::rt::{Read, Write};
 use hyper::service::HttpService;

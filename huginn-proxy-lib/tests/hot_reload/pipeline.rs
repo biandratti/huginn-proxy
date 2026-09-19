@@ -3,9 +3,8 @@ use std::io::Write as _;
 use std::sync::Arc;
 
 use huginn_proxy_lib::{
-    initial_client_pool, initial_rate_limiter, try_reload, Config, DynamicConfig,
-    HealthCheckSupervisor, HealthRegistry, Metrics, SharedClientPool, SharedRateLimiter,
-    StaticConfig,
+    Config, DynamicConfig, HealthCheckSupervisor, HealthRegistry, Metrics, SharedClientPool,
+    SharedRateLimiter, StaticConfig, initial_client_pool, initial_rate_limiter, try_reload,
 };
 
 fn test_health_supervisor() -> HealthCheckSupervisor {
@@ -27,9 +26,11 @@ fn minimal_config(backend_addr: std::net::SocketAddr, listen_port: u16) -> Confi
 
     Config {
         listen: ListenConfig {
-            addrs: vec![format!("127.0.0.1:{listen_port}")
-                .parse()
-                .unwrap_or_else(|_| std::net::SocketAddr::from(([127, 0, 0, 1], 0)))],
+            addrs: vec![
+                format!("127.0.0.1:{listen_port}")
+                    .parse()
+                    .unwrap_or_else(|_| std::net::SocketAddr::from(([127, 0, 0, 1], 0))),
+            ],
             ..Default::default()
         },
         backends: vec![Backend {

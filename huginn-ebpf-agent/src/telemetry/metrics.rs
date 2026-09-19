@@ -1,13 +1,13 @@
 use huginn_ebpf::{
-    syn_captured_v4_count_from_path, syn_captured_v6_count_from_path,
+    CaptureMode, syn_captured_v4_count_from_path, syn_captured_v6_count_from_path,
     syn_insert_failures_v4_count_from_path, syn_insert_failures_v6_count_from_path,
     syn_malformed_v4_count_from_path, syn_malformed_v6_count_from_path,
     syn_rate_allowed_v4_count_from_path, syn_rate_allowed_v6_count_from_path,
-    syn_rate_skipped_v4_count_from_path, syn_rate_skipped_v6_count_from_path, CaptureMode,
+    syn_rate_skipped_v4_count_from_path, syn_rate_skipped_v6_count_from_path,
 };
+use opentelemetry::KeyValue;
 use opentelemetry::global;
 use opentelemetry::metrics::{Gauge, Meter};
-use opentelemetry::KeyValue;
 use opentelemetry_sdk::metrics::SdkMeterProvider;
 use prometheus::Registry;
 use std::sync::Arc;

@@ -18,10 +18,10 @@ use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, TcpListener, TcpStream};
 use std::time::Duration;
 
 use huginn_ebpf::{
+    CaptureBackend, EbpfLogLevel, EbpfProbe, SynRateLimit, XdpAttachMode,
     syn_captured_v4_count_from_path, syn_captured_v6_count_from_path,
     syn_rate_allowed_v4_count_from_path, syn_rate_allowed_v6_count_from_path,
-    syn_rate_skipped_v4_count_from_path, syn_rate_skipped_v6_count_from_path, CaptureBackend,
-    EbpfLogLevel, EbpfProbe, SynRateLimit, XdpAttachMode,
+    syn_rate_skipped_v4_count_from_path, syn_rate_skipped_v6_count_from_path,
 };
 
 const BURST: u32 = 5;

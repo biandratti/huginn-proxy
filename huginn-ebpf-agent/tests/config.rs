@@ -2,15 +2,15 @@ use std::collections::HashMap;
 use std::net::{Ipv4Addr, Ipv6Addr};
 
 use huginn_ebpf_agent::config::{
-    from_env, CaptureBackend, ConfigError, EbpfLogLevel, HealthFormat, XdpAttachMode,
-    DEFAULT_PIN_PATH,
+    CaptureBackend, ConfigError, DEFAULT_PIN_PATH, EbpfLogLevel, HealthFormat, XdpAttachMode,
+    from_env,
 };
 
 /// Build a `get_var` closure from a list of (name, value) pairs.
-fn env_of(pairs: &[(&'static str, &'static str)]) -> impl Fn(&str) -> Option<String> {
+fn env_of(pairs: Vec<(&'static str, &'static str)>) -> impl Fn(&str) -> Option<String> {
     let map: HashMap<String, String> = pairs
-        .iter()
-        .map(|(k, v)| ((*k).to_string(), (*v).to_string()))
+        .into_iter()
+        .map(|(k, v)| (k.to_string(), v.to_string()))
         .collect();
     move |name: &str| map.get(name).cloned()
 }
@@ -27,10 +27,10 @@ const REQUIRED: &[(&str, &str)] = &[
 ];
 
 /// `REQUIRED` plus the given extra pairs.
-fn required_with(extra: &[(&'static str, &'static str)]) -> impl Fn(&str) -> Option<String> {
-    let mut pairs: Vec<(&'static str, &'static str)> = REQUIRED.to_vec();
-    pairs.extend_from_slice(extra);
-    env_of(&pairs)
+fn required_with(extra: Vec<(&'static str, &'static str)>) -> impl Fn(&str) -> Option<String> {
+    let mut pairs = REQUIRED.to_vec();
+    pairs.extend(extra);
+    env_of(pairs)
 }
 
 /// Parse `from_env`, panicking with a readable message on error.
@@ -43,7 +43,7 @@ fn parse_ok(env: impl Fn(&str) -> Option<String>) -> huginn_ebpf_agent::config::
 
 #[test]
 fn from_env_minimal_applies_defaults() {
-    let cfg = parse_ok(required_with(&[]));
+    let cfg = parse_ok(required_with(vec![]));
     assert_eq!(cfg.interface, "eth0");
     assert_eq!(cfg.dst_ip_v4, Ipv4Addr::new(10, 0, 0, 1));
     assert_eq!(cfg.dst_port, 8443);
@@ -68,7 +68,7 @@ fn from_env_minimal_applies_defaults() {
 
 #[test]
 fn from_env_full_overrides_every_optional() {
-    let cfg = parse_ok(required_with(&[
+    let cfg = parse_ok(required_with(vec![
         ("HUGINN_EBPF_DST_IP_V6", "2001:db8::1"),
         ("HUGINN_EBPF_PIN_PATH", "/run/bpf/huginn"),
         ("HUGINN_EBPF_LINK_PIN_PATH", "/run/bpf/huginn/my_link"),
@@ -100,7 +100,7 @@ fn log_level_accepts_all_levels_case_insensitively() {
         ("debug", EbpfLogLevel::Debug),
         ("TRACE", EbpfLogLevel::Trace),
     ] {
-        let cfg = parse_ok(required_with(&[("HUGINN_EBPF_LOG_LEVEL", raw)]));
+        let cfg = parse_ok(required_with(vec![("HUGINN_EBPF_LOG_LEVEL", raw)]));
         assert_eq!(cfg.log_level, expected, "{raw:?} should parse to {expected:?}");
     }
 }
@@ -119,7 +119,7 @@ fn from_env_missing_required_vars_are_reported() {
             .copied()
             .filter(|(k, _)| *k != missing)
             .collect();
-        let result = from_env(env_of(&pairs));
+        let result = from_env(env_of(pairs));
         assert!(
             matches!(result, Err(ConfigError::Missing { ref name }) if name == missing),
             "removing {missing} should report it missing, got {result:?}"
@@ -140,7 +140,7 @@ fn from_env_invalid_values_are_reported() {
         ("HUGINN_EBPF_HEARTBEAT_SECS", "0"),
         ("HUGINN_EBPF_HEALTH_FORMAT", "xml"),
     ] {
-        let result = from_env(required_with(&[(name, bad)]));
+        let result = from_env(required_with(vec![(name, bad)]));
         assert!(
             matches!(result, Err(ConfigError::Invalid { name: ref n, .. }) if n == name),
             "{name}={bad} should be rejected as invalid, got {result:?}"

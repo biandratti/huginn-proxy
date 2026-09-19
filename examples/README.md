@@ -24,9 +24,9 @@ cargo build --release -p huginn-proxy
 
 ### With TCP SYN fingerprinting (eBPF/XDP) - Linux only
 
-eBPF/XDP is a **Linux-only** feature. It does not compile or run on macOS or Windows.
-Requires Linux kernel ≥ 5.11 and the Rust nightly toolchain with `rust-src` (installed
-automatically via `rust-toolchain.toml` in the XDP subcrate).
+eBPF is **Linux-only** (does not compile or run on macOS or Windows). Building
+`--features ebpf-tcp` needs nightly + `rust-src` (`huginn-ebpf-programs/rust-toolchain.toml`).
+Runtime needs kernel ≥ 5.11.
 
 ```bash
 # Build with the ebpf-tcp feature (no clang or kernel headers needed)

@@ -10,10 +10,10 @@ mod common;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use common::{ensure_crypto_provider, CertFixture, TestResult};
+use common::{CertFixture, TestResult, ensure_crypto_provider};
 use huginn_certs::server_crypto::build_client_root_store;
 use huginn_certs::{
-    build_server_crypto, CertEntry, CryptoFileSource, ServerCryptoMap, TlsBuildOptions,
+    CertEntry, CryptoFileSource, ServerCryptoMap, TlsBuildOptions, build_server_crypto,
 };
 use rcgen::{
     BasicConstraints, CertificateParams, ExtendedKeyUsagePurpose, IsCa, Issuer, KeyPair,
@@ -75,7 +75,7 @@ async fn restricted_protocol_version_still_builds() -> TestResult {
 
 #[tokio::test]
 async fn restricted_curve_preferences_still_build() -> TestResult {
-    use huginn_certs::kx_groups::{resolve_kx_groups, KxGroupName};
+    use huginn_certs::kx_groups::{KxGroupName, resolve_kx_groups};
 
     let names = [KxGroupName::X25519MlKem768, KxGroupName::X25519, KxGroupName::Secp256r1];
     assert_eq!(resolve_kx_groups(&names).len(), 3, "all three typed groups map");

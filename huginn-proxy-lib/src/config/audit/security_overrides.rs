@@ -71,15 +71,17 @@ fn collect_dropped(
 ) {
     let mut push = |message: String| out.push(ConfigWarning { scope: scope.to_string(), message });
 
-    if let Some(over) = over_rl {
-        if parent_rl.enabled && !over.enabled {
-            push("rate_limit override disables the parent's enabled rate limit (whole block replaced, not merged)".to_string());
-        }
+    if let Some(over) = over_rl
+        && parent_rl.enabled
+        && !over.enabled
+    {
+        push("rate_limit override disables the parent's enabled rate limit (whole block replaced, not merged)".to_string());
     }
-    if let Some(over) = over_ip {
-        if parent_ip.mode != IpFilterMode::Disabled && over.mode == IpFilterMode::Disabled {
-            push("ip_filter override disables the parent's active IP filter (whole block replaced, not merged)".to_string());
-        }
+    if let Some(over) = over_ip
+        && parent_ip.mode != IpFilterMode::Disabled
+        && over.mode == IpFilterMode::Disabled
+    {
+        push("ip_filter override disables the parent's active IP filter (whole block replaced, not merged)".to_string());
     }
     if let Some(over) = over_hdr {
         let mut dropped: Vec<&str> = Vec::new();

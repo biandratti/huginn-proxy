@@ -1,5 +1,5 @@
 use huginn_proxy_lib::proxy::protocol::{
-    read_proxy_header_v2, ProxyProtocolError, ProxySource, V2_SIGNATURE,
+    ProxyProtocolError, ProxySource, V2_SIGNATURE, read_proxy_header_v2,
 };
 use std::io::Cursor;
 use std::net::Ipv6Addr;

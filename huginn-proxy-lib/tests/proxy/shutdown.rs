@@ -1,13 +1,13 @@
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use huginn_proxy_lib::proxy::shutdown::{
-    begin_shutdown, shutdown_channel, wait_for_drain, ShutdownPhase,
+    ShutdownPhase, begin_shutdown, shutdown_channel, wait_for_drain,
 };
 use huginn_proxy_lib::{NotReadyReason, Readiness};
-use tokio::signal::unix::{signal, SignalKind};
+use tokio::signal::unix::{SignalKind, signal};
 use tokio::sync::watch;
-use tokio::time::{sleep, Duration};
+use tokio::time::{Duration, sleep};
 
 #[tokio::test]
 async fn wait_for_drain_returns_immediately_when_idle() {

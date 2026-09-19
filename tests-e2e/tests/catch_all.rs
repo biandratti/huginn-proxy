@@ -5,7 +5,7 @@
 //! 421; this guards against a regression to that behavior.
 
 use tests_e2e::common::{
-    parse_backend_echo, wait_for_service, DEFAULT_SERVICE_TIMEOUT_SECS, PROXY_HTTPS_URL_IPV4,
+    DEFAULT_SERVICE_TIMEOUT_SECS, PROXY_HTTPS_URL_IPV4, parse_backend_echo, wait_for_service,
 };
 
 /// A request carrying an arbitrary, unconfigured `Host` is routed through the

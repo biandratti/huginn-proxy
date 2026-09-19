@@ -1,5 +1,5 @@
-use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::Registry;
+use tracing_subscriber::layer::SubscriberExt;
 
 /// Targets silenced by default because they log client-controlled input as failures.
 ///

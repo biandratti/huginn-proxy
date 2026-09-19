@@ -32,11 +32,11 @@ pub mod error;
 pub mod kx_groups;
 pub mod server_crypto;
 
-pub use certs::{cert_chain_hash, fnv1a_hash, ServerCertsKeys};
+pub use certs::{ServerCertsKeys, cert_chain_hash, fnv1a_hash};
 pub use cipher_suites::{CipherSuiteName, UnknownCipherSuite};
-pub use crypto_source::{read_certs_and_keys, CertEntry, CryptoFileSource, CryptoSource};
+pub use crypto_source::{CertEntry, CryptoFileSource, CryptoSource, read_certs_and_keys};
 pub use error::CertError;
 pub use kx_groups::{KxGroupName, UnknownKxGroup};
 pub use server_crypto::{
-    build_server_crypto, CertReloadReport, ServerCryptoForSni, ServerCryptoMap, TlsBuildOptions,
+    CertReloadReport, ServerCryptoForSni, ServerCryptoMap, TlsBuildOptions, build_server_crypto,
 };

@@ -32,7 +32,7 @@ use std::time::Duration;
 
 use arc_swap::ArcSwap;
 use bytes::Bytes;
-use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
+use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
 use http_body_util::Full;
 use huginn_proxy_lib::config::{
     Backend, Domain, FingerprintConfig, KeepAliveConfig, ListenConfig, LoggingConfig, Route,
@@ -40,8 +40,8 @@ use huginn_proxy_lib::config::{
 };
 use huginn_proxy_lib::fingerprinting::names;
 use huginn_proxy_lib::{Config, TlsConfig};
-use hyper::service::service_fn;
 use hyper::Response;
+use hyper::service::service_fn;
 use hyper_util::rt::{TokioExecutor, TokioIo};
 use hyper_util::server::conn::auto::Builder as ConnBuilder;
 use tokio::net::TcpListener;

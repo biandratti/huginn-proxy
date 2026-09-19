@@ -116,8 +116,8 @@ async fn test_capturing_stream_max_capture() -> Result<(), Box<dyn std::error::E
 // These tests are no longer needed as the functionality is tested through CapturingStream tests
 
 #[tokio::test]
-async fn test_capturing_stream_write_passthrough(
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+async fn test_capturing_stream_write_passthrough()
+-> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let (tx, _rx) = watch::channel(None);
     let mock_stream = MockStream::new(vec![]);
     let (mut capturing, _extracted) =

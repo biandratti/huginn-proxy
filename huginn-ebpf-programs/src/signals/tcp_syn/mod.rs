@@ -5,7 +5,7 @@ mod log_level;
 mod maps;
 
 pub use handler::{
-    finish_tcp_syn_v4, finish_tcp_syn_v6, handle_tcp_syn_v4, handle_tcp_syn_v6, TcpSynError,
+    TcpSynError, finish_tcp_syn_v4, finish_tcp_syn_v6, handle_tcp_syn_v4, handle_tcp_syn_v6,
 };
 pub use log_level::{level, log_level};
 pub use maps::{

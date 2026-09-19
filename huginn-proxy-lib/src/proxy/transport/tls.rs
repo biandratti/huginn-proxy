@@ -3,13 +3,13 @@ use std::sync::Arc;
 use super::timeout_helper::serve_with_timeout;
 use crate::backend::UpstreamGateway;
 use crate::fingerprinting::TcpObservation;
-use crate::fingerprinting::{read_client_hello, CapturingStream};
+use crate::fingerprinting::{CapturingStream, read_client_hello};
+use crate::proxy::ClientPool;
 use crate::proxy::connection::{PrefixedStream, TlsConnectionGuard};
 use crate::proxy::handler::request::handle_proxy_request;
 use crate::proxy::synthetic_response::synthetic_error_response;
-use crate::proxy::ClientPool;
-use crate::telemetry::metrics::values;
 use crate::telemetry::Metrics;
+use crate::telemetry::metrics::values;
 use crate::tls::record_tls_handshake_metrics;
 use crate::tls::setup::SharedServerCrypto;
 use crate::tls::{FailureSeverity, TlsAcceptFailure};
@@ -18,8 +18,8 @@ use hyper_util::rt::{TokioExecutor, TokioIo};
 use hyper_util::server::conn::auto::Builder as ConnBuilder;
 use tokio::net::TcpStream;
 use tokio::time::Instant;
-use tokio_rustls::rustls::server::Acceptor;
 use tokio_rustls::LazyConfigAcceptor;
+use tokio_rustls::rustls::server::Acceptor;
 use tracing::{debug, info, warn};
 
 /// Configuration for handling TLS connections
