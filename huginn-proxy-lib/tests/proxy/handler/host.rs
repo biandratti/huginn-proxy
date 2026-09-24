@@ -1,5 +1,5 @@
 use huginn_proxy_lib::proxy::handler::{
-    extract_request_host_inner, strip_host_port, strip_trailing_dot,
+    extract_request_host_inner, https_redirect_location, strip_host_port, strip_trailing_dot,
 };
 
 #[test]
@@ -270,4 +270,41 @@ fn h2_uri_authority_with_trailing_dot_is_normalized() {
 fn authority_of_bare_dot_falls_back_to_host_header() {
     let req = req_h2_with_host("https://./path", "fallback.example.com");
     assert_eq!(extract_request_host_inner(&req), "fallback.example.com");
+}
+
+#[test]
+fn https_redirect_location_omits_port_443() {
+    assert_eq!(
+        https_redirect_location("api.example.com", "/path", None, 443),
+        "https://api.example.com/path"
+    );
+}
+
+#[test]
+fn https_redirect_location_writes_non_443_port() {
+    assert_eq!(
+        https_redirect_location("api.example.com", "/path", None, 8443),
+        "https://api.example.com:8443/path"
+    );
+}
+
+#[test]
+fn https_redirect_location_keeps_query() {
+    assert_eq!(
+        https_redirect_location("foo.example.com", "/v1", Some("q=1"), 443),
+        "https://foo.example.com/v1?q=1"
+    );
+}
+
+#[test]
+fn https_redirect_location_uses_request_host_not_wildcard_pattern() {
+    assert_eq!(
+        https_redirect_location("other.com", "/path", None, 443),
+        "https://other.com/path"
+    );
+}
+
+#[test]
+fn https_redirect_location_brackets_ipv6() {
+    assert_eq!(https_redirect_location("::1", "/", None, 8443), "https://[::1]:8443/");
 }

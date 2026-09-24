@@ -26,6 +26,7 @@ pub struct PlainConnectionConfig {
     pub syn_fingerprint: Option<TcpObservation>,
     pub upstream: UpstreamGateway,
     pub shutdown_rx: crate::proxy::shutdown::ShutdownWatch,
+    pub listen: crate::config::RuntimeListen,
 }
 
 /// Handle a plain HTTP connection
@@ -52,6 +53,7 @@ pub async fn handle_plain_connection(
         let security = security.clone();
         let client_pool = client_pool.clone();
         let upstream = upstream.clone();
+        let listen = config.listen;
 
         async move {
             let preserve_host = config.preserve_host;
@@ -71,6 +73,7 @@ pub async fn handle_plain_connection(
                 &client_pool,
                 &upstream,
                 None,
+                listen,
             )
             .await;
 

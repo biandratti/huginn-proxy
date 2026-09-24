@@ -1,6 +1,6 @@
 use crate::backend::health_check::HealthRegistry;
 use crate::backend::{BackendSelector, UpstreamGateway};
-use crate::config::{FingerprintConfig, KeepAliveConfig};
+use crate::config::{FingerprintConfig, KeepAliveConfig, RuntimeListen};
 use crate::fingerprinting::{SynResult, TcpObservation};
 use crate::proxy::connection::{ConnectionError, ConnectionManager};
 use crate::proxy::peer_resolution::{ResolvedProxyProtocol, resolve_peer};
@@ -42,6 +42,7 @@ pub struct AcceptContext {
     pub tls_handshake_timeout: Duration,
     pub connection_handling_timeout: Duration,
     pub proxy_protocol: ResolvedProxyProtocol,
+    pub listen: RuntimeListen,
 }
 
 pub async fn accept_loop(
@@ -142,10 +143,9 @@ pub async fn accept_loop(
             );
 
             if tls_enabled {
-                // `tls_enabled` comes from `listen.port_tls`, not from whether a map exists.
-                // A missing map is a startup invariant (`port_tls` without `[tls]` is filled
-                // with defaults at load). Until that fill runs, drop rather than treat this
-                // socket as plaintext.
+                // `tls_enabled` and `server_crypto: Some` both come from running `port_tls`
+                // (`run()` builds the map; load fills `[tls]` if omitted). A missing map is a
+                // wiring bug: drop rather than treat this socket as plaintext.
                 let Some(server_crypto) = ctx_task.server_crypto.as_ref() else {
                     warn!(?peer, "HTTPS listener has no TLS configuration; dropping connection");
                     return;
@@ -169,6 +169,7 @@ pub async fn accept_loop(
                         syn_fingerprint: syn_fingerprint.clone(),
                         upstream: upstream.clone(),
                         shutdown_rx: shutdown_rx.clone(),
+                        listen: ctx_task.listen,
                     },
                 )
                 .await;
@@ -189,6 +190,7 @@ pub async fn accept_loop(
                         syn_fingerprint,
                         upstream,
                         shutdown_rx,
+                        listen: ctx_task.listen,
                     },
                 )
                 .await;

@@ -58,6 +58,7 @@ fn domain(
         headers: None,
         security,
         fingerprinting,
+        https_redirection: None,
         routes,
     }
 }

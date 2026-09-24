@@ -108,6 +108,30 @@ impl Default for ListenConfig {
     }
 }
 
+/// Running HTTP/HTTPS listen ports from static config.
+///
+/// Used for HTTP→HTTPS `301` (`Location` port and the dual-listen default).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RuntimeListen {
+    /// `listen.port` is set (plaintext sockets exist).
+    pub http: bool,
+    /// Running `listen.port_tls`.
+    pub tls_port: Option<u16>,
+}
+
+impl RuntimeListen {
+    /// Both HTTP and HTTPS sockets are in effect.
+    pub fn dual(self) -> bool {
+        self.http && self.tls_port.is_some()
+    }
+}
+
+impl From<&ListenConfig> for RuntimeListen {
+    fn from(listen: &ListenConfig) -> Self {
+        Self { http: listen.port.is_some(), tls_port: listen.port_tls }
+    }
+}
+
 fn default_tcp_backlog() -> i32 {
     4096
 }

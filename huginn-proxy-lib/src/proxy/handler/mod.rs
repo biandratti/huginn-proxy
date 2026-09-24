@@ -7,7 +7,9 @@ pub mod request;
 pub mod resolve;
 pub use authority::{authority_matches_sni, mutual_tls_session_matches};
 pub use headers::{add_forwarded_headers, akamai_header_value, tls_header_value};
-pub use host::{extract_request_host_inner, strip_host_port, strip_trailing_dot};
+pub use host::{
+    extract_request_host_inner, https_redirect_location, strip_host_port, strip_trailing_dot,
+};
 pub use rate_limit_validation::check_rate_limit;
 pub use request::handle_proxy_request;
 pub use resolve::{EffectiveSecurity, resolve_security};

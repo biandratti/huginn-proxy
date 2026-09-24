@@ -39,6 +39,7 @@ fn minimal_config(backend_addr: std::net::SocketAddr, listen_port: u16) -> Confi
             headers: None,
             security: None,
             fingerprinting: None,
+            https_redirection: None,
             routes: vec![Route {
                 prefix: "/".to_string(),
                 backend: backend_addr.to_string(),

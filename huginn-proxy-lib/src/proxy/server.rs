@@ -1,7 +1,9 @@
 use crate::backend::BackendSelector;
 use crate::backend::health_check::{HealthCheckSupervisor, HealthRegistry};
 use crate::config::watcher::spawn_config_watcher;
-use crate::config::{EffectiveConfigSummary, EffectiveConfigView, ListenSocket, StaticConfig};
+use crate::config::{
+    EffectiveConfigSummary, EffectiveConfigView, ListenSocket, RuntimeListen, StaticConfig,
+};
 use crate::error::Result;
 pub use crate::proxy::accept::SynProbe;
 use crate::proxy::accept::{AcceptContext, accept_loop};
@@ -165,6 +167,7 @@ pub async fn run(
             static_cfg.timeout.connection_handling_secs,
         ),
         proxy_protocol: ResolvedProxyProtocol::resolve(static_cfg.listen.proxy_protocol),
+        listen: RuntimeListen::from(&static_cfg.listen),
     });
 
     // Spawn one accept task per listener.

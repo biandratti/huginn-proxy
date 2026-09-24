@@ -1,6 +1,6 @@
-use super::host::extract_request_host;
+use super::host::{extract_request_host, https_redirect_location};
 use crate::backend::UpstreamGateway;
-use crate::config::{Backend, DEFAULT_DOMAIN_LABEL, Domain, KeepAliveConfig};
+use crate::config::{Backend, DEFAULT_DOMAIN_LABEL, Domain, KeepAliveConfig, RuntimeListen};
 use crate::fingerprinting::TcpObservation;
 use crate::fingerprinting::names;
 use crate::proxy::ClientPool;
@@ -13,18 +13,18 @@ use crate::proxy::handler::rate_limit_validation::check_rate_limit;
 use crate::proxy::handler::resolve::{domain_defers_ip_filter, resolve_security};
 use crate::proxy::http_result::{HttpError, HttpResult};
 use crate::telemetry::Metrics;
+use crate::utils::http::{RespBody, empty_body};
 use http::HeaderMap;
 use http::StatusCode;
 use http::Version;
 use hyper::Request;
+use hyper::Response;
 use hyper::body::Incoming;
-use hyper::header::HeaderName;
+use hyper::header::{HeaderName, LOCATION};
 use std::sync::Arc;
 use tokio::sync::watch;
 use tokio::time::Instant;
 use tracing::debug;
-
-use crate::utils::http::RespBody;
 
 /// Strip all proxy-authoritative fingerprint headers from an incoming request.
 ///
@@ -78,6 +78,17 @@ fn enforce_ip_access(
     Ok(())
 }
 
+fn https_redirect_response(location: String) -> HttpResult<Response<RespBody>> {
+    let value = http::HeaderValue::from_str(&location).map_err(|e| {
+        HttpError::FailedToGenerateDownstreamResponse(format!("invalid redirect Location: {e}"))
+    })?;
+    Response::builder()
+        .status(StatusCode::MOVED_PERMANENTLY)
+        .header(LOCATION, value)
+        .body(empty_body())
+        .map_err(|e| HttpError::FailedToGenerateDownstreamResponse(e.to_string()))
+}
+
 /// Handle request routing and forwarding.
 ///
 /// `peer` is the effective client address as resolved by `resolve_peer`, and is expected to be
@@ -102,6 +113,7 @@ pub async fn handle_proxy_request(
     client_pool: &ClientPool,
     upstream: &UpstreamGateway,
     connection_sni: Option<&str>,
+    listen: RuntimeListen,
 ) -> HttpResult<hyper::Response<RespBody>> {
     let start = Instant::now();
     let method = req.method().to_string();
@@ -136,6 +148,25 @@ pub async fn handle_proxy_request(
             .and_then(|s| s.ip_filter.as_ref())
             .unwrap_or(&security.ip_filter);
         enforce_ip_access(peer, domain_ip_filter, metrics, &method, &protocol)?;
+    }
+
+    // HTTP→HTTPS redirect: after the IP filter, before 421/mTLS, and without
+    // consuming rate-limit tokens. Dual listen is the running `port` + `port_tls`.
+    if !is_https
+        && let Some(domain) = domain
+        && domain.https_redirect_enabled(listen.dual())
+        && let Some(tls_port) = listen.tls_port
+    {
+        if host.is_empty() {
+            let error = HttpError::InvalidHostInRequestHeader;
+            let status_code = StatusCode::from(error.clone()).as_u16();
+            metrics.record_entrypoint_request(&method, status_code, &protocol);
+            return Err(error);
+        }
+        let location = https_redirect_location(&host, path, req.uri().query(), tls_port);
+        let status_code = StatusCode::MOVED_PERMANENTLY.as_u16();
+        metrics.record_entrypoint_request(&method, status_code, &protocol);
+        return https_redirect_response(location);
     }
 
     // Misdirected-request enforcement (RFC 9110 §15.5.20 / RFC 7540 §9.1.2), always on,

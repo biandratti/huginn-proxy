@@ -1,5 +1,5 @@
 use huginn_proxy_lib::config::{
-    Backend, BackendHttpVersion, Config, HealthCheckConfig, HealthCheckType,
+    Backend, BackendHttpVersion, Config, Domain, HealthCheckConfig, HealthCheckType,
 };
 
 #[test]
@@ -279,4 +279,53 @@ backends = [{ address = "backend:9000" }]
 health_format = "xml"
 "#;
     assert!(toml::from_str::<Config>(toml).is_err());
+}
+
+#[test]
+fn https_redirect_enabled_defaults_true_with_certs_on_dual_listen() {
+    let domain = Domain {
+        host: Some("api.example.com".to_string()),
+        cert_path: Some("/certs/a.pem".to_string()),
+        key_path: Some("/certs/a.key".to_string()),
+        client_ca_path: None,
+        headers: None,
+        security: None,
+        fingerprinting: None,
+        https_redirection: None,
+        routes: vec![],
+    };
+    assert!(domain.https_redirect_enabled(true));
+    assert!(!domain.https_redirect_enabled(false));
+}
+
+#[test]
+fn https_redirect_enabled_false_without_certs() {
+    let domain = Domain {
+        host: Some("api.example.com".to_string()),
+        cert_path: None,
+        key_path: None,
+        client_ca_path: None,
+        headers: None,
+        security: None,
+        fingerprinting: None,
+        https_redirection: None,
+        routes: vec![],
+    };
+    assert!(!domain.https_redirect_enabled(true));
+}
+
+#[test]
+fn https_redirect_enabled_honours_explicit_false() {
+    let domain = Domain {
+        host: Some("api.example.com".to_string()),
+        cert_path: Some("/certs/a.pem".to_string()),
+        key_path: Some("/certs/a.key".to_string()),
+        client_ca_path: None,
+        headers: None,
+        security: None,
+        fingerprinting: None,
+        https_redirection: Some(false),
+        routes: vec![],
+    };
+    assert!(!domain.https_redirect_enabled(true));
 }

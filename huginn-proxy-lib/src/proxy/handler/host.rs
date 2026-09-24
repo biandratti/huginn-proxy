@@ -61,6 +61,35 @@ pub fn extract_request_host_inner<B>(req: &Request<B>) -> String {
         .unwrap_or_default()
 }
 
+/// Build the `Location` target for an HTTP→HTTPS redirect.
+///
+/// `host` is the request host without a port (`extract_request_host`). IPv6 hosts
+/// are wrapped in brackets so the URI authority is valid. `tls_port` is the
+/// running `listen.port_tls`; `443` is omitted from the authority.
+#[doc(hidden)]
+pub fn https_redirect_location(
+    host: &str,
+    path: &str,
+    query: Option<&str>,
+    tls_port: u16,
+) -> String {
+    let host = if host.contains(':') {
+        format!("[{host}]")
+    } else {
+        host.to_string()
+    };
+    let authority = if tls_port == 443 {
+        host
+    } else {
+        format!("{host}:{tls_port}")
+    };
+    let path = if path.is_empty() { "/" } else { path };
+    match query {
+        Some(q) if !q.is_empty() => format!("https://{authority}{path}?{q}"),
+        _ => format!("https://{authority}{path}"),
+    }
+}
+
 /// Strip port from a `Host` header value and normalise IPv6 addresses.
 ///
 /// Returns the bare hostname without port and without IPv6 brackets:

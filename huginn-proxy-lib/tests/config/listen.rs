@@ -1,7 +1,7 @@
 use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr};
 
 use huginn_proxy_lib::Result as ProxyResult;
-use huginn_proxy_lib::config::{ListenConfig, ListenSocket};
+use huginn_proxy_lib::config::{ListenConfig, ListenSocket, RuntimeListen};
 
 type TestResult = Result<(), Box<dyn std::error::Error + Send + Sync>>;
 
@@ -103,4 +103,20 @@ fn bracketed_v6_is_accepted() -> TestResult {
     assert!(sockets.contains(&sock(SocketAddr::from((Ipv6Addr::LOCALHOST, 80)), false)));
     assert!(sockets.contains(&sock(SocketAddr::from((Ipv4Addr::LOCALHOST, 80)), false)));
     Ok(())
+}
+
+#[test]
+fn runtime_listen_dual_needs_both_ports() {
+    let http_only = RuntimeListen::from(&listen(Some(80), None, false, None, None));
+    assert!(!http_only.dual());
+    assert!(http_only.http);
+    assert_eq!(http_only.tls_port, None);
+
+    let https_only = RuntimeListen::from(&listen(None, Some(443), false, None, None));
+    assert!(!https_only.dual());
+    assert_eq!(https_only.tls_port, Some(443));
+
+    let dual = RuntimeListen::from(&listen(Some(80), Some(443), false, None, None));
+    assert!(dual.dual());
+    assert_eq!(dual.tls_port, Some(443));
 }

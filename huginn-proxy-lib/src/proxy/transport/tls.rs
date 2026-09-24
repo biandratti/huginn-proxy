@@ -39,6 +39,7 @@ pub struct TlsConnectionConfig {
     pub syn_fingerprint: Option<TcpObservation>,
     pub upstream: UpstreamGateway,
     pub shutdown_rx: crate::proxy::shutdown::ShutdownWatch,
+    pub listen: crate::config::RuntimeListen,
 }
 
 /// Handle a TLS connection
@@ -186,6 +187,7 @@ pub async fn handle_tls_connection(
             let security = config.security.clone();
             let client_pool = config.client_pool.clone();
             let upstream = config.upstream.clone();
+            let listen = config.listen;
 
             let svc =
                 hyper::service::service_fn(move |req: hyper::Request<hyper::body::Incoming>| {
@@ -219,6 +221,7 @@ pub async fn handle_tls_connection(
                             &client_pool_for_request,
                             &upstream,
                             connection_sni.as_deref(),
+                            listen,
                         )
                         .await;
 
@@ -262,6 +265,7 @@ pub async fn handle_tls_connection(
             let security = config.security.clone();
             let client_pool = config.client_pool.clone();
             let upstream = config.upstream.clone();
+            let listen = config.listen;
 
             let svc =
                 hyper::service::service_fn(move |req: hyper::Request<hyper::body::Incoming>| {
@@ -294,6 +298,7 @@ pub async fn handle_tls_connection(
                             &client_pool,
                             &upstream,
                             connection_sni.as_deref(),
+                            listen,
                         )
                         .await;
 

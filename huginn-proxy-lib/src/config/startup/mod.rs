@@ -8,7 +8,9 @@ pub mod tls;
 use serde::Serialize;
 
 pub use fingerprinting::FingerprintConfig;
-pub use listen::{ListenConfig, ListenSocket, ProxyProtocolConfig, ProxyProtocolMode};
+pub use listen::{
+    ListenConfig, ListenSocket, ProxyProtocolConfig, ProxyProtocolMode, RuntimeListen,
+};
 pub use reload::ReloadConfig;
 pub use telemetry::{HealthFormat, LoggingConfig, TelemetryConfig};
 pub use timeout::{KeepAliveConfig, TimeoutConfig};

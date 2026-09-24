@@ -12,6 +12,7 @@ fn domain(host: &str) -> Domain {
         headers: None,
         security: None,
         fingerprinting: None,
+        https_redirection: None,
         routes: vec![],
     }
 }
@@ -25,6 +26,7 @@ fn domain_with_cert(host: &str, cert_path: &str) -> Domain {
         headers: None,
         security: None,
         fingerprinting: None,
+        https_redirection: None,
         routes: vec![],
     }
 }
@@ -39,6 +41,7 @@ fn catch_all() -> Domain {
         headers: None,
         security: None,
         fingerprinting: None,
+        https_redirection: None,
         routes: vec![],
     }
 }

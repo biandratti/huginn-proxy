@@ -202,6 +202,7 @@ async fn capture_fingerprint_values() -> Result<(), Box<dyn std::error::Error + 
             headers: None,
             security: None,
             fingerprinting: None,
+            https_redirection: None,
             routes: vec![Route {
                 prefix: "/".to_string(),
                 backend: backend_addr.to_string(),

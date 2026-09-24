@@ -126,6 +126,14 @@ fn validate_domains_against_listen(listen: &ListenConfig, domains: &[Domain]) ->
     let https_only = listen.port_tls.is_some() && listen.port.is_none();
     for domain in domains {
         let host = domain.label();
+        if domain.https_redirection.is_some()
+            && (listen.port.is_none() || listen.port_tls.is_none())
+        {
+            return Err(ProxyError::Config(format!(
+                "Domain '{host}': https_redirection requires both listen.port and \
+                 listen.port_tls"
+            )));
+        }
         let has_tls_material = domain.cert_path.is_some()
             || domain.key_path.is_some()
             || domain.client_ca_path.is_some();
@@ -172,6 +180,14 @@ fn validate_config(cfg: &Config) -> Result<()> {
                     "Domain '{host}': cert_path and key_path must both be set or both omitted"
                 )));
             }
+        }
+
+        if domain.https_redirection.is_some()
+            && (domain.cert_path.is_none() || domain.key_path.is_none())
+        {
+            return Err(ProxyError::Config(format!(
+                "Domain '{host}': https_redirection requires cert_path and key_path"
+            )));
         }
 
         if let Some(ca) = &domain.client_ca_path {

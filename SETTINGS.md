@@ -321,12 +321,13 @@ enforce).
 | Key         | Type   | Default | Description                                                                                      |
 |-------------|--------|---------|--------------------------------------------------------------------------------------------------|
 | `host`      | string | `null`  | Domain pattern for host matching: exact (`api.example.com`) or single-level wildcard (`*.example.com`). Normalized at load: lowercased, trailing `.` stripped. **Omit for a catch-all** that matches any host; its cert (if any) is the TLS default certificate. |
-| `cert_path` | string | `null`  | Path to the TLS certificate PEM file. Omit for plain-HTTP-only domains. Requires a [`[tls]`](#tls) section: without it no listener terminates TLS and the config is rejected at startup. |
+| `cert_path` | string | `null`  | Path to the TLS certificate PEM file. Omit for plain-HTTP-only domains. Requires `listen.port_tls`: without it no listener terminates TLS and the config is rejected at startup. |
 | `key_path`  | string | `null`  | Path to the TLS private key PEM file. Must be set together with `cert_path` or both omitted.     |
 | `client_ca_path` | string | `null` | Path to a client-CA bundle PEM file. When set, this domain requires **mutual TLS**: clients must present a certificate signed by one of these CAs. Requires `cert_path`/`key_path`. Hot-reloadable per-domain. |
 | `headers`   | table  | —       | Domain-level header manipulation. Merged between global and route-level headers.                 |
 | `security`  | table  | —       | Per-domain security overrides (`ip_filter`, `rate_limit`, `headers`). See [`[domains.security]`](#domainssecurity) below. |
 | `fingerprinting` | bool | `null` (inherit) | Domain-level fingerprint-header **injection** gate. Resolved per route as `route.or(domain).unwrap_or(true)`. Controls header injection only; capture is the static global `[fingerprint]`. |
+| `https_redirection` | bool | `true` when the domain has `cert_path`/`key_path` **and** both `listen.port` and `listen.port_tls` are in effect; otherwise no redirect | On plaintext HTTP, respond `301` to the same host, path, and query on HTTPS. The written flag is not baked from the file's ports at load: default `true` and the "both ports" check use the **running** listen (a reload that changes `port`/`port_tls` is ignored until restart). Setting the key without `cert_path`/`key_path` is a validation error. Setting it when only one port is in effect is a validation error. A domain without certs and without this key does not redirect. `Location` uses the running `port_tls` (omitted when it is `443`). Empty `Host` → `400` with no `Location`. Runs after the IP filter and before 421/mTLS; does not consume rate-limit tokens. |
 | `routes`    | array  | `[]`    | Path-based routing rules scoped to this domain. Same fields as the former `[[routes]]` entries.  |
 
 <table>
