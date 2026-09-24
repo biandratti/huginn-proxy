@@ -52,8 +52,8 @@ services:
       - HUGINN_EBPF_CAPTURE_STALE_TICKS=3
       - HUGINN_EBPF_RECONNECT_POLL_SECS=5
     volumes:
-      #- ./config/compose.toml:/config/compose.toml:ro
-      - ./config/compose.yaml:/config/compose.yaml:ro
+      #- ./config/compose.release.toml:/config/compose.toml:ro
+      - ./config/compose.release.yaml:/config/compose.yaml:ro
       - ./certs:/config/certs:ro
       - bpffs:/sys/fs/bpf
     ports:

@@ -14,10 +14,14 @@ services:
       - ./config/compose.yaml:/config/compose.yaml:ro
       - ./certs:/config/certs:ro
     ports:
-      - "0.0.0.0:7000:7000"   # Proxy server IPv4
-      - "[::]:7000:7000"       # Proxy server IPv6
-      - "0.0.0.0:9090:9090"   # Observability server IPv4 (Metrics + Health checks)
-      - "[::]:9090:9090"       # Observability server IPv6
+      - "0.0.0.0:80:80"
+      - "[::]:80:80"
+      - "0.0.0.0:443:443"
+      - "[::]:443:443"
+      - "0.0.0.0:9090:9090"
+      - "[::]:9090:9090"
+    cap_add:
+      - CAP_NET_BIND_SERVICE
     ulimits:
       nofile:
         soft: 65536

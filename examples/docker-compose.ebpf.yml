@@ -16,7 +16,7 @@ services:
       - HUGINN_EBPF_INTERFACE=eth0
       - HUGINN_EBPF_DST_IP_V4=0.0.0.0
       - "HUGINN_EBPF_DST_IP_V6=::"
-      - HUGINN_EBPF_DST_PORTS=7000
+      - HUGINN_EBPF_DST_PORTS=443
       - HUGINN_EBPF_PIN_PATH=/sys/fs/bpf/huginn
       - HUGINN_EBPF_LINK_PIN_PATH=/sys/fs/bpf/huginn/capture_link
       - HUGINN_EBPF_SYN_MAP_MAX_ENTRIES=8192
@@ -59,14 +59,17 @@ services:
       - ./certs:/config/certs:ro
       - bpffs:/sys/fs/bpf
     ports:
-      - "0.0.0.0:7000:7000"
-      - "[::]:7000:7000"
+      - "0.0.0.0:80:80"
+      - "[::]:80:80"
+      - "0.0.0.0:443:443"
+      - "[::]:443:443"
       - "0.0.0.0:9090:9090"
       - "[::]:9090:9090"
       - "0.0.0.0:9091:9091"
       - "[::]:9091:9091"
     cap_add:
       - CAP_BPF
+      - CAP_NET_BIND_SERVICE
     ulimits:
       nofile:
         soft: 65536

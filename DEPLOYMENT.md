@@ -37,7 +37,7 @@ the probe does not depend on utilities the runtime will never ship. Kubernetes c
 
 Published image names and tags (`latest` / `vX.Y.Z`): [DEPLOYMENT-MATRIX.md](DEPLOYMENT-MATRIX.md). The three GHCR packages are separate repositories (`huginn-proxy`, `huginn-proxy-plain`, `huginn-proxy-ebpf-agent`); **do not** add `-ebpf-agent` as a suffix on the tag.
 
-Compose that **builds** from this repository (TLS, backends, plain vs eBPF) is documented in [`examples/README.md`](examples/README.md).
+Compose that **builds** from this repository publishes **80** (HTTP, `301` to HTTPS) and **443**, plus 9090/9091. The proxy image runs as UID **10001**, so those files add `CAP_NET_BIND_SERVICE`. TLS, backends, and plain vs eBPF are in [`examples/README.md`](examples/README.md). `docker-compose.release-*` stay on **7000** and mount `examples/config/compose.release.yaml` (`listen.addrs`) until a GHCR image ships `listen.port` / `port_tls`.
 
 Pre-built images from GHCR (pin `latest` to a release tag in the compose file if you need reproducibility):
 

@@ -1,10 +1,9 @@
+# Frozen for GHCR :latest (listen.addrs + port 7000). Repo compose uses compose.toml (port 80 / port_tls 443).
 # Top-level scalar keys
 preserve_host = false
 
 [listen]
-port = 80
-port_tls = 443
-ipv6 = true
+addrs = ["0.0.0.0:7000", "[::]:7000"]
 # tcp_backlog = 4096
 
 [[backends]]
