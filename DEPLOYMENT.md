@@ -98,8 +98,8 @@ spec:
           value: "tc"                   # recommended; use xdp-native if driver XDP is available
         - name: HUGINN_EBPF_DST_IP_V4
           value: "0.0.0.0"
-        - name: HUGINN_EBPF_DST_PORT
-          value: "7000"
+        - name: HUGINN_EBPF_DST_PORTS
+          value: "7000"                 # one port, or "80,443" when both are proxied
         - name: HUGINN_EBPF_PIN_PATH
           value: "/sys/fs/bpf/huginn"
         - name: HUGINN_EBPF_METRICS_ADDR

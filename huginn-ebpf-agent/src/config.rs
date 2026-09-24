@@ -20,7 +20,7 @@ pub struct Config {
     pub interface: String,
     pub dst_ip_v4: Ipv4Addr,
     pub dst_ip_v6: Ipv6Addr,
-    pub dst_port: u16,
+    pub dst_ports: Vec<u16>,
     pub pin_path: String,
     pub link_pin_path: String,
     pub syn_map_max_entries: u32,
@@ -68,13 +68,9 @@ pub fn from_env(get_var: impl Fn(&str) -> Option<String>) -> Result<Config, Conf
         None => Ipv6Addr::UNSPECIFIED,
     };
 
-    let dst_port_str = get_var("HUGINN_EBPF_DST_PORT")
-        .ok_or(ConfigError::Missing { name: "HUGINN_EBPF_DST_PORT".to_string() })?;
-    let dst_port: u16 = dst_port_str.parse().map_err(|_| ConfigError::Invalid {
-        name: "HUGINN_EBPF_DST_PORT".to_string(),
-        value: dst_port_str.clone(),
-        reason: "must be a valid port number (1-65535)".to_string(),
-    })?;
+    let dst_ports_str = get_var("HUGINN_EBPF_DST_PORTS")
+        .ok_or(ConfigError::Missing { name: "HUGINN_EBPF_DST_PORTS".to_string() })?;
+    let dst_ports = parse_dst_ports(&dst_ports_str)?;
 
     let pin_path = get_var("HUGINN_EBPF_PIN_PATH").unwrap_or_else(|| DEFAULT_PIN_PATH.to_string());
 
@@ -130,7 +126,7 @@ pub fn from_env(get_var: impl Fn(&str) -> Option<String>) -> Result<Config, Conf
         interface,
         dst_ip_v4,
         dst_ip_v6,
-        dst_port,
+        dst_ports,
         pin_path,
         link_pin_path,
         syn_map_max_entries,
@@ -143,6 +139,42 @@ pub fn from_env(get_var: impl Fn(&str) -> Option<String>) -> Result<Config, Conf
         heartbeat_secs,
         health_format,
     })
+}
+
+fn parse_dst_ports(raw: &str) -> Result<Vec<u16>, ConfigError> {
+    const NAME: &str = "HUGINN_EBPF_DST_PORTS";
+    let parts: Vec<&str> = raw.split(',').map(str::trim).collect();
+    if parts.is_empty() || parts.len() > 2 || parts.iter().any(|part| part.is_empty()) {
+        return Err(ConfigError::Invalid {
+            name: NAME.to_string(),
+            value: raw.to_string(),
+            reason: "must be one or two comma-separated ports".to_string(),
+        });
+    }
+    let mut ports = Vec::with_capacity(parts.len());
+    for part in parts {
+        let port: u16 = part.parse().map_err(|_| ConfigError::Invalid {
+            name: NAME.to_string(),
+            value: raw.to_string(),
+            reason: "must be a port number in 1..=65535".to_string(),
+        })?;
+        if port == 0 {
+            return Err(ConfigError::Invalid {
+                name: NAME.to_string(),
+                value: raw.to_string(),
+                reason: "must be a port number in 1..=65535; 0 is not a filter".to_string(),
+            });
+        }
+        if ports.contains(&port) {
+            return Err(ConfigError::Invalid {
+                name: NAME.to_string(),
+                value: raw.to_string(),
+                reason: "ports must be distinct".to_string(),
+            });
+        }
+        ports.push(port);
+    }
+    Ok(ports)
 }
 
 fn parse_optional_u64(

@@ -21,7 +21,7 @@ fn env_of(pairs: Vec<(&'static str, &'static str)>) -> impl Fn(&str) -> Option<S
 const REQUIRED: &[(&str, &str)] = &[
     ("HUGINN_EBPF_INTERFACE", "eth0"),
     ("HUGINN_EBPF_DST_IP_V4", "10.0.0.1"),
-    ("HUGINN_EBPF_DST_PORT", "8443"),
+    ("HUGINN_EBPF_DST_PORTS", "8443"),
     ("HUGINN_EBPF_METRICS_ADDR", "0.0.0.0"),
     ("HUGINN_EBPF_METRICS_PORT", "9100"),
 ];
@@ -46,7 +46,7 @@ fn from_env_minimal_applies_defaults() {
     let cfg = parse_ok(required_with(vec![]));
     assert_eq!(cfg.interface, "eth0");
     assert_eq!(cfg.dst_ip_v4, Ipv4Addr::new(10, 0, 0, 1));
-    assert_eq!(cfg.dst_port, 8443);
+    assert_eq!(cfg.dst_ports, vec![8443]);
     assert_eq!(cfg.metrics_listen_addr, "0.0.0.0");
     assert_eq!(cfg.metrics_port, 9100);
     assert_eq!(cfg.dst_ip_v6, Ipv6Addr::UNSPECIFIED);
@@ -91,6 +91,15 @@ fn from_env_full_overrides_every_optional() {
 }
 
 #[test]
+fn dst_ports_accepts_one_or_two_ports() {
+    let one = parse_ok(required_with(vec![("HUGINN_EBPF_DST_PORTS", "443")]));
+    assert_eq!(one.dst_ports, vec![443]);
+
+    let two = parse_ok(required_with(vec![("HUGINN_EBPF_DST_PORTS", " 80, 443 ")]));
+    assert_eq!(two.dst_ports, vec![80, 443]);
+}
+
+#[test]
 fn log_level_accepts_all_levels_case_insensitively() {
     for (raw, expected) in [
         (" off ", EbpfLogLevel::Off),
@@ -110,7 +119,7 @@ fn from_env_missing_required_vars_are_reported() {
     for missing in [
         "HUGINN_EBPF_INTERFACE",
         "HUGINN_EBPF_DST_IP_V4",
-        "HUGINN_EBPF_DST_PORT",
+        "HUGINN_EBPF_DST_PORTS",
         "HUGINN_EBPF_METRICS_ADDR",
         "HUGINN_EBPF_METRICS_PORT",
     ] {
@@ -132,7 +141,13 @@ fn from_env_invalid_values_are_reported() {
     for (name, bad) in [
         ("HUGINN_EBPF_DST_IP_V4", "not-an-ip"),
         ("HUGINN_EBPF_DST_IP_V6", "::gg::"),
-        ("HUGINN_EBPF_DST_PORT", "70000"),
+        ("HUGINN_EBPF_DST_PORTS", "70000"),
+        ("HUGINN_EBPF_DST_PORTS", "0"),
+        ("HUGINN_EBPF_DST_PORTS", "80,0"),
+        ("HUGINN_EBPF_DST_PORTS", "80,80"),
+        ("HUGINN_EBPF_DST_PORTS", "80,443,22"),
+        ("HUGINN_EBPF_DST_PORTS", ""),
+        ("HUGINN_EBPF_DST_PORTS", "443,"),
         ("HUGINN_EBPF_METRICS_PORT", "-1"),
         ("HUGINN_EBPF_SYN_MAP_MAX_ENTRIES", "lots"),
         ("HUGINN_EBPF_LOG_LEVEL", "verbose"),

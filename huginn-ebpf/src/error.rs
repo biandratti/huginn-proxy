@@ -64,4 +64,9 @@ pub enum EbpfError {
 
     #[error("failed to draw a random SYN rate-limit hash seed: {0}")]
     RateLimitSeed(#[from] getrandom::Error),
+
+    #[error(
+        "destination port list must be one or two distinct ports in 1..=65535; got {count} entries"
+    )]
+    InvalidDestPorts { count: usize },
 }

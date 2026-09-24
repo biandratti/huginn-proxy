@@ -19,7 +19,7 @@ fn env_of(pairs: Vec<(&'static str, &'static str)>) -> impl Fn(&str) -> Option<S
 const REQUIRED: &[(&str, &str)] = &[
     ("HUGINN_EBPF_INTERFACE", "eth0"),
     ("HUGINN_EBPF_DST_IP_V4", "10.0.0.1"),
-    ("HUGINN_EBPF_DST_PORT", "8443"),
+    ("HUGINN_EBPF_DST_PORTS", "8443"),
     ("HUGINN_EBPF_METRICS_ADDR", "0.0.0.0"),
     ("HUGINN_EBPF_METRICS_PORT", "9100"),
 ];
