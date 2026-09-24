@@ -2,7 +2,8 @@
 preserve_host = false
 
 [listen]
-addrs = ["0.0.0.0:7000", "[::]:7000"]
+port_tls = 7000
+ipv6 = true
 # tcp_backlog = 4096
 
 [[backends]]

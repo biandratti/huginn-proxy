@@ -4,16 +4,9 @@ use huginn_proxy_lib::config::{
 };
 use std::io::Write;
 
-fn create_test_config(listen: &str, backends: Vec<Backend>) -> Config {
+fn create_test_config(listen_port: u16, backends: Vec<Backend>) -> Config {
     Config {
-        listen: ListenConfig {
-            addrs: vec![
-                listen
-                    .parse()
-                    .unwrap_or_else(|_| panic!("Invalid listen address: {listen}")),
-            ],
-            ..Default::default()
-        },
+        listen: ListenConfig::localhost_http(listen_port),
         backends,
         domains: vec![],
         preserve_host: false,
@@ -52,7 +45,7 @@ async fn test_config_loads_valid_file() -> Result<(), Box<dyn std::error::Error 
     writeln!(
         file,
         r#"
-listen = {{ addrs = ["127.0.0.1:0"] }}
+listen = {{ port = 8080, address_v4 = ["127.0.0.1"] }}
 backends = [
     {{ address = "localhost:9000" }}
 ]
@@ -60,7 +53,7 @@ backends = [
     )?;
 
     let config = load_from_path(file.path())?;
-    assert_eq!(config.listen.addrs[0].to_string(), "127.0.0.1:0");
+    assert_eq!(config.listen.port, Some(8080));
     assert_eq!(config.backends.len(), 1);
     assert_eq!(config.backends[0].address, "localhost:9000");
 
@@ -73,7 +66,7 @@ async fn test_config_with_routes() -> Result<(), Box<dyn std::error::Error + Sen
     writeln!(
         file,
         r#"
-listen = {{ addrs = ["127.0.0.1:0"] }}
+listen = {{ port = 8080, address_v4 = ["127.0.0.1"] }}
 backends = [
     {{ address = "backend-a:9000" }},
     {{ address = "backend-b:9000" }}
@@ -102,7 +95,7 @@ routes = [
 
 #[test]
 fn test_config_defaults() {
-    let config = create_test_config("127.0.0.1:0", vec![]);
+    let config = create_test_config(8080, vec![]);
 
     assert!(config.fingerprint.tls_enabled);
     assert!(config.fingerprint.http_enabled);
@@ -115,7 +108,7 @@ fn test_config_defaults() {
 
 #[test]
 fn test_config_with_fingerprinting() {
-    let mut config = create_test_config("127.0.0.1:0", vec![]);
+    let mut config = create_test_config(8080, vec![]);
     config.fingerprint.tls_enabled = true;
     config.fingerprint.http_enabled = true;
 
@@ -125,7 +118,7 @@ fn test_config_with_fingerprinting() {
 
 #[test]
 fn test_config_with_custom_timeouts() {
-    let mut config = create_test_config("127.0.0.1:0", vec![]);
+    let mut config = create_test_config(8080, vec![]);
     config.timeout.upstream_connect_ms = Some(10000);
     config.timeout.proxy_idle_ms = 120000;
     config.timeout.shutdown_secs = 60;
@@ -140,13 +133,13 @@ fn test_config_security_defaults() {
     let security = SecurityConfig::default();
     assert_eq!(security.max_connections, 512);
 
-    let config = create_test_config("127.0.0.1:0", vec![]);
+    let config = create_test_config(8080, vec![]);
     assert_eq!(config.security.max_connections, 512);
 }
 
 #[test]
 fn test_config_with_custom_max_connections() {
-    let mut config = create_test_config("127.0.0.1:0", vec![]);
+    let mut config = create_test_config(8080, vec![]);
     config.security.max_connections = 1000;
 
     assert_eq!(config.security.max_connections, 1000);
@@ -159,7 +152,7 @@ async fn test_config_loads_security_settings()
     writeln!(
         file,
         r#"
-listen = {{ addrs = ["127.0.0.1:0"] }}
+listen = {{ port = 8080, address_v4 = ["127.0.0.1"] }}
 backends = [
     {{ address = "localhost:9000" }}
 ]
@@ -181,7 +174,7 @@ fn test_config_keep_alive_defaults() {
     assert!(keep_alive.enabled);
     assert_eq!(keep_alive.upstream_idle_timeout, 60);
 
-    let config = create_test_config("127.0.0.1:0", vec![]);
+    let config = create_test_config(8080, vec![]);
     assert!(config.timeout.keep_alive.enabled);
     assert_eq!(config.timeout.keep_alive.upstream_idle_timeout, 60);
 }
@@ -193,7 +186,7 @@ async fn test_config_loads_keep_alive_settings()
     writeln!(
         file,
         r#"
-listen = {{ addrs = ["127.0.0.1:0"] }}
+listen = {{ port = 8080, address_v4 = ["127.0.0.1"] }}
 backends = [
     {{ address = "localhost:9000" }}
 ]

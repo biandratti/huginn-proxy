@@ -6,7 +6,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 type TestResult = Result<(), Box<dyn std::error::Error + Send + Sync>>;
 
 const CONFIG: &str = r#"
-listen = { addrs = ["127.0.0.1:0"] }
+listen = { port = 8080, address_v4 = ["127.0.0.1"] }
 backends = [{ address = "backend:9000" }]
 headers = { request = { add = [
   { name = "Authorization", value = "cli-secret" }
@@ -15,7 +15,7 @@ headers = { request = { add = [
 
 // Same header added twice → a duplicate-header warning (non-fatal).
 const CONFIG_WITH_WARNING: &str = r#"
-listen = { addrs = ["127.0.0.1:0"] }
+listen = { port = 8080, address_v4 = ["127.0.0.1"] }
 backends = [{ address = "backend:9000" }]
 headers = { request = { add = [
   { name = "X-Foo", value = "a" },
@@ -82,7 +82,7 @@ fn validate_strict_fails_on_warnings() -> TestResult {
 fn validate_strict_fails_on_proxy_protocol_trust_gap() -> TestResult {
     // proxy_protocol=require with no trusted_proxies drops every connection; surfaced in --validate.
     let toml = r#"
-listen = { addrs = ["127.0.0.1:0"], proxy_protocol = { mode = "require" } }
+listen = { port = 8080, address_v4 = ["127.0.0.1"], proxy_protocol = { mode = "require" } }
 backends = [{ address = "backend:9000" }]
 "#;
     let path = temp_config("validate-pp-gap", toml)?;
@@ -119,7 +119,8 @@ fn print_effective_config_implies_validation_and_outputs_redacted_json() -> Test
     let stdout = String::from_utf8(output.stdout)?;
     let value: serde_json::Value = serde_json::from_str(&stdout)?;
 
-    assert_eq!(value["static"]["listen"]["addrs"][0], "127.0.0.1:0");
+    assert_eq!(value["static"]["listen"]["port"], 8080);
+    assert_eq!(value["static"]["listen"]["address_v4"][0], "127.0.0.1");
     assert_eq!(value["dynamic"]["headers"]["request"]["add"][0]["value"], "<redacted>");
     assert!(!stdout.contains("cli-secret"));
     assert!(!stdout.contains("Config OK"));

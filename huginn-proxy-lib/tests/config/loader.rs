@@ -8,7 +8,7 @@ use super::tmp_path;
 fn loads_minimal_config() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let path = tmp_path("minimal");
     let toml = r#"
-listen = { addrs = ["127.0.0.1:0"] }
+listen = { port = 8080, address_v4 = ["127.0.0.1"] }
 backends = [
   { address = "localhost:9000" }
 ]
@@ -16,7 +16,8 @@ backends = [
     fs::write(&path, toml)?;
 
     let cfg = load_from_path(&path)?;
-    assert_eq!(cfg.listen.addrs[0].to_string(), "127.0.0.1:0");
+    assert_eq!(cfg.listen.port, Some(8080));
+    assert_eq!(cfg.listen.address_v4, Some(vec!["127.0.0.1".to_string()]));
     assert_eq!(cfg.backends.len(), 1);
     assert!(cfg.domains.is_empty());
     assert!(cfg.tls.is_none());
@@ -34,7 +35,7 @@ fn loads_domains_and_tls() -> Result<(), Box<dyn std::error::Error + Send + Sync
 
     let toml = format!(
         r#"
-listen = {{ addrs = ["127.0.0.1:0"] }}
+listen = {{ port = 8080, address_v4 = ["127.0.0.1"] }}
 backends = [
   {{ address = "backend-a:9000" }},
   {{ address = "backend-b:9000" }}
@@ -85,7 +86,7 @@ fn loads_domain_client_ca_path() -> Result<(), Box<dyn std::error::Error + Send 
 
     let toml = format!(
         r#"
-listen = {{ addrs = ["127.0.0.1:0"] }}
+listen = {{ port = 8080, address_v4 = ["127.0.0.1"] }}
 backends = [{{ address = "backend:9000" }}]
 
 [tls]
@@ -125,7 +126,7 @@ fn rejects_client_ca_without_cert() -> Result<(), Box<dyn std::error::Error + Se
 
     let toml = format!(
         r#"
-listen = {{ addrs = ["127.0.0.1:0"] }}
+listen = {{ port = 8080, address_v4 = ["127.0.0.1"] }}
 backends = [{{ address = "backend:9000" }}]
 
 [tls]
@@ -159,7 +160,7 @@ fn rejects_missing_client_ca_file() -> Result<(), Box<dyn std::error::Error + Se
 
     let toml = format!(
         r#"
-listen = {{ addrs = ["127.0.0.1:0"] }}
+listen = {{ port = 8080, address_v4 = ["127.0.0.1"] }}
 backends = [{{ address = "backend:9000" }}]
 
 [tls]
@@ -191,7 +192,7 @@ client_ca_path = "/nonexistent/huginn-test/missing-ca.crt"
 fn normalizes_domain_host_to_lowercase() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let path = tmp_path("host-case");
     let toml = r#"
-listen = { addrs = ["127.0.0.1:0"] }
+listen = { port = 8080, address_v4 = ["127.0.0.1"] }
 backends = [{ address = "b:9000" }]
 
 [[domains]]
@@ -208,7 +209,7 @@ host = "API.Example.COM"
 fn normalizes_domain_host_trailing_dot() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let path = tmp_path("host-trailing-dot");
     let toml = r#"
-listen = { addrs = ["127.0.0.1:0"] }
+listen = { port = 8080, address_v4 = ["127.0.0.1"] }
 backends = [{ address = "b:9000" }]
 
 [[domains]]
@@ -226,7 +227,7 @@ fn rejects_duplicate_domain_host_with_and_without_trailing_dot()
 -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let path = tmp_path("dup-host-trailing-dot");
     let toml = r#"
-listen = { addrs = ["127.0.0.1:0"] }
+listen = { port = 8080, address_v4 = ["127.0.0.1"] }
 backends = [{ address = "b:9000" }]
 
 [[domains]]
@@ -249,7 +250,7 @@ host = "api.example.com"
 fn rejects_bare_dot_host() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let path = tmp_path("bare-dot-host");
     let toml = r#"
-listen = { addrs = ["127.0.0.1:0"] }
+listen = { port = 8080, address_v4 = ["127.0.0.1"] }
 backends = [{ address = "b:9000" }]
 
 [[domains]]
@@ -270,7 +271,7 @@ fn rejects_duplicate_domain_host() -> Result<(), Box<dyn std::error::Error + Sen
     let path = tmp_path("dup-host");
     // Different case → still a duplicate after normalization.
     let toml = r#"
-listen = { addrs = ["127.0.0.1:0"] }
+listen = { port = 8080, address_v4 = ["127.0.0.1"] }
 backends = [{ address = "b:9000" }]
 
 [[domains]]
@@ -293,7 +294,7 @@ host = "api.example.com"
 fn rejects_multiple_catch_all_domains() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let path = tmp_path("multi-catchall");
     let toml = r#"
-listen = { addrs = ["127.0.0.1:0"] }
+listen = { port = 8080, address_v4 = ["127.0.0.1"] }
 backends = [{ address = "b:9000" }]
 
 [[domains]]
@@ -318,7 +319,7 @@ fn loads_per_domain_security_override() -> Result<(), Box<dyn std::error::Error 
 
     let path = tmp_path("domain-security");
     let toml = r#"
-listen = { addrs = ["127.0.0.1:0"] }
+listen = { port = 8080, address_v4 = ["127.0.0.1"] }
 backends = [{ address = "backend:9000" }]
 
 [security.ip_filter]
@@ -387,7 +388,7 @@ fn loads_per_route_security_override() -> Result<(), Box<dyn std::error::Error +
 
     let path = tmp_path("route-security");
     let toml = r#"
-listen = { addrs = ["127.0.0.1:0"] }
+listen = { port = 8080, address_v4 = ["127.0.0.1"] }
 backends = [{ address = "backend:9000" }]
 
 [[domains]]
@@ -467,7 +468,7 @@ fn rejects_domain_certs_without_a_tls_section()
     let path = tmp_path("no-tls");
     let toml = format!(
         r#"
-listen = {{ addrs = ["127.0.0.1:0"] }}
+listen = {{ port = 8080, address_v4 = ["127.0.0.1"] }}
 backends = [{{ address = "b:9000" }}]
 
 [[domains]]
@@ -497,7 +498,7 @@ fn accepts_a_plain_domain_without_a_tls_section()
 -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let path = tmp_path("plain-domain");
     let toml = r#"
-listen = { addrs = ["127.0.0.1:0"] }
+listen = { port = 8080, address_v4 = ["127.0.0.1"] }
 backends = [{ address = "b:9000" }]
 
 [[domains]]
@@ -519,7 +520,7 @@ fn rejects_invalid_health_check_timeout_greater_than_interval()
 -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let path = tmp_path("bad-hc");
     let toml = r#"
-listen = { addrs = ["127.0.0.1:0"] }
+listen = { port = 8080, address_v4 = ["127.0.0.1"] }
 backends = [
   { address = "localhost:9000", health_check = { interval_secs = 1, timeout_secs = 5 } }
 ]

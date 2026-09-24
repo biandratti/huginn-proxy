@@ -10,7 +10,7 @@ type TestResult = Result<(), Box<dyn std::error::Error + Send + Sync>>;
 fn warns_on_enabled_rate_limit_with_zero_window() -> TestResult {
     let path = tmp_path("rl-zero-window");
     let toml = r#"
-listen = { addrs = ["127.0.0.1:0"] }
+listen = { port = 8080, address_v4 = ["127.0.0.1"] }
 backends = [{ address = "backend:9000" }]
 
 [security.rate_limit]
@@ -33,7 +33,7 @@ window_seconds = 0
 fn warns_per_scope_for_zero_window() -> TestResult {
     let path = tmp_path("rl-zero-window-route");
     let toml = r#"
-listen = { addrs = ["127.0.0.1:0"] }
+listen = { port = 8080, address_v4 = ["127.0.0.1"] }
 backends = [{ address = "backend:9000" }]
 
 [[domains]]
@@ -62,7 +62,7 @@ window_seconds = 0
 fn warns_when_limit_by_header_without_header_name() -> TestResult {
     let path = tmp_path("rl-header-missing");
     let toml = r#"
-listen = { addrs = ["127.0.0.1:0"] }
+listen = { port = 8080, address_v4 = ["127.0.0.1"] }
 backends = [{ address = "backend:9000" }]
 
 [security.rate_limit]
@@ -85,7 +85,7 @@ limit_by = "header"
 fn silent_when_limit_by_header_has_name() -> TestResult {
     let path = tmp_path("rl-header-ok");
     let toml = r#"
-listen = { addrs = ["127.0.0.1:0"] }
+listen = { port = 8080, address_v4 = ["127.0.0.1"] }
 backends = [{ address = "backend:9000" }]
 
 [security.rate_limit]
@@ -111,7 +111,7 @@ fn silent_when_disabled_or_positive_window() -> TestResult {
     let path = tmp_path("rl-ok");
     // Disabled block with a zero window (inert), and an enabled block with a valid window.
     let toml = r#"
-listen = { addrs = ["127.0.0.1:0"] }
+listen = { port = 8080, address_v4 = ["127.0.0.1"] }
 backends = [{ address = "backend:9000" }]
 
 [security.rate_limit]

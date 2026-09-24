@@ -2,7 +2,8 @@
 # Generate certs first (see examples/README.md § "Generate TLS Certificates").
 
 [listen]
-addrs = ["127.0.0.1:7000"]
+port_tls = 7000
+address_v4 = ["127.0.0.1"]
 
 [[domains]]
 host = "localhost"

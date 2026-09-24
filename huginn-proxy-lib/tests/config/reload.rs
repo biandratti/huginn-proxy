@@ -7,7 +7,7 @@ use super::tmp_path;
 type TestResult = Result<(), Box<dyn std::error::Error + Send + Sync>>;
 
 const BASE: &str = r#"
-listen = { addrs = ["127.0.0.1:0"] }
+listen = { port = 8080, address_v4 = ["127.0.0.1"] }
 backends = [
   { address = "localhost:9000" }
 ]

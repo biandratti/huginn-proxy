@@ -109,7 +109,7 @@ impl Config {
 
     /// Decompose the deserialized config into its static and dynamic parts.
     ///
-    /// - `StaticConfig` holds process-level settings (listen addrs, TLS stack,
+    /// - `StaticConfig` holds process-level settings (listen ports, TLS stack,
     ///   logging, timeouts, `max_connections`). Changing these requires a restart.
     /// - `DynamicConfig` holds hot-reloadable settings (domains, backends, headers,
     ///   security policy). Wrap the returned value in `ArcSwap` to support

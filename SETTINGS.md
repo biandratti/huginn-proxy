@@ -83,7 +83,11 @@ Network interfaces and socket options. **Static** — requires restart to change
 
 | Key                                 | Type             | Default | Description                                                                                                                                                |
 |-------------------------------------|------------------|---------|--------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `addrs`                             | array of strings | —       | One or more `host:port` addresses to bind. IPv6 addresses must be wrapped in brackets.                                                                         |
+| `port`                              | integer          | —       | Plain HTTP listen port. Omit to skip HTTP sockets. At least one of `port` or `port_tls` is required; they must not be equal.                                |
+| `port_tls`                          | integer          | —       | HTTPS listen port. Omit to skip TLS sockets.                                                                                                                |
+| `ipv6`                              | bool             | `false` | Also bind IPv6 `::` when `address_v6` is omitted. IPv4 `0.0.0.0` is always bound unless `address_v4` lists specific addresses.                              |
+| `address_v4`                        | array of strings | `0.0.0.0` | IPv4 bind addresses. Must not be empty. Must not mix `0.0.0.0` with other addresses.                                                                      |
+| `address_v6`                        | array of strings | —       | IPv6 bind addresses. Used instead of the `ipv6` flag when set. Must not be empty. Must not mix `::` with other addresses. Bare (`::1`) and bracketed (`[::1]`) forms are accepted. |
 | `tcp_backlog`                       | integer          | `4096`  | Kernel `listen(2)` backlog per socket. Increase under heavy connection bursts.                                                                                 |
 | `proxy_protocol.mode`               | string           | `off`   | PROXY protocol handling (v1 and v2): `off`, `optional`, or `require`. See note below.                                                                          |
 | `proxy_protocol.header_timeout_ms`  | integer          | `100`   | Milliseconds to wait for a PROXY header from a trusted peer (covers detection + full read). Only relevant when `proxy_protocol.mode` is `optional`/`require`. `<= 0` falls back to an internal 1 s timeout (not recommended). |
@@ -125,7 +129,9 @@ Network interfaces and socket options. **Static** — requires restart to change
 
 ```toml
 [listen]
-addrs = ["0.0.0.0:7000", "[::]:7000"]
+port = 80
+port_tls = 443
+ipv6 = true
 # tcp_backlog = 4096
 
 [listen.proxy_protocol]
@@ -138,9 +144,9 @@ addrs = ["0.0.0.0:7000", "[::]:7000"]
 
 ```yaml
 listen:
-  addrs:
-    - "0.0.0.0:7000"
-    - "[::]:7000"
+  port: 80
+  port_tls: 443
+  ipv6: true
   # tcp_backlog: 4096
   proxy_protocol:
     # mode: off  # off | optional | require
@@ -1683,7 +1689,7 @@ security:
 preserve_host = false
 
 [listen]
-addrs = ["0.0.0.0:8080"]
+port = 8080
 
 [[backends]]
 address = "localhost:3000"
@@ -1704,8 +1710,7 @@ backend = "localhost:3000"
 preserve_host: false
 
 listen:
-  addrs:
-    - "0.0.0.0:8080"
+  port: 8080
 
 backends:
   - address: "localhost:3000"

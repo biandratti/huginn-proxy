@@ -129,9 +129,9 @@ pub async fn run(
     let backlog = static_cfg.listen.tcp_backlog;
     let listeners: Vec<(SocketAddr, TcpListener)> = static_cfg
         .listen
-        .addrs
-        .iter()
-        .map(|&addr| {
+        .sockets()?
+        .into_iter()
+        .map(|addr| {
             bind_listener(addr, backlog)
                 .map(|l| (addr, l))
                 .map_err(crate::error::ProxyError::Io)

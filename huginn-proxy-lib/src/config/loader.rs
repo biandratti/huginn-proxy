@@ -78,6 +78,7 @@ fn validate_unique_hosts(cfg: &Config) -> Result<()> {
 }
 
 fn validate_config(cfg: &Config) -> Result<()> {
+    cfg.listen.sockets()?;
     validate_unique_hosts(cfg)?;
 
     for domain in &cfg.domains {

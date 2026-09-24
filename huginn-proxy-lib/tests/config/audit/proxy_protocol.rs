@@ -18,7 +18,7 @@ fn warnings_for(name: &str, toml: &str) -> Result<usize, Box<dyn std::error::Err
 fn require_with_empty_trusted_proxies_warns() -> Result<(), Box<dyn std::error::Error + Send + Sync>>
 {
     let toml = r#"
-listen = { addrs = ["127.0.0.1:0"], proxy_protocol = { mode = "require" } }
+listen = { port = 8080, address_v4 = ["127.0.0.1"], proxy_protocol = { mode = "require" } }
 backends = [{ address = "backend:9000" }]
 "#;
     assert_eq!(warnings_for("pp-require-empty", toml)?, 1);
@@ -29,7 +29,7 @@ backends = [{ address = "backend:9000" }]
 fn optional_with_empty_trusted_proxies_warns()
 -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let toml = r#"
-listen = { addrs = ["127.0.0.1:0"], proxy_protocol = { mode = "optional" } }
+listen = { port = 8080, address_v4 = ["127.0.0.1"], proxy_protocol = { mode = "optional" } }
 backends = [{ address = "backend:9000" }]
 "#;
     assert_eq!(warnings_for("pp-optional-empty", toml)?, 1);
@@ -39,7 +39,7 @@ backends = [{ address = "backend:9000" }]
 #[test]
 fn off_mode_never_warns() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let toml = r#"
-listen = { addrs = ["127.0.0.1:0"], proxy_protocol = { mode = "off" } }
+listen = { port = 8080, address_v4 = ["127.0.0.1"], proxy_protocol = { mode = "off" } }
 backends = [{ address = "backend:9000" }]
 "#;
     assert_eq!(warnings_for("pp-off", toml)?, 0);
@@ -50,7 +50,7 @@ backends = [{ address = "backend:9000" }]
 fn require_with_trusted_proxies_does_not_warn()
 -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let toml = r#"
-listen = { addrs = ["127.0.0.1:0"], proxy_protocol = { mode = "require" } }
+listen = { port = 8080, address_v4 = ["127.0.0.1"], proxy_protocol = { mode = "require" } }
 backends = [{ address = "backend:9000" }]
 
 [security.trusted_proxies]
@@ -64,7 +64,7 @@ cidrs = ["10.0.0.0/8"]
 fn require_with_insecure_does_not_warn() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     // `insecure = true` trusts every peer, so `require` has a peer to trust: no gap.
     let toml = r#"
-listen = { addrs = ["127.0.0.1:0"], proxy_protocol = { mode = "require" } }
+listen = { port = 8080, address_v4 = ["127.0.0.1"], proxy_protocol = { mode = "require" } }
 backends = [{ address = "backend:9000" }]
 
 [security.trusted_proxies]

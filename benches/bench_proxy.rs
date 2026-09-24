@@ -101,7 +101,7 @@ impl BenchFixture {
         //    /bench/fp  → fingerprinting ON  (measures overhead)
         //    /bench/nofp → fingerprinting OFF (baseline)
         let config = Config {
-            listen: ListenConfig { addrs: vec![proxy_addr], ..Default::default() },
+            listen: ListenConfig::localhost_https(proxy_port),
             backends: vec![Backend {
                 address: backend_address.clone(),
                 http_version: None,

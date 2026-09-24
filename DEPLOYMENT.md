@@ -287,7 +287,7 @@ continues running with the old values.
 
 | TOML key | Description |
 |---|---|
-| `[listen]` | Bind addresses, backlog, `reuse_port` |
+| `[listen]` | HTTP/HTTPS ports, bind addresses, backlog |
 | `[tls]` | TLS termination (cert/key hot-reload is handled separately — see below) |
 | `[fingerprint]` | Fingerprinting feature flags (`tcp_enabled`, `tls_enabled`, `http_enabled`, `max_capture`) — static because they control eBPF program loading and capture buffers at startup |
 | `[logging]` | Log level and format |

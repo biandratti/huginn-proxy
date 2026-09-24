@@ -47,7 +47,7 @@ fn rejects_missing_extension() -> TestResult {
 #[test]
 fn toml_parser_parses_minimal_config() -> TestResult {
     let input = r#"
-        listen = { addrs = ["127.0.0.1:0"] }
+        listen = { port = 8080, address_v4 = ["127.0.0.1"] }
         backends = [{ address = "localhost:3000" }]
     "#;
     let cfg = TomlParser.parse(input)?;
@@ -69,8 +69,8 @@ fn toml_parser_returns_error_on_invalid_syntax() -> TestResult {
 fn yaml_parser_parses_minimal_config() -> TestResult {
     let input = r#"
 listen:
-  addrs:
-    - "127.0.0.1:0"
+  port: 8080
+  address_v4: ["127.0.0.1"]
 backends:
   - address: "localhost:3000"
 "#;
@@ -95,7 +95,8 @@ fn toml_parser_rejects_unknown_nested_field() -> TestResult {
         backends = [{ address = "localhost:3000" }]
 
         [listen]
-        addrs = ["127.0.0.1:0"]
+        port = 8080
+        address_v4 = ["127.0.0.1"]
 
         [listen.proxy_protocol]
         mode = "optional"
@@ -115,8 +116,8 @@ fn toml_parser_rejects_unknown_nested_field() -> TestResult {
 fn yaml_parser_rejects_misindented_field() -> TestResult {
     let input = r#"
 listen:
-  addrs:
-    - "127.0.0.1:0"
+  port: 8080
+  address_v4: ["127.0.0.1"]
   proxy_protocol:
     mode: optional
   header_timeout_ms: 100
@@ -136,7 +137,7 @@ backends:
 #[test]
 fn toml_and_yaml_produce_equivalent_backends() -> TestResult {
     let toml_input = r#"
-        listen = { addrs = ["0.0.0.0:7000"] }
+        listen = { port = 7000 }
         backends = [
           { address = "backend-a:9000", http_version = "http11" },
           { address = "backend-b:9000", health_check = { interval_secs = 7, timeout_secs = 2 } },
@@ -144,8 +145,7 @@ fn toml_and_yaml_produce_equivalent_backends() -> TestResult {
     "#;
     let yaml_input = r#"
 listen:
-  addrs:
-    - "0.0.0.0:7000"
+  port: 7000
 backends:
   - address: "backend-a:9000"
     http_version: http11
