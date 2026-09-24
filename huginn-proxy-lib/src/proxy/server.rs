@@ -1,7 +1,7 @@
 use crate::backend::BackendSelector;
 use crate::backend::health_check::{HealthCheckSupervisor, HealthRegistry};
 use crate::config::watcher::spawn_config_watcher;
-use crate::config::{EffectiveConfigSummary, EffectiveConfigView, StaticConfig};
+use crate::config::{EffectiveConfigSummary, EffectiveConfigView, ListenSocket, StaticConfig};
 use crate::error::Result;
 pub use crate::proxy::accept::SynProbe;
 use crate::proxy::accept::{AcceptContext, accept_loop};
@@ -22,7 +22,6 @@ use crate::tls::{build_server_crypto_map, tls_build_options};
 use arc_swap::ArcSwap;
 use hyper_util::rt::{TokioExecutor, TokioTimer};
 use hyper_util::server::conn::auto::Builder as ConnBuilder;
-use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::net::TcpListener;
 use tokio::runtime::Handle;
@@ -68,26 +67,31 @@ pub async fn run(
     // Collect background service handles for ordered cooperative shutdown.
     let mut services: Vec<ServiceHandle> = Vec::new();
 
-    // Build the per-SNI TLS config map from the current dynamic config.
-    // `None` when TLS is not configured (plain HTTP mode).
-    let server_crypto: Option<SharedServerCrypto> = if let Some(tls) = &static_cfg.tls {
-        let options = tls_build_options(tls);
-        let (map, report) =
-            build_server_crypto_map(&dynamic_cfg.load().domains, &options, None, &metrics).await?;
-        if report.is_partial() {
-            info!(
-                failed = report.failed.len(),
-                loaded = report.loaded.len(),
-                "Some domain certificates failed to load at startup; those domains will not serve TLS"
-            );
+    // Build the per-SNI TLS config map only for HTTPS sockets (`listen.port_tls`).
+    // `None` when there is no TLS listener.
+    let server_crypto: Option<SharedServerCrypto> = if static_cfg.listen.port_tls.is_some() {
+        if let Some(tls) = &static_cfg.tls {
+            let options = tls_build_options(tls);
+            let (map, report) =
+                build_server_crypto_map(&dynamic_cfg.load().domains, &options, None, &metrics)
+                    .await?;
+            if report.is_partial() {
+                info!(
+                    failed = report.failed.len(),
+                    loaded = report.loaded.len(),
+                    "Some domain certificates failed to load at startup; those domains will not serve TLS"
+                );
+            }
+            if !map.has_serviceable_config() && !dynamic_cfg.load().domains.is_empty() {
+                info!(
+                    "TLS is configured but no certificate is serviceable; all TLS handshakes will be \
+                     rejected until a cert is provided"
+                );
+            }
+            Some(Arc::new(ArcSwap::from_pointee(map)))
+        } else {
+            None
         }
-        if !map.has_serviceable_config() && !dynamic_cfg.load().domains.is_empty() {
-            info!(
-                "TLS is configured but no certificate is serviceable; all TLS handshakes will be \
-                 rejected until a cert is provided"
-            );
-        }
-        Some(Arc::new(ArcSwap::from_pointee(map)))
     } else {
         None
     };
@@ -127,19 +131,19 @@ pub async fn run(
     let reload_mutex = Arc::new(tokio::sync::Mutex::new(()));
 
     let backlog = static_cfg.listen.tcp_backlog;
-    let listeners: Vec<(SocketAddr, TcpListener)> = static_cfg
+    let listeners: Vec<(ListenSocket, TcpListener)> = static_cfg
         .listen
         .sockets()?
         .into_iter()
-        .map(|addr| {
-            bind_listener(addr, backlog)
-                .map(|l| (addr, l))
+        .map(|sock| {
+            bind_listener(sock.addr, backlog)
+                .map(|l| (sock, l))
                 .map_err(crate::error::ProxyError::Io)
         })
         .collect::<Result<_>>()?;
 
-    for (addr, _) in &listeners {
-        info!(?addr, "starting proxy");
+    for sock in listeners.iter().map(|(s, _)| s) {
+        info!(addr = ?sock.addr, tls = sock.tls_enabled, "starting proxy");
     }
 
     let ctx = Arc::new(AcceptContext {
@@ -165,9 +169,10 @@ pub async fn run(
     // Each new connection loads a fresh snapshot of DynamicConfig + rate-limiter so it
     // automatically picks up any hot-reloaded configuration.
     let mut accept_tasks = tokio::task::JoinSet::new();
-    for (addr, listener) in listeners {
+    for (sock, listener) in listeners {
         accept_tasks.spawn(accept_loop(
-            addr,
+            sock.addr,
+            sock.tls_enabled,
             listener,
             shutdown_rx.clone(),
             Arc::clone(&connection_manager),

@@ -198,7 +198,10 @@ impl ListenConfig {
     }
 
     /// Validate ports and addresses, then return the sockets to bind.
-    pub fn sockets(&self) -> Result<Vec<SocketAddr>> {
+    ///
+    /// `tls_enabled` is stamped here from the config field that produced the
+    /// socket (`port` vs `port_tls`), before `bind`.
+    pub fn sockets(&self) -> Result<Vec<ListenSocket>> {
         self.validate_ports()?;
         build_listen_sockets(
             &self.address_v4,
@@ -226,6 +229,13 @@ impl ListenConfig {
     }
 }
 
+/// One bind target: address plus whether this socket was created from `port_tls`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ListenSocket {
+    pub addr: SocketAddr,
+    pub tls_enabled: bool,
+}
+
 /// Validate and combine listen addresses with ports. Mirrors rust-rpxy `build_listen_sockets`.
 fn build_listen_sockets(
     listen_addresses_v4: &Option<Vec<String>>,
@@ -233,7 +243,7 @@ fn build_listen_sockets(
     listen_ipv6: bool,
     http_port: Option<u16>,
     https_port: Option<u16>,
-) -> Result<Vec<SocketAddr>> {
+) -> Result<Vec<ListenSocket>> {
     let mut listen_ips: Vec<IpAddr> = Vec::new();
 
     if let Some(addrs) = listen_addresses_v4 {
@@ -297,10 +307,10 @@ fn build_listen_sockets(
         .flat_map(|ip| {
             let mut v = Vec::new();
             if let Some(port) = http_port {
-                v.push(SocketAddr::new(*ip, port));
+                v.push(ListenSocket { addr: SocketAddr::new(*ip, port), tls_enabled: false });
             }
             if let Some(port) = https_port {
-                v.push(SocketAddr::new(*ip, port));
+                v.push(ListenSocket { addr: SocketAddr::new(*ip, port), tls_enabled: true });
             }
             v
         })

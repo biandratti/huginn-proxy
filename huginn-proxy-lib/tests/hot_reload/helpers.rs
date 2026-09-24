@@ -121,7 +121,7 @@ pub async fn spawn_proxy(
     debounce_secs: u32,
 ) -> Result<(SocketAddr, tokio::task::AbortHandle), Box<dyn std::error::Error + Send + Sync>> {
     let config = load_from_path(config_path)?;
-    let listen_addr = config.listen.sockets()?[0];
+    let listen_addr = config.listen.sockets()?[0].addr;
 
     let huginn_proxy_lib::config::ConfigParts { static_cfg, dynamic_cfg } = config.into_parts();
     let static_cfg = Arc::new(static_cfg);

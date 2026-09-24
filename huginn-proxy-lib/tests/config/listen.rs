@@ -1,7 +1,7 @@
 use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr};
 
 use huginn_proxy_lib::Result as ProxyResult;
-use huginn_proxy_lib::config::ListenConfig;
+use huginn_proxy_lib::config::{ListenConfig, ListenSocket};
 
 type TestResult = Result<(), Box<dyn std::error::Error + Send + Sync>>;
 
@@ -22,7 +22,11 @@ fn listen(
     }
 }
 
-fn assert_sockets_err(result: ProxyResult<Vec<SocketAddr>>, needle: &str) {
+fn sock(addr: SocketAddr, tls_enabled: bool) -> ListenSocket {
+    ListenSocket { addr, tls_enabled }
+}
+
+fn assert_sockets_err(result: ProxyResult<Vec<ListenSocket>>, needle: &str) {
     match result {
         Err(err) => assert!(err.to_string().contains(needle), "{err}"),
         Ok(sockets) => panic!("expected listen error containing {needle:?}, got {sockets:?}"),
@@ -32,14 +36,14 @@ fn assert_sockets_err(result: ProxyResult<Vec<SocketAddr>>, needle: &str) {
 #[test]
 fn http_only_defaults_to_unspecified_v4() -> TestResult {
     let sockets = listen(Some(80), None, false, None, None).sockets()?;
-    assert_eq!(sockets, vec![SocketAddr::from((Ipv4Addr::UNSPECIFIED, 80))]);
+    assert_eq!(sockets, vec![sock(SocketAddr::from((Ipv4Addr::UNSPECIFIED, 80)), false)]);
     Ok(())
 }
 
 #[test]
 fn https_only() -> TestResult {
     let sockets = listen(None, Some(443), false, None, None).sockets()?;
-    assert_eq!(sockets, vec![SocketAddr::from((Ipv4Addr::UNSPECIFIED, 443))]);
+    assert_eq!(sockets, vec![sock(SocketAddr::from((Ipv4Addr::UNSPECIFIED, 443)), true)]);
     Ok(())
 }
 
@@ -49,8 +53,8 @@ fn both_ports_on_each_ip() -> TestResult {
     assert_eq!(
         sockets,
         vec![
-            SocketAddr::from((Ipv4Addr::LOCALHOST, 80)),
-            SocketAddr::from((Ipv4Addr::LOCALHOST, 443)),
+            sock(SocketAddr::from((Ipv4Addr::LOCALHOST, 80)), false),
+            sock(SocketAddr::from((Ipv4Addr::LOCALHOST, 443)), true),
         ]
     );
     Ok(())
@@ -62,8 +66,8 @@ fn ipv6_flag_adds_unspecified_v6() -> TestResult {
     assert_eq!(
         sockets,
         vec![
-            SocketAddr::from((Ipv4Addr::UNSPECIFIED, 8080)),
-            SocketAddr::from((Ipv6Addr::UNSPECIFIED, 8080)),
+            sock(SocketAddr::from((Ipv4Addr::UNSPECIFIED, 8080)), false),
+            sock(SocketAddr::from((Ipv6Addr::UNSPECIFIED, 8080)), false),
         ]
     );
     Ok(())
@@ -96,7 +100,7 @@ fn wildcard_mixed_with_specific_v4_is_error() {
 fn bracketed_v6_is_accepted() -> TestResult {
     let sockets =
         listen(Some(80), None, false, Some(vec!["127.0.0.1"]), Some(vec!["[::1]"])).sockets()?;
-    assert!(sockets.contains(&SocketAddr::from((Ipv6Addr::LOCALHOST, 80))));
-    assert!(sockets.contains(&SocketAddr::from((Ipv4Addr::LOCALHOST, 80))));
+    assert!(sockets.contains(&sock(SocketAddr::from((Ipv6Addr::LOCALHOST, 80)), false)));
+    assert!(sockets.contains(&sock(SocketAddr::from((Ipv4Addr::LOCALHOST, 80)), false)));
     Ok(())
 }

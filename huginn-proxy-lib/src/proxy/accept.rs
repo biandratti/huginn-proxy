@@ -46,6 +46,7 @@ pub struct AcceptContext {
 
 pub async fn accept_loop(
     addr: SocketAddr,
+    tls_enabled: bool,
     listener: TcpListener,
     mut shutdown_rx: ShutdownWatch,
     connection_manager: Arc<ConnectionManager>,
@@ -140,7 +141,15 @@ pub async fn accept_loop(
                 ctx_task.backend_selector.clone(),
             );
 
-            if let Some(ref server_crypto) = ctx_task.server_crypto {
+            if tls_enabled {
+                // `tls_enabled` comes from `listen.port_tls`, not from whether a map exists.
+                // A missing map is a startup invariant (`port_tls` without `[tls]` is filled
+                // with defaults at load). Until that fill runs, drop rather than treat this
+                // socket as plaintext.
+                let Some(server_crypto) = ctx_task.server_crypto.as_ref() else {
+                    warn!(?peer, "HTTPS listener has no TLS configuration; dropping connection");
+                    return;
+                };
                 handle_tls_connection(
                     stream,
                     peer,

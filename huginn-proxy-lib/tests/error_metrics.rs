@@ -68,7 +68,7 @@ routes = [{{ prefix = "/api", backend = "127.0.0.1:1" }}]
     std::fs::write(tmp.path(), &toml)?;
 
     let config = load_from_path(tmp.path())?;
-    let listen_addr = config.listen.sockets()?[0];
+    let listen_addr = config.listen.sockets()?[0].addr;
     let huginn_proxy_lib::config::ConfigParts { static_cfg, dynamic_cfg } = config.into_parts();
 
     let _proxy = tokio::spawn(async move {

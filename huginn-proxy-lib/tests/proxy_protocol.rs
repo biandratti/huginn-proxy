@@ -122,7 +122,7 @@ async fn spawn_proxy(
     std::fs::write(tmp.path(), toml)?;
 
     let config = load_from_path(tmp.path())?;
-    let listen_addr = config.listen.sockets()?[0];
+    let listen_addr = config.listen.sockets()?[0].addr;
 
     let huginn_proxy_lib::config::ConfigParts { static_cfg, dynamic_cfg } = config.into_parts();
     let static_cfg = Arc::new(static_cfg);
