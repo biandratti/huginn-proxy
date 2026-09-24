@@ -1,7 +1,7 @@
 use super::host::{extract_request_host, https_redirect_location};
 use crate::backend::UpstreamGateway;
 use crate::config::{Backend, DEFAULT_DOMAIN_LABEL, Domain, KeepAliveConfig, RuntimeListen};
-use crate::fingerprinting::TcpObservation;
+use crate::fingerprinting::ConnectionFingerprints;
 use crate::fingerprinting::names;
 use crate::proxy::ClientPool;
 use crate::proxy::forwarding::forward;
@@ -22,7 +22,6 @@ use hyper::Response;
 use hyper::body::Incoming;
 use hyper::header::{HeaderName, LOCATION};
 use std::sync::Arc;
-use tokio::sync::watch;
 use tokio::time::Instant;
 use tracing::debug;
 
@@ -101,9 +100,7 @@ pub async fn handle_proxy_request(
     mut req: Request<Incoming>,
     domains: Arc<Vec<Domain>>,
     backends: Arc<Vec<Backend>>,
-    ja4_fingerprints: Option<crate::fingerprinting::Ja4Fingerprints>,
-    fingerprint_rx: Option<watch::Receiver<Option<huginn_net_http::AkamaiFingerprint>>>,
-    syn_fingerprint: Option<TcpObservation>,
+    fingerprints: ConnectionFingerprints,
     keep_alive: &KeepAliveConfig,
     security: &crate::proxy::SecurityContext,
     metrics: &Metrics,
@@ -315,7 +312,7 @@ pub async fn handle_proxy_request(
     // Extract and inject fingerprints first (fingerprints are extracted from TLS handshake/HTTP2 frames,
     // not from HTTP headers, so adding X-Forwarded-* headers won't affect fingerprint generation)
     if effective.fingerprinting {
-        if let Some(ref fingerprints) = ja4_fingerprints {
+        if let Some(ref fingerprints) = fingerprints.ja4 {
             if let Ok(hv) = hyper::header::HeaderValue::from_str(&fingerprints.ja4.full.to_string())
             {
                 req.headers_mut()
@@ -351,7 +348,7 @@ pub async fn handle_proxy_request(
                     .insert(HeaderName::from_static(names::TLS_JA4_RS1), hv);
             }
         }
-        if let Some(ref rx) = fingerprint_rx {
+        if let Some(ref rx) = fingerprints.akamai {
             if req.version() == Version::HTTP_2 {
                 let akamai = rx.borrow().clone();
                 debug!("Handler: akamai fingerprint: {:?}", akamai);
@@ -370,7 +367,7 @@ pub async fn handle_proxy_request(
                 metrics.record_http2_fingerprint_not_applicable();
             }
         }
-        match syn_fingerprint {
+        match fingerprints.tcp_syn {
             Some(ref syn_fp) => {
                 debug!("Handler: injecting {} header: {}", names::TCP_SYN, syn_fp);
                 if let Ok(hv) = hyper::header::HeaderValue::from_str(&syn_fp.to_string()) {

@@ -3,7 +3,7 @@ use std::sync::Arc;
 use super::timeout_helper::serve_with_timeout;
 use crate::backend::UpstreamGateway;
 use crate::fingerprinting::TcpObservation;
-use crate::fingerprinting::{CapturingStream, read_client_hello};
+use crate::fingerprinting::{CapturingStream, ConnectionFingerprints, read_client_hello};
 use crate::proxy::ClientPool;
 use crate::proxy::connection::{PrefixedStream, TlsConnectionGuard};
 use crate::proxy::handler::request::handle_proxy_request;
@@ -160,26 +160,29 @@ pub async fn handle_tls_connection(
         let tls_connection_guard =
             TlsConnectionGuard::new(Some(metrics.tls_connections_active.clone()));
 
-        let ja4_fingerprints = if config.fingerprint_config.tls_enabled {
-            ja4_fingerprints
-        } else {
-            None
+        let mut fingerprints = ConnectionFingerprints {
+            ja4: config
+                .fingerprint_config
+                .tls_enabled
+                .then_some(ja4_fingerprints)
+                .flatten(),
+            tcp_syn: config.syn_fingerprint.clone(),
+            ..Default::default()
         };
-
-        let syn_fingerprint = config.syn_fingerprint.clone();
 
         let _tls_guard = tls_connection_guard;
 
         if config.fingerprint_config.http_enabled {
-            let (fingerprint_tx, fingerprint_rx) =
+            let (akamai_tx, akamai_rx) =
                 tokio::sync::watch::channel(None::<huginn_net_http::AkamaiFingerprint>);
 
             let (capturing_stream, _fingerprint_extracted) = CapturingStream::new(
                 tls,
                 config.fingerprint_config.max_capture,
-                fingerprint_tx.clone(),
+                akamai_tx,
                 Arc::clone(&metrics),
             );
+            fingerprints.akamai = Some(akamai_rx);
 
             let backends = config.backends.clone();
             let domains = config.domains.clone();
@@ -193,9 +196,7 @@ pub async fn handle_tls_connection(
                 hyper::service::service_fn(move |req: hyper::Request<hyper::body::Incoming>| {
                     let domains = domains.clone();
                     let backends = backends.clone();
-                    let ja4_fingerprints = ja4_fingerprints.clone();
-                    let fingerprint_rx = fingerprint_rx.clone();
-                    let syn_fingerprint = syn_fingerprint.clone();
+                    let fingerprints = fingerprints.clone();
                     let metrics = metrics.clone();
                     let keep_alive = keep_alive.clone();
                     let security = security.clone();
@@ -209,9 +210,7 @@ pub async fn handle_tls_connection(
                             req,
                             domains,
                             backends,
-                            ja4_fingerprints,
-                            Some(fingerprint_rx),
-                            syn_fingerprint,
+                            fingerprints,
                             &keep_alive,
                             &security,
                             &metrics,
@@ -271,8 +270,7 @@ pub async fn handle_tls_connection(
                 hyper::service::service_fn(move |req: hyper::Request<hyper::body::Incoming>| {
                     let domains = domains.clone();
                     let backends = backends.clone();
-                    let ja4_fingerprints = ja4_fingerprints.clone();
-                    let syn_fingerprint = syn_fingerprint.clone();
+                    let fingerprints = fingerprints.clone();
                     let metrics = metrics.clone();
                     let keep_alive = keep_alive.clone();
                     let security = security.clone();
@@ -286,9 +284,7 @@ pub async fn handle_tls_connection(
                             req,
                             domains,
                             backends,
-                            ja4_fingerprints,
-                            None,
-                            syn_fingerprint,
+                            fingerprints,
                             &keep_alive,
                             &security,
                             &metrics,

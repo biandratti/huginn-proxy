@@ -178,6 +178,7 @@ pub async fn accept_loop(
                     stream,
                     peer,
                     PlainConnectionConfig {
+                        fingerprint_config: ctx_task.fingerprint_config.clone(),
                         domains,
                         backends,
                         keep_alive: ctx_task.keep_alive_config.clone(),

@@ -8,9 +8,8 @@ pub struct FingerprintConfig {
     /// Default: true
     #[serde(default = "default_true")]
     pub tls_enabled: bool,
-    /// Enable HTTP/2 fingerprinting (Akamai)
-    /// Note: Only works for HTTP/2 connections, not HTTP/1.x
-    /// Default: true
+    /// Enable HTTP/2 fingerprinting (Akamai). HTTP/2 only (including cleartext
+    /// prior knowledge / h2c); not HTTP/1.x. Default: true.
     #[serde(default = "default_true")]
     pub http_enabled: bool,
     /// Enable TCP SYN fingerprinting via eBPF/XDP (p0f-style raw signature).

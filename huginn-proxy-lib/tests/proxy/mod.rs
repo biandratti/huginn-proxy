@@ -4,6 +4,7 @@ mod edge_cases;
 mod forwarding;
 mod h2c_forwarding;
 mod handler;
+mod http_akamai;
 mod http_result;
 mod path_manipulation;
 mod peer_resolution;

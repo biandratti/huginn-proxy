@@ -924,7 +924,7 @@ Feature flags for passive fingerprinting. **Static** — eBPF programs are loade
 | Key            | Type    | Default | Description                                                                                                                                                |
 |----------------|---------|---------|------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `tls_enabled`  | bool    | `true`  | Extract TLS (JA4) fingerprints and inject `x-tls-ja4*` headers.                                                                                     |
-| `http_enabled` | bool    | `true`  | Extract HTTP/2 (Akamai) fingerprints and inject `x-http2-akamai` header.                                                                              |
+| `http_enabled` | bool    | `true`  | Extract HTTP/2 (Akamai) fingerprints and inject `x-http2-akamai`. Runs on HTTPS and on plaintext HTTP/2 (h2c prior knowledge). HTTP/1.1 is not fingerprinted. |
 | `tcp_enabled`  | bool    | `false` | Extract TCP SYN (p0f-style) fingerprints via eBPF/XDP and inject `x-tcp-p0f` header. Requires the `ebpf-tcp` build feature and Linux kernel ≥ 5.11. |
 | `max_capture`  | integer | `65536` | Maximum bytes captured per HTTP/2 connection for fingerprinting.                                                                                           |
 
