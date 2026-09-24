@@ -713,12 +713,14 @@ Rule of thumb: `[headers]` is for free-form request/response header plumbing (ca
 
 ## `[tls]`
 
-TLS termination options. Omit the entire section to run as plain HTTP. **Static** — requires
-restart to change. Certificates are configured per domain under `[[domains]]` (see below).
+TLS termination options. **Static** — requires restart to change. Certificates are configured per
+domain under `[[domains]]`. `[tls]` is optional when `listen.port_tls` is set: omitting it fills
+the same defaults as an empty `[tls]` (including ALPN `["h2", "http/1.1"]` if `alpn` is omitted).
+`[tls]` without `listen.port_tls` is an error.
 
 | Key    | Type             | Default | Description                                                                                                 |
 |--------|------------------|---------|-------------------------------------------------------------------------------------------------------------|
-| `alpn` | array of strings | `[]`    | ALPN protocols to advertise. Use `["h2", "http/1.1"]` to support both HTTP/2 and HTTP/1.1 with negotiation. |
+| `alpn` | array of strings | `["h2", "http/1.1"]` when `port_tls` is set and the key is omitted; otherwise as written (including `[]`) | ALPN protocols to advertise. An explicit empty list disables ALPN. |
 
 <table>
 <thead>

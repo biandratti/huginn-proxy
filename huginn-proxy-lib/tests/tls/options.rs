@@ -1,4 +1,4 @@
-use huginn_proxy_lib::config::{SessionResumptionConfig, TlsConfig, TlsOptions, TlsVersion};
+use huginn_proxy_lib::config::{TlsConfig, TlsOptions, TlsVersion};
 use huginn_proxy_lib::tls::{
     CipherSuiteName, KxGroupName, supported_cipher_suites, supported_curves, tls_build_options,
 };
@@ -8,8 +8,7 @@ use tokio_rustls::rustls::version::{TLS12, TLS13};
 /// Resolve `TlsOptions` into the effective protocol-version list the cert builder
 /// receives (via the public `tls_build_options` projection).
 fn resolved_versions(options: TlsOptions) -> Vec<&'static SupportedProtocolVersion> {
-    let cfg =
-        TlsConfig { alpn: vec![], options, session_resumption: SessionResumptionConfig::default() };
+    let cfg = TlsConfig { options, ..Default::default() };
     tls_build_options(&cfg).protocol_versions
 }
 

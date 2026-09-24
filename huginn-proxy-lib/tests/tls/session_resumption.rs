@@ -2,20 +2,15 @@ use huginn_proxy_lib::config::{SessionResumptionConfig, TlsConfig};
 
 #[test]
 fn test_session_resumption_enabled_default() {
-    let config = TlsConfig {
-        alpn: vec![],
-        options: Default::default(),
-        session_resumption: Default::default(),
-    };
+    let config = TlsConfig::default();
     assert!(config.session_resumption.enabled);
 }
 
 #[test]
 fn test_session_resumption_disabled() {
     let config = TlsConfig {
-        alpn: vec![],
-        options: Default::default(),
         session_resumption: SessionResumptionConfig { enabled: false },
+        ..Default::default()
     };
     assert!(!config.session_resumption.enabled);
 }

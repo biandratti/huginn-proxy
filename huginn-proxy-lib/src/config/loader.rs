@@ -3,24 +3,60 @@ use std::fs;
 use std::path::Path;
 
 use crate::config::Config;
+use crate::config::StaticConfig;
 use crate::config::audit;
+use crate::config::dynamic::backend::Domain;
 use crate::config::parser::ConfigFormat;
+use crate::config::startup::listen::ListenConfig;
+use crate::config::startup::tls::{TlsConfig, default_alpn};
 use crate::error::{ProxyError, Result};
 
 pub fn load_from_path<P: AsRef<Path>>(p: P) -> Result<Config> {
-    let path = p.as_ref();
-    let format = ConfigFormat::from_path(path)?;
+    let mut cfg = parse_config_file(p.as_ref())?;
+    apply_listen_tls_defaults(&mut cfg);
+    validate_config(&cfg)?;
+    validate_tls_section(&cfg.listen, cfg.tls.as_ref())?;
+    validate_domains_against_listen(&cfg.listen, &cfg.domains)?;
+    audit::run(&cfg);
+    Ok(cfg)
+}
 
+/// Parse a replacement config and validate domains against the **running** listen.
+///
+/// Static `listen` / `[tls]` in the file are not used for cert × port rules (those
+/// settings are ignored until restart). The file must still be a valid snapshot
+/// (sockets, unique hosts, cert files, cross-refs).
+pub fn load_from_path_for_reload<P: AsRef<Path>>(p: P, running: &StaticConfig) -> Result<Config> {
+    let cfg = parse_config_file(p.as_ref())?;
+    validate_config(&cfg)?;
+    validate_domains_against_listen(&running.listen, &cfg.domains)?;
+    audit::run(&cfg);
+    Ok(cfg)
+}
+
+fn parse_config_file(path: &Path) -> Result<Config> {
+    let format = ConfigFormat::from_path(path)?;
     let content = fs::read_to_string(path)
         .map_err(|e| ProxyError::Config(format!("Failed to read config file: {e}")))?;
-
     let mut cfg = format.parser().parse(&content)?;
-
     normalize_domain_hosts(&mut cfg);
-    validate_config(&cfg)?;
-    audit::run(&cfg);
-
     Ok(cfg)
+}
+
+/// When `port_tls` is set, fill `[tls]` if omitted and default ALPN if `alpn` is omitted.
+fn apply_listen_tls_defaults(cfg: &mut Config) {
+    if cfg.listen.port_tls.is_none() {
+        return;
+    }
+    match &mut cfg.tls {
+        None => {
+            cfg.tls = Some(TlsConfig { alpn: Some(default_alpn()), ..TlsConfig::default() });
+        }
+        Some(tls) if tls.alpn.is_none() => {
+            tls.alpn = Some(default_alpn());
+        }
+        Some(_) => {}
+    }
 }
 
 /// Lowercase every domain `host` and strip a trailing `.` (the DNS root label). DNS
@@ -77,24 +113,45 @@ fn validate_unique_hosts(cfg: &Config) -> Result<()> {
     Ok(())
 }
 
+fn validate_tls_section(listen: &ListenConfig, tls: Option<&TlsConfig>) -> Result<()> {
+    if tls.is_some() && listen.port_tls.is_none() {
+        return Err(ProxyError::Config(
+            "[tls] requires listen.port_tls; HTTP-only listeners have no TLS handshake".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+fn validate_domains_against_listen(listen: &ListenConfig, domains: &[Domain]) -> Result<()> {
+    let https_only = listen.port_tls.is_some() && listen.port.is_none();
+    for domain in domains {
+        let host = domain.label();
+        let has_tls_material = domain.cert_path.is_some()
+            || domain.key_path.is_some()
+            || domain.client_ca_path.is_some();
+        if has_tls_material && listen.port_tls.is_none() {
+            return Err(ProxyError::Config(format!(
+                "Domain '{host}': TLS material is configured but listen.port_tls is unset, \
+                 so the listener would serve plaintext and ignore it; set port_tls or drop \
+                 cert_path/key_path/client_ca_path"
+            )));
+        }
+        if https_only && (domain.cert_path.is_none() || domain.key_path.is_none()) {
+            return Err(ProxyError::Config(format!(
+                "Domain '{host}': listen.port_tls is set without listen.port, so every \
+                 domain must have cert_path and key_path"
+            )));
+        }
+    }
+    Ok(())
+}
+
 fn validate_config(cfg: &Config) -> Result<()> {
     cfg.listen.sockets()?;
     validate_unique_hosts(cfg)?;
 
     for domain in &cfg.domains {
         let host = domain.label();
-
-        if cfg.tls.is_none()
-            && (domain.cert_path.is_some()
-                || domain.key_path.is_some()
-                || domain.client_ca_path.is_some())
-        {
-            return Err(ProxyError::Config(format!(
-                "Domain '{host}': TLS material is configured but there is no [tls] section, \
-                 so the listener would serve plaintext and ignore it; add [tls] or drop \
-                 cert_path/key_path/client_ca_path"
-            )));
-        }
 
         match (&domain.cert_path, &domain.key_path) {
             (Some(cert), Some(key)) => {

@@ -368,7 +368,7 @@ async fn spawn_proxy_tls(
             }],
         }],
         tls: Some(TlsConfig {
-            alpn: vec!["http/1.1".to_string()],
+            alpn: Some(vec!["http/1.1".to_string()]),
             options: Default::default(),
             session_resumption: Default::default(),
         }),

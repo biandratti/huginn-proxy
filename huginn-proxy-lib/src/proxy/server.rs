@@ -70,28 +70,30 @@ pub async fn run(
     // Build the per-SNI TLS config map only for HTTPS sockets (`listen.port_tls`).
     // `None` when there is no TLS listener.
     let server_crypto: Option<SharedServerCrypto> = if static_cfg.listen.port_tls.is_some() {
-        if let Some(tls) = &static_cfg.tls {
-            let options = tls_build_options(tls);
-            let (map, report) =
-                build_server_crypto_map(&dynamic_cfg.load().domains, &options, None, &metrics)
-                    .await?;
-            if report.is_partial() {
-                info!(
-                    failed = report.failed.len(),
-                    loaded = report.loaded.len(),
-                    "Some domain certificates failed to load at startup; those domains will not serve TLS"
-                );
-            }
-            if !map.has_serviceable_config() && !dynamic_cfg.load().domains.is_empty() {
-                info!(
-                    "TLS is configured but no certificate is serviceable; all TLS handshakes will be \
-                     rejected until a cert is provided"
-                );
-            }
-            Some(Arc::new(ArcSwap::from_pointee(map)))
-        } else {
-            None
+        let tls = static_cfg.tls.as_ref().ok_or_else(|| {
+            crate::error::ProxyError::Config(
+                "listen.port_tls is set but TLS configuration is missing; load fills [tls] \
+                 defaults when port_tls is present"
+                    .to_string(),
+            )
+        })?;
+        let options = tls_build_options(tls);
+        let (map, report) =
+            build_server_crypto_map(&dynamic_cfg.load().domains, &options, None, &metrics).await?;
+        if report.is_partial() {
+            info!(
+                failed = report.failed.len(),
+                loaded = report.loaded.len(),
+                "Some domain certificates failed to load at startup; those domains will not serve TLS"
+            );
         }
+        if !map.has_serviceable_config() && !dynamic_cfg.load().domains.is_empty() {
+            info!(
+                "TLS is configured but no certificate is serviceable; all TLS handshakes will be \
+                 rejected until a cert is provided"
+            );
+        }
+        Some(Arc::new(ArcSwap::from_pointee(map)))
     } else {
         None
     };

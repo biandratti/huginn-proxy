@@ -213,7 +213,7 @@ async fn capture_fingerprint_values() -> Result<(), Box<dyn std::error::Error + 
             }],
         }],
         tls: Some(TlsConfig {
-            alpn: vec!["h2".to_string(), "http/1.1".to_string()],
+            alpn: Some(vec!["h2".to_string(), "http/1.1".to_string()]),
             options: Default::default(),
             session_resumption: Default::default(),
         }),

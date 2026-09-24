@@ -193,20 +193,39 @@ fn default_true() -> bool {
     true
 }
 
-#[derive(Debug, Deserialize, Clone, PartialEq)]
+#[derive(Debug, Deserialize, Clone, PartialEq, Default)]
 #[serde(deny_unknown_fields)]
 pub struct TlsConfig {
-    /// Application-Layer Protocol Negotiation (ALPN) protocols
-    /// Common values: ["h2", "http/1.1"]
-    /// Default: empty (no ALPN)
+    /// Application-Layer Protocol Negotiation (ALPN) protocols.
+    ///
+    /// `None` means the key was omitted. With `listen.port_tls`, load fills
+    /// `["h2", "http/1.1"]`; an explicit list (including `[]`) is kept.
     #[serde(default)]
-    pub alpn: Vec<String>,
+    pub alpn: Option<Vec<String>>,
     /// Controls TLS versions and cipher suites
     #[serde(default)]
     pub options: TlsOptions,
     /// Session resumption configuration
     #[serde(default)]
     pub session_resumption: SessionResumptionConfig,
+}
+
+impl TlsConfig {
+    /// ALPN to advertise in the handshake.
+    ///
+    /// An omitted key is no ALPN until load fills `["h2", "http/1.1"]` when
+    /// `listen.port_tls` is set. An explicit `[]` stays empty.
+    pub fn alpn_protocols(&self) -> &[String] {
+        match self.alpn.as_ref() {
+            Some(list) => list.as_slice(),
+            None => &[],
+        }
+    }
+}
+
+/// ALPN used when `listen.port_tls` is set and `tls.alpn` is omitted.
+pub(crate) fn default_alpn() -> Vec<String> {
+    vec!["h2".to_string(), "http/1.1".to_string()]
 }
 
 /// Allowlisted effective-config view of TLS: `{"enabled": false}` when TLS is off, otherwise the
@@ -250,7 +269,7 @@ pub(crate) fn effective_tls_view(config: Option<&TlsConfig>) -> TlsView<'_> {
 
     TlsView::Enabled(TlsEnabledView {
         enabled: true,
-        alpn: config.alpn.as_slice(),
+        alpn: config.alpn_protocols(),
         options: TlsOptionsView {
             versions: config
                 .options

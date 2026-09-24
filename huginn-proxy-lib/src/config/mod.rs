@@ -24,7 +24,7 @@ pub use dynamic::{
     HealthCheckConfig, HealthCheckType, Route, sort_domain_routes, sort_routes,
 };
 pub use effective::{EffectiveConfigSummary, EffectiveConfigView};
-pub use loader::load_from_path;
+pub use loader::{load_from_path, load_from_path_for_reload};
 pub use parser::{ConfigFormat, ConfigParser, TomlParser, YamlParser};
 pub use root::{Config, ConfigParts};
 pub use secret::Secret;
