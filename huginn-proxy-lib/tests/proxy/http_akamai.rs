@@ -1,5 +1,3 @@
-//! Akamai on the plaintext HTTP listener (h2c prior knowledge).
-
 use std::convert::Infallible;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
