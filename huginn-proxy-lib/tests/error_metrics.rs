@@ -56,7 +56,7 @@ async fn a_rejected_request_is_counted_once() -> TestResult {
     // The backend is never dialed: the request is rejected before backend selection.
     let port = free_port()?;
     let toml = format!(
-        r#"listen = {{ addrs = ["127.0.0.1:{port}"] }}
+        r#"listen = {{ port = {port}, address_v4 = ["127.0.0.1"] }}
 backends = [{{ address = "127.0.0.1:1" }}]
 
 [[domains]]
@@ -68,7 +68,7 @@ routes = [{{ prefix = "/api", backend = "127.0.0.1:1" }}]
     std::fs::write(tmp.path(), &toml)?;
 
     let config = load_from_path(tmp.path())?;
-    let listen_addr = config.listen.addrs[0];
+    let listen_addr = config.listen.sockets()?[0].addr;
     let huginn_proxy_lib::config::ConfigParts { static_cfg, dynamic_cfg } = config.into_parts();
 
     let _proxy = tokio::spawn(async move {

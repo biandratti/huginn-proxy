@@ -1,4 +1,22 @@
+use huginn_net_http::AkamaiFingerprint;
 use huginn_net_tcp::TcpObservation;
+use tokio::sync::watch;
+
+use crate::fingerprinting::Ja4Fingerprints;
+
+/// The fingerprints a connection can contribute to each of its requests.
+///
+/// Every field is `None` when its capture is disabled or does not apply to the
+/// transport: plaintext connections have no JA4, HTTP/1.1 yields no Akamai, and a
+/// keep-alive request has no fresh SYN. Akamai arrives through a `watch` because
+/// [`CapturingStream`](crate::fingerprinting::CapturingStream) extracts it from the
+/// HTTP/2 frames after the connection is already being served.
+#[derive(Debug, Clone, Default)]
+pub struct ConnectionFingerprints {
+    pub ja4: Option<Ja4Fingerprints>,
+    pub akamai: Option<watch::Receiver<Option<AkamaiFingerprint>>>,
+    pub tcp_syn: Option<TcpObservation>,
+}
 
 /// Outcome of a TCP SYN fingerprint probe.
 ///

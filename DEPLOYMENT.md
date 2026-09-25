@@ -37,7 +37,9 @@ the probe does not depend on utilities the runtime will never ship. Kubernetes c
 
 Published image names and tags (`latest` / `vX.Y.Z`): [DEPLOYMENT-MATRIX.md](DEPLOYMENT-MATRIX.md). The three GHCR packages are separate repositories (`huginn-proxy`, `huginn-proxy-plain`, `huginn-proxy-ebpf-agent`); **do not** add `-ebpf-agent` as a suffix on the tag.
 
-Compose that **builds** from this repository (TLS, backends, plain vs eBPF) is documented in [`examples/README.md`](examples/README.md).
+Repo-built compose publishes **80**, **443**, and metrics (9090/9091), with `CAP_NET_BIND_SERVICE` so UID **10001** can bind those ports. Stack details: [`examples/README.md`](examples/README.md). Capture ports: [EBPF-SETUP.md](EBPF-SETUP.md).
+
+`docker-compose.release-*` still use `compose.release.yaml` (process binds **7000**, host `443:7000`) until a GHCR image ships `listen.port` / `port_tls`.
 
 Pre-built images from GHCR (pin `latest` to a release tag in the compose file if you need reproducibility):
 
@@ -98,8 +100,8 @@ spec:
           value: "tc"                   # recommended; use xdp-native if driver XDP is available
         - name: HUGINN_EBPF_DST_IP_V4
           value: "0.0.0.0"
-        - name: HUGINN_EBPF_DST_PORT
-          value: "7000"
+        - name: HUGINN_EBPF_DST_PORTS
+          value: "443"                  # HTTPS port when listen.https_redirection is true (default with both ports). Use "80,443" only when https_redirection = false.
         - name: HUGINN_EBPF_PIN_PATH
           value: "/sys/fs/bpf/huginn"
         - name: HUGINN_EBPF_METRICS_ADDR
@@ -287,7 +289,7 @@ continues running with the old values.
 
 | TOML key | Description |
 |---|---|
-| `[listen]` | Bind addresses, backlog, `reuse_port` |
+| `[listen]` | HTTP/HTTPS ports, bind addresses, backlog |
 | `[tls]` | TLS termination (cert/key hot-reload is handled separately — see below) |
 | `[fingerprint]` | Fingerprinting feature flags (`tcp_enabled`, `tls_enabled`, `http_enabled`, `max_capture`) — static because they control eBPF program loading and capture buffers at startup |
 | `[logging]` | Log level and format |

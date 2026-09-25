@@ -3,16 +3,18 @@
 
 //! Shared logic for TCP SYN fingerprinting between the BPF kernel programs and userspace.
 //!
-//! Contract: `quirk_bits`, `SynRawDataV4`/`SynRawDataV6` layout, and key encoding must match
-//! both `huginn-ebpf-programs` and `huginn-ebpf`.
+//! Contract: `quirk_bits`, `SynRawDataV4`/`SynRawDataV6` layout, key encoding, and
+//! `dest_port_allowed` must match both `huginn-ebpf-programs` and `huginn-ebpf`.
 
 pub mod constants;
+pub mod dest_port;
 pub mod headers;
 pub mod keys;
 pub mod quirk_bits;
 pub mod syn_raw_v4;
 pub mod syn_raw_v6;
 
+pub use dest_port::dest_port_allowed;
 pub use keys::{make_key_v4, make_key_v6};
 pub use syn_raw_v4::SynRawDataV4;
 pub use syn_raw_v6::SynRawDataV6;

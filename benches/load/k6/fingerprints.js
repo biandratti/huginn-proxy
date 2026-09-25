@@ -18,7 +18,7 @@
 import http from "k6/http";
 import {check} from "k6";
 
-const baseUrl = __ENV.BASE_URL || "https://127.0.0.1:7000";
+const baseUrl = __ENV.BASE_URL || "https://127.0.0.1:443";
 const targetPath = __ENV.TARGET_PATH || "/test";
 const noHttp2 = __ENV.K6_NO_HTTP2 === "true";
 const ramp = __ENV.RAMP === "true";

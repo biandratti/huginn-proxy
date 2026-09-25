@@ -5,7 +5,7 @@ type TestResult = Result<(), Box<dyn std::error::Error + Send + Sync>>;
 
 fn config_with_tls_options(options: &str) -> String {
     format!(
-        r#"listen = {{ addrs = ["127.0.0.1:7000"] }}
+        r#"listen = {{ port_tls = 8443, address_v4 = ["127.0.0.1"] }}
 backends = [{{ address = "backend:9000" }}]
 
 [[domains]]

@@ -76,7 +76,7 @@ impl EffectiveConfigSummary {
             });
 
         Self {
-            listener_count: static_cfg.listen.addrs.len(),
+            listener_count: static_cfg.listen.sockets().map(|s| s.len()).unwrap_or(0),
             tls_enabled: static_cfg.tls.is_some(),
             proxy_protocol_mode: static_cfg.listen.proxy_protocol.mode.as_str(),
             domain_count: dynamic_cfg.domains.len(),

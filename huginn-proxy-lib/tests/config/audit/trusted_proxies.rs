@@ -9,7 +9,7 @@ fn trusted_proxies_audit_warns_on_trust_all_and_broad_range()
 -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let path = tmp_path("tp-broad");
     let toml = r#"
-listen = { addrs = ["127.0.0.1:0"] }
+listen = { port = 8080, address_v4 = ["127.0.0.1"] }
 backends = [{ address = "backend:9000" }]
 
 [security.trusted_proxies]
@@ -46,7 +46,7 @@ fn insecure_opt_in_silences_trust_all_warning()
     let path = tmp_path("tp-optin");
     // insecure acknowledges the /0 footgun, but a broad non-/0 range still warns.
     let toml = r#"
-listen = { addrs = ["127.0.0.1:0"] }
+listen = { port = 8080, address_v4 = ["127.0.0.1"] }
 backends = [{ address = "backend:9000" }]
 
 [security.trusted_proxies]
@@ -75,7 +75,7 @@ fn trusted_proxies_audit_silent_on_private_ranges()
 -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let path = tmp_path("tp-private");
     let toml = r#"
-listen = { addrs = ["127.0.0.1:0"] }
+listen = { port = 8080, address_v4 = ["127.0.0.1"] }
 backends = [{ address = "backend:9000" }]
 
 [security.trusted_proxies]

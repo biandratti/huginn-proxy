@@ -1,7 +1,7 @@
-use super::host::extract_request_host;
+use super::host::{extract_request_host, https_redirect_location};
 use crate::backend::UpstreamGateway;
-use crate::config::{Backend, DEFAULT_DOMAIN_LABEL, Domain, KeepAliveConfig};
-use crate::fingerprinting::TcpObservation;
+use crate::config::{Backend, DEFAULT_DOMAIN_LABEL, Domain, KeepAliveConfig, RuntimeListen};
+use crate::fingerprinting::ConnectionFingerprints;
 use crate::fingerprinting::names;
 use crate::proxy::ClientPool;
 use crate::proxy::forwarding::forward;
@@ -13,18 +13,17 @@ use crate::proxy::handler::rate_limit_validation::check_rate_limit;
 use crate::proxy::handler::resolve::{domain_defers_ip_filter, resolve_security};
 use crate::proxy::http_result::{HttpError, HttpResult};
 use crate::telemetry::Metrics;
+use crate::utils::http::{RespBody, empty_body};
 use http::HeaderMap;
 use http::StatusCode;
 use http::Version;
 use hyper::Request;
+use hyper::Response;
 use hyper::body::Incoming;
-use hyper::header::HeaderName;
+use hyper::header::{HeaderName, LOCATION};
 use std::sync::Arc;
-use tokio::sync::watch;
 use tokio::time::Instant;
 use tracing::debug;
-
-use crate::utils::http::RespBody;
 
 /// Strip all proxy-authoritative fingerprint headers from an incoming request.
 ///
@@ -78,6 +77,32 @@ fn enforce_ip_access(
     Ok(())
 }
 
+fn https_redirect_response(location: String) -> HttpResult<Response<RespBody>> {
+    let value = http::HeaderValue::from_str(&location).map_err(|e| {
+        HttpError::FailedToGenerateDownstreamResponse(format!("invalid redirect Location: {e}"))
+    })?;
+    Response::builder()
+        .status(StatusCode::MOVED_PERMANENTLY)
+        .header(LOCATION, value)
+        .body(empty_body())
+        .map_err(|e| HttpError::FailedToGenerateDownstreamResponse(e.to_string()))
+}
+
+/// Return the running HTTPS port when this request must be redirected.
+///
+/// Redirect policy is listener-wide, but only a matched domain is eligible. This keeps unknown
+/// hosts on the existing `421` path instead of advertising an HTTPS endpoint for them.
+#[doc(hidden)]
+pub fn https_redirect_port(
+    is_https: bool,
+    domain_matched: bool,
+    listen: RuntimeListen,
+) -> Option<u16> {
+    (!is_https && domain_matched && listen.https_redirection)
+        .then_some(listen.tls_port)
+        .flatten()
+}
+
 /// Handle request routing and forwarding.
 ///
 /// `peer` is the effective client address as resolved by `resolve_peer`, and is expected to be
@@ -90,9 +115,7 @@ pub async fn handle_proxy_request(
     mut req: Request<Incoming>,
     domains: Arc<Vec<Domain>>,
     backends: Arc<Vec<Backend>>,
-    ja4_fingerprints: Option<crate::fingerprinting::Ja4Fingerprints>,
-    fingerprint_rx: Option<watch::Receiver<Option<huginn_net_http::AkamaiFingerprint>>>,
-    syn_fingerprint: Option<TcpObservation>,
+    fingerprints: ConnectionFingerprints,
     keep_alive: &KeepAliveConfig,
     security: &crate::proxy::SecurityContext,
     metrics: &Metrics,
@@ -102,6 +125,7 @@ pub async fn handle_proxy_request(
     client_pool: &ClientPool,
     upstream: &UpstreamGateway,
     connection_sni: Option<&str>,
+    listen: RuntimeListen,
 ) -> HttpResult<hyper::Response<RespBody>> {
     let start = Instant::now();
     let method = req.method().to_string();
@@ -136,6 +160,22 @@ pub async fn handle_proxy_request(
             .and_then(|s| s.ip_filter.as_ref())
             .unwrap_or(&security.ip_filter);
         enforce_ip_access(peer, domain_ip_filter, metrics, &method, &protocol)?;
+    }
+
+    // Process-wide HTTP→HTTPS redirect: after the matched domain's IP filter, before
+    // 421/mTLS, and without consuming rate-limit tokens. An unmatched host is never
+    // redirected; it reaches the existing 421 path below.
+    if let Some(tls_port) = https_redirect_port(is_https, domain.is_some(), listen) {
+        if host.is_empty() {
+            let error = HttpError::InvalidHostInRequestHeader;
+            let status_code = StatusCode::from(error.clone()).as_u16();
+            metrics.record_entrypoint_request(&method, status_code, &protocol);
+            return Err(error);
+        }
+        let location = https_redirect_location(&host, path, req.uri().query(), tls_port);
+        let status_code = StatusCode::MOVED_PERMANENTLY.as_u16();
+        metrics.record_entrypoint_request(&method, status_code, &protocol);
+        return https_redirect_response(location);
     }
 
     // Misdirected-request enforcement (RFC 9110 §15.5.20 / RFC 7540 §9.1.2), always on,
@@ -284,7 +324,7 @@ pub async fn handle_proxy_request(
     // Extract and inject fingerprints first (fingerprints are extracted from TLS handshake/HTTP2 frames,
     // not from HTTP headers, so adding X-Forwarded-* headers won't affect fingerprint generation)
     if effective.fingerprinting {
-        if let Some(ref fingerprints) = ja4_fingerprints {
+        if let Some(ref fingerprints) = fingerprints.ja4 {
             if let Ok(hv) = hyper::header::HeaderValue::from_str(&fingerprints.ja4.full.to_string())
             {
                 req.headers_mut()
@@ -320,7 +360,7 @@ pub async fn handle_proxy_request(
                     .insert(HeaderName::from_static(names::TLS_JA4_RS1), hv);
             }
         }
-        if let Some(ref rx) = fingerprint_rx {
+        if let Some(ref rx) = fingerprints.akamai {
             if req.version() == Version::HTTP_2 {
                 let akamai = rx.borrow().clone();
                 debug!("Handler: akamai fingerprint: {:?}", akamai);
@@ -339,7 +379,7 @@ pub async fn handle_proxy_request(
                 metrics.record_http2_fingerprint_not_applicable();
             }
         }
-        match syn_fingerprint {
+        match fingerprints.tcp_syn {
             Some(ref syn_fp) => {
                 debug!("Handler: injecting {} header: {}", names::TCP_SYN, syn_fp);
                 if let Ok(hv) = hyper::header::HeaderValue::from_str(&syn_fp.to_string()) {

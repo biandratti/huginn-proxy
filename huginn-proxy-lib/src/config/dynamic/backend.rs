@@ -241,8 +241,8 @@ pub const DEFAULT_DOMAIN_LABEL: &str = "_default_";
 /// - Exact: `"api.example.com"`
 /// - Wildcard (one level): `"*.example.com"`
 ///
-/// `cert_path` / `key_path` are optional, omit both for plain-HTTP domains.
-/// Both must be present together; specifying only one is a validation error.
+/// `cert_path` / `key_path` must be present together. They are required on every
+/// domain when `listen.port_tls` is set and may be omitted only in HTTP-only configs.
 #[derive(Debug, Deserialize, Clone, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct Domain {

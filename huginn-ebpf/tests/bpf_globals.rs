@@ -27,6 +27,7 @@ const PATCHED_GLOBALS: &[&str] = &[
     "dst_ip_v4",
     "dst_ip_v6",
     "dst_port",
+    "dst_port_2",
     "log_level",
     "syn_rate_enabled",
     "syn_rate_threshold",

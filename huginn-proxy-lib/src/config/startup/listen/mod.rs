@@ -1,6 +1,12 @@
+mod sockets;
+
 use serde::{Deserialize, Serialize};
-use std::net::SocketAddr;
 use tracing::warn;
+
+use crate::error::{ProxyError, Result};
+
+pub use sockets::ListenSocket;
+use sockets::build_listen_sockets;
 
 /// PROXY protocol (v1 and v2) handling for a listener.
 ///
@@ -51,24 +57,36 @@ impl Default for ProxyProtocolConfig {
     }
 }
 
-/// Listener configuration, addresses and kernel socket options.
+/// Listener configuration: ports, bind addresses, and kernel socket options.
+///
+/// Sockets are built like rust-rpxy `build_listen_sockets`: each IP combined with each
+/// present port. There is no `addrs` (`host:port`) list.
 #[derive(Debug, Deserialize, Clone, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct ListenConfig {
-    /// Addresses and ports to listen on. One or more entries, one per IP family.
-    /// Example IPv4 only:
-    /// ```text
-    /// ["0.0.0.0:7000"]
-    /// ```
-    /// Example IPv6 only:
-    /// ```text
-    /// ["[::]:7000"]
-    /// ```
-    /// Example both:
-    /// ```text
-    /// ["0.0.0.0:7000", "[::]:7000"]
-    /// ```
-    pub addrs: Vec<SocketAddr>,
+    /// Plain HTTP port. Absent: no HTTP sockets.
+    #[serde(default)]
+    pub port: Option<u16>,
+    /// HTTPS port. Absent: no TLS sockets.
+    #[serde(default)]
+    pub port_tls: Option<u16>,
+    /// Redirect matched plaintext HTTP requests to HTTPS.
+    ///
+    /// Defaults to `true` when both `port` and `port_tls` are present, otherwise `false`.
+    /// May only be written when both ports are present.
+    #[serde(default)]
+    pub https_redirection: Option<bool>,
+    /// Bind IPv6 `::` in addition to IPv4 when `address_v6` is omitted. Default: false.
+    #[serde(default)]
+    pub ipv6: bool,
+    /// IPv4 bind addresses. Absent: `0.0.0.0`. Must not be empty; must not mix `0.0.0.0` with
+    /// other addresses.
+    #[serde(default)]
+    pub address_v4: Option<Vec<String>>,
+    /// IPv6 bind addresses. Absent: `::` only when `ipv6` is true. Must not be empty; must not
+    /// mix `::` with other addresses. Bracketed (`[::1]`) and bare (`::1`) forms are accepted.
+    #[serde(default)]
+    pub address_v6: Option<Vec<String>>,
     /// `listen(2)` backlog, length of the pending-connection queue per listener socket.
     /// Raise this under high connection rates to avoid the kernel silently dropping SYNs before
     /// `accept(2)` is called. The kernel clamps the value to `net.core.somaxconn`.
@@ -84,9 +102,46 @@ pub struct ListenConfig {
 impl Default for ListenConfig {
     fn default() -> Self {
         Self {
-            addrs: vec![],
+            port: None,
+            port_tls: None,
+            https_redirection: None,
+            ipv6: false,
+            address_v4: None,
+            address_v6: None,
             tcp_backlog: default_tcp_backlog(),
             proxy_protocol: ProxyProtocolConfig::default(),
+        }
+    }
+}
+
+/// Running HTTP/HTTPS listen ports from static config.
+///
+/// Used for HTTP→HTTPS `301` (`Location` port and the dual-listen default).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RuntimeListen {
+    /// `listen.port` is set (plaintext sockets exist).
+    pub http: bool,
+    /// Running `listen.port_tls`.
+    pub tls_port: Option<u16>,
+    /// Effective process-wide HTTP→HTTPS redirect policy.
+    pub https_redirection: bool,
+}
+
+impl RuntimeListen {
+    /// Both HTTP and HTTPS sockets are in effect.
+    pub fn dual(self) -> bool {
+        self.http && self.tls_port.is_some()
+    }
+}
+
+impl From<&ListenConfig> for RuntimeListen {
+    fn from(listen: &ListenConfig) -> Self {
+        Self {
+            http: listen.port.is_some(),
+            tls_port: listen.port_tls,
+            https_redirection: listen
+                .https_redirection
+                .unwrap_or(listen.port.is_some() && listen.port_tls.is_some()),
         }
     }
 }
@@ -118,7 +173,9 @@ fn resolve_proxy_protocol_header_timeout_ms(configured_ms: i64) -> u64 {
     }
 }
 
-fn deserialize_proxy_protocol_header_timeout_ms<'de, D>(deserializer: D) -> Result<u64, D::Error>
+fn deserialize_proxy_protocol_header_timeout_ms<'de, D>(
+    deserializer: D,
+) -> std::result::Result<u64, D::Error>
 where
     D: serde::Deserializer<'de>,
 {
@@ -129,7 +186,12 @@ where
 /// Allowlisted effective-config view of [`ListenConfig`]. Field names are the JSON keys.
 #[derive(Serialize)]
 pub(crate) struct ListenView {
-    addrs: Vec<String>,
+    port: Option<u16>,
+    port_tls: Option<u16>,
+    https_redirection: bool,
+    ipv6: bool,
+    address_v4: Option<Vec<String>>,
+    address_v6: Option<Vec<String>>,
     tcp_backlog: i32,
     proxy_protocol: ProxyProtocolView,
 }
@@ -141,15 +203,75 @@ struct ProxyProtocolView {
 }
 
 impl ListenConfig {
+    /// HTTP on `127.0.0.1` at `port`. Used by tests and benches that bind a concrete port.
+    pub fn localhost_http(port: u16) -> Self {
+        Self {
+            port: Some(port),
+            address_v4: Some(vec!["127.0.0.1".to_string()]),
+            ..Default::default()
+        }
+    }
+
+    /// HTTPS on `127.0.0.1` at `port`. Used by tests and benches that terminate TLS.
+    pub fn localhost_https(port: u16) -> Self {
+        Self {
+            port_tls: Some(port),
+            address_v4: Some(vec!["127.0.0.1".to_string()]),
+            ..Default::default()
+        }
+    }
+
     pub(crate) fn effective_view(&self) -> ListenView {
         ListenView {
-            addrs: self.addrs.iter().map(ToString::to_string).collect(),
+            port: self.port,
+            port_tls: self.port_tls,
+            https_redirection: RuntimeListen::from(self).https_redirection,
+            ipv6: self.ipv6,
+            address_v4: self.address_v4.clone(),
+            address_v6: self.address_v6.clone(),
             tcp_backlog: self.tcp_backlog,
             proxy_protocol: ProxyProtocolView {
                 mode: self.proxy_protocol.mode.as_str(),
                 header_timeout_ms: self.proxy_protocol.header_timeout_ms,
             },
         }
+    }
+
+    /// Validate ports and addresses, then return the sockets to bind.
+    ///
+    /// `tls_enabled` is stamped here from the config field that produced the
+    /// socket (`port` vs `port_tls`), before `bind`.
+    pub fn sockets(&self) -> Result<Vec<ListenSocket>> {
+        self.validate_ports()?;
+        build_listen_sockets(
+            &self.address_v4,
+            &self.address_v6,
+            self.ipv6,
+            self.port,
+            self.port_tls,
+        )
+    }
+
+    fn validate_ports(&self) -> Result<()> {
+        if self.port.is_none() && self.port_tls.is_none() {
+            return Err(ProxyError::Config(
+                "Either or both of listen.port and listen.port_tls must be specified".to_string(),
+            ));
+        }
+        if let (Some(http), Some(https)) = (self.port, self.port_tls)
+            && http == https
+        {
+            return Err(ProxyError::Config(
+                "listen.port and listen.port_tls must be different".to_string(),
+            ));
+        }
+        if self.https_redirection.is_some() && (self.port.is_none() || self.port_tls.is_none()) {
+            return Err(ProxyError::Config(
+                "listen.https_redirection requires both listen.port and listen.port_tls"
+                    .to_string(),
+            ));
+        }
+        Ok(())
     }
 }
 

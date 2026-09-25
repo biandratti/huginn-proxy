@@ -9,7 +9,7 @@ fn header_audit_warns_on_duplicate_add_and_add_remove_conflict()
 -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let path = tmp_path("hdr-dup");
     let toml = r#"
-listen = { addrs = ["127.0.0.1:0"] }
+listen = { port = 8080, address_v4 = ["127.0.0.1"] }
 backends = [{ address = "backend:9000" }]
 
 [headers.request]
@@ -49,7 +49,7 @@ fn header_audit_warns_on_duplicate_custom_security_header()
 -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let path = tmp_path("hdr-custom-dup");
     let toml = r#"
-listen = { addrs = ["127.0.0.1:0"] }
+listen = { port = 8080, address_v4 = ["127.0.0.1"] }
 backends = [{ address = "backend:9000" }]
 
 [security.headers]
@@ -76,7 +76,7 @@ fn header_audit_silent_on_cross_scope_override()
     let path = tmp_path("hdr-cross-scope");
     // Same header name at global and domain scope is an intentional override, not a duplicate.
     let toml = r#"
-listen = { addrs = ["127.0.0.1:0"] }
+listen = { port = 8080, address_v4 = ["127.0.0.1"] }
 backends = [{ address = "backend:9000" }]
 
 [headers.request]

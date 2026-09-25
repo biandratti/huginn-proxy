@@ -133,7 +133,7 @@ PROXY_IPV6=$(docker inspect \
 docker run --rm \
   --network examples_default \
   curlimages/curl \
-  -sk "https://[${PROXY_IPV6}]:7000/api/test"
+  -sk "https://[${PROXY_IPV6}]/api/test"
 ```
 
 To enable IPv6 in Docker Desktop's engine config, go to **Settings → Docker Engine** and add:
@@ -183,22 +183,23 @@ Use `127.0.0.1` here so the host matches published ports reliably (some systems 
 compose example publishes both IPv4 and IPv6, but explicit IPv4 avoids surprises in CI and scripts).
 
 ```bash
-curl -sk https://127.0.0.1:7000/api/test
+curl -sk https://127.0.0.1/api/test
+curl -sI http://127.0.0.1/api/test
 curl http://127.0.0.1:9090/metrics | grep huginn_proxy
 ```
 
 To pick a stack explicitly when using a hostname (e.g. `localhost`), curl supports `-4` / `--ipv4` and `-6` / `--ipv6`:
 
 ```bash
-curl -4 -sk https://localhost:7000/api/test    # IPv4 only
-curl -6 -sk https://localhost:7000/api/test    # IPv6 only (or https://[::1]:7000/...)
+curl -4 -sk https://localhost/api/test    # IPv4 only
+curl -6 -sk https://localhost/api/test    # IPv6 only (or https://[::1]/...)
 
 curl -4 http://localhost:9090/metrics | grep huginn_proxy
 curl -6 http://localhost:9090/metrics | grep huginn_proxy
 ```
 
-**Browser:** Open `https://localhost:7000/` (or `https://127.0.0.1:7000/` if your cert includes that name in SAN —
-`mkcert` Option B lists both). The self-signed **Option A** cert uses `CN=localhost`, so the hostname `localhost`
+**Browser:** Open `https://localhost/` (or `https://127.0.0.1/` if your cert includes that name in SAN —
+`mkcert` Option B lists both). `http://localhost/` returns `301` to HTTPS. The self-signed **Option A** cert uses `CN=localhost`, so the hostname `localhost`
 matches; you may still need to accept the browser warning unless you use `mkcert`.
 
 ---
@@ -207,7 +208,8 @@ matches; you may still need to accept the browser warning unless you use `mkcert
 
 | Service    | URL                             | Description                       |
 |------------|---------------------------------|-----------------------------------|
-| Proxy      | `https://127.0.0.1:7000/`       | HTTPS proxy                       |
+| Proxy      | `https://127.0.0.1/`            | HTTPS proxy                       |
+| Proxy      | `http://127.0.0.1/`             | HTTP → `301` to HTTPS             |
 | Proxy      | `http://127.0.0.1:9090/health`  | Health (liveness alias)           |
 | Proxy      | `http://127.0.0.1:9090/ready`   | Readiness (accepting connections) |
 | Proxy      | `http://127.0.0.1:9090/live`    | Liveness                          |
@@ -269,7 +271,7 @@ docker compose -f examples/docker-compose.observability.yml up -d
 Verify that TLS and HTTP/2 fingerprints are injected:
 
 ```bash
-curl -sk https://127.0.0.1:7000/api/test
+curl -sk https://127.0.0.1/api/test
 ```
 
 Expected headers:

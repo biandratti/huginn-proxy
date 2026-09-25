@@ -25,14 +25,7 @@ fn minimal_config(backend_addr: std::net::SocketAddr, listen_port: u16) -> Confi
     };
 
     Config {
-        listen: ListenConfig {
-            addrs: vec![
-                format!("127.0.0.1:{listen_port}")
-                    .parse()
-                    .unwrap_or_else(|_| std::net::SocketAddr::from(([127, 0, 0, 1], 0))),
-            ],
-            ..Default::default()
-        },
+        listen: ListenConfig::localhost_http(listen_port),
         backends: vec![Backend {
             address: backend_addr.to_string(),
             http_version: None,

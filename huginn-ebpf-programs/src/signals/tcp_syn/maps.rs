@@ -156,6 +156,11 @@ pub fn increment_syn_malformed_v6() {
 #[unsafe(export_name = "dst_port")]
 static DST_PORT: u16 = 0;
 
+/// Second capture port. `0` means the list has only [`DST_PORT`].
+#[allow(unsafe_code)]
+#[unsafe(export_name = "dst_port_2")]
+static DST_PORT_2: u16 = 0;
+
 #[allow(unsafe_code)]
 #[unsafe(export_name = "dst_ip_v4")]
 static DST_IP_V4: u32 = 0;
@@ -166,9 +171,21 @@ static DST_IP_V6: [u8; 16] = [0u8; 16];
 
 #[allow(unsafe_code)]
 #[inline(always)]
-pub fn dst_port() -> u16 {
+fn dst_port() -> u16 {
     // SAFETY: read_volatile of a loader-patched global.
     unsafe { core::ptr::read_volatile(&DST_PORT) }
+}
+
+#[allow(unsafe_code)]
+#[inline(always)]
+fn dst_port_2() -> u16 {
+    // SAFETY: read_volatile of a loader-patched global.
+    unsafe { core::ptr::read_volatile(&DST_PORT_2) }
+}
+
+#[inline(always)]
+pub fn dest_allowed(dest: u16) -> bool {
+    huginn_ebpf_common::dest_port_allowed(dest, dst_port(), dst_port_2())
 }
 
 #[allow(unsafe_code)]

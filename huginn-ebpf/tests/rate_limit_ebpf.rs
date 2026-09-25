@@ -55,7 +55,7 @@ fn load_probe(
         "lo",
         dst_v4,
         dst_v6,
-        port,
+        &[port],
         huginn_ebpf::DEFAULT_SYN_MAP_MAX_ENTRIES,
         capture,
         EbpfLogLevel::Off,

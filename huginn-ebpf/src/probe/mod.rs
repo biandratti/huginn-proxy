@@ -113,6 +113,19 @@ impl AsRawFd for EbpfLogPoller {
     }
 }
 
+fn normalize_dst_ports(dst_ports: &[u16]) -> Result<(u16, u16), EbpfError> {
+    let count = dst_ports.len();
+    if count == 0 || count > 2 || dst_ports.contains(&0) {
+        return Err(EbpfError::InvalidDestPorts { count });
+    }
+    let first = dst_ports[0];
+    let second = if count == 2 { dst_ports[1] } else { 0 };
+    if second == first {
+        return Err(EbpfError::InvalidDestPorts { count });
+    }
+    Ok((first, second))
+}
+
 impl EbpfProbe {
     /// Load and attach the BPF capture program (XDP or TC) to the given network interface.
     ///
@@ -120,7 +133,9 @@ impl EbpfProbe {
     /// - `interface`: network interface name (e.g., `"eth0"`)
     /// - `dst_ip_v4`: proxy IPv4 listen IP. `0.0.0.0` disables the IPv4 destination filter.
     /// - `dst_ip_v6`: proxy IPv6 listen IP. `::` disables the IPv6 destination filter.
-    /// - `dst_port`: proxy listen port. Always active as a filter.
+    /// - `dst_ports`: one or two proxy listen ports to capture. The first is required and
+    ///   non-zero. A second port of `0` is not passed here: omit it. `0` does not disable
+    ///   the filter.
     /// - `syn_map_max_entries`: capacity of the LRU map (default 8192).
     /// - `capture`: [`CaptureBackend::Xdp`] (driver/generic XDP) or [`CaptureBackend::Tc`]
     ///   (clsact ingress; required on VLAN/bond interfaces where generic XDP drops GRO-merged
@@ -142,7 +157,7 @@ impl EbpfProbe {
         interface: &str,
         dst_ip_v4: Ipv4Addr,
         dst_ip_v6: Ipv6Addr,
-        dst_port: u16,
+        dst_ports: &[u16],
         syn_map_max_entries: u32,
         capture: CaptureBackend,
         log_level: EbpfLogLevel,
@@ -165,8 +180,12 @@ impl EbpfProbe {
         // :: -> all-zero bytes -> XDP skips the IPv6 destination check.
         let bpf_dst_ip_v6: [u8; 16] = dst_ip_v6.octets();
 
+        let (dst_port, dst_port_2) = normalize_dst_ports(dst_ports)?;
+
         // tcp->dest in network byte order as read by LE CPU = port.to_be()
+        // `dst_port_2 == 0` means the list has one port. `dst_port` is never 0.
         let bpf_dst_port: u16 = dst_port.to_be();
+        let bpf_dst_port_2: u16 = dst_port_2.to_be();
 
         // 0 = logging off (default); higher = more verbose (log::LevelFilter encoding).
         let bpf_log_level: u8 = log_level.as_u8();
@@ -202,6 +221,7 @@ impl EbpfProbe {
             .override_global("dst_ip_v4", &bpf_dst_ip, false)
             .override_global("dst_ip_v6", &bpf_dst_ip_v6, false)
             .override_global("dst_port", &bpf_dst_port, false)
+            .override_global("dst_port_2", &bpf_dst_port_2, false)
             .override_global("log_level", &bpf_log_level, false)
             .override_global("syn_rate_enabled", &bpf_rate_enabled, false)
             .override_global("syn_rate_threshold", &bpf_rate_threshold, false)
@@ -244,6 +264,7 @@ impl EbpfProbe {
             filter_ip_v4,
             filter_ip_v6,
             dst_port,
+            dst_port_2,
             mode = mode_str,
             link_pinned = outcome.link_pinned,
             rate_limit_enabled = rate_limit.enabled(),

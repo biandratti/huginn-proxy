@@ -87,8 +87,7 @@ fn handle_ipv4(ctx: &XdpContext, mut offset: usize) {
         return;
     }
 
-    let dst_port_val = tcp_syn::dst_port();
-    if dst_port_val != 0 && unsafe { (*tcp).dest } != dst_port_val {
+    if !tcp_syn::dest_allowed(unsafe { (*tcp).dest }) {
         return;
     }
 
@@ -156,8 +155,7 @@ fn handle_ipv6(ctx: &XdpContext, mut offset: usize) {
         return;
     }
 
-    let dst_port_val = tcp_syn::dst_port();
-    if dst_port_val != 0 && unsafe { (*tcp).dest } != dst_port_val {
+    if !tcp_syn::dest_allowed(unsafe { (*tcp).dest }) {
         return;
     }
 

@@ -112,20 +112,6 @@ fn authority_matches_sni_different_cert_files_rejected() {
     assert!(!authority_matches_sni(&domains, "api.example.com", "other.com"));
 }
 
-#[test]
-fn authority_matches_sni_certless_host_uses_default_cert() {
-    // A certless named domain is served by the default (catch-all) cert. A request for it
-    // over a connection that also presented the default cert coalesces.
-    let catch_all_with_cert = Domain {
-        cert_path: Some("/certs/default.pem".to_string()),
-        key_path: Some("/certs/default.key".to_string()),
-        ..catch_all()
-    };
-    let domains = vec![domain("api.example.com"), catch_all_with_cert];
-    // SNI=api.example.com -> certless -> default cert; authority=other -> catch-all -> default cert.
-    assert!(authority_matches_sni(&domains, "api.example.com", "other.com"));
-}
-
 fn mtls_domain(host: &str, cert_path: &str) -> Domain {
     Domain {
         client_ca_path: Some("/certs/client-ca.pem".to_string()),

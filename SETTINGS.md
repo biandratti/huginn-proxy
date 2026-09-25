@@ -83,10 +83,21 @@ Network interfaces and socket options. **Static** — requires restart to change
 
 | Key                                 | Type             | Default | Description                                                                                                                                                |
 |-------------------------------------|------------------|---------|--------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `addrs`                             | array of strings | —       | One or more `host:port` addresses to bind. IPv6 addresses must be wrapped in brackets.                                                                         |
+| `port`                              | integer          | —       | Plain HTTP listen port. Omit to skip HTTP sockets. At least one of `port` or `port_tls` is required; they must not be equal.                                |
+| `port_tls`                          | integer          | —       | HTTPS listen port. Omit to skip TLS sockets.                                                                                                                |
+| `https_redirection`                 | bool             | `true` with both ports; otherwise `false` | Process-wide HTTP→HTTPS redirect policy. May only be written when both `port` and `port_tls` are set. With `true`, matched plaintext requests receive `301`; with `false`, HTTP is proxied. Static: restart required. |
+| `ipv6`                              | bool             | `false` | Also bind IPv6 `::` when `address_v6` is omitted. IPv4 `0.0.0.0` is always bound unless `address_v4` lists specific addresses.                              |
+| `address_v4`                        | array of strings | `0.0.0.0` | IPv4 bind addresses. Must not be empty. Must not mix `0.0.0.0` with other addresses.                                                                      |
+| `address_v6`                        | array of strings | —       | IPv6 bind addresses. Used instead of the `ipv6` flag when set. Must not be empty. Must not mix `::` with other addresses. Bare (`::1`) and bracketed (`[::1]`) forms are accepted. |
 | `tcp_backlog`                       | integer          | `4096`  | Kernel `listen(2)` backlog per socket. Increase under heavy connection bursts.                                                                                 |
 | `proxy_protocol.mode`               | string           | `off`   | PROXY protocol handling (v1 and v2): `off`, `optional`, or `require`. See note below.                                                                          |
 | `proxy_protocol.header_timeout_ms`  | integer          | `100`   | Milliseconds to wait for a PROXY header from a trusted peer (covers detection + full read). Only relevant when `proxy_protocol.mode` is `optional`/`require`. `<= 0` falls back to an internal 1 s timeout (not recommended). |
+
+`https_redirection` applies only after host matching. An unknown host with no exact,
+wildcard, or catch-all domain receives `421`, not a redirect. `Location` preserves the request
+host, path, and query; it omits port `443` and writes any other `port_tls`. An empty matched host
+receives `400` without `Location`. The redirect runs after the IP filter and before mTLS/rate
+limiting.
 
 > **`proxy_protocol.mode`** lets huginn recover the real client `(src_ip, src_port)` when it sits behind
 > any L4 load balancer or ingress that prepends a [PROXY protocol](https://www.haproxy.org/download/2.0/doc/proxy-protocol.txt)
@@ -125,7 +136,9 @@ Network interfaces and socket options. **Static** — requires restart to change
 
 ```toml
 [listen]
-addrs = ["0.0.0.0:7000", "[::]:7000"]
+port = 80
+port_tls = 443
+ipv6 = true
 # tcp_backlog = 4096
 
 [listen.proxy_protocol]
@@ -138,9 +151,9 @@ addrs = ["0.0.0.0:7000", "[::]:7000"]
 
 ```yaml
 listen:
-  addrs:
-    - "0.0.0.0:7000"
-    - "[::]:7000"
+  port: 80
+  port_tls: 443
+  ipv6: true
   # tcp_backlog: 4096
   proxy_protocol:
     # mode: off  # off | optional | require
@@ -314,9 +327,9 @@ enforce).
 
 | Key         | Type   | Default | Description                                                                                      |
 |-------------|--------|---------|--------------------------------------------------------------------------------------------------|
-| `host`      | string | `null`  | Domain pattern for host matching: exact (`api.example.com`) or single-level wildcard (`*.example.com`). Normalized at load: lowercased, trailing `.` stripped. **Omit for a catch-all** that matches any host; its cert (if any) is the TLS default certificate. |
-| `cert_path` | string | `null`  | Path to the TLS certificate PEM file. Omit for plain-HTTP-only domains. Requires a [`[tls]`](#tls) section: without it no listener terminates TLS and the config is rejected at startup. |
-| `key_path`  | string | `null`  | Path to the TLS private key PEM file. Must be set together with `cert_path` or both omitted.     |
+| `host`      | string | `null`  | Domain pattern for host matching: exact (`api.example.com`) or single-level wildcard (`*.example.com`). Normalized at load: lowercased, trailing `.` stripped. **Omit for a catch-all** that matches any host; when TLS is enabled, its required cert is the TLS default certificate. |
+| `cert_path` | string | `null`  | Path to the TLS certificate PEM file. Required on every domain, including the catch-all, whenever `listen.port_tls` is set. May be omitted only for HTTP-only configurations. Multiple domains may reference the same certificate. |
+| `key_path`  | string | `null`  | Path to the TLS private key PEM file. Required with `cert_path`; both may be omitted only in HTTP-only configurations. |
 | `client_ca_path` | string | `null` | Path to a client-CA bundle PEM file. When set, this domain requires **mutual TLS**: clients must present a certificate signed by one of these CAs. Requires `cert_path`/`key_path`. Hot-reloadable per-domain. |
 | `headers`   | table  | —       | Domain-level header manipulation. Merged between global and route-level headers.                 |
 | `security`  | table  | —       | Per-domain security overrides (`ip_filter`, `rate_limit`, `headers`). See [`[domains.security]`](#domainssecurity) below. |
@@ -707,12 +720,14 @@ Rule of thumb: `[headers]` is for free-form request/response header plumbing (ca
 
 ## `[tls]`
 
-TLS termination options. Omit the entire section to run as plain HTTP. **Static** — requires
-restart to change. Certificates are configured per domain under `[[domains]]` (see below).
+TLS termination options. **Static** — requires restart to change. Certificates are configured per
+domain under `[[domains]]`. `[tls]` is optional when `listen.port_tls` is set: omitting it fills
+the same defaults as an empty `[tls]` (including ALPN `["h2", "http/1.1"]` if `alpn` is omitted).
+`[tls]` without `listen.port_tls` is an error.
 
 | Key    | Type             | Default | Description                                                                                                 |
 |--------|------------------|---------|-------------------------------------------------------------------------------------------------------------|
-| `alpn` | array of strings | `[]`    | ALPN protocols to advertise. Use `["h2", "http/1.1"]` to support both HTTP/2 and HTTP/1.1 with negotiation. |
+| `alpn` | array of strings | `["h2", "http/1.1"]` when `port_tls` is set and the key is omitted; otherwise as written (including `[]`) | ALPN protocols to advertise. An explicit empty list disables ALPN. |
 
 <table>
 <thead>
@@ -915,7 +930,7 @@ Feature flags for passive fingerprinting. **Static** — eBPF programs are loade
 | Key            | Type    | Default | Description                                                                                                                                                |
 |----------------|---------|---------|------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `tls_enabled`  | bool    | `true`  | Extract TLS (JA4) fingerprints and inject `x-tls-ja4*` headers.                                                                                     |
-| `http_enabled` | bool    | `true`  | Extract HTTP/2 (Akamai) fingerprints and inject `x-http2-akamai` header.                                                                              |
+| `http_enabled` | bool    | `true`  | Extract HTTP/2 (Akamai) fingerprints and inject `x-http2-akamai`. Runs on HTTPS and on plaintext HTTP/2 (h2c prior knowledge). HTTP/1.1 is not fingerprinted. |
 | `tcp_enabled`  | bool    | `false` | Extract TCP SYN (p0f-style) fingerprints via eBPF/XDP and inject `x-tcp-p0f` header. Requires the `ebpf-tcp` build feature and Linux kernel ≥ 5.11. |
 | `max_capture`  | integer | `65536` | Maximum bytes captured per HTTP/2 connection for fingerprinting.                                                                                           |
 
@@ -1683,7 +1698,7 @@ security:
 preserve_host = false
 
 [listen]
-addrs = ["0.0.0.0:8080"]
+port = 8080
 
 [[backends]]
 address = "localhost:3000"
@@ -1704,8 +1719,7 @@ backend = "localhost:3000"
 preserve_host: false
 
 listen:
-  addrs:
-    - "0.0.0.0:8080"
+  port: 8080
 
 backends:
   - address: "localhost:3000"

@@ -2,18 +2,22 @@ use std::sync::Arc;
 
 use super::timeout_helper::serve_with_timeout;
 use crate::backend::UpstreamGateway;
-use crate::fingerprinting::TcpObservation;
+use crate::fingerprinting::{CapturingStream, ConnectionFingerprints, TcpObservation};
 use crate::proxy::ClientPool;
 use crate::proxy::handler::request::handle_proxy_request;
 use crate::proxy::synthetic_response::synthetic_error_response;
 use crate::telemetry::Metrics;
 use http::StatusCode;
+use huginn_net_http::AkamaiFingerprint;
 use hyper_util::rt::{TokioExecutor, TokioIo};
 use hyper_util::server::conn::auto::Builder as ConnBuilder;
+use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::net::TcpStream;
+use tokio::sync::watch;
 
 /// Configuration for handling plain HTTP connections
 pub struct PlainConnectionConfig {
+    pub fingerprint_config: crate::config::FingerprintConfig,
     pub domains: Arc<Vec<crate::config::Domain>>,
     pub backends: Arc<Vec<crate::config::Backend>>,
     pub keep_alive: crate::config::KeepAliveConfig,
@@ -26,6 +30,7 @@ pub struct PlainConnectionConfig {
     pub syn_fingerprint: Option<TcpObservation>,
     pub upstream: UpstreamGateway,
     pub shutdown_rx: crate::proxy::shutdown::ShutdownWatch,
+    pub listen: crate::config::RuntimeListen,
 }
 
 /// Handle a plain HTTP connection
@@ -34,24 +39,52 @@ pub async fn handle_plain_connection(
     peer: std::net::SocketAddr,
     config: PlainConnectionConfig,
 ) {
+    // JA4 needs a ClientHello, so it stays `None` on this transport; Akamai is captured
+    // from the HTTP/2 frames exactly as on the TLS path (cleartext h2 is prior knowledge).
+    let mut fingerprints =
+        ConnectionFingerprints { tcp_syn: config.syn_fingerprint.clone(), ..Default::default() };
+
+    if config.fingerprint_config.http_enabled {
+        let (akamai_tx, akamai_rx) = watch::channel(None::<AkamaiFingerprint>);
+        let (capturing_stream, _extracted) = CapturingStream::new(
+            stream,
+            config.fingerprint_config.max_capture,
+            akamai_tx,
+            Arc::clone(&config.metrics),
+        );
+        fingerprints.akamai = Some(akamai_rx);
+        serve_plain(capturing_stream, fingerprints, peer, config).await;
+    } else {
+        serve_plain(stream, fingerprints, peer, config).await;
+    }
+}
+
+async fn serve_plain<S>(
+    stream: S,
+    fingerprints: ConnectionFingerprints,
+    peer: std::net::SocketAddr,
+    config: PlainConnectionConfig,
+) where
+    S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
+{
     let backends = config.backends.clone();
     let metrics = config.metrics.clone();
     let domains = config.domains.clone();
     let keep_alive = config.keep_alive.clone();
     let security = config.security.clone();
     let client_pool = config.client_pool.clone();
-    let syn_fingerprint = config.syn_fingerprint.clone();
     let upstream = config.upstream.clone();
 
     let svc = hyper::service::service_fn(move |req: hyper::Request<hyper::body::Incoming>| {
         let domains = domains.clone();
         let backends = backends.clone();
-        let syn_fingerprint = syn_fingerprint.clone();
         let metrics = metrics.clone();
         let keep_alive = keep_alive.clone();
         let security = security.clone();
         let client_pool = client_pool.clone();
         let upstream = upstream.clone();
+        let listen = config.listen;
+        let fingerprints = fingerprints.clone();
 
         async move {
             let preserve_host = config.preserve_host;
@@ -59,9 +92,7 @@ pub async fn handle_plain_connection(
                 req,
                 domains,
                 backends,
-                None,
-                None,
-                syn_fingerprint,
+                fingerprints,
                 &keep_alive,
                 &security,
                 &metrics,
@@ -71,6 +102,7 @@ pub async fn handle_plain_connection(
                 &client_pool,
                 &upstream,
                 None,
+                listen,
             )
             .await;
 

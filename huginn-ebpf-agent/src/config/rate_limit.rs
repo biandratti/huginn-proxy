@@ -1,4 +1,4 @@
-use super::ConfigError;
+use super::{ConfigError, env};
 use huginn_ebpf::SynRateLimit;
 use std::str::FromStr;
 
@@ -17,7 +17,7 @@ pub(super) fn resolve_rate_limit(
 ) -> Result<SynRateLimit, ConfigError> {
     let enabled = parse_or_default(
         get_var,
-        "HUGINN_EBPF_RATE_LIMIT_ENABLED",
+        env::RATE_LIMIT_ENABLED,
         false,
         "must be 'true' or 'false'",
         |_| true,
@@ -29,7 +29,7 @@ pub(super) fn resolve_rate_limit(
     let max_burst = SynRateLimit::MAX_THRESHOLD;
     let burst = parse_or_default(
         get_var,
-        "HUGINN_EBPF_RATE_LIMIT_BURST",
+        env::RATE_LIMIT_BURST,
         DEFAULT_BURST,
         &format!("must be an integer between 1 and {max_burst}"),
         |b| b > 0 && b <= max_burst,
@@ -38,7 +38,7 @@ pub(super) fn resolve_rate_limit(
     let max_window = SynRateLimit::MAX_WINDOW_SECONDS;
     let window_seconds = parse_or_default(
         get_var,
-        "HUGINN_EBPF_RATE_LIMIT_WINDOW_SECONDS",
+        env::RATE_LIMIT_WINDOW_SECONDS,
         DEFAULT_WINDOW_SECONDS,
         &format!("must be an integer between 1 and {max_window} seconds"),
         |w| w > 0 && w <= max_window,
@@ -50,7 +50,7 @@ pub(super) fn resolve_rate_limit(
 /// Parse `name` trimmed and lowercased, defaulting when unset.
 fn parse_or_default<T: FromStr + Copy>(
     get_var: &impl Fn(&str) -> Option<String>,
-    name: &str,
+    name: &'static str,
     default: T,
     reason: &str,
     usable: impl Fn(T) -> bool,
@@ -60,10 +60,6 @@ fn parse_or_default<T: FromStr + Copy>(
     };
     match raw.trim().to_ascii_lowercase().parse::<T>() {
         Ok(value) if usable(value) => Ok(value),
-        _ => Err(ConfigError::Invalid {
-            name: name.to_string(),
-            value: raw,
-            reason: reason.to_string(),
-        }),
+        _ => Err(ConfigError::invalid(name, raw, reason)),
     }
 }

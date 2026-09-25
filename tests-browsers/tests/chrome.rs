@@ -6,7 +6,7 @@
 //! ## Requirements
 //! - Chrome/Chromium browser installed (must match CHROME_FINGERPRINTS.version in lib.rs)
 //! - chromedriver running on port 9515: `chromedriver --port=9515`
-//! - huginn-proxy running on https://localhost:7000
+//! - huginn-proxy running on https://localhost (and http://localhost → 301 to HTTPS)
 //!
 //!
 //! ## Running
@@ -22,7 +22,7 @@
 //! ```
 
 use tests_browsers::{
-    CHROME_FINGERPRINTS, PROXY_URL, get_chrome_json, names, parse_backend_echo,
+    CHROME_FINGERPRINTS, PROXY_HTTP_URL, PROXY_URL, get_chrome_json, names, parse_backend_echo,
     verify_chrome_version, verify_fingerprint_headers,
 };
 use thirtyfour::prelude::*;
@@ -121,6 +121,40 @@ async fn test_chrome_fingerprint() -> Result<(), Box<dyn std::error::Error>> {
             );
         }
 
+        Ok::<(), Box<dyn std::error::Error>>(())
+    }
+    .await;
+
+    let _ = driver.quit().await;
+    result
+}
+
+#[tokio::test]
+async fn test_chrome_http_redirects_to_https() -> Result<(), Box<dyn std::error::Error>> {
+    let mut caps = DesiredCapabilities::chrome();
+    caps.add_arg("--ignore-certificate-errors")?;
+    caps.add_arg("--headless=new")?;
+    caps.add_arg("--no-sandbox")?;
+    caps.add_arg("--disable-dev-shm-usage")?;
+
+    let driver = WebDriver::new(CHROMEDRIVER_URL, caps).await.map_err(|e| {
+        format!(
+            "Chrome/chromedriver not available: {}. Start chromedriver: chromedriver --port=9515",
+            e
+        )
+    })?;
+
+    let result = async {
+        let url = format!("{}/anything", PROXY_HTTP_URL);
+        driver.goto(&url).await?;
+        let current = driver.current_url().await?;
+        assert!(
+            current.as_str().starts_with(PROXY_URL),
+            "HTTP should redirect to HTTPS, got {current}"
+        );
+        let content = get_chrome_json(&driver).await?;
+        let headers = parse_backend_echo(&content)?;
+        verify_fingerprint_headers(&headers)?;
         Ok::<(), Box<dyn std::error::Error>>(())
     }
     .await;

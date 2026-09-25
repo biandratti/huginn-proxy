@@ -9,4 +9,4 @@ pub use http2_extractor::CapturingStream;
 pub use huginn_net_tcp::TcpObservation;
 pub use ja4::Ja4Fingerprints;
 pub use tls_extractor::read_client_hello;
-pub use types::SynResult;
+pub use types::{ConnectionFingerprints, SynResult};

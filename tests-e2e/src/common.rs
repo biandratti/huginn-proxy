@@ -3,9 +3,13 @@
 use reqwest::Client;
 use std::collections::HashMap;
 
-pub const PROXY_HTTPS_URL_IPV4: &str = "https://127.0.0.1:7000";
+pub const PROXY_HTTPS_URL_IPV4: &str = "https://127.0.0.1:443";
 
-pub const PROXY_HTTPS_URL_IPV6: &str = "https://[::1]:7000";
+pub const PROXY_HTTPS_URL_IPV6: &str = "https://[::1]:443";
+
+pub const PROXY_HTTP_URL_IPV4: &str = "http://127.0.0.1:80";
+
+pub const PROXY_HTTP_URL_IPV6: &str = "http://[::1]:80";
 
 /// Default metrics/health check server URL
 pub const METRICS_URL: &str = "http://127.0.0.1:9090";

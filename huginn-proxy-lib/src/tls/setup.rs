@@ -25,7 +25,7 @@ pub type SharedServerCrypto = Arc<ArcSwap<ServerCryptoMap>>;
 /// group); a non-empty list applies exactly those groups.
 pub fn tls_build_options(tls: &TlsConfig) -> TlsBuildOptions {
     TlsBuildOptions {
-        alpn: tls.alpn.clone(),
+        alpn: tls.alpn_protocols().to_vec(),
         cipher_suites: tls.options.cipher_suites.clone(),
         curve_preferences: tls.options.curve_preferences.clone(),
         protocol_versions: resolve_protocol_versions(&tls.options),

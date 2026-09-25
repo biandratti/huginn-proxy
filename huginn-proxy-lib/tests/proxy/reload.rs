@@ -73,7 +73,7 @@ fn ip_filter_table(path: &str, cidr: &str) -> String {
 }
 
 fn render(spec: &Spec) -> String {
-    let mut out = format!("listen = {{ addrs = [\"127.0.0.1:{LISTEN_PORT}\"] }}\n");
+    let mut out = format!("listen = {{ port = {LISTEN_PORT}, address_v4 = [\"127.0.0.1\"] }}\n");
     let backends = spec
         .backends
         .iter()

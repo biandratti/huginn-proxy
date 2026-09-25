@@ -15,7 +15,7 @@ fn all_warnings_aggregates_every_audit() -> Result<(), Box<dyn std::error::Error
     //  - trusted_proxies trust-all
     //  - security override dropping a globally-enabled rate limit
     let toml = r#"
-listen = { addrs = ["127.0.0.1:0"] }
+listen = { port = 8080, address_v4 = ["127.0.0.1"] }
 backends = [{ address = "backend:9000" }]
 
 [security]

@@ -122,7 +122,7 @@ async fn spawn_proxy(
     std::fs::write(tmp.path(), toml)?;
 
     let config = load_from_path(tmp.path())?;
-    let listen_addr = config.listen.addrs[0];
+    let listen_addr = config.listen.sockets()?[0].addr;
 
     let huginn_proxy_lib::config::ConfigParts { static_cfg, dynamic_cfg } = config.into_parts();
     let static_cfg = Arc::new(static_cfg);
@@ -181,7 +181,7 @@ async fn raw_request(proxy: SocketAddr, header_prefix: &[u8]) -> String {
 
 fn config_toml(listen_port: u16, backend: SocketAddr, mode: &str, trusted: &str) -> String {
     format!(
-        r#"listen = {{ addrs = ["127.0.0.1:{listen_port}"], proxy_protocol = {{ mode = "{mode}" }} }}
+        r#"listen = {{ port = {listen_port}, address_v4 = ["127.0.0.1"], proxy_protocol = {{ mode = "{mode}" }} }}
 backends = [{{ address = "{backend}" }}]
 
 [security.trusted_proxies]
@@ -341,9 +341,8 @@ async fn spawn_proxy_tls(
 
     let config = Config {
         listen: ListenConfig {
-            addrs: vec![listen_addr],
             proxy_protocol: ProxyProtocolConfig { mode: proxy_protocol_mode, ..Default::default() },
-            ..Default::default()
+            ..ListenConfig::localhost_https(listen_port)
         },
         backends: vec![Backend {
             address: backend.to_string(),
@@ -369,7 +368,7 @@ async fn spawn_proxy_tls(
             }],
         }],
         tls: Some(TlsConfig {
-            alpn: vec!["http/1.1".to_string()],
+            alpn: Some(vec!["http/1.1".to_string()]),
             options: Default::default(),
             session_resumption: Default::default(),
         }),

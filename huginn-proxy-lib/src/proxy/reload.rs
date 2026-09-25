@@ -1,7 +1,7 @@
 use crate::backend::health_check::HealthCheckSupervisor;
 use crate::config::{
     Backend, BackendPoolConfig, Domain, DynamicConfig, RateLimitConfig, StaticConfig,
-    load_from_path,
+    load_from_path_for_reload,
 };
 use crate::proxy::client_pool::ClientPool;
 use crate::proxy::protocol::warn_proxy_protocol_trust_gap;
@@ -55,7 +55,7 @@ pub async fn try_reload(
 
     info!(path = %config_path.display(), "Hot reload triggered");
 
-    let new_config = match load_from_path(config_path) {
+    let new_config = match load_from_path_for_reload(config_path, static_cfg) {
         Ok(c) => c,
         Err(e) => {
             error!(error = %e, "Config reload failed: parse error, keeping current config");

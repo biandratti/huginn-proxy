@@ -16,6 +16,7 @@ mod fingerprint_ja4;
 mod fingerprint_sync_tcp;
 mod header_override;
 mod health_checks;
+mod https_redirect;
 mod load_balance;
 mod path_manipulation;
 mod rate_limit;

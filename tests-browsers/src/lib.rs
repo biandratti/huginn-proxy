@@ -5,7 +5,9 @@ use thirtyfour::prelude::*;
 
 pub use huginn_proxy_lib::fingerprinting::names;
 
-pub const PROXY_URL: &str = "https://localhost:7000";
+pub const PROXY_URL: &str = "https://localhost";
+
+pub const PROXY_HTTP_URL: &str = "http://localhost";
 
 #[derive(Debug, Clone)]
 pub struct BrowserFingerprints {

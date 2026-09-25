@@ -21,9 +21,9 @@ Limitation: HTTP/3 is not supported yet.
 
 **IPv4 and IPv6**
 
-The proxy listens on both IPv4 and IPv6 simultaneously. Configure multiple `listen.addrs` entries (e.g.,
-`"0.0.0.0:7000"` for IPv4 and `"[::]:7000"` for IPv6). Backend addresses, IP filtering rules, and all observability
-endpoints support both address families.
+The proxy binds IPv4 `0.0.0.0` by default. Set `listen.ipv6 = true` to also bind `::`, or list specific addresses in
+`listen.address_v4` / `listen.address_v6`. `address_v6` accepts bare (`::1`) and bracketed (`[::1]`) forms. Backend
+addresses, IP filtering rules, and all observability endpoints support both address families.
 
 ## Load Balancing
 
@@ -69,8 +69,8 @@ Limitation: No regex support. Only simple prefix matching.
 
 **Virtual hosting with per-domain certificates and routes**
 
-Routes are grouped under `[[domains]]` entries. Each domain owns a `host` pattern, an optional TLS certificate
-(`cert_path` / `key_path`), optional domain-scoped `headers`, and its own set of `routes`. A request is first matched to
+Routes are grouped under `[[domains]]` entries. Each domain owns a `host` pattern, TLS certificate
+(`cert_path` / `key_path`) when `listen.port_tls` is enabled, optional domain-scoped `headers`, and its own set of `routes`. A request is first matched to
 a domain by host, then to a route by prefix within that domain.
 
 Host matching order is **exact host → single-label wildcard (`*.example.com`) → catch-all**. The catch-all is the entry
@@ -84,8 +84,15 @@ the TLS layer and drives the optional `sni_strict` handshake rejection. Cert sel
 reconciled by the always-on **421 Misdirected Request** check on coalesced connections. Host comparison is
 case-insensitive and IPv6 brackets are stripped before matching (`[::1]` matches a domain configured as `::1`).
 
-`cert_path` and `key_path` are optional but must be supplied together — omit both for a plain-HTTP domain. Specifying
-only one is a validation error. Duplicate hosts and more than one catch-all are also rejected at config load.
+`cert_path` and `key_path` must be supplied together. When `listen.port_tls` is set, every domain
+(including the catch-all) must declare both; multiple domains may reference the same pair of files.
+They may be omitted only when the whole listener configuration is HTTP-only. Duplicate hosts and
+more than one catch-all are also rejected at config load.
+
+HTTP→HTTPS redirect is process-wide (`listen.https_redirection`). When both `listen.port` and
+`listen.port_tls` are set, the default is `true`: a matched plaintext request receives `301` and is
+not forwarded. Set `false` to proxy HTTP as well as HTTPS. Writing the key with only one port is a
+validation error. An unmatched host is still `421` (no `Location`); the catch-all is a match.
 
 Limitation: Wildcard is one label deep only. Routing is host + path prefix; no header- or method-based routing.
 

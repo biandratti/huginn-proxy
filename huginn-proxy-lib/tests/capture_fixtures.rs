@@ -188,7 +188,7 @@ async fn capture_fingerprint_values() -> Result<(), Box<dyn std::error::Error + 
     let proxy_addr: std::net::SocketAddr = format!("127.0.0.1:{proxy_port}").parse()?;
 
     let config = Config {
-        listen: ListenConfig { addrs: vec![proxy_addr], ..Default::default() },
+        listen: ListenConfig::localhost_https(proxy_port),
         backends: vec![Backend {
             address: backend_addr.to_string(),
             http_version: None,
@@ -213,7 +213,7 @@ async fn capture_fingerprint_values() -> Result<(), Box<dyn std::error::Error + 
             }],
         }],
         tls: Some(TlsConfig {
-            alpn: vec!["h2".to_string(), "http/1.1".to_string()],
+            alpn: Some(vec!["h2".to_string(), "http/1.1".to_string()]),
             options: Default::default(),
             session_resumption: Default::default(),
         }),

@@ -2,9 +2,14 @@
 preserve_host: false
 
 listen:
-  addrs:
-    - "0.0.0.0:7000"
-    - "[::]:7000"
+  port: 80
+  port_tls: 443
+  https_redirection: true
+  ipv6: true
+  address_v4:
+    - "0.0.0.0"
+  address_v6:
+    - "::"
   # tcp_backlog: 4096
 
 backends:

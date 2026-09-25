@@ -6,7 +6,7 @@
 //! ## Requirements
 //! - Firefox browser installed (must match FIREFOX_FINGERPRINTS.version in lib.rs)
 //! - geckodriver installed and running on port 4444
-//! - Docker Compose services running (proxy on https://localhost:7000)
+//! - Docker Compose services running (proxy on https://localhost; http://localhost redirects)
 //!
 //! ## Running Locally
 //!
@@ -53,8 +53,9 @@
 
 use serial_test::serial;
 use tests_browsers::{
-    FIREFOX_FINGERPRINTS, PROXY_URL, get_chrome_json, get_firefox_json, get_http2_fingerprint,
-    names, parse_backend_echo, verify_fingerprint_headers, verify_firefox_version,
+    FIREFOX_FINGERPRINTS, PROXY_HTTP_URL, PROXY_URL, get_chrome_json, get_firefox_json,
+    get_http2_fingerprint, names, parse_backend_echo, verify_fingerprint_headers,
+    verify_firefox_version,
 };
 use thirtyfour::prelude::*;
 
@@ -145,6 +146,34 @@ async fn test_firefox_fingerprint() -> Result<(), Box<dyn std::error::Error>> {
             );
         }
 
+        Ok::<(), Box<dyn std::error::Error>>(())
+    }
+    .await;
+
+    let _ = driver.quit().await;
+    result
+}
+
+#[tokio::test]
+#[serial]
+async fn test_firefox_http_redirects_to_https() -> Result<(), Box<dyn std::error::Error>> {
+    let mut caps = DesiredCapabilities::firefox();
+    caps.add_arg("--headless")?;
+    caps.accept_insecure_certs(true)?;
+
+    let driver = WebDriver::new(GECKODRIVER_URL, caps).await?;
+
+    let result = async {
+        let url = format!("{}/anything", PROXY_HTTP_URL);
+        driver.goto(&url).await?;
+        let current = driver.current_url().await?;
+        assert!(
+            current.as_str().starts_with(PROXY_URL),
+            "HTTP should redirect to HTTPS, got {current}"
+        );
+        let content = get_firefox_json(&driver).await?;
+        let headers = parse_backend_echo(&content)?;
+        verify_fingerprint_headers(&headers)?;
         Ok::<(), Box<dyn std::error::Error>>(())
     }
     .await;

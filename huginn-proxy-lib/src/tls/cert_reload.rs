@@ -22,8 +22,8 @@ use crate::tls::setup::SharedServerCrypto;
 /// Translate configured domains into cert entries for the per-SNI config builder.
 ///
 /// Domains that declare both a `cert_path` and a `key_path` become a
-/// [`CertEntry`]; a domain missing either is skipped (it can still serve TLS via
-/// the catch-all default cert) with an informational log.
+/// [`CertEntry`]. Config validation requires both on every domain whenever TLS
+/// is enabled; the skip branch remains defensive for direct library callers.
 ///
 /// A domain that also sets `client_ca_path` gets that CA attached to its source,
 /// so its per-SNI `ServerConfig` enforces mutual TLS while other domains do not:
@@ -45,7 +45,7 @@ pub fn cert_entries_from_domains(domains: &[Domain]) -> Vec<CertEntry> {
             }
             _ => info!(
                 host = domain.label(),
-                "Domain has no cert_path/key_path; it will serve TLS only if a default certificate exists"
+                "Domain has no cert_path/key_path; skipping invalid TLS entry"
             ),
         }
     }

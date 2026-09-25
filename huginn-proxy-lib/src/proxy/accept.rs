@@ -1,6 +1,6 @@
 use crate::backend::health_check::HealthRegistry;
 use crate::backend::{BackendSelector, UpstreamGateway};
-use crate::config::{FingerprintConfig, KeepAliveConfig};
+use crate::config::{FingerprintConfig, KeepAliveConfig, RuntimeListen};
 use crate::fingerprinting::{SynResult, TcpObservation};
 use crate::proxy::connection::{ConnectionError, ConnectionManager};
 use crate::proxy::peer_resolution::{ResolvedProxyProtocol, resolve_peer};
@@ -42,10 +42,12 @@ pub struct AcceptContext {
     pub tls_handshake_timeout: Duration,
     pub connection_handling_timeout: Duration,
     pub proxy_protocol: ResolvedProxyProtocol,
+    pub listen: RuntimeListen,
 }
 
 pub async fn accept_loop(
     addr: SocketAddr,
+    tls_enabled: bool,
     listener: TcpListener,
     mut shutdown_rx: ShutdownWatch,
     connection_manager: Arc<ConnectionManager>,
@@ -140,7 +142,11 @@ pub async fn accept_loop(
                 ctx_task.backend_selector.clone(),
             );
 
-            if let Some(ref server_crypto) = ctx_task.server_crypto {
+            if tls_enabled {
+                let Some(server_crypto) = ctx_task.server_crypto.as_ref() else {
+                    warn!(?peer, "HTTPS listener has no TLS configuration; dropping connection");
+                    return;
+                };
                 handle_tls_connection(
                     stream,
                     peer,
@@ -160,6 +166,7 @@ pub async fn accept_loop(
                         syn_fingerprint: syn_fingerprint.clone(),
                         upstream: upstream.clone(),
                         shutdown_rx: shutdown_rx.clone(),
+                        listen: ctx_task.listen,
                     },
                 )
                 .await;
@@ -168,6 +175,7 @@ pub async fn accept_loop(
                     stream,
                     peer,
                     PlainConnectionConfig {
+                        fingerprint_config: ctx_task.fingerprint_config.clone(),
                         domains,
                         backends,
                         keep_alive: ctx_task.keep_alive_config.clone(),
@@ -180,6 +188,7 @@ pub async fn accept_loop(
                         syn_fingerprint,
                         upstream,
                         shutdown_rx,
+                        listen: ctx_task.listen,
                     },
                 )
                 .await;

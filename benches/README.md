@@ -171,10 +171,10 @@ external tool against a running proxy instance:
 docker compose -f examples/docker-compose.release-ebpf.yml up --build
 
 # 30-second load test: 50 concurrent users, HTTP/1.1
-oha --insecure -c 50 -z 30s https://127.0.0.1:7000/
+oha --insecure -c 50 -z 30s https://127.0.0.1:443/
 
 # HTTP/2 load test
-oha --insecure -c 50 -z 30s --http-version 2 https://127.0.0.1:7000/
+oha --insecure -c 50 -z 30s --http-version 2 https://127.0.0.1:443/
 ```
 
 ### Load test results (oha, c=50, 30s, localhost)
