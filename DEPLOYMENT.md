@@ -37,7 +37,7 @@ the probe does not depend on utilities the runtime will never ship. Kubernetes c
 
 Published image names and tags (`latest` / `vX.Y.Z`): [DEPLOYMENT-MATRIX.md](DEPLOYMENT-MATRIX.md). The three GHCR packages are separate repositories (`huginn-proxy`, `huginn-proxy-plain`, `huginn-proxy-ebpf-agent`); **do not** add `-ebpf-agent` as a suffix on the tag.
 
-Compose that **builds** from this repository publishes **80** (HTTP, `301` to HTTPS) and **443**, plus 9090/9091. The proxy image runs as UID **10001**, so those files add `CAP_NET_BIND_SERVICE`. TLS, backends, and plain vs eBPF are in [`examples/README.md`](examples/README.md). `docker-compose.release-*` stay on **7000** and mount `examples/config/compose.release.yaml` (`listen.addrs`) until a GHCR image ships `listen.port` / `port_tls`.
+Compose that **builds** from this repository publishes **80** (HTTP, `301` to HTTPS when `listen.https_redirection` is true, the example default) and **443**, plus 9090/9091. The proxy image runs as UID **10001**, so those files add `CAP_NET_BIND_SERVICE`. Dual listen with redirect captures SYN on **443** only (`HUGINN_EBPF_DST_PORTS=443`); set `https_redirection = false` and `80,443` when HTTP is proxied. TLS, backends, and plain vs eBPF are in [`examples/README.md`](examples/README.md). `docker-compose.release-*` stay on **7000** and mount `examples/config/compose.release.yaml` (`listen.addrs`) until a GHCR image ships `listen.port` / `port_tls`.
 
 Pre-built images from GHCR (pin `latest` to a release tag in the compose file if you need reproducibility):
 
@@ -99,7 +99,7 @@ spec:
         - name: HUGINN_EBPF_DST_IP_V4
           value: "0.0.0.0"
         - name: HUGINN_EBPF_DST_PORTS
-          value: "7000"                 # one port, or "80,443" when both are proxied
+          value: "443"                  # HTTPS port when listen.https_redirection is true (default with both ports). Use "80,443" only when https_redirection = false.
         - name: HUGINN_EBPF_PIN_PATH
           value: "/sys/fs/bpf/huginn"
         - name: HUGINN_EBPF_METRICS_ADDR

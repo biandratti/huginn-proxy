@@ -1,11 +1,13 @@
 mod client_pool;
 mod connection;
+mod dual_fingerprint;
 mod edge_cases;
 mod forwarding;
 mod h2c_forwarding;
 mod handler;
 mod http_akamai;
 mod http_result;
+mod https_redirect;
 mod path_manipulation;
 mod peer_resolution;
 mod protocol;

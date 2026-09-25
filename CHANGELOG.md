@@ -7,6 +7,21 @@ follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.0.6-rc.0]
+
+### Breaking changes
+
+- **`listen.addrs` removed.** Listeners are `listen.port` (HTTP) and `listen.port_tls` (HTTPS), plus `ipv6`, `address_v4`, and `address_v6`. At least one port is required; they must differ.
+- **`https_redirection` moved from `[[domains]]` to `[listen]`.** Process-wide. Default `true` when both ports are set, otherwise `false`. Writing the key with a single port is rejected. A reload that rewrites it is ignored until restart.
+- **Every domain needs `cert_path` and `key_path` when `listen.port_tls` is set**, catch-all included. Two domains may share the same pair of files. Omitting the pair to inherit the catch-all certificate is rejected.
+
+### Added
+
+- Dual HTTP+HTTPS listeners. When `https_redirection` is effective, matched plaintext requests receive `301` (host, path, and query of the request; `port_tls` omitted in `Location` when it is `443`). Set `false` to proxy HTTP as well.
+- `HUGINN_EBPF_DST_PORTS` replaces `HUGINN_EBPF_DST_PORT`: one or two capture ports. With dual listen and redirect, capture `port_tls` only.
+
+---
+
 ## [0.0.5-rc.0]
 
 ### Added

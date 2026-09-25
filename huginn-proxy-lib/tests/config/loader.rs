@@ -540,6 +540,42 @@ backends = [
 }
 
 #[test]
+fn http_only_rejects_domain_cert_even_with_tls_section()
+-> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let cert_path = tmp_path("http-tls-section.crt");
+    let key_path = tmp_path("http-tls-section.key");
+    fs::write(&cert_path, "dummy cert")?;
+    fs::write(&key_path, "dummy key")?;
+    let path = tmp_path("http-only-cert-with-tls");
+    let toml = format!(
+        r#"
+listen = {{ port = 8080, address_v4 = ["127.0.0.1"] }}
+backends = [{{ address = "b:9000" }}]
+
+[tls]
+
+[[domains]]
+host = "api.example.com"
+cert_path = "{}"
+key_path = "{}"
+routes = [{{ prefix = "/", backend = "b:9000" }}]
+"#,
+        cert_path.display(),
+        key_path.display()
+    );
+    fs::write(&path, toml)?;
+    let err = match load_from_path(&path) {
+        Ok(_) => panic!("HTTP-only listen must reject domain certs even when [tls] is present"),
+        Err(e) => e.to_string(),
+    };
+    assert!(err.contains("port_tls"), "got: {err}");
+    let _ = fs::remove_file(&path);
+    let _ = fs::remove_file(&cert_path);
+    let _ = fs::remove_file(&key_path);
+    Ok(())
+}
+
+#[test]
 fn rejects_tls_section_without_port_tls() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let path = tmp_path("tls-no-port-tls");
     let toml = r#"
@@ -660,6 +696,27 @@ routes = [{ prefix = "/", backend = "b:9000" }]
     fs::write(&path, toml)?;
     let err = match load_from_path(&path) {
         Ok(_) => panic!("dual-listen domain without cert must be rejected"),
+        Err(e) => e.to_string(),
+    };
+    assert!(err.contains("cert_path"), "got: {err}");
+    let _ = fs::remove_file(&path);
+    Ok(())
+}
+
+#[test]
+fn both_ports_reject_catchall_without_cert() -> Result<(), Box<dyn std::error::Error + Send + Sync>>
+{
+    let path = tmp_path("dual-plain-catchall");
+    let toml = r#"
+listen = { port = 8080, port_tls = 8443, address_v4 = ["127.0.0.1"] }
+backends = [{ address = "b:9000" }]
+
+[[domains]]
+routes = [{ prefix = "/", backend = "b:9000" }]
+"#;
+    fs::write(&path, toml)?;
+    let err = match load_from_path(&path) {
+        Ok(_) => panic!("dual-listen catch-all without cert must be rejected"),
         Err(e) => e.to_string(),
     };
     assert!(err.contains("cert_path"), "got: {err}");

@@ -89,6 +89,11 @@ case-insensitive and IPv6 brackets are stripped before matching (`[::1]` matches
 They may be omitted only when the whole listener configuration is HTTP-only. Duplicate hosts and
 more than one catch-all are also rejected at config load.
 
+HTTP→HTTPS redirect is process-wide (`listen.https_redirection`). When both `listen.port` and
+`listen.port_tls` are set, the default is `true`: a matched plaintext request receives `301` and is
+not forwarded. Set `false` to proxy HTTP as well as HTTPS. Writing the key with only one port is a
+validation error. An unmatched host is still `421` (no `Location`); the catch-all is a match.
+
 Limitation: Wildcard is one label deep only. Routing is host + path prefix; no header- or method-based routing.
 
 ## Rate Limiting
