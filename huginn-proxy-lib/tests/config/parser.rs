@@ -137,7 +137,7 @@ backends:
 #[test]
 fn toml_and_yaml_produce_equivalent_backends() -> TestResult {
     let toml_input = r#"
-        listen = { port = 7000 }
+        listen = { port = 8080 }
         backends = [
           { address = "backend-a:9000", http_version = "http11" },
           { address = "backend-b:9000", health_check = { interval_secs = 7, timeout_secs = 2 } },
@@ -145,7 +145,7 @@ fn toml_and_yaml_produce_equivalent_backends() -> TestResult {
     "#;
     let yaml_input = r#"
 listen:
-  port: 7000
+  port: 8080
 backends:
   - address: "backend-a:9000"
     http_version: http11

@@ -1,5 +1,3 @@
-//! Dual-listen HTTP→HTTPS redirect through the accept loop.
-
 use std::fs;
 use std::net::SocketAddr;
 use std::sync::Arc;

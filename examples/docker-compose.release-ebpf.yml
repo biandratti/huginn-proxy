@@ -57,8 +57,9 @@ services:
       - ./certs:/config/certs:ro
       - bpffs:/sys/fs/bpf
     ports:
-      - "0.0.0.0:7000:7000"
-      - "[::]:7000:7000"
+      # GHCR :latest still binds 7000 (`listen.addrs`). Host 443 is a publish map only.
+      - "0.0.0.0:443:7000"
+      - "[::]:443:7000"
       - "0.0.0.0:9090:9090"
       - "[::]:9090:9090"
       - "0.0.0.0:9091:9091"

@@ -96,7 +96,7 @@ pub fn https_redirect_location(
 /// - `"[::1]:8080"` → `"::1"`
 /// - `"[::1]"` → `"::1"`
 /// - `"example.com:8080"` → `"example.com"`
-/// - `"127.0.0.1:7000"` → `"127.0.0.1"`
+/// - `"127.0.0.1:8080"` → `"127.0.0.1"`
 #[doc(hidden)]
 pub fn strip_host_port(host: &str) -> &str {
     if host.starts_with('[') {

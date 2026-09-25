@@ -6,7 +6,7 @@ use serde_json::Value;
 type TestResult = Result<(), Box<dyn std::error::Error + Send + Sync>>;
 
 const CONFIG: &str = r#"
-listen = { port = 7000, address_v4 = ["127.0.0.1"], proxy_protocol = { mode = "optional" } }
+listen = { port_tls = 8443, address_v4 = ["127.0.0.1"], proxy_protocol = { mode = "optional" } }
 backends = [{ address = "backend:9000" }]
 headers = { request = { add = [
   { name = "Authorization", value = "global-secret" }
@@ -76,8 +76,8 @@ fn effective_config_reports_applied_values_and_defaults() -> TestResult {
         EffectiveConfigView::new(&parts.static_cfg, &parts.dynamic_cfg).to_pretty_json()?;
     let value: Value = serde_json::from_str(&output)?;
 
-    assert_eq!(value["static"]["listen"]["port"], 7000);
-    assert_eq!(value["static"]["listen"]["port_tls"], Value::Null);
+    assert_eq!(value["static"]["listen"]["port"], Value::Null);
+    assert_eq!(value["static"]["listen"]["port_tls"], 8443);
     assert_eq!(value["static"]["listen"]["https_redirection"], false);
     assert_eq!(value["static"]["listen"]["address_v4"][0], "127.0.0.1");
     assert_eq!(value["static"]["listen"]["proxy_protocol"]["mode"], "optional");

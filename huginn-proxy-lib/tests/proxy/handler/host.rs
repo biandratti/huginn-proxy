@@ -16,7 +16,7 @@ fn hostname_without_port_is_unchanged() {
 
 #[test]
 fn strip_port_from_ipv4() {
-    assert_eq!(strip_host_port("127.0.0.1:7000"), "127.0.0.1");
+    assert_eq!(strip_host_port("127.0.0.1:8080"), "127.0.0.1");
 }
 
 #[test]
@@ -94,13 +94,13 @@ fn h1_extracts_hostname_from_host_header() {
 
 #[test]
 fn h1_extracts_ipv4_from_host_header() {
-    let req = req_h1("127.0.0.1:7000");
+    let req = req_h1("127.0.0.1:8080");
     assert_eq!(extract_request_host_inner(&req), "127.0.0.1");
 }
 
 #[test]
 fn h1_strips_brackets_from_ipv6_host_header() {
-    let req = req_h1("[::1]:7000");
+    let req = req_h1("[::1]:8080");
     assert_eq!(extract_request_host_inner(&req), "::1");
 }
 
@@ -118,21 +118,21 @@ fn h2_extracts_hostname_from_uri_authority() {
 
 #[test]
 fn h2_extracts_ipv4_from_uri_authority() {
-    let req = req_h2("https://127.0.0.1:7000/");
+    let req = req_h2("https://127.0.0.1:8080/");
     assert_eq!(extract_request_host_inner(&req), "127.0.0.1");
 }
 
 #[test]
 fn h2_strips_brackets_from_ipv6_uri_authority() {
     // http::Uri::host() returns "[::1]" for IPv6; strip_host_port normalises it.
-    let req = req_h2("https://[::1]:7000/");
+    let req = req_h2("https://[::1]:8080/");
     assert_eq!(extract_request_host_inner(&req), "::1");
 }
 
 #[test]
 fn h2_uri_authority_wins_over_spoofed_host_header() {
     // Client sets a forged Host header, :authority takes priority.
-    let req = req_h2_with_host("https://127.0.0.1:7000/", "evil.example.com");
+    let req = req_h2_with_host("https://127.0.0.1:8080/", "evil.example.com");
     assert_eq!(extract_request_host_inner(&req), "127.0.0.1");
 }
 
@@ -170,13 +170,13 @@ fn h1_absolute_form_authority_wins_over_host_header() {
 #[test]
 fn ip_connection_routes_by_uri_authority() {
     // IP connections don't send SNI (RFC 6066); routing uses :authority / Host as usual.
-    let req = req_h2("https://127.0.0.1:7000/");
+    let req = req_h2("https://127.0.0.1:8080/");
     assert_eq!(extract_request_host_inner(&req), "127.0.0.1");
 }
 
 #[test]
 fn h2_ipv6_authority_is_extracted() {
-    let req = req_h2("https://[::1]:7000/");
+    let req = req_h2("https://[::1]:8080/");
     assert_eq!(extract_request_host_inner(&req), "::1");
 }
 

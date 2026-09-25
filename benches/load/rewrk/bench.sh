@@ -16,14 +16,14 @@
 #     EBPF=true benches/load/rewrk/bench.sh
 #
 # Override defaults via env:
-#   CONNECTIONS=512 THREADS=4 DURATION=15s HOST=https://127.0.0.1:7000 ./bench.sh
+#   CONNECTIONS=512 THREADS=4 DURATION=15s HOST=https://127.0.0.1:443 ./bench.sh
 
 set -e
 
 CONNECTIONS=${CONNECTIONS:-512}
 THREADS=${THREADS:-4}
 DURATION=${DURATION:-15s}
-HOST=${HOST:-https://127.0.0.1:7000}
+HOST=${HOST:-https://127.0.0.1:443}
 EBPF=${EBPF:-false}
 
 if ! command -v rewrk >/dev/null 2>&1; then

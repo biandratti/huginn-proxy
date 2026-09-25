@@ -2,7 +2,7 @@
 # Generate certs first (see examples/README.md § "Generate TLS Certificates").
 
 [listen]
-port_tls = 7000
+port_tls = 8443
 address_v4 = ["127.0.0.1"]
 
 [[domains]]
