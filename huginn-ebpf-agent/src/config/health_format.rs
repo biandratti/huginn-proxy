@@ -1,4 +1,4 @@
-use super::ConfigError;
+use super::{ConfigError, env};
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum HealthFormat {
@@ -19,16 +19,12 @@ impl HealthFormat {
 pub(super) fn parse_health_format(
     get_var: &impl Fn(&str) -> Option<String>,
 ) -> Result<HealthFormat, ConfigError> {
-    let Some(raw) = get_var("HUGINN_EBPF_HEALTH_FORMAT") else {
+    let Some(raw) = get_var(env::HEALTH_FORMAT) else {
         return Ok(HealthFormat::Json);
     };
     match raw.trim().to_ascii_lowercase().as_str() {
         "json" => Ok(HealthFormat::Json),
         "text" => Ok(HealthFormat::Text),
-        _ => Err(ConfigError::Invalid {
-            name: "HUGINN_EBPF_HEALTH_FORMAT".to_string(),
-            value: raw,
-            reason: "must be json or text".to_string(),
-        }),
+        _ => Err(ConfigError::invalid(env::HEALTH_FORMAT, raw, "must be json or text")),
     }
 }

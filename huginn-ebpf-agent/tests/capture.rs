@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use huginn_ebpf_agent::config::{
-    CaptureBackend, ConfigError, XdpAttachMode, resolve_capture_backend,
+    CaptureBackend, ConfigError, XdpAttachMode, env, resolve_capture_backend,
 };
 
 /// Build a `get_var` closure from a list of (name, value) pairs.
@@ -22,14 +22,14 @@ fn assert_resolves(env: impl Fn(&str) -> Option<String>, expected: CaptureBacken
 #[test]
 fn capture_explicit_values_win() {
     assert_resolves(
-        env_of(vec![("HUGINN_EBPF_CAPTURE", "xdp-native")]),
+        env_of(vec![(env::CAPTURE, "xdp-native")]),
         CaptureBackend::Xdp(XdpAttachMode::Native),
     );
     assert_resolves(
-        env_of(vec![("HUGINN_EBPF_CAPTURE", "xdp-skb")]),
+        env_of(vec![(env::CAPTURE, "xdp-skb")]),
         CaptureBackend::Xdp(XdpAttachMode::Skb),
     );
-    assert_resolves(env_of(vec![("HUGINN_EBPF_CAPTURE", "tc")]), CaptureBackend::Tc);
+    assert_resolves(env_of(vec![(env::CAPTURE, "tc")]), CaptureBackend::Tc);
 }
 
 #[test]
@@ -39,23 +39,23 @@ fn default_is_xdp_native() {
 
 #[test]
 fn capture_is_case_insensitive_and_trims_whitespace() {
-    assert_resolves(env_of(vec![("HUGINN_EBPF_CAPTURE", " TC ")]), CaptureBackend::Tc);
+    assert_resolves(env_of(vec![(env::CAPTURE, " TC ")]), CaptureBackend::Tc);
     assert_resolves(
-        env_of(vec![("HUGINN_EBPF_CAPTURE", "XDP-SKB")]),
+        env_of(vec![(env::CAPTURE, "XDP-SKB")]),
         CaptureBackend::Xdp(XdpAttachMode::Skb),
     );
     assert_resolves(
-        env_of(vec![("HUGINN_EBPF_CAPTURE", " Xdp-Native ")]),
+        env_of(vec![(env::CAPTURE, " Xdp-Native ")]),
         CaptureBackend::Xdp(XdpAttachMode::Native),
     );
 }
 
 #[test]
 fn invalid_capture_value_is_rejected() {
-    let env = env_of(vec![("HUGINN_EBPF_CAPTURE", "tcx")]);
+    let vars = env_of(vec![(env::CAPTURE, "tcx")]);
     assert!(matches!(
-        resolve_capture_backend(&env),
-        Err(ConfigError::Invalid { ref name, .. }) if name == "HUGINN_EBPF_CAPTURE"
+        resolve_capture_backend(&vars),
+        Err(ConfigError::Invalid { ref name, .. }) if name == env::CAPTURE
     ));
 }
 

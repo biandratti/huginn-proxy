@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::net::{Ipv4Addr, Ipv6Addr};
 
 use huginn_ebpf_agent::config::{
-    CaptureBackend, ConfigError, DEFAULT_PIN_PATH, EbpfLogLevel, HealthFormat, XdpAttachMode,
+    CaptureBackend, ConfigError, DEFAULT_PIN_PATH, EbpfLogLevel, HealthFormat, XdpAttachMode, env,
     from_env,
 };
 
@@ -19,11 +19,11 @@ fn env_of(pairs: Vec<(&'static str, &'static str)>) -> impl Fn(&str) -> Option<S
 
 /// The minimal set of required env vars (no optional ones), for happy-path tests.
 const REQUIRED: &[(&str, &str)] = &[
-    ("HUGINN_EBPF_INTERFACE", "eth0"),
-    ("HUGINN_EBPF_DST_IP_V4", "10.0.0.1"),
-    ("HUGINN_EBPF_DST_PORTS", "8443"),
-    ("HUGINN_EBPF_METRICS_ADDR", "0.0.0.0"),
-    ("HUGINN_EBPF_METRICS_PORT", "9100"),
+    (env::INTERFACE, "eth0"),
+    (env::DST_IP_V4, "10.0.0.1"),
+    (env::DST_PORTS, "8443"),
+    (env::METRICS_ADDR, "0.0.0.0"),
+    (env::METRICS_PORT, "9100"),
 ];
 
 /// `REQUIRED` plus the given extra pairs.
@@ -69,33 +69,29 @@ fn from_env_minimal_applies_defaults() {
 #[test]
 fn from_env_full_overrides_every_optional() {
     let cfg = parse_ok(required_with(vec![
-        ("HUGINN_EBPF_DST_IP_V6", "2001:db8::1"),
-        ("HUGINN_EBPF_PIN_PATH", "/run/bpf/huginn"),
-        ("HUGINN_EBPF_LINK_PIN_PATH", "/run/bpf/huginn/my_link"),
-        ("HUGINN_EBPF_SYN_MAP_MAX_ENTRIES", "16384"),
-        ("HUGINN_EBPF_CAPTURE", "tc"),
-        ("HUGINN_EBPF_LOG_LEVEL", "debug"),
-        ("HUGINN_EBPF_HEALTH_FORMAT", "text"),
+        (env::DST_IP_V6, "2001:db8::1"),
+        (env::PIN_PATH, "/run/bpf/huginn"),
+        (env::LINK_PIN_PATH, "/run/bpf/huginn/my_link"),
+        (env::SYN_MAP_MAX_ENTRIES, "16384"),
+        (env::CAPTURE, "tc"),
+        (env::LOG_LEVEL, "debug"),
+        (env::HEALTH_FORMAT, "text"),
     ]));
     assert_eq!(cfg.dst_ip_v6, Ipv6Addr::new(0x2001, 0x0db8, 0, 0, 0, 0, 0, 1));
     assert_eq!(cfg.pin_path, "/run/bpf/huginn");
     assert_eq!(cfg.link_pin_path, "/run/bpf/huginn/my_link");
     assert_eq!(cfg.syn_map_max_entries, 16384);
     assert!(matches!(cfg.capture, CaptureBackend::Tc));
-    assert_eq!(
-        cfg.log_level,
-        EbpfLogLevel::Debug,
-        "HUGINN_EBPF_LOG_LEVEL=debug should be parsed"
-    );
+    assert_eq!(cfg.log_level, EbpfLogLevel::Debug, "{}=debug should be parsed", env::LOG_LEVEL);
     assert_eq!(cfg.health_format, HealthFormat::Text);
 }
 
 #[test]
 fn dst_ports_accepts_one_or_two_ports() {
-    let one = parse_ok(required_with(vec![("HUGINN_EBPF_DST_PORTS", "443")]));
+    let one = parse_ok(required_with(vec![(env::DST_PORTS, "443")]));
     assert_eq!(one.dst_ports, vec![443]);
 
-    let two = parse_ok(required_with(vec![("HUGINN_EBPF_DST_PORTS", " 80, 443 ")]));
+    let two = parse_ok(required_with(vec![(env::DST_PORTS, " 80, 443 ")]));
     assert_eq!(two.dst_ports, vec![80, 443]);
 }
 
@@ -109,7 +105,7 @@ fn log_level_accepts_all_levels_case_insensitively() {
         ("debug", EbpfLogLevel::Debug),
         ("TRACE", EbpfLogLevel::Trace),
     ] {
-        let cfg = parse_ok(required_with(vec![("HUGINN_EBPF_LOG_LEVEL", raw)]));
+        let cfg = parse_ok(required_with(vec![(env::LOG_LEVEL, raw)]));
         assert_eq!(cfg.log_level, expected, "{raw:?} should parse to {expected:?}");
     }
 }
@@ -117,11 +113,11 @@ fn log_level_accepts_all_levels_case_insensitively() {
 #[test]
 fn from_env_missing_required_vars_are_reported() {
     for missing in [
-        "HUGINN_EBPF_INTERFACE",
-        "HUGINN_EBPF_DST_IP_V4",
-        "HUGINN_EBPF_DST_PORTS",
-        "HUGINN_EBPF_METRICS_ADDR",
-        "HUGINN_EBPF_METRICS_PORT",
+        env::INTERFACE,
+        env::DST_IP_V4,
+        env::DST_PORTS,
+        env::METRICS_ADDR,
+        env::METRICS_PORT,
     ] {
         let pairs: Vec<(&str, &str)> = REQUIRED
             .iter()
@@ -139,21 +135,21 @@ fn from_env_missing_required_vars_are_reported() {
 #[test]
 fn from_env_invalid_values_are_reported() {
     for (name, bad) in [
-        ("HUGINN_EBPF_DST_IP_V4", "not-an-ip"),
-        ("HUGINN_EBPF_DST_IP_V6", "::gg::"),
-        ("HUGINN_EBPF_DST_PORTS", "70000"),
-        ("HUGINN_EBPF_DST_PORTS", "0"),
-        ("HUGINN_EBPF_DST_PORTS", "80,0"),
-        ("HUGINN_EBPF_DST_PORTS", "80,80"),
-        ("HUGINN_EBPF_DST_PORTS", "80,443,22"),
-        ("HUGINN_EBPF_DST_PORTS", ""),
-        ("HUGINN_EBPF_DST_PORTS", "443,"),
-        ("HUGINN_EBPF_METRICS_PORT", "-1"),
-        ("HUGINN_EBPF_SYN_MAP_MAX_ENTRIES", "lots"),
-        ("HUGINN_EBPF_LOG_LEVEL", "verbose"),
-        ("HUGINN_EBPF_LINK_PIN_PATH", "   "),
-        ("HUGINN_EBPF_HEARTBEAT_SECS", "0"),
-        ("HUGINN_EBPF_HEALTH_FORMAT", "xml"),
+        (env::DST_IP_V4, "not-an-ip"),
+        (env::DST_IP_V6, "::gg::"),
+        (env::DST_PORTS, "70000"),
+        (env::DST_PORTS, "0"),
+        (env::DST_PORTS, "80,0"),
+        (env::DST_PORTS, "80,80"),
+        (env::DST_PORTS, "80,443,22"),
+        (env::DST_PORTS, ""),
+        (env::DST_PORTS, "443,"),
+        (env::METRICS_PORT, "-1"),
+        (env::SYN_MAP_MAX_ENTRIES, "lots"),
+        (env::LOG_LEVEL, "verbose"),
+        (env::LINK_PIN_PATH, "   "),
+        (env::HEARTBEAT_SECS, "0"),
+        (env::HEALTH_FORMAT, "xml"),
     ] {
         let result = from_env(required_with(vec![(name, bad)]));
         assert!(

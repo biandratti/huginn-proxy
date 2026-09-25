@@ -2,6 +2,7 @@ use huginn_ebpf::pin;
 use std::net::{Ipv4Addr, Ipv6Addr};
 
 mod capture;
+pub mod env;
 mod health_format;
 mod log_level;
 mod rate_limit;
@@ -47,68 +48,75 @@ pub enum ConfigError {
     },
 }
 
-pub fn from_env(get_var: impl Fn(&str) -> Option<String>) -> Result<Config, ConfigError> {
-    let interface = get_var("HUGINN_EBPF_INTERFACE")
-        .ok_or(ConfigError::Missing { name: "HUGINN_EBPF_INTERFACE".to_string() })?;
+impl ConfigError {
+    fn missing(name: &'static str) -> Self {
+        Self::Missing { name: name.to_string() }
+    }
 
-    let dst_ip_v4_str = get_var("HUGINN_EBPF_DST_IP_V4")
-        .ok_or(ConfigError::Missing { name: "HUGINN_EBPF_DST_IP_V4".to_string() })?;
-    let dst_ip_v4: Ipv4Addr = dst_ip_v4_str.parse().map_err(|_| ConfigError::Invalid {
-        name: "HUGINN_EBPF_DST_IP_V4".to_string(),
-        value: dst_ip_v4_str.clone(),
-        reason: "must be a valid IPv4 address".to_string(),
+    fn invalid(name: &'static str, value: impl Into<String>, reason: impl Into<String>) -> Self {
+        Self::Invalid { name: name.to_string(), value: value.into(), reason: reason.into() }
+    }
+}
+
+pub fn from_env(get_var: impl Fn(&str) -> Option<String>) -> Result<Config, ConfigError> {
+    let interface = get_var(env::INTERFACE).ok_or(ConfigError::missing(env::INTERFACE))?;
+
+    let dst_ip_v4_str = get_var(env::DST_IP_V4).ok_or(ConfigError::missing(env::DST_IP_V4))?;
+    let dst_ip_v4: Ipv4Addr = dst_ip_v4_str.parse().map_err(|_| {
+        ConfigError::invalid(env::DST_IP_V4, dst_ip_v4_str.clone(), "must be a valid IPv4 address")
     })?;
 
-    let dst_ip_v6: Ipv6Addr = match get_var("HUGINN_EBPF_DST_IP_V6") {
-        Some(s) => s.parse().map_err(|_| ConfigError::Invalid {
-            name: "HUGINN_EBPF_DST_IP_V6".to_string(),
-            value: s.clone(),
-            reason: "must be a valid IPv6 address".to_string(),
+    let dst_ip_v6: Ipv6Addr = match get_var(env::DST_IP_V6) {
+        Some(s) => s.parse().map_err(|_| {
+            ConfigError::invalid(env::DST_IP_V6, s.clone(), "must be a valid IPv6 address")
         })?,
         None => Ipv6Addr::UNSPECIFIED,
     };
 
-    let dst_ports_str = get_var("HUGINN_EBPF_DST_PORTS")
-        .ok_or(ConfigError::Missing { name: "HUGINN_EBPF_DST_PORTS".to_string() })?;
+    let dst_ports_str = get_var(env::DST_PORTS).ok_or(ConfigError::missing(env::DST_PORTS))?;
     let dst_ports = parse_dst_ports(&dst_ports_str)?;
 
-    let pin_path = get_var("HUGINN_EBPF_PIN_PATH").unwrap_or_else(|| DEFAULT_PIN_PATH.to_string());
+    let pin_path = get_var(env::PIN_PATH).unwrap_or_else(|| DEFAULT_PIN_PATH.to_string());
 
-    let link_pin_path = match get_var("HUGINN_EBPF_LINK_PIN_PATH") {
+    let link_pin_path = match get_var(env::LINK_PIN_PATH) {
         Some(s) => {
             let trimmed = s.trim();
             if trimmed.is_empty() {
-                return Err(ConfigError::Invalid {
-                    name: "HUGINN_EBPF_LINK_PIN_PATH".to_string(),
-                    value: s,
-                    reason: "must be a non-empty bpffs path".to_string(),
-                });
+                return Err(ConfigError::invalid(
+                    env::LINK_PIN_PATH,
+                    s,
+                    "must be a non-empty bpffs path",
+                ));
             }
             trimmed.to_string()
         }
         None => pin::capture_link_path(&pin_path).display().to_string(),
     };
 
-    let syn_map_max_entries = get_var("HUGINN_EBPF_SYN_MAP_MAX_ENTRIES")
+    let syn_map_max_entries = get_var(env::SYN_MAP_MAX_ENTRIES)
         .map(|s| {
-            s.parse().map_err(|_| ConfigError::Invalid {
-                name: "HUGINN_EBPF_SYN_MAP_MAX_ENTRIES".to_string(),
-                value: s.clone(),
-                reason: "must be a positive integer".to_string(),
+            s.parse().map_err(|_| {
+                ConfigError::invalid(
+                    env::SYN_MAP_MAX_ENTRIES,
+                    s.clone(),
+                    "must be a positive integer",
+                )
             })
         })
         .transpose()
         .map(|opt| opt.unwrap_or(huginn_ebpf::DEFAULT_SYN_MAP_MAX_ENTRIES))?;
 
-    let metrics_listen_addr = get_var("HUGINN_EBPF_METRICS_ADDR")
-        .ok_or(ConfigError::Missing { name: "HUGINN_EBPF_METRICS_ADDR".to_string() })?;
+    let metrics_listen_addr =
+        get_var(env::METRICS_ADDR).ok_or(ConfigError::missing(env::METRICS_ADDR))?;
 
-    let metrics_port_str = get_var("HUGINN_EBPF_METRICS_PORT")
-        .ok_or(ConfigError::Missing { name: "HUGINN_EBPF_METRICS_PORT".to_string() })?;
-    let metrics_port: u16 = metrics_port_str.parse().map_err(|_| ConfigError::Invalid {
-        name: "HUGINN_EBPF_METRICS_PORT".to_string(),
-        value: metrics_port_str.clone(),
-        reason: "must be a valid port number (1-65535)".to_string(),
+    let metrics_port_str =
+        get_var(env::METRICS_PORT).ok_or(ConfigError::missing(env::METRICS_PORT))?;
+    let metrics_port: u16 = metrics_port_str.parse().map_err(|_| {
+        ConfigError::invalid(
+            env::METRICS_PORT,
+            metrics_port_str.clone(),
+            "must be a valid port number (1-65535)",
+        )
     })?;
 
     let capture = resolve_capture_backend(&get_var)?;
@@ -117,8 +125,8 @@ pub fn from_env(get_var: impl Fn(&str) -> Option<String>) -> Result<Config, Conf
 
     let rate_limit = resolve_rate_limit(&get_var)?;
 
-    let drain_delay_secs = parse_optional_u64(&get_var, "HUGINN_EBPF_DRAIN_DELAY_SECS", 0, false)?;
-    let heartbeat_secs = parse_optional_u64(&get_var, "HUGINN_EBPF_HEARTBEAT_SECS", 1, true)?;
+    let drain_delay_secs = parse_optional_u64(&get_var, env::DRAIN_DELAY_SECS, 0, false)?;
+    let heartbeat_secs = parse_optional_u64(&get_var, env::HEARTBEAT_SECS, 1, true)?;
 
     let health_format = parse_health_format(&get_var)?;
 
@@ -142,35 +150,28 @@ pub fn from_env(get_var: impl Fn(&str) -> Option<String>) -> Result<Config, Conf
 }
 
 fn parse_dst_ports(raw: &str) -> Result<Vec<u16>, ConfigError> {
-    const NAME: &str = "HUGINN_EBPF_DST_PORTS";
     let parts: Vec<&str> = raw.split(',').map(str::trim).collect();
     if parts.is_empty() || parts.len() > 2 || parts.iter().any(|part| part.is_empty()) {
-        return Err(ConfigError::Invalid {
-            name: NAME.to_string(),
-            value: raw.to_string(),
-            reason: "must be one or two comma-separated ports".to_string(),
-        });
+        return Err(ConfigError::invalid(
+            env::DST_PORTS,
+            raw,
+            "must be one or two comma-separated ports",
+        ));
     }
     let mut ports = Vec::with_capacity(parts.len());
     for part in parts {
-        let port: u16 = part.parse().map_err(|_| ConfigError::Invalid {
-            name: NAME.to_string(),
-            value: raw.to_string(),
-            reason: "must be a port number in 1..=65535".to_string(),
+        let port: u16 = part.parse().map_err(|_| {
+            ConfigError::invalid(env::DST_PORTS, raw, "must be a port number in 1..=65535")
         })?;
         if port == 0 {
-            return Err(ConfigError::Invalid {
-                name: NAME.to_string(),
-                value: raw.to_string(),
-                reason: "must be a port number in 1..=65535; 0 is not a filter".to_string(),
-            });
+            return Err(ConfigError::invalid(
+                env::DST_PORTS,
+                raw,
+                "must be a port number in 1..=65535; 0 is not a filter",
+            ));
         }
         if ports.contains(&port) {
-            return Err(ConfigError::Invalid {
-                name: NAME.to_string(),
-                value: raw.to_string(),
-                reason: "ports must be distinct".to_string(),
-            });
+            return Err(ConfigError::invalid(env::DST_PORTS, raw, "ports must be distinct"));
         }
         ports.push(port);
     }
@@ -179,24 +180,18 @@ fn parse_dst_ports(raw: &str) -> Result<Vec<u16>, ConfigError> {
 
 fn parse_optional_u64(
     get_var: &impl Fn(&str) -> Option<String>,
-    name: &str,
+    name: &'static str,
     default: u64,
     reject_zero: bool,
 ) -> Result<u64, ConfigError> {
     let Some(raw) = get_var(name) else {
         return Ok(default);
     };
-    let parsed = raw.parse::<u64>().map_err(|_| ConfigError::Invalid {
-        name: name.to_string(),
-        value: raw.clone(),
-        reason: "must be a non-negative integer".to_string(),
-    })?;
+    let parsed = raw
+        .parse::<u64>()
+        .map_err(|_| ConfigError::invalid(name, raw.clone(), "must be a non-negative integer"))?;
     if reject_zero && parsed == 0 {
-        return Err(ConfigError::Invalid {
-            name: name.to_string(),
-            value: raw,
-            reason: "must be a positive integer".to_string(),
-        });
+        return Err(ConfigError::invalid(name, raw, "must be a positive integer"));
     }
     Ok(parsed)
 }
