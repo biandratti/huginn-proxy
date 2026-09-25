@@ -37,7 +37,6 @@ fn domain(
         headers: None,
         security,
         fingerprinting: None,
-        https_redirection: None,
         routes,
     }
 }

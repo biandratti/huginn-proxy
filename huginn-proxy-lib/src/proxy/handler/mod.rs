@@ -11,5 +11,5 @@ pub use host::{
     extract_request_host_inner, https_redirect_location, strip_host_port, strip_trailing_dot,
 };
 pub use rate_limit_validation::check_rate_limit;
-pub use request::handle_proxy_request;
+pub use request::{handle_proxy_request, https_redirect_port};
 pub use resolve::{EffectiveSecurity, resolve_security};

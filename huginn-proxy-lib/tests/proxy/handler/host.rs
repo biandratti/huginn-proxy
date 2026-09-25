@@ -1,5 +1,7 @@
+use huginn_proxy_lib::config::RuntimeListen;
 use huginn_proxy_lib::proxy::handler::{
-    extract_request_host_inner, https_redirect_location, strip_host_port, strip_trailing_dot,
+    extract_request_host_inner, https_redirect_location, https_redirect_port, strip_host_port,
+    strip_trailing_dot,
 };
 
 #[test]
@@ -307,4 +309,17 @@ fn https_redirect_location_uses_request_host_not_wildcard_pattern() {
 #[test]
 fn https_redirect_location_brackets_ipv6() {
     assert_eq!(https_redirect_location("::1", "/", None, 8443), "https://[::1]:8443/");
+}
+
+#[test]
+fn https_redirect_requires_a_matched_domain() {
+    let listen = RuntimeListen { http: true, tls_port: Some(443), https_redirection: true };
+    assert_eq!(https_redirect_port(false, true, listen), Some(443));
+    assert_eq!(https_redirect_port(false, false, listen), None);
+}
+
+#[test]
+fn https_redirect_false_proxies_plain_http() {
+    let listen = RuntimeListen { http: true, tls_port: Some(443), https_redirection: false };
+    assert_eq!(https_redirect_port(false, true, listen), None);
 }

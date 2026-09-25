@@ -123,17 +123,8 @@ fn validate_tls_section(listen: &ListenConfig, tls: Option<&TlsConfig>) -> Resul
 }
 
 fn validate_domains_against_listen(listen: &ListenConfig, domains: &[Domain]) -> Result<()> {
-    let https_only = listen.port_tls.is_some() && listen.port.is_none();
     for domain in domains {
         let host = domain.label();
-        if domain.https_redirection.is_some()
-            && (listen.port.is_none() || listen.port_tls.is_none())
-        {
-            return Err(ProxyError::Config(format!(
-                "Domain '{host}': https_redirection requires both listen.port and \
-                 listen.port_tls"
-            )));
-        }
         let has_tls_material = domain.cert_path.is_some()
             || domain.key_path.is_some()
             || domain.client_ca_path.is_some();
@@ -144,10 +135,10 @@ fn validate_domains_against_listen(listen: &ListenConfig, domains: &[Domain]) ->
                  cert_path/key_path/client_ca_path"
             )));
         }
-        if https_only && (domain.cert_path.is_none() || domain.key_path.is_none()) {
+        if listen.port_tls.is_some() && (domain.cert_path.is_none() || domain.key_path.is_none()) {
             return Err(ProxyError::Config(format!(
-                "Domain '{host}': listen.port_tls is set without listen.port, so every \
-                 domain must have cert_path and key_path"
+                "Domain '{host}': listen.port_tls is set, so every domain must have \
+                 cert_path and key_path"
             )));
         }
     }
@@ -180,14 +171,6 @@ fn validate_config(cfg: &Config) -> Result<()> {
                     "Domain '{host}': cert_path and key_path must both be set or both omitted"
                 )));
             }
-        }
-
-        if domain.https_redirection.is_some()
-            && (domain.cert_path.is_none() || domain.key_path.is_none())
-        {
-            return Err(ProxyError::Config(format!(
-                "Domain '{host}': https_redirection requires cert_path and key_path"
-            )));
         }
 
         if let Some(ca) = &domain.client_ca_path {

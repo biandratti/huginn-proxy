@@ -88,6 +88,21 @@ fn https_redirect_response(location: String) -> HttpResult<Response<RespBody>> {
         .map_err(|e| HttpError::FailedToGenerateDownstreamResponse(e.to_string()))
 }
 
+/// Return the running HTTPS port when this request must be redirected.
+///
+/// Redirect policy is listener-wide, but only a matched domain is eligible. This keeps unknown
+/// hosts on the existing `421` path instead of advertising an HTTPS endpoint for them.
+#[doc(hidden)]
+pub fn https_redirect_port(
+    is_https: bool,
+    domain_matched: bool,
+    listen: RuntimeListen,
+) -> Option<u16> {
+    (!is_https && domain_matched && listen.https_redirection)
+        .then_some(listen.tls_port)
+        .flatten()
+}
+
 /// Handle request routing and forwarding.
 ///
 /// `peer` is the effective client address as resolved by `resolve_peer`, and is expected to be
@@ -147,13 +162,10 @@ pub async fn handle_proxy_request(
         enforce_ip_access(peer, domain_ip_filter, metrics, &method, &protocol)?;
     }
 
-    // HTTP→HTTPS redirect: after the IP filter, before 421/mTLS, and without
-    // consuming rate-limit tokens. Dual listen is the running `port` + `port_tls`.
-    if !is_https
-        && let Some(domain) = domain
-        && domain.https_redirect_enabled(listen.dual())
-        && let Some(tls_port) = listen.tls_port
-    {
+    // Process-wide HTTP→HTTPS redirect: after the matched domain's IP filter, before
+    // 421/mTLS, and without consuming rate-limit tokens. An unmatched host is never
+    // redirected; it reaches the existing 421 path below.
+    if let Some(tls_port) = https_redirect_port(is_https, domain.is_some(), listen) {
         if host.is_empty() {
             let error = HttpError::InvalidHostInRequestHeader;
             let status_code = StatusCode::from(error.clone()).as_u16();

@@ -75,7 +75,6 @@ fn http_proxy_config(proxy_port: u16, backend: std::net::SocketAddr) -> Config {
             headers: None,
             security: None,
             fingerprinting: Some(true),
-            https_redirection: None,
             routes: vec![Route {
                 prefix: "/".to_string(),
                 backend: backend.to_string(),

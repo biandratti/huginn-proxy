@@ -84,6 +84,13 @@ fn equal_ports_are_error() {
 }
 
 #[test]
+fn explicit_redirect_requires_both_ports() {
+    let mut config = listen(Some(80), None, false, None, None);
+    config.https_redirection = Some(false);
+    assert_sockets_err(config.sockets(), "https_redirection requires both");
+}
+
+#[test]
 fn empty_address_v4_is_error() {
     assert_sockets_err(listen(Some(80), None, false, Some(vec![]), None).sockets(), "empty");
 }
@@ -111,12 +118,19 @@ fn runtime_listen_dual_needs_both_ports() {
     assert!(!http_only.dual());
     assert!(http_only.http);
     assert_eq!(http_only.tls_port, None);
+    assert!(!http_only.https_redirection);
 
     let https_only = RuntimeListen::from(&listen(None, Some(443), false, None, None));
     assert!(!https_only.dual());
     assert_eq!(https_only.tls_port, Some(443));
+    assert!(!https_only.https_redirection);
 
     let dual = RuntimeListen::from(&listen(Some(80), Some(443), false, None, None));
     assert!(dual.dual());
     assert_eq!(dual.tls_port, Some(443));
+    assert!(dual.https_redirection);
+
+    let mut explicit_false = listen(Some(80), Some(443), false, None, None);
+    explicit_false.https_redirection = Some(false);
+    assert!(!RuntimeListen::from(&explicit_false).https_redirection);
 }

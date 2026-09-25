@@ -12,13 +12,6 @@
 use crate::config::Domain;
 use crate::proxy::router::pick_domain;
 
-/// The certificate a domain is effectively served with: its own `cert_path`, or the
-/// default certificate (the catch-all/host-less domain's `cert_path`) when it declares
-/// none. Mirrors `ServerCryptoMap`'s exact → wildcard → default resolution.
-fn effective_cert_path<'a>(domain: &'a Domain, default_cert: Option<&'a str>) -> Option<&'a str> {
-    domain.cert_path.as_deref().or(default_cert)
-}
-
 /// Whether a request `host` is authoritative for a TLS connection whose SNI was `sni`,
 /// i.e. the certificate the connection's SNI selected also covers `host`.
 ///
@@ -44,13 +37,10 @@ pub fn authority_matches_sni(domains: &[Domain], sni: &str, host: &str) -> bool 
             if std::ptr::eq(sni_domain, host_domain) {
                 return true;
             }
-            // Otherwise: same effective certificate ⇒ the connection's cert covers `host`.
-            let default_cert = domains
-                .iter()
-                .find(|d| d.host.is_none())
-                .and_then(|d| d.cert_path.as_deref());
-            let sni_cert = effective_cert_path(sni_domain, default_cert);
-            let host_cert = effective_cert_path(host_domain, default_cert);
+            // Otherwise: same declared certificate ⇒ the connection's cert covers `host`.
+            // Config validation requires every domain to declare a cert when TLS is enabled.
+            let sni_cert = sni_domain.cert_path.as_deref();
+            let host_cert = host_domain.cert_path.as_deref();
             sni_cert.is_some() && sni_cert == host_cert
         }
         (None, None) => true,

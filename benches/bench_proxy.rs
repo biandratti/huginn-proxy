@@ -115,7 +115,6 @@ impl BenchFixture {
                 headers: None,
                 security: None,
                 fingerprinting: None,
-                https_redirection: None,
                 routes: vec![
                     Route {
                         prefix: "/bench/fp".to_string(),

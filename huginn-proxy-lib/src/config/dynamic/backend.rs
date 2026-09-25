@@ -241,8 +241,8 @@ pub const DEFAULT_DOMAIN_LABEL: &str = "_default_";
 /// - Exact: `"api.example.com"`
 /// - Wildcard (one level): `"*.example.com"`
 ///
-/// `cert_path` / `key_path` are optional, omit both for plain-HTTP domains.
-/// Both must be present together; specifying only one is a validation error.
+/// `cert_path` / `key_path` must be present together. They are required on every
+/// domain when `listen.port_tls` is set and may be omitted only in HTTP-only configs.
 #[derive(Debug, Deserialize, Clone, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct Domain {
@@ -278,31 +278,12 @@ pub struct Domain {
     /// `None` (unset) means the built-in default `true`; a route's own `fingerprinting` overrides it.
     #[serde(default)]
     pub fingerprinting: Option<bool>,
-    /// HTTP→HTTPS redirect for this domain. Written value is kept as-is; default `true` is
-    /// resolved at request time against the **running** dual listen (`port` + `port_tls`),
-    /// not baked in `into_parts()`.
-    #[serde(default)]
-    pub https_redirection: Option<bool>,
     /// Path-based routing rules scoped to this domain.
     #[serde(default)]
     pub routes: Vec<Route>,
 }
 
 impl Domain {
-    /// Whether a plaintext request for this domain should receive `301` to HTTPS.
-    ///
-    /// Requires both HTTP and HTTPS listeners in effect. When the flag is omitted,
-    /// domains with `cert_path` and `key_path` redirect; domains without certs do not.
-    pub fn https_redirect_enabled(&self, dual_listen: bool) -> bool {
-        if !dual_listen {
-            return false;
-        }
-        match self.https_redirection {
-            Some(flag) => flag,
-            None => self.cert_path.is_some() && self.key_path.is_some(),
-        }
-    }
-
     /// Identifier for this domain in metrics labels and logs: the configured `host`,
     /// or [`DEFAULT_DOMAIN_LABEL`] (`"_default_"`) for the catch-all (host-less) domain.
     pub fn label(&self) -> &str {
@@ -401,7 +382,6 @@ pub(crate) struct DomainView<'a> {
     headers: Option<HeaderManipulationView<'a>>,
     security: Option<ScopedSecurityView<'a>>,
     fingerprinting: Option<bool>,
-    https_redirection: Option<bool>,
     routes: Vec<RouteView<'a>>,
 }
 
@@ -471,7 +451,6 @@ impl Domain {
                 .as_ref()
                 .map(DomainSecurityConfig::effective_view),
             fingerprinting: self.fingerprinting,
-            https_redirection: self.https_redirection,
             routes: self.routes.iter().map(Route::effective_view).collect(),
         }
     }

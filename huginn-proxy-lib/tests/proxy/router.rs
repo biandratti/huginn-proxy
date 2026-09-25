@@ -29,7 +29,6 @@ fn domain(host: &str, routes: Vec<Route>) -> Domain {
         headers: None,
         security: None,
         fingerprinting: None,
-        https_redirection: None,
         routes,
     }
 }
@@ -44,7 +43,6 @@ fn catch_all(routes: Vec<Route>) -> Domain {
         headers: None,
         security: None,
         fingerprinting: None,
-        https_redirection: None,
         routes,
     }
 }

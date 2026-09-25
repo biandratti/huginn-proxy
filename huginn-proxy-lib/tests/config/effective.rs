@@ -78,6 +78,7 @@ fn effective_config_reports_applied_values_and_defaults() -> TestResult {
 
     assert_eq!(value["static"]["listen"]["port"], 7000);
     assert_eq!(value["static"]["listen"]["port_tls"], Value::Null);
+    assert_eq!(value["static"]["listen"]["https_redirection"], false);
     assert_eq!(value["static"]["listen"]["address_v4"][0], "127.0.0.1");
     assert_eq!(value["static"]["listen"]["proxy_protocol"]["mode"], "optional");
     assert_eq!(value["static"]["listen"]["proxy_protocol"]["header_timeout_ms"], 100);
@@ -85,7 +86,11 @@ fn effective_config_reports_applied_values_and_defaults() -> TestResult {
     assert_eq!(value["dynamic"]["domains"][0]["cert_configured"], true);
     assert_eq!(value["dynamic"]["domains"][0]["private_key_configured"], true);
     assert_eq!(value["dynamic"]["domains"][0]["client_auth_configured"], true);
-    assert_eq!(value["dynamic"]["domains"][0]["https_redirection"], Value::Null);
+    assert!(
+        value["dynamic"]["domains"][0]
+            .get("https_redirection")
+            .is_none()
+    );
     assert_eq!(value["dynamic"]["headers"]["request"]["add"][0]["value"], "<redacted>");
     assert_eq!(value["dynamic"]["security"]["headers"]["csp"]["policy"], "<redacted>");
     assert_eq!(value["static"]["telemetry"]["health_format"], "json");

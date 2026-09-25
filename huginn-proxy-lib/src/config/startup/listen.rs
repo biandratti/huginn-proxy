@@ -71,6 +71,12 @@ pub struct ListenConfig {
     /// HTTPS port. Absent: no TLS sockets.
     #[serde(default)]
     pub port_tls: Option<u16>,
+    /// Redirect matched plaintext HTTP requests to HTTPS.
+    ///
+    /// Defaults to `true` when both `port` and `port_tls` are present, otherwise `false`.
+    /// May only be written when both ports are present.
+    #[serde(default)]
+    pub https_redirection: Option<bool>,
     /// Bind IPv6 `::` in addition to IPv4 when `address_v6` is omitted. Default: false.
     #[serde(default)]
     pub ipv6: bool,
@@ -99,6 +105,7 @@ impl Default for ListenConfig {
         Self {
             port: None,
             port_tls: None,
+            https_redirection: None,
             ipv6: false,
             address_v4: None,
             address_v6: None,
@@ -117,6 +124,8 @@ pub struct RuntimeListen {
     pub http: bool,
     /// Running `listen.port_tls`.
     pub tls_port: Option<u16>,
+    /// Effective process-wide HTTP→HTTPS redirect policy.
+    pub https_redirection: bool,
 }
 
 impl RuntimeListen {
@@ -128,7 +137,13 @@ impl RuntimeListen {
 
 impl From<&ListenConfig> for RuntimeListen {
     fn from(listen: &ListenConfig) -> Self {
-        Self { http: listen.port.is_some(), tls_port: listen.port_tls }
+        Self {
+            http: listen.port.is_some(),
+            tls_port: listen.port_tls,
+            https_redirection: listen
+                .https_redirection
+                .unwrap_or(listen.port.is_some() && listen.port_tls.is_some()),
+        }
     }
 }
 
@@ -174,6 +189,7 @@ where
 pub(crate) struct ListenView {
     port: Option<u16>,
     port_tls: Option<u16>,
+    https_redirection: bool,
     ipv6: bool,
     address_v4: Option<Vec<String>>,
     address_v6: Option<Vec<String>>,
@@ -210,6 +226,7 @@ impl ListenConfig {
         ListenView {
             port: self.port,
             port_tls: self.port_tls,
+            https_redirection: RuntimeListen::from(self).https_redirection,
             ipv6: self.ipv6,
             address_v4: self.address_v4.clone(),
             address_v6: self.address_v6.clone(),
@@ -247,6 +264,12 @@ impl ListenConfig {
         {
             return Err(ProxyError::Config(
                 "listen.port and listen.port_tls must be different".to_string(),
+            ));
+        }
+        if self.https_redirection.is_some() && (self.port.is_none() || self.port_tls.is_none()) {
+            return Err(ProxyError::Config(
+                "listen.https_redirection requires both listen.port and listen.port_tls"
+                    .to_string(),
             ));
         }
         Ok(())

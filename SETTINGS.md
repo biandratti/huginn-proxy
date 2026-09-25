@@ -85,12 +85,19 @@ Network interfaces and socket options. **Static** — requires restart to change
 |-------------------------------------|------------------|---------|--------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `port`                              | integer          | —       | Plain HTTP listen port. Omit to skip HTTP sockets. At least one of `port` or `port_tls` is required; they must not be equal.                                |
 | `port_tls`                          | integer          | —       | HTTPS listen port. Omit to skip TLS sockets.                                                                                                                |
+| `https_redirection`                 | bool             | `true` with both ports; otherwise `false` | Process-wide HTTP→HTTPS redirect policy. May only be written when both `port` and `port_tls` are set. With `true`, matched plaintext requests receive `301`; with `false`, HTTP is proxied. Static: restart required. |
 | `ipv6`                              | bool             | `false` | Also bind IPv6 `::` when `address_v6` is omitted. IPv4 `0.0.0.0` is always bound unless `address_v4` lists specific addresses.                              |
 | `address_v4`                        | array of strings | `0.0.0.0` | IPv4 bind addresses. Must not be empty. Must not mix `0.0.0.0` with other addresses.                                                                      |
 | `address_v6`                        | array of strings | —       | IPv6 bind addresses. Used instead of the `ipv6` flag when set. Must not be empty. Must not mix `::` with other addresses. Bare (`::1`) and bracketed (`[::1]`) forms are accepted. |
 | `tcp_backlog`                       | integer          | `4096`  | Kernel `listen(2)` backlog per socket. Increase under heavy connection bursts.                                                                                 |
 | `proxy_protocol.mode`               | string           | `off`   | PROXY protocol handling (v1 and v2): `off`, `optional`, or `require`. See note below.                                                                          |
 | `proxy_protocol.header_timeout_ms`  | integer          | `100`   | Milliseconds to wait for a PROXY header from a trusted peer (covers detection + full read). Only relevant when `proxy_protocol.mode` is `optional`/`require`. `<= 0` falls back to an internal 1 s timeout (not recommended). |
+
+`https_redirection` applies only after host matching. An unknown host with no exact,
+wildcard, or catch-all domain receives `421`, not a redirect. `Location` preserves the request
+host, path, and query; it omits port `443` and writes any other `port_tls`. An empty matched host
+receives `400` without `Location`. The redirect runs after the IP filter and before mTLS/rate
+limiting.
 
 > **`proxy_protocol.mode`** lets huginn recover the real client `(src_ip, src_port)` when it sits behind
 > any L4 load balancer or ingress that prepends a [PROXY protocol](https://www.haproxy.org/download/2.0/doc/proxy-protocol.txt)
@@ -320,14 +327,13 @@ enforce).
 
 | Key         | Type   | Default | Description                                                                                      |
 |-------------|--------|---------|--------------------------------------------------------------------------------------------------|
-| `host`      | string | `null`  | Domain pattern for host matching: exact (`api.example.com`) or single-level wildcard (`*.example.com`). Normalized at load: lowercased, trailing `.` stripped. **Omit for a catch-all** that matches any host; its cert (if any) is the TLS default certificate. |
-| `cert_path` | string | `null`  | Path to the TLS certificate PEM file. Omit for plain-HTTP-only domains. Requires `listen.port_tls`: without it no listener terminates TLS and the config is rejected at startup. |
-| `key_path`  | string | `null`  | Path to the TLS private key PEM file. Must be set together with `cert_path` or both omitted.     |
+| `host`      | string | `null`  | Domain pattern for host matching: exact (`api.example.com`) or single-level wildcard (`*.example.com`). Normalized at load: lowercased, trailing `.` stripped. **Omit for a catch-all** that matches any host; when TLS is enabled, its required cert is the TLS default certificate. |
+| `cert_path` | string | `null`  | Path to the TLS certificate PEM file. Required on every domain, including the catch-all, whenever `listen.port_tls` is set. May be omitted only for HTTP-only configurations. Multiple domains may reference the same certificate. |
+| `key_path`  | string | `null`  | Path to the TLS private key PEM file. Required with `cert_path`; both may be omitted only in HTTP-only configurations. |
 | `client_ca_path` | string | `null` | Path to a client-CA bundle PEM file. When set, this domain requires **mutual TLS**: clients must present a certificate signed by one of these CAs. Requires `cert_path`/`key_path`. Hot-reloadable per-domain. |
 | `headers`   | table  | —       | Domain-level header manipulation. Merged between global and route-level headers.                 |
 | `security`  | table  | —       | Per-domain security overrides (`ip_filter`, `rate_limit`, `headers`). See [`[domains.security]`](#domainssecurity) below. |
 | `fingerprinting` | bool | `null` (inherit) | Domain-level fingerprint-header **injection** gate. Resolved per route as `route.or(domain).unwrap_or(true)`. Controls header injection only; capture is the static global `[fingerprint]`. |
-| `https_redirection` | bool | `true` when the domain has `cert_path`/`key_path` **and** both `listen.port` and `listen.port_tls` are in effect; otherwise no redirect | On plaintext HTTP, respond `301` to the same host, path, and query on HTTPS. The written flag is not baked from the file's ports at load: default `true` and the "both ports" check use the **running** listen (a reload that changes `port`/`port_tls` is ignored until restart). Setting the key without `cert_path`/`key_path` is a validation error. Setting it when only one port is in effect is a validation error. A domain without certs and without this key does not redirect. `Location` uses the running `port_tls` (omitted when it is `443`). Empty `Host` → `400` with no `Location`. Runs after the IP filter and before 421/mTLS; does not consume rate-limit tokens. |
 | `routes`    | array  | `[]`    | Path-based routing rules scoped to this domain. Same fields as the former `[[routes]]` entries.  |
 
 <table>

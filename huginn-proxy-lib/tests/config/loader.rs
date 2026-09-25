@@ -647,7 +647,7 @@ routes = [{ prefix = "/", backend = "b:9000" }]
 }
 
 #[test]
-fn both_ports_allow_domain_without_cert() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+fn both_ports_reject_domain_without_cert() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let path = tmp_path("dual-plain-domain");
     let toml = r#"
 listen = { port = 8080, port_tls = 8443, address_v4 = ["127.0.0.1"] }
@@ -658,9 +658,11 @@ host = "api.example.com"
 routes = [{ prefix = "/", backend = "b:9000" }]
 "#;
     fs::write(&path, toml)?;
-    let cfg = load_from_path(&path)?;
-    assert!(cfg.tls.is_some());
-    assert!(cfg.domains[0].cert_path.is_none());
+    let err = match load_from_path(&path) {
+        Ok(_) => panic!("dual-listen domain without cert must be rejected"),
+        Err(e) => e.to_string(),
+    };
+    assert!(err.contains("cert_path"), "got: {err}");
     let _ = fs::remove_file(&path);
     Ok(())
 }
@@ -719,30 +721,44 @@ routes = [{ prefix = "/", backend = "b:9000" }]
 }
 
 #[test]
-fn https_redirection_without_cert_is_rejected()
+fn dual_listen_allows_domains_to_share_cert_files()
 -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let path = tmp_path("https-redir-no-cert");
-    let toml = r#"
-listen = { port = 8080, port_tls = 8443, address_v4 = ["127.0.0.1"] }
-backends = [{ address = "b:9000" }]
+    let path = tmp_path("shared-cert");
+    let cert_path = tmp_path("shared-cert.crt");
+    let key_path = tmp_path("shared-cert.key");
+    fs::write(&cert_path, "dummy cert")?;
+    fs::write(&key_path, "dummy key")?;
+    let toml = format!(
+        r#"
+listen = {{ port = 8080, port_tls = 8443, address_v4 = ["127.0.0.1"] }}
+backends = [{{ address = "b:9000" }}]
 
 [[domains]]
 host = "api.example.com"
-https_redirection = true
-routes = [{ prefix = "/", backend = "b:9000" }]
-"#;
+cert_path = "{cert}"
+key_path = "{key}"
+routes = [{{ prefix = "/", backend = "b:9000" }}]
+
+[[domains]]
+host = "docs.example.com"
+cert_path = "{cert}"
+key_path = "{key}"
+routes = [{{ prefix = "/", backend = "b:9000" }}]
+"#,
+        cert = cert_path.display(),
+        key = key_path.display(),
+    );
     fs::write(&path, toml)?;
-    let err = match load_from_path(&path) {
-        Ok(_) => panic!("https_redirection without cert must be rejected"),
-        Err(e) => e.to_string(),
-    };
-    assert!(err.contains("https_redirection requires cert_path"), "got: {err}");
+    let cfg = load_from_path(&path)?;
+    assert_eq!(cfg.domains[0].cert_path, cfg.domains[1].cert_path);
     let _ = fs::remove_file(&path);
+    let _ = fs::remove_file(&cert_path);
+    let _ = fs::remove_file(&key_path);
     Ok(())
 }
 
 #[test]
-fn https_redirection_on_https_only_is_rejected()
+fn listen_https_redirection_on_https_only_is_rejected()
 -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let path = tmp_path("https-redir-one-port");
     let cert_path = tmp_path("redir-one.crt");
@@ -751,14 +767,13 @@ fn https_redirection_on_https_only_is_rejected()
     fs::write(&key_path, "dummy key")?;
     let toml = format!(
         r#"
-listen = {{ port_tls = 8443, address_v4 = ["127.0.0.1"] }}
+listen = {{ port_tls = 8443, https_redirection = true, address_v4 = ["127.0.0.1"] }}
 backends = [{{ address = "b:9000" }}]
 
 [[domains]]
 host = "api.example.com"
 cert_path = "{}"
 key_path = "{}"
-https_redirection = true
 routes = [{{ prefix = "/", backend = "b:9000" }}]
 "#,
         cert_path.display(),
@@ -766,7 +781,7 @@ routes = [{{ prefix = "/", backend = "b:9000" }}]
     );
     fs::write(&path, toml)?;
     let err = match load_from_path(&path) {
-        Ok(_) => panic!("https_redirection with a single port must be rejected"),
+        Ok(_) => panic!("listen.https_redirection with a single port must be rejected"),
         Err(e) => e.to_string(),
     };
     assert!(err.contains("listen.port"), "got: {err}");
@@ -800,8 +815,7 @@ routes = [{{ prefix = "/", backend = "b:9000" }}]
     );
     fs::write(&path, toml)?;
     let cfg = load_from_path(&path)?;
-    assert_eq!(cfg.domains[0].https_redirection, None);
-    assert!(cfg.domains[0].https_redirect_enabled(true));
+    assert!(huginn_proxy_lib::config::RuntimeListen::from(&cfg.listen).https_redirection);
     let _ = fs::remove_file(&path);
     let _ = fs::remove_file(&cert_path);
     let _ = fs::remove_file(&key_path);
@@ -818,21 +832,8 @@ fn reload_https_redirection_uses_running_listen()
     fs::write(&cert_path, "dummy cert")?;
     fs::write(&key_path, "dummy key")?;
 
-    let running_path = tmp_path("redir-running-http");
-    let running_toml = r#"
-listen = { port = 8080, address_v4 = ["127.0.0.1"] }
-backends = [{ address = "b:9000" }]
-
-[[domains]]
-host = "api.example.com"
-routes = [{ prefix = "/", backend = "b:9000" }]
-"#;
-    fs::write(&running_path, running_toml)?;
-    let running = load_from_path(&running_path)?;
-    let parts = running.into_parts();
-
-    let next_path = tmp_path("redir-next-dual");
-    let next_toml = format!(
+    let running_path = tmp_path("redir-running-dual");
+    let running_toml = format!(
         r#"
 listen = {{ port = 8080, port_tls = 8443, address_v4 = ["127.0.0.1"] }}
 backends = [{{ address = "b:9000" }}]
@@ -841,7 +842,25 @@ backends = [{{ address = "b:9000" }}]
 host = "api.example.com"
 cert_path = "{}"
 key_path = "{}"
-https_redirection = true
+routes = [{{ prefix = "/", backend = "b:9000" }}]
+"#,
+        cert_path.display(),
+        key_path.display()
+    );
+    fs::write(&running_path, running_toml)?;
+    let running = load_from_path(&running_path)?;
+    let parts = running.into_parts();
+
+    let next_path = tmp_path("redir-next-dual");
+    let next_toml = format!(
+        r#"
+listen = {{ port = 8080, port_tls = 8443, https_redirection = false, address_v4 = ["127.0.0.1"] }}
+backends = [{{ address = "b:9000" }}]
+
+[[domains]]
+host = "api.example.com"
+cert_path = "{}"
+key_path = "{}"
 routes = [{{ prefix = "/", backend = "b:9000" }}]
 "#,
         cert_path.display(),
@@ -849,11 +868,11 @@ routes = [{{ prefix = "/", backend = "b:9000" }}]
     );
     fs::write(&next_path, next_toml)?;
 
-    let err = match load_from_path_for_reload(&next_path, &parts.static_cfg) {
-        Ok(_) => panic!("reload must judge https_redirection against running listen"),
-        Err(e) => e.to_string(),
-    };
-    assert!(err.contains("https_redirection requires both listen.port"), "got: {err}");
+    let next = load_from_path_for_reload(&next_path, &parts.static_cfg)?;
+    assert_eq!(next.listen.https_redirection, Some(false));
+    assert!(
+        huginn_proxy_lib::config::RuntimeListen::from(&parts.static_cfg.listen).https_redirection
+    );
 
     let _ = fs::remove_file(&running_path);
     let _ = fs::remove_file(&next_path);
