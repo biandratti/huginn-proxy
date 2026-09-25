@@ -143,9 +143,6 @@ pub async fn accept_loop(
             );
 
             if tls_enabled {
-                // `tls_enabled` and `server_crypto: Some` both come from running `port_tls`
-                // (`run()` builds the map; load fills `[tls]` if omitted). A missing map is a
-                // wiring bug: drop rather than treat this socket as plaintext.
                 let Some(server_crypto) = ctx_task.server_crypto.as_ref() else {
                     warn!(?peer, "HTTPS listener has no TLS configuration; dropping connection");
                     return;

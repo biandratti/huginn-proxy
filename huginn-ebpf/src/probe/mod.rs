@@ -113,7 +113,6 @@ impl AsRawFd for EbpfLogPoller {
     }
 }
 
-/// One or two distinct ports in `1..=65535`. The second kernel slot is `0` when the list has one port.
 fn normalize_dst_ports(dst_ports: &[u16]) -> Result<(u16, u16), EbpfError> {
     let count = dst_ports.len();
     if count == 0 || count > 2 || dst_ports.contains(&0) {

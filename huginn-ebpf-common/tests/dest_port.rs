@@ -1,5 +1,3 @@
-//! Destination-port capture list shared by the BPF datapath and userspace tests.
-
 use huginn_ebpf_common::dest_port_allowed;
 
 const HTTP: u16 = 80;

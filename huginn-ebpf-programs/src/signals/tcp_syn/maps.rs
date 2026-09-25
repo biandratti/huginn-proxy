@@ -183,7 +183,6 @@ fn dst_port_2() -> u16 {
     unsafe { core::ptr::read_volatile(&DST_PORT_2) }
 }
 
-/// `true` when this SYN destination is in the one- or two-port capture list.
 #[inline(always)]
 pub fn dest_allowed(dest: u16) -> bool {
     huginn_ebpf_common::dest_port_allowed(dest, dst_port(), dst_port_2())

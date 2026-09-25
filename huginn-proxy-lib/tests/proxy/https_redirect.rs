@@ -58,8 +58,6 @@ async fn spawn_redirect_proxy(
     let client_ca_line = ca.as_ref().map_or(String::new(), |ca_file| {
         format!("client_ca_path = \"{}\"", ca_file.path().display())
     });
-    // `routes` must stay in the `[[domains]]` table. Extra `[domains.security.*]` tables
-    // come after, or TOML would parse `routes` as a field of the nested security table.
     let toml = format!(
         r#"
 listen = {{ port = {http_port}, port_tls = {https_port}, address_v4 = ["127.0.0.1"], https_redirection = {https_redirection} }}
