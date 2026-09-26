@@ -5,7 +5,7 @@ sidebar:
   order: 3
 ---
 
-Traffic enters the proxy listener (plain or TLS). The first matching **route** wins. [IP filtering](/huginn-proxy/docs/ip-filtering/) and [rate limiting](/huginn-proxy/docs/rate-limiting/) run before forwarding. Fingerprints are derived from the **client→proxy** side of the connection; the proxy then injects **trusted** headers so backends do not rely on spoofable client fields.
+Traffic enters on [`listen.port`](/huginn-proxy/docs/listen/) (plaintext) and/or `listen.port_tls` (TLS). When `https_redirection` is effective, a matched plaintext request returns `301` and is not forwarded. Otherwise the first matching **route** wins. [IP filtering](/huginn-proxy/docs/ip-filtering/) and [rate limiting](/huginn-proxy/docs/rate-limiting/) run before forwarding. Fingerprints are derived from the **client→proxy** side of the connection; the proxy then injects **trusted** headers so backends do not rely on spoofable client fields.
 
 ## With or without the eBPF agent
 

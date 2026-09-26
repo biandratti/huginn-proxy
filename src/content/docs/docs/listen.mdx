@@ -1,17 +1,21 @@
 ---
 title: Listen
-description: Bind addresses, TCP backlog, and PROXY protocol.
+description: HTTP and HTTPS ports, bind addresses, redirect, TCP backlog, and PROXY protocol.
 sidebar:
   order: 2
 ---
 
 import { Tabs, TabItem } from '@astrojs/starlight/components';
 
-The **`[listen]`** section controls where the proxy accepts client connections. **Static**: changing it requires a process restart.
+The **`[listen]`** section controls where the proxy accepts client connections. **Static**: changing it requires a process restart. Each bind address is combined with each present port.
 
 ## Fields
 
-- **`addrs`:** list of socket addresses (IPv4 and/or IPv6), for example `0.0.0.0:7000` and `[::]:7000` for dual-stack.
+- **`port`:** plain HTTP port. Omit it to skip HTTP sockets.
+- **`port_tls`:** HTTPS port. Omit it to skip TLS sockets. At least one of `port` or `port_tls` is required, and they must differ. Each socket is stamped by the field that created it (`port` is plaintext, `port_tls` is TLS).
+- **`https_redirection`:** process-wide HTTP→HTTPS policy. Default **`true`** when both ports are set, otherwise **`false`**. The key may be written only when both ports are set. With `true`, a matched plaintext request receives **`301`** (request host, path, and query; `port_tls` is omitted from `Location` when it is `443`). With `false`, HTTP is proxied. A host that matches no domain receives **`421`**, not a redirect. A reload that changes this value is ignored until restart.
+- **`ipv6`:** also bind IPv6 `::` when `address_v6` is omitted (default **`false`**). IPv4 `0.0.0.0` is bound unless `address_v4` lists specific addresses.
+- **`address_v4`** / **`address_v6`:** bind addresses. Each address is combined with each present port. An empty list is rejected. Do not mix the wildcard (`0.0.0.0` or `::`) with other addresses. IPv6 accepts bare (`::1`) and bracketed (`[::1]`) forms.
 - **`tcp_backlog`:** listen queue depth (default **`4096`**).
 - **`proxy_protocol`:** optional PROXY protocol v1/v2 support when huginn sits behind a trusted L4 load balancer (see below).
 
@@ -22,9 +26,14 @@ The **`[listen]`** section controls where the proxy accepts client connections. 
 
 ```yaml
 listen:
-  addrs:
-    - "0.0.0.0:7000"
-    - "[::]:7000"
+  port: 80
+  port_tls: 443
+  https_redirection: true
+  ipv6: true
+  address_v4:
+    - "0.0.0.0"
+  address_v6:
+    - "::"
   # tcp_backlog: 4096
   # proxy_protocol:
   #   mode: off # off | optional | require
@@ -36,7 +45,12 @@ listen:
 
 ```toml
 [listen]
-addrs = ["0.0.0.0:7000", "[::]:7000"]
+port = 80
+port_tls = 443
+https_redirection = true
+ipv6 = true
+address_v4 = ["0.0.0.0"]
+address_v6 = ["::"]
 # tcp_backlog = 4096
 
 # [listen.proxy_protocol]

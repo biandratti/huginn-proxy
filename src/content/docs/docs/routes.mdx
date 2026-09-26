@@ -350,7 +350,7 @@ Pool settings are under **[`[backend_pool]`](/huginn-proxy/docs/backends/#backen
 ## Domain fields (summary)
 
 - **`host`** (exact, `*.wildcard`, or absent for catch-all)
-- **`cert_path`**, **`key_path`**: TLS certificate for this domain (omit for plain HTTP)
+- **`cert_path`**, **`key_path`**: required together on every domain, catch-all included, when `listen.port_tls` is set. Domains may share the same pair of files. Omit both only on an HTTP-only listener. Omitting them to inherit the catch-all certificate is rejected.
 - **`client_ca_path`**: optional client-CA bundle; when set, this domain requires **mTLS** (see [TLS](/huginn-proxy/docs/tls/#client-authentication-mtls))
 - **`fingerprinting`**: domain-level gate (resolved against route-level `fingerprinting`)
 - **`headers`**: domain-level header manipulation (same shape as global `[headers]`)
