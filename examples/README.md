@@ -161,6 +161,8 @@ from the proxy. The only fork is whether you also run **TCP SYN** capture via **
 
 Both files also start the same **demo backends** (`traefik/whoami`) — that is unrelated to the choice above.
 
+Both stacks publish **80** (HTTP, `301` to HTTPS) and **443**, and mount `config/compose.yaml`. Compose adds `CAP_NET_BIND_SERVICE` so UID 10001 can bind those ports.
+
 ```bash
 # JA4 + Akamai + TCP SYN — two images + bpffs volume (kernel ≥ 5.11)
 docker compose -f examples/docker-compose.ebpf.yml up --build
@@ -169,13 +171,20 @@ docker compose -f examples/docker-compose.ebpf.yml up --build
 docker compose -f examples/docker-compose.without-ebpf.yml up --build
 ```
 
-Alternatively, pull a pre-built image from the registry:
+The same ports and config, from published images (no local build):
 
-| Image                                            | Description                                                          |
-|--------------------------------------------------|----------------------------------------------------------------------|
-| `ghcr.io/<owner>/huginn-proxy:latest`            | Proxy with eBPF/XDP — requires Linux kernel ≥ 5.11 and `cap_add`     |
-| `ghcr.io/<owner>/huginn-proxy-plain:latest`      | Proxy without eBPF — runs on any Linux kernel, no extra capabilities |
-| `ghcr.io/<owner>/huginn-proxy-ebpf-agent:latest` | XDP agent — pairs with the proxy image above                         |
+```bash
+docker compose -f examples/docker-compose.release-ebpf.yml up -d
+docker compose -f examples/docker-compose.release-without-ebpf.yml up -d
+```
+
+| Image                                            | Description                                                                                      |
+|--------------------------------------------------|--------------------------------------------------------------------------------------------------|
+| `ghcr.io/<owner>/huginn-proxy:latest`            | Proxy with eBPF — Linux kernel ≥ 5.11. Compose adds `CAP_BPF` and `CAP_NET_BIND_SERVICE`.      |
+| `ghcr.io/<owner>/huginn-proxy-plain:latest`      | Proxy without eBPF. Compose adds `CAP_NET_BIND_SERVICE` to bind 80 and 443.                     |
+| `ghcr.io/<owner>/huginn-proxy-ebpf-agent:latest` | Capture agent — pairs with the eBPF proxy image                                                 |
+
+Pin `:latest` to a release tag in the compose file when you need a reproducible pull. Image names and tags: [DEPLOYMENT-MATRIX.md](../DEPLOYMENT-MATRIX.md).
 
 ### 4. Test the Proxy
 
@@ -225,11 +234,12 @@ eBPF compose examples map agent HTTP on the proxy service (`9091:9091`).
 
 ## Configuration Files
 
-The `config/` directory contains example configurations:
+The `config/` directory contains the Compose stack in two formats:
 
-- **`compose.toml`** - Basic proxy setup (default for Docker Compose)
+- **`compose.yaml`** — mounted by every compose file in this directory (HTTP `80`, HTTPS `443`, `https_redirection`)
+- **`compose.toml`** — the same stack; the TOML volume lines in the compose files are commented out
 
-To switch configurations, edit `docker-compose.ebpf.yml` and change the `command` and `volumes` sections.
+To switch configurations, edit `command` and `volumes` in the compose file you started.
 
 ---
 
