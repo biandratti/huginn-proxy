@@ -16,7 +16,7 @@ members = [
 resolver = "3"
 
 [workspace.package]
-version = "0.0.5-rc.0"
+version = "0.0.6-rc.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 authors = ["Maximiliano Biandratti"]
