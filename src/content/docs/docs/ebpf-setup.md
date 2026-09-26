@@ -49,7 +49,7 @@ There is **no `tcx` value** of `HUGINN_EBPF_CAPTURE`; it is chosen for you. Do n
 | Variable | Role |
 | --- | --- |
 | `HUGINN_EBPF_INTERFACE` | NIC to attach to (in Docker Compose with `network_mode: service:proxy`, this is the **proxy** container’s `eth0`). |
-| `HUGINN_EBPF_DST_PORT` | Listener port to filter toward (the proxy’s TLS/HTTP port, e.g. `7000`). |
+| `HUGINN_EBPF_DST_PORTS` | One or two destination ports, comma-separated. With both listeners and effective `https_redirection`, capture `port_tls` only (for example `443`). Use `80,443` only when `https_redirection` is `false` and HTTP is proxied. `0`, an empty list, a duplicate, or a third port stops the agent. |
 | `HUGINN_EBPF_DST_IP_V4` | IPv4 destination filter (`0.0.0.0` = no filter). |
 | `HUGINN_EBPF_DST_IP_V6` | IPv6 counterpart (`::` = no filter; quote in YAML if needed). |
 | `HUGINN_EBPF_PIN_PATH` | Directory under bpffs where maps are pinned (e.g. `/sys/fs/bpf/huginn`). **Same** on proxy. |

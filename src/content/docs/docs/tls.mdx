@@ -12,7 +12,7 @@ TLS configuration splits into two places:
 - **Certificate paths** (`cert_path`, `key_path`) and optional **mTLS** (`client_ca_path`) belong to each **`[[domains]]`** entry. Each hostname can have its own certificate and client-CA bundle. See [Routes & Domains](/huginn-proxy/docs/routes/).
 - **Transport options** (`alpn`, `[tls.options]`, `[tls.session_resumption]`) live under the top-level **`[tls]`** section. **Static**: requires restart. Certificate **file contents** reload separately (see [Certificate rotation](#certificate-rotation)).
 
-Omit the **`[tls]`** section entirely to run as plain HTTP.
+Listeners are [`listen.port`](/huginn-proxy/docs/listen/) (HTTP) and `listen.port_tls` (HTTPS). When `port_tls` is set, every domain, catch-all included, needs `cert_path` and `key_path`. Two domains may share the same files. Omitting the pair to inherit the catch-all certificate is rejected. HTTP→HTTPS `301` is [`listen.https_redirection`](/huginn-proxy/docs/listen/), not a per-domain flag.
 
 ## How SNI and routing relate
 
