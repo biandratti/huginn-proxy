@@ -11,15 +11,18 @@ services:
       - HUGINN_CONFIG_PATH=/config/compose.yaml
       - RUST_LOG=${RUST_LOG:-info}
     volumes:
-      #- ./config/compose.release.toml:/config/compose.toml:ro
-      - ./config/compose.release.yaml:/config/compose.yaml:ro
+      #- ./config/compose.toml:/config/compose.toml:ro
+      - ./config/compose.yaml:/config/compose.yaml:ro
       - ./certs:/config/certs:ro
     ports:
-      # GHCR :latest still binds 7000 (`listen.addrs`). Host 443 is a publish map only.
-      - "0.0.0.0:443:7000"
-      - "[::]:443:7000"
+      - "0.0.0.0:80:80"
+      - "[::]:80:80"
+      - "0.0.0.0:443:443"
+      - "[::]:443:443"
       - "0.0.0.0:9090:9090"
       - "[::]:9090:9090"
+    cap_add:
+      - CAP_NET_BIND_SERVICE
     ulimits:
       nofile:
         soft: 65536

@@ -37,9 +37,7 @@ the probe does not depend on utilities the runtime will never ship. Kubernetes c
 
 Published image names and tags (`latest` / `vX.Y.Z`): [DEPLOYMENT-MATRIX.md](DEPLOYMENT-MATRIX.md). The three GHCR packages are separate repositories (`huginn-proxy`, `huginn-proxy-plain`, `huginn-proxy-ebpf-agent`); **do not** add `-ebpf-agent` as a suffix on the tag.
 
-Repo-built compose publishes **80**, **443**, and metrics (9090/9091), with `CAP_NET_BIND_SERVICE` so UID **10001** can bind those ports. Stack details: [`examples/README.md`](examples/README.md). Capture ports: [EBPF-SETUP.md](EBPF-SETUP.md).
-
-`docker-compose.release-*` still use `compose.release.yaml` (process binds **7000**, host `443:7000`) until a GHCR image ships `listen.port` / `port_tls`.
+Compose publishes **80**, **443**, and metrics (9090/9091), with `CAP_NET_BIND_SERVICE` so UID **10001** can bind those ports. Repo-built and GHCR files mount the same `examples/config/compose.yaml`. Stack details: [`examples/README.md`](examples/README.md). Capture ports: [EBPF-SETUP.md](EBPF-SETUP.md).
 
 Pre-built images from GHCR (pin `latest` to a release tag in the compose file if you need reproducibility):
 

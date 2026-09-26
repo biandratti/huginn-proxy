@@ -167,8 +167,8 @@ For sustained multi-client load (RPS under production-like concurrency), use an
 external tool against a running proxy instance:
 
 ```bash
-# Start the proxy locally (TLS mode, all fingerprinting enabled)
-docker compose -f examples/docker-compose.release-ebpf.yml up --build
+# Start the published stack (HTTPS on 443, all fingerprinting enabled)
+docker compose -f examples/docker-compose.release-ebpf.yml up -d
 
 # 30-second load test: 50 concurrent users, HTTP/1.1
 oha --insecure -c 50 -z 30s https://127.0.0.1:443/
@@ -332,7 +332,7 @@ The script **checks** that fingerprint headers (JA4, Akamai, TCP SYN) appear in 
 `traefik/whoami`), not on the response seen by the k6 client.
 
 ```bash
-docker compose -f examples/docker-compose.release-ebpf.yml up --build
+docker compose -f examples/docker-compose.release-ebpf.yml up -d
 
 k6 run --insecure-skip-tls-verify benches/load/k6/fingerprints.js
 ```
@@ -374,7 +374,7 @@ Examples:
 k6 run --insecure-skip-tls-verify benches/load/k6/fingerprints.js
 
 # Higher steady load — tune TIME_WAIT first (see table above)
-k6 run --env VUS=50 --env DURATION=60s --insecure-skip-tls-verify benches/load/k6/fingerprints.js````
+k6 run --env VUS=50 --env DURATION=60s --insecure-skip-tls-verify benches/load/k6/fingerprints.js
 
 # Ramp to saturation: 10 → 50 → 150 → 300 VUs (~4 min)
 # Tune OS first: sudo sysctl -w net.ipv4.tcp_fin_timeout=10 net.ipv4.ip_local_port_range="10000 65535"
