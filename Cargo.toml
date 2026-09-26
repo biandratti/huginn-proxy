@@ -49,7 +49,7 @@ libc = "0.2.189"
 log = "0.4.34"
 notify = "8.2.0"
 opentelemetry = { version = "0.32.0", features = ["metrics"] }
-opentelemetry-prometheus = "0.32.0"
+opentelemetry-prometheus = "0.33.0"
 opentelemetry_sdk = { version = "0.32.1", features = ["metrics", "trace"] }
 pingora-limits = "0.9.0"
 pingora-timeout = "0.9.0"
