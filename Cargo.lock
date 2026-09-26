@@ -1062,7 +1062,7 @@ dependencies = [
  "huginn-ebpf",
  "hyper",
  "hyper-util",
- "opentelemetry",
+ "opentelemetry 0.33.0",
  "opentelemetry-prometheus",
  "opentelemetry_sdk",
  "prometheus",
@@ -1165,7 +1165,7 @@ dependencies = [
  "hyper-util",
  "ipnet",
  "notify",
- "opentelemetry",
+ "opentelemetry 0.33.0",
  "opentelemetry-prometheus",
  "opentelemetry_sdk",
  "pingora-limits",
@@ -1852,13 +1852,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "opentelemetry"
+version = "0.33.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6cdb0b1b267eb9db3331b434ed9ddab10d50e280a9adf9d13e5233e2002b61b5"
+dependencies = [
+ "futures-core",
+ "futures-sink",
+ "js-sys",
+ "pin-project-lite",
+ "thiserror 2.0.21",
+ "tracing",
+]
+
+[[package]]
 name = "opentelemetry-prometheus"
 version = "0.32.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2c0359983e7f79cf33c9abd89e5d7ddf67c46c419d0148598022d70e70c01aba"
 dependencies = [
  "once_cell",
- "opentelemetry",
+ "opentelemetry 0.32.0",
  "opentelemetry_sdk",
  "prometheus",
  "tracing",
@@ -1873,7 +1887,7 @@ dependencies = [
  "futures-channel",
  "futures-executor",
  "futures-util",
- "opentelemetry",
+ "opentelemetry 0.32.0",
  "percent-encoding",
  "portable-atomic",
  "rand 0.9.5",
