@@ -937,3 +937,48 @@ routes = [{{ prefix = "/", backend = "b:9000" }}]
     let _ = fs::remove_file(&key_path);
     Ok(())
 }
+
+#[test]
+fn reload_of_unchanged_file_matches_startup_static_tls()
+-> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    use huginn_proxy_lib::config::load_from_path_for_reload;
+
+    let cert_path = tmp_path("reload-static-tls.crt");
+    let key_path = tmp_path("reload-static-tls.key");
+    fs::write(&cert_path, "dummy cert")?;
+    fs::write(&key_path, "dummy key")?;
+
+    for (name, tls_section) in [("omitted-section", ""), ("omitted-alpn", "[tls]\n")] {
+        let path = tmp_path(name);
+        let toml = format!(
+            r#"
+listen = {{ port_tls = 8443, address_v4 = ["127.0.0.1"] }}
+backends = [{{ address = "b:9000" }}]
+
+{tls_section}
+[[domains]]
+host = "api.example.com"
+cert_path = "{}"
+key_path = "{}"
+routes = [{{ prefix = "/", backend = "b:9000" }}]
+"#,
+            cert_path.display(),
+            key_path.display()
+        );
+        fs::write(&path, toml)?;
+        let started = load_from_path(&path)?.into_parts();
+        let reloaded = load_from_path_for_reload(&path, &started.static_cfg)?.into_parts();
+        assert_eq!(reloaded.static_cfg, started.static_cfg);
+        let alpn = reloaded
+            .static_cfg
+            .tls
+            .as_ref()
+            .and_then(|tls| tls.alpn.as_ref());
+        assert_eq!(alpn, Some(&vec!["h2".to_string(), "http/1.1".to_string()]));
+        let _ = fs::remove_file(&path);
+    }
+
+    let _ = fs::remove_file(&cert_path);
+    let _ = fs::remove_file(&key_path);
+    Ok(())
+}

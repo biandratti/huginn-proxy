@@ -84,6 +84,34 @@ fn equal_ports_are_error() {
 }
 
 #[test]
+fn port_zero_is_error() {
+    assert_sockets_err(listen(Some(0), None, false, None, None).sockets(), "listen.port must");
+}
+
+#[test]
+fn port_tls_zero_is_error() {
+    assert_sockets_err(listen(None, Some(0), false, None, None).sockets(), "listen.port_tls must");
+}
+
+#[test]
+fn zero_beside_another_port_is_error() {
+    assert_sockets_err(listen(Some(0), Some(80), false, None, None).sockets(), "listen.port must");
+    assert_sockets_err(
+        listen(Some(80), Some(0), false, None, None).sockets(),
+        "listen.port_tls must",
+    );
+}
+
+#[test]
+fn port_bounds_are_valid() -> TestResult {
+    let low = listen(Some(1), None, false, None, None).sockets()?;
+    assert_eq!(low, vec![sock(SocketAddr::from((Ipv4Addr::UNSPECIFIED, 1)), false)]);
+    let high = listen(None, Some(65535), false, None, None).sockets()?;
+    assert_eq!(high, vec![sock(SocketAddr::from((Ipv4Addr::UNSPECIFIED, 65535)), true)]);
+    Ok(())
+}
+
+#[test]
 fn explicit_redirect_requires_both_ports() {
     let mut config = listen(Some(80), None, false, None, None);
     config.https_redirection = Some(false);

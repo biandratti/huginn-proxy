@@ -65,7 +65,8 @@ pub fn extract_request_host_inner<B>(req: &Request<B>) -> String {
 ///
 /// `host` is the request host without a port (`extract_request_host`). IPv6 hosts
 /// are wrapped in brackets so the URI authority is valid. `tls_port` is the
-/// running `listen.port_tls`; `443` is omitted from the authority.
+/// running `listen.port_tls`; `443` is omitted from the authority. A path that
+/// does not start with `/` (`""` or `"*"`) is replaced with `/`.
 #[doc(hidden)]
 pub fn https_redirect_location(
     host: &str,
@@ -83,7 +84,7 @@ pub fn https_redirect_location(
     } else {
         format!("{host}:{tls_port}")
     };
-    let path = if path.is_empty() { "/" } else { path };
+    let path = if path.starts_with('/') { path } else { "/" };
     match query {
         Some(q) if !q.is_empty() => format!("https://{authority}{path}?{q}"),
         _ => format!("https://{authority}{path}"),
