@@ -23,11 +23,12 @@ pub fn load_from_path<P: AsRef<Path>>(p: P) -> Result<Config> {
 
 /// Parse a replacement config and validate domains against the **running** listen.
 ///
-/// Static `listen` / `[tls]` in the file are not used for cert × port rules (those
-/// settings are ignored until restart). The file must still be a valid snapshot
-/// (sockets, unique hosts, cert files, cross-refs).
+/// Static settings in the file are ignored until restart. Defaults are filled the same
+/// way as startup, so an unchanged file compares equal to the running static config.
+/// The file must still be a valid snapshot (sockets, unique hosts, cert files, cross-refs).
 pub fn load_from_path_for_reload<P: AsRef<Path>>(p: P, running: &StaticConfig) -> Result<Config> {
-    let cfg = parse_config_file(p.as_ref())?;
+    let mut cfg = parse_config_file(p.as_ref())?;
+    apply_listen_tls_defaults(&mut cfg);
     validate_config(&cfg)?;
     validate_domains_against_listen(&running.listen, &cfg.domains)?;
     audit::run(&cfg);
