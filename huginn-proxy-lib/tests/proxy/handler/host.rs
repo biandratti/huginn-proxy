@@ -312,6 +312,18 @@ fn https_redirect_location_brackets_ipv6() {
 }
 
 #[test]
+fn https_redirect_location_replaces_a_path_that_does_not_start_with_slash() {
+    assert_eq!(
+        https_redirect_location("api.example.com", "", None, 443),
+        "https://api.example.com/"
+    );
+    assert_eq!(
+        https_redirect_location("api.example.com", "*", Some("q=1"), 443),
+        "https://api.example.com/?q=1"
+    );
+}
+
+#[test]
 fn https_redirect_requires_a_matched_domain() {
     let listen = RuntimeListen { http: true, tls_port: Some(443), https_redirection: true };
     assert_eq!(https_redirect_port(false, true, listen), Some(443));
