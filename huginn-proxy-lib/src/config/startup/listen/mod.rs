@@ -265,6 +265,12 @@ impl ListenConfig {
                 "listen.port and listen.port_tls must be different".to_string(),
             ));
         }
+        if self.port == Some(0) {
+            return Err(ProxyError::Config("listen.port must be in 1..=65535".to_string()));
+        }
+        if self.port_tls == Some(0) {
+            return Err(ProxyError::Config("listen.port_tls must be in 1..=65535".to_string()));
+        }
         if self.https_redirection.is_some() && (self.port.is_none() || self.port_tls.is_none()) {
             return Err(ProxyError::Config(
                 "listen.https_redirection requires both listen.port and listen.port_tls"
