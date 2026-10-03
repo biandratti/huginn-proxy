@@ -8,7 +8,7 @@
 #   docker build --target ebpf  -f docker/proxy.Dockerfile .    (or just: docker build -f ...)
 
 # ── builder base ────────────────────────────────────────────────
-FROM rust:1.98.1-slim@sha256:4cd829461bd5c4d511c32e269da9cb8929223b666519d8004e35fc8d1d771ab7 AS builder-base
+FROM rust:1.99.0-slim@sha256:01dd4f9c24801cfc8ba9cf8a5dd6dcca451cd17d1ae73574edc22591de6e6816 AS builder-base
 RUN apt-get update -q && apt-get install -y --no-install-recommends \
     pkg-config libssl-dev \
     && rm -rf /var/lib/apt/lists/*
@@ -34,7 +34,7 @@ RUN cargo build --release -p huginn-proxy --features ebpf-tcp
 
 # ── runtime base ────────────────────────────────────────────────
 # Distroless contains only the glibc/libgcc runtime and CA store needed by the binaries.
-FROM gcr.io/distroless/cc-debian13:latest@sha256:4594d59540d1948417f6ca2829ddd9294493a7c68b7528f4dd459de7f203a750 AS runtime-base
+FROM gcr.io/distroless/cc-debian13:latest@sha256:159783207c2cd44c2aa5715961d13c8612368ac9bd450f887e3f08fc8ea461e3 AS runtime-base
 COPY --from=builder-base /healthcheck /usr/local/bin/healthcheck
 
 # ── plain target ────────────────────────────────────────────────
