@@ -183,6 +183,8 @@ timeout:
   keep_alive:
     enabled: true
     upstream_idle_timeout: 60
+    client_tcp_idle_secs: 60
+    client_tcp_interval_secs: 10
 
 security:
   max_connections: 512

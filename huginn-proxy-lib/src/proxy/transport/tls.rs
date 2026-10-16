@@ -52,9 +52,21 @@ pub async fn handle_tls_connection(
     let crypto = config.server_crypto.load_full();
     {
         let handshake_start = Instant::now();
-        let (prefix, ja4_fingerprints) = match read_client_hello(&mut stream, &metrics).await {
-            Ok(v) => v,
-            Err(e) => {
+        // One time budget for ClientHello read + handshake, so silent clients can't hang forever.
+        let client_hello_result = tokio::time::timeout(
+            config.tls_handshake_timeout,
+            read_client_hello(&mut stream, &metrics),
+        )
+        .await;
+        let (prefix, ja4_fingerprints) = match client_hello_result {
+            Ok(Ok(v)) => v,
+            Err(_) => {
+                debug!(?peer, "timed out waiting for client hello");
+                metrics.record_timeout(values::TIMEOUT_TLS_HANDSHAKE);
+                metrics.record_tls_handshake_error(values::TLS_ERROR_HANDSHAKE_TIMEOUT);
+                return;
+            }
+            Ok(Err(e)) => {
                 let failure = TlsAcceptFailure::classify(&e, false);
                 match failure.severity() {
                     FailureSeverity::Debug => {
@@ -86,8 +98,11 @@ pub async fn handle_tls_connection(
         let mut unmatched_sni = false;
         // Two-phase handshake: `LazyConfigAcceptor` reads the ClientHello (replayed
         // from the prefix), then we pick the per-SNI `ServerConfig` and finish. The
-        // whole exchange is bounded by the single handshake timeout.
-        let tls_accept_result = tokio::time::timeout(config.tls_handshake_timeout, async {
+        // whole exchange gets whatever is left of the handshake budget.
+        let remaining = config
+            .tls_handshake_timeout
+            .saturating_sub(handshake_start.elapsed());
+        let tls_accept_result = tokio::time::timeout(remaining, async {
             let start = LazyConfigAcceptor::new(Acceptor::default(), prefixed).await?;
             let server_config = {
                 let client_hello = start.client_hello();

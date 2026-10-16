@@ -85,11 +85,26 @@ pub struct KeepAliveConfig {
     /// Default: 60 seconds
     #[serde(default = "default_upstream_idle_timeout")]
     pub upstream_idle_timeout: u64,
+    /// Seconds a client connection can be idle before TCP keepalive probes start.
+    /// `0` disables client TCP keepalive.
+    /// Default: 60 seconds
+    #[serde(default = "default_client_tcp_idle_secs")]
+    pub client_tcp_idle_secs: u64,
+    /// Seconds between client TCP keepalive probes.
+    /// `0` disables client TCP keepalive.
+    /// Default: 10 seconds
+    #[serde(default = "default_client_tcp_interval_secs")]
+    pub client_tcp_interval_secs: u64,
 }
 
 impl Default for KeepAliveConfig {
     fn default() -> Self {
-        Self { enabled: true, upstream_idle_timeout: default_upstream_idle_timeout() }
+        Self {
+            enabled: true,
+            upstream_idle_timeout: default_upstream_idle_timeout(),
+            client_tcp_idle_secs: default_client_tcp_idle_secs(),
+            client_tcp_interval_secs: default_client_tcp_interval_secs(),
+        }
     }
 }
 
@@ -117,6 +132,14 @@ fn default_upstream_idle_timeout() -> u64 {
     60
 }
 
+fn default_client_tcp_idle_secs() -> u64 {
+    60
+}
+
+fn default_client_tcp_interval_secs() -> u64 {
+    10
+}
+
 /// Allowlisted effective-config view of [`TimeoutConfig`]. Field names are the JSON keys.
 #[derive(Serialize)]
 pub(crate) struct TimeoutView {
@@ -133,6 +156,8 @@ pub(crate) struct TimeoutView {
 struct KeepAliveView {
     enabled: bool,
     upstream_idle_timeout: u64,
+    client_tcp_idle_secs: u64,
+    client_tcp_interval_secs: u64,
 }
 
 impl TimeoutConfig {
@@ -147,6 +172,8 @@ impl TimeoutConfig {
             keep_alive: KeepAliveView {
                 enabled: self.keep_alive.enabled,
                 upstream_idle_timeout: self.keep_alive.upstream_idle_timeout,
+                client_tcp_idle_secs: self.keep_alive.client_tcp_idle_secs,
+                client_tcp_interval_secs: self.keep_alive.client_tcp_interval_secs,
             },
         }
     }
