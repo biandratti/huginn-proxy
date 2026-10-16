@@ -31,11 +31,11 @@ pub fn scan_client_hello(buf: &[u8]) -> ClientHelloScan {
             Some(&CONTENT_TYPE_HANDSHAKE) => {}
             Some(_) => return ClientHelloScan::AsIs,
         }
-        let Some(header) = buf.get(offset..offset + RECORD_HEADER_LEN) else {
+        let start = offset.saturating_add(RECORD_HEADER_LEN);
+        let Some(header) = buf.get(offset..start) else {
             return ClientHelloScan::NeedMore;
         };
-        let start = offset + RECORD_HEADER_LEN;
-        offset = start + u16::from_be_bytes([header[3], header[4]]) as usize;
+        offset = start.saturating_add(u16::from_be_bytes([header[3], header[4]]) as usize);
         let Some(fragment) = buf.get(start..offset) else {
             return ClientHelloScan::NeedMore;
         };
@@ -44,7 +44,8 @@ pub fn scan_client_hello(buf: &[u8]) -> ClientHelloScan {
         let Some(&[_, a, b, c]) = payload.get(..HANDSHAKE_HEADER_LEN) else {
             continue;
         };
-        let msg_len = HANDSHAKE_HEADER_LEN + u32::from_be_bytes([0, a, b, c]) as usize;
+        let msg_len =
+            HANDSHAKE_HEADER_LEN.saturating_add(u32::from_be_bytes([0, a, b, c]) as usize);
         if msg_len > MAX_RECORD_LEN {
             return ClientHelloScan::AsIs;
         }
