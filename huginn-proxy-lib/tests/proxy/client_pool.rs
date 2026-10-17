@@ -3,7 +3,7 @@ use huginn_proxy_lib::config::{BackendPoolConfig, KeepAliveConfig, TimeoutConfig
 use huginn_proxy_lib::proxy::ClientPool;
 
 fn default_keep_alive_config() -> KeepAliveConfig {
-    KeepAliveConfig { enabled: true, upstream_idle_timeout: 90 }
+    KeepAliveConfig { enabled: true, upstream_idle_timeout: 90, ..Default::default() }
 }
 
 fn default_upstream_connect_ms() -> Option<u64> {
@@ -96,7 +96,7 @@ fn test_client_pool_clone() {
 
 #[test]
 fn test_keep_alive_disabled() {
-    let config = KeepAliveConfig { enabled: false, upstream_idle_timeout: 0 };
+    let config = KeepAliveConfig { enabled: false, upstream_idle_timeout: 0, ..Default::default() };
     let pool_config = BackendPoolConfig::default();
     let pool = ClientPool::new(&config, pool_config, default_upstream_connect_ms());
 

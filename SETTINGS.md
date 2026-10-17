@@ -1177,12 +1177,14 @@ timeout:
 
 ### `[timeout.keep_alive]`
 
-HTTP/1.1 keep-alive and upstream TCP keepalive. Applies only to HTTP/1.1; HTTP/2 connections are always persistent.
+HTTP/1.1 keep-alive plus upstream and client TCP keepalive. `enabled` applies only to HTTP/1.1; HTTP/2 connections are always persistent.
 
-| Key                     | Type    | Default | Description                                                                                                                                                                                   |
-|-------------------------|---------|---------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `enabled`               | bool    | `true`  | Enable HTTP/1.1 persistent connections (`Connection: keep-alive`).                                                                                                                            |
-| `upstream_idle_timeout` | integer | `60`    | TCP keepalive interval in seconds for proxy → backend connections. Sets how often keepalive packets are sent to detect dead backend connections. Aligned with rpxy's `upstream_idle_timeout`. |
+| Key                        | Type    | Default | Description                                                                                                                                                                                   |
+|----------------------------|---------|---------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `enabled`                  | bool    | `true`  | Enable HTTP/1.1 persistent connections (`Connection: keep-alive`).                                                                                                                            |
+| `upstream_idle_timeout`    | integer | `60`    | TCP keepalive interval in seconds for proxy → backend connections. Sets how often keepalive packets are sent to detect dead backend connections. Aligned with rpxy's `upstream_idle_timeout`. |
+| `client_tcp_idle_secs`     | integer | `60`    | Seconds a client → proxy connection can be idle before TCP keepalive probes start. Detects clients that vanished without closing. `0` disables client TCP keepalive.                          |
+| `client_tcp_interval_secs` | integer | `10`    | Seconds between client TCP keepalive probes. `0` disables client TCP keepalive.                                                                                                               |
 
 <table>
 <thead>
@@ -1199,6 +1201,8 @@ HTTP/1.1 keep-alive and upstream TCP keepalive. Applies only to HTTP/1.1; HTTP/2
 [timeout.keep_alive]
 enabled = true
 upstream_idle_timeout = 60
+client_tcp_idle_secs = 60
+client_tcp_interval_secs = 10
 ```
 
 </td>
@@ -1209,6 +1213,8 @@ timeout:
   keep_alive:
     enabled: true
     upstream_idle_timeout: 60
+    client_tcp_idle_secs: 60
+    client_tcp_interval_secs: 10
 ```
 
 </td>

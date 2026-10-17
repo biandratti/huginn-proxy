@@ -18,7 +18,25 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::net::TcpListener;
 use tokio::time::{Duration, Instant};
-use tracing::warn;
+use tracing::{debug, warn};
+
+/// Enable TCP keepalive so clients that vanish without closing get detected.
+/// Skipped when either setting is `0`.
+fn enable_client_keepalive(
+    stream: &tokio::net::TcpStream,
+    peer: SocketAddr,
+    config: &KeepAliveConfig,
+) {
+    if config.client_tcp_idle_secs == 0 || config.client_tcp_interval_secs == 0 {
+        return;
+    }
+    let keepalive = socket2::TcpKeepalive::new()
+        .with_time(Duration::from_secs(config.client_tcp_idle_secs))
+        .with_interval(Duration::from_secs(config.client_tcp_interval_secs));
+    if let Err(e) = socket2::SockRef::from(stream).set_tcp_keepalive(&keepalive) {
+        debug!(?peer, error = %e, "failed to enable TCP keepalive on client socket");
+    }
+}
 
 /// Callback type for TCP SYN fingerprint lookup.
 ///
@@ -82,6 +100,8 @@ pub async fn accept_loop(
                 continue;
             }
         };
+
+        enable_client_keepalive(&stream, socket_peer, &ctx.keep_alive_config);
 
         let ctx_task = Arc::clone(&ctx);
         let shutdown_rx = shutdown_rx.clone();
