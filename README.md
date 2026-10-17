@@ -17,6 +17,8 @@
 `huginn-proxy-ebpf-agent` ([images & layout](#architecture))
 
 **High-performance reverse proxy with passive fingerprinting capabilities powered by Huginn Net.**
+
+<h2><a href="https://huginn-proxy.duckdns.org/">Live demo</a></h2>
 </div>
 
 ## Overview

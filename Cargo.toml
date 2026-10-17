@@ -38,19 +38,19 @@ huginn-certs = { path = "huginn-certs" }
 huginn-ebpf = { path = "huginn-ebpf" }
 huginn-ebpf-common = { path = "huginn-ebpf-common" }
 huginn-ebpf-rate-limit = { path = "huginn-ebpf-rate-limit" }
-huginn-net-http = { version = "2.2.0", features = ["akamai"] }
-huginn-net-tcp = { version = "2.2.0", features = ["syn"] }
-huginn-net-tls = { version = "2.2.0", features = ["stable-v1"] }
+huginn-net-http = { version = "2.2.1", features = ["akamai"] }
+huginn-net-tcp = { version = "2.2.1", features = ["syn"] }
+huginn-net-tls = { version = "2.2.1", features = ["stable-v1"] }
 huginn-proxy-lib = { path = "huginn-proxy-lib" }
-hyper = { version = "1.11.1", features = ["full"] }
+hyper = { version = "1.12.0", features = ["full"] }
 hyper-util = { version = "0.1.21", features = ["full"] }
 ipnet = "2.12.2"
-libc = "0.2.189"
+libc = "0.2.190"
 log = "0.4.34"
 notify = "8.2.0"
-opentelemetry = { version = "0.33.0", features = ["metrics"] }
-opentelemetry-prometheus = "0.33.0"
-opentelemetry_sdk = { version = "0.33.0", features = ["metrics", "trace"] }
+opentelemetry = { version = "0.33.1", features = ["metrics"] }
+opentelemetry-prometheus = "0.33.1"
+opentelemetry_sdk = { version = "0.33.1", features = ["metrics", "trace"] }
 pingora-limits = "0.9.0"
 pingora-timeout = "0.9.0"
 ppp = "2.3.0"
@@ -59,17 +59,17 @@ rcgen = "0.14.10"
 reqwest = { version = "0.13.5", features = ["json", "http2"] }
 rustls-pki-types = "1.15.1"
 serde = { version = "1.0.229", features = ["derive"] }
-serde_json = "1.0.151"
+serde_json = "1.0.154"
 serde_norway = "0.9.42"
 serial_test = "4.0.1"
 socket2 = "0.6.5"
 tempfile = "3.27.0"
-thirtyfour = "0.37.5"
+thirtyfour = { version = "0.37.8", default-features = false, features = ["reqwest", "rustls"] }
 thiserror = "2.0.21"
-tokio = { version = "1.53.1", features = ["net", "time", "io-util", "macros", "rt-multi-thread", "sync", "signal", "fs"] }
-tokio-rustls = "0.26.5"
-tokio-util = { version = "0.7.19", features = ["rt"] }
-toml = "1.1.6"
+tokio = { version = "1.53.3", features = ["net", "time", "io-util", "macros", "rt-multi-thread", "sync", "signal", "fs"] }
+tokio-rustls = "0.26.6"
+tokio-util = { version = "0.7.20", features = ["rt"] }
+toml = "1.1.8"
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["fmt", "env-filter"] }
 x509-parser = "0.18.1"

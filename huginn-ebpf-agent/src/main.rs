@@ -18,7 +18,9 @@ use tokio::signal;
 /// Drain the eBPF log ring buffer when its fd is readable.
 fn spawn_ebpf_log_drain(poller: EbpfLogPoller) {
     tokio::spawn(async move {
-        let mut async_fd = match AsyncFd::with_interest(poller, Interest::READABLE) {
+        let mut async_fd = match unsafe {
+            AsyncFd::register_with_interest(poller, Interest::READABLE)
+        } {
             Ok(fd) => fd,
             Err(e) => {
                 tracing::warn!(error = %e, "failed to register eBPF log fd; debug logs disabled");
