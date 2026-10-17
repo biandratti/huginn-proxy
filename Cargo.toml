@@ -38,9 +38,9 @@ huginn-certs = { path = "huginn-certs" }
 huginn-ebpf = { path = "huginn-ebpf" }
 huginn-ebpf-common = { path = "huginn-ebpf-common" }
 huginn-ebpf-rate-limit = { path = "huginn-ebpf-rate-limit" }
-huginn-net-http = { version = "2.2.0", features = ["akamai"] }
-huginn-net-tcp = { version = "2.2.0", features = ["syn"] }
-huginn-net-tls = { version = "2.2.0", features = ["stable-v1"] }
+huginn-net-http = { version = "2.2.1", features = ["akamai"] }
+huginn-net-tcp = { version = "2.2.1", features = ["syn"] }
+huginn-net-tls = { version = "2.2.1", features = ["stable-v1"] }
 huginn-proxy-lib = { path = "huginn-proxy-lib" }
 hyper = { version = "1.12.0", features = ["full"] }
 hyper-util = { version = "0.1.21", features = ["full"] }
