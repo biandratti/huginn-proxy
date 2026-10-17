@@ -1021,9 +1021,9 @@ version = "0.0.6-rc.0"
 
 [[package]]
 name = "huginn-net-http"
-version = "2.2.0"
+version = "2.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fa865c5e982215cfc1ba33782f13a80677c19f0e0d4bc1053ac80c16a9e7b012"
+checksum = "4b97af4f9b8b6f376271d25d29bccbe01310c612ca0bdb10e84467a412aed235"
 dependencies = [
  "crossbeam-channel",
  "hpack-patched",
@@ -1038,9 +1038,9 @@ dependencies = [
 
 [[package]]
 name = "huginn-net-tcp"
-version = "2.2.0"
+version = "2.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b507cb9d5f2b9dc83ca1c9fa398c08af0760a56361919328af6dae20fcdec5a0"
+checksum = "d1c0661b347f5a769871eb6862622dd5c252cc044f481a676f24eef9fe78eb61"
 dependencies = [
  "crossbeam-channel",
  "pcap-file",
@@ -1051,9 +1051,9 @@ dependencies = [
 
 [[package]]
 name = "huginn-net-tls"
-version = "2.2.0"
+version = "2.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1950c46b42fa20553ae7dba6aaf6cf4e0b627b6b081ccf10450da4f1619c7c4a"
+checksum = "dd8717b36080edce2156f798abd4f386fa75fff1c4011e2a16d890925813d918"
 dependencies = [
  "crossbeam-channel",
  "pcap-file",
