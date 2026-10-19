@@ -60,11 +60,15 @@ pub async fn run(
         .timer(TokioTimer::new())
         .keep_alive(static_cfg.timeout.keep_alive.enabled)
         .header_read_timeout(idle_timeout);
-    builder
-        .http2()
-        .timer(TokioTimer::new())
-        .keep_alive_interval(idle_timeout)
-        .keep_alive_timeout(idle_timeout.saturating_add(Duration::from_secs(1)));
+    if static_cfg.timeout.keep_alive.enabled {
+        builder
+            .http2()
+            .timer(TokioTimer::new())
+            .keep_alive_interval(idle_timeout)
+            .keep_alive_timeout(idle_timeout.saturating_add(Duration::from_secs(1)));
+    } else {
+        builder.http2().timer(TokioTimer::new());
+    }
 
     // Collect background service handles for ordered cooperative shutdown.
     let mut services: Vec<ServiceHandle> = Vec::new();

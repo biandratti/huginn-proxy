@@ -1177,7 +1177,7 @@ timeout:
 
 ### `[timeout.keep_alive]`
 
-HTTP/1.1 keep-alive plus upstream and client TCP keepalive. `enabled` applies only to HTTP/1.1; HTTP/2 connections are always persistent.
+HTTP/1.1 keep-alive plus upstream and client TCP keepalive. `enabled` controls HTTP/1.1 persistent connections and the HTTP/2 inbound PING keep-alive (`proxy_idle_ms`); HTTP/2 connections stay persistent either way. `false` also disables upstream TCP keepalive.
 
 | Key                        | Type    | Default | Description                                                                                                                                                                                   |
 |----------------------------|---------|---------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|

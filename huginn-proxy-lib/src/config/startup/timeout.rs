@@ -75,8 +75,8 @@ pub struct KeepAliveConfig {
     /// Allows reusing the same TCP connection for multiple HTTP requests
     /// Default: true
     ///
-    /// Note: HTTP/2 connections are always persistent and use multiplexing,
-    /// so this setting only affects HTTP/1.1 connections.
+    /// Note: HTTP/2 connections are always persistent and use multiplexing.
+    /// When `false`, HTTP/2 inbound PING keep-alive is also disabled.
     #[serde(default = "default_true")]
     pub enabled: bool,
     /// Seconds an upstream (proxy → backend) connection can be idle before TCP keepalive
