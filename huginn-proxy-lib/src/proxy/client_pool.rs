@@ -156,16 +156,11 @@ impl ClientPool {
     }
 }
 
-/// TCP keepalive on the proxy → backend socket: probes start after `upstream_idle_timeout`
-/// and repeat every `client_tcp_interval_secs` (`0` keeps the OS default interval).
+/// TCP keep-alive on upstream (proxy → backend) sockets.
 fn apply_upstream_keepalive(connector: &mut HttpConnector, keep_alive: &KeepAliveConfig) {
     if keep_alive.enabled {
         connector.set_keepalive(Some(Duration::from_secs(keep_alive.upstream_idle_timeout)));
-        if keep_alive.client_tcp_interval_secs > 0 {
-            connector.set_keepalive_interval(Some(Duration::from_secs(
-                keep_alive.client_tcp_interval_secs,
-            )));
-        }
+        connector.set_keepalive_interval(Some(Duration::from_secs(keep_alive.tcp_interval_secs)));
     } else {
         connector.set_keepalive(None);
     }

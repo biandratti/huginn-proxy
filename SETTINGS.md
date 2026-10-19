@@ -1177,14 +1177,14 @@ timeout:
 
 ### `[timeout.keep_alive]`
 
-HTTP/1.1 keep-alive plus upstream and client TCP keepalive. `enabled` controls HTTP/1.1 persistent connections and the HTTP/2 inbound PING keep-alive (`proxy_idle_ms`); HTTP/2 connections stay persistent either way. `false` also disables upstream TCP keepalive.
+HTTP/1.1 keep-alive plus upstream and client TCP keepalive. `enabled` controls HTTP/1.1 persistent connections and the HTTP/2 inbound PING keep-alive (`proxy_idle_ms`); HTTP/2 connections stay persistent either way. `false` also disables upstream and client TCP keepalive.
 
 | Key                        | Type    | Default | Description                                                                                                                                                                                   |
 |----------------------------|---------|---------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `enabled`                  | bool    | `true`  | Enable HTTP/1.1 persistent connections (`Connection: keep-alive`).                                                                                                                            |
 | `upstream_idle_timeout`    | integer | `20`    | Seconds a proxy → backend connection can be idle before TCP keepalive probes start. Detects dead backend connections. Aligned with rpxy's `upstream_idle_timeout`.                            |
-| `client_tcp_idle_secs`     | integer | `20`    | Seconds a client → proxy connection can be idle before TCP keepalive probes start. Detects clients that vanished without closing. `0` disables client TCP keepalive.                          |
-| `client_tcp_interval_secs` | integer | `10`    | Seconds between TCP keepalive probes, on both client and upstream sockets. `0` keeps the OS default interval on both.                                                                         |
+| `client_tcp_idle_secs`     | integer | `20`    | Seconds a client → proxy connection can be idle before TCP keepalive probes start. Detects clients that vanished without closing.                                                             |
+| `tcp_interval_secs`        | integer | `10`    | Seconds between TCP keepalive probes, on both client and upstream sockets.                                                                                                                    |
 
 <table>
 <thead>
@@ -1202,7 +1202,7 @@ HTTP/1.1 keep-alive plus upstream and client TCP keepalive. `enabled` controls H
 enabled = true
 upstream_idle_timeout = 20
 client_tcp_idle_secs = 20
-client_tcp_interval_secs = 10
+tcp_interval_secs = 10
 ```
 
 </td>
@@ -1214,7 +1214,7 @@ timeout:
     enabled: true
     upstream_idle_timeout: 20
     client_tcp_idle_secs: 20
-    client_tcp_interval_secs: 10
+    tcp_interval_secs: 10
 ```
 
 </td>
@@ -1249,7 +1249,7 @@ recreation and draining of old connections.
 ```toml
 [backend_pool]
 enabled = true
-idle_timeout = 20
+idle_timeout = 90
 pool_max_idle_per_host = 0
 ```
 
@@ -1259,7 +1259,7 @@ pool_max_idle_per_host = 0
 ```yaml
 backend_pool:
   enabled: true
-  idle_timeout: 20
+  idle_timeout: 90
   pool_max_idle_per_host: 0
 ```
 

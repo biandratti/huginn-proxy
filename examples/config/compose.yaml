@@ -170,7 +170,7 @@ logging:
 
 backend_pool:
   enabled: true
-  idle_timeout: 20
+  idle_timeout: 90
   pool_max_idle_per_host: 0
 
 timeout:
@@ -184,7 +184,7 @@ timeout:
     enabled: true
     upstream_idle_timeout: 20
     client_tcp_idle_secs: 20
-    client_tcp_interval_secs: 10
+    tcp_interval_secs: 10
 
 security:
   max_connections: 512

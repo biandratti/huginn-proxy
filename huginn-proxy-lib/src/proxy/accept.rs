@@ -20,22 +20,18 @@ use tokio::net::TcpListener;
 use tokio::time::{Duration, Instant};
 use tracing::{debug, warn};
 
-/// Enable TCP keepalive so clients that vanish without closing get detected.
-/// Skipped when `client_tcp_idle_secs` is `0`. `client_tcp_interval_secs = 0` keeps the
-/// OS default probe interval, same as on upstream sockets.
+/// TCP keep-alive on client sockets, to detect clients that vanish without closing.
 fn enable_client_keepalive(
     stream: &tokio::net::TcpStream,
     peer: SocketAddr,
     config: &KeepAliveConfig,
 ) {
-    if config.client_tcp_idle_secs == 0 {
+    if !config.enabled {
         return;
     }
-    let mut keepalive =
-        socket2::TcpKeepalive::new().with_time(Duration::from_secs(config.client_tcp_idle_secs));
-    if config.client_tcp_interval_secs > 0 {
-        keepalive = keepalive.with_interval(Duration::from_secs(config.client_tcp_interval_secs));
-    }
+    let keepalive = socket2::TcpKeepalive::new()
+        .with_time(Duration::from_secs(config.client_tcp_idle_secs))
+        .with_interval(Duration::from_secs(config.tcp_interval_secs));
     if let Err(e) = socket2::SockRef::from(stream).set_tcp_keepalive(&keepalive) {
         debug!(?peer, error = %e, "failed to enable TCP keepalive on client socket");
     }

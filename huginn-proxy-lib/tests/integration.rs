@@ -174,7 +174,7 @@ fn test_config_keep_alive_defaults() {
     assert!(keep_alive.enabled);
     assert_eq!(keep_alive.upstream_idle_timeout, 20);
     assert_eq!(keep_alive.client_tcp_idle_secs, 20);
-    assert_eq!(keep_alive.client_tcp_interval_secs, 10);
+    assert_eq!(keep_alive.tcp_interval_secs, 10);
 
     let config = create_test_config(8080, vec![]);
     assert!(config.timeout.keep_alive.enabled);
@@ -197,7 +197,7 @@ backends = [
 enabled = false
 upstream_idle_timeout = 120
 client_tcp_idle_secs = 30
-client_tcp_interval_secs = 0
+tcp_interval_secs = 5
 "#
     )?;
 
@@ -205,7 +205,7 @@ client_tcp_interval_secs = 0
     assert!(!config.timeout.keep_alive.enabled);
     assert_eq!(config.timeout.keep_alive.upstream_idle_timeout, 120);
     assert_eq!(config.timeout.keep_alive.client_tcp_idle_secs, 30);
-    assert_eq!(config.timeout.keep_alive.client_tcp_interval_secs, 0);
+    assert_eq!(config.timeout.keep_alive.tcp_interval_secs, 5);
 
     Ok(())
 }

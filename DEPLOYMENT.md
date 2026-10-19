@@ -239,7 +239,7 @@ max_connections = 1024
 
 [backend_pool]
 enabled = true
-idle_timeout = 20
+idle_timeout = 90
 pool_max_idle_per_host = 128
 
 [timeout]

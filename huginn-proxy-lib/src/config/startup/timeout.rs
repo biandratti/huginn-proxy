@@ -76,25 +76,22 @@ pub struct KeepAliveConfig {
     /// Default: true
     ///
     /// Note: HTTP/2 connections are always persistent and use multiplexing.
-    /// When `false`, HTTP/2 inbound PING keep-alive is also disabled.
+    /// When `false`, HTTP/2 PING and TCP keep-alive are also disabled.
     #[serde(default = "default_true")]
     pub enabled: bool,
-    /// Seconds an upstream (proxy → backend) connection can be idle before TCP keepalive
-    /// probes start. Maps to rpxy's `upstream_idle_timeout`. Probes repeat every
-    /// `client_tcp_interval_secs` (`0` keeps the OS default interval).
+    /// Idle seconds before TCP keep-alive probes on upstream (proxy → backend) connections.
+    /// Maps to rpxy's `upstream_idle_timeout`.
     /// Default: 20 seconds
     #[serde(default = "default_upstream_idle_timeout")]
     pub upstream_idle_timeout: u64,
-    /// Seconds a client connection can be idle before TCP keepalive probes start.
-    /// `0` disables client TCP keepalive.
+    /// Idle seconds before TCP keep-alive probes on client connections.
     /// Default: 20 seconds
     #[serde(default = "default_client_tcp_idle_secs")]
     pub client_tcp_idle_secs: u64,
-    /// Seconds between TCP keepalive probes, on both client and upstream sockets.
-    /// `0` keeps the OS default interval on both.
+    /// Seconds between TCP keep-alive probes, on client and upstream connections.
     /// Default: 10 seconds
-    #[serde(default = "default_client_tcp_interval_secs")]
-    pub client_tcp_interval_secs: u64,
+    #[serde(default = "default_tcp_interval_secs")]
+    pub tcp_interval_secs: u64,
 }
 
 impl Default for KeepAliveConfig {
@@ -103,11 +100,10 @@ impl Default for KeepAliveConfig {
             enabled: true,
             upstream_idle_timeout: default_upstream_idle_timeout(),
             client_tcp_idle_secs: default_client_tcp_idle_secs(),
-            client_tcp_interval_secs: default_client_tcp_interval_secs(),
+            tcp_interval_secs: default_tcp_interval_secs(),
         }
     }
 }
-
 fn default_proxy_idle_ms() -> u64 {
     20000
 }
@@ -136,7 +132,7 @@ fn default_client_tcp_idle_secs() -> u64 {
     20
 }
 
-fn default_client_tcp_interval_secs() -> u64 {
+fn default_tcp_interval_secs() -> u64 {
     10
 }
 
@@ -157,7 +153,7 @@ struct KeepAliveView {
     enabled: bool,
     upstream_idle_timeout: u64,
     client_tcp_idle_secs: u64,
-    client_tcp_interval_secs: u64,
+    tcp_interval_secs: u64,
 }
 
 impl TimeoutConfig {
@@ -173,7 +169,7 @@ impl TimeoutConfig {
                 enabled: self.keep_alive.enabled,
                 upstream_idle_timeout: self.keep_alive.upstream_idle_timeout,
                 client_tcp_idle_secs: self.keep_alive.client_tcp_idle_secs,
-                client_tcp_interval_secs: self.keep_alive.client_tcp_interval_secs,
+                tcp_interval_secs: self.keep_alive.tcp_interval_secs,
             },
         }
     }
