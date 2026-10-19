@@ -18,7 +18,7 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::net::TcpListener;
 use tokio::time::{Duration, Instant};
-use tracing::{debug, warn};
+use tracing::warn;
 
 /// TCP keep-alive on client sockets, to detect clients that vanish without closing.
 fn enable_client_keepalive(
@@ -33,7 +33,7 @@ fn enable_client_keepalive(
         .with_time(Duration::from_secs(config.client_tcp_idle_secs))
         .with_interval(Duration::from_secs(config.tcp_interval_secs));
     if let Err(e) = socket2::SockRef::from(stream).set_tcp_keepalive(&keepalive) {
-        debug!(?peer, error = %e, "failed to enable TCP keepalive on client socket");
+        warn!(?peer, error = %e, "failed to enable TCP keepalive on client socket");
     }
 }
 
