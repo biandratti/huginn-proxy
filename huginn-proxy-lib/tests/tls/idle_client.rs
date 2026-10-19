@@ -1,7 +1,7 @@
 //! Clients that never finish the ClientHello must be closed after `tls_handshake_secs`.
 
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use arc_swap::ArcSwap;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -134,12 +134,27 @@ async fn spawn_tls_proxy() -> Result<(std::net::SocketAddr, tokio::task::AbortHa
     Ok((listen_addr, handle.abort_handle()))
 }
 
-/// Pass if the proxy closes or resets `stream` in time.
-async fn assert_closed_by_proxy(mut stream: TcpStream) -> Result<(), BoxError> {
+/// Pass if the proxy closes or resets `stream` once the handshake timeout has run out,
+/// counted from `connected_at`. Closing too early means something other than the timeout did it.
+async fn assert_closed_by_proxy(
+    mut stream: TcpStream,
+    connected_at: Instant,
+) -> Result<(), BoxError> {
+    let min =
+        Duration::from_secs(HANDSHAKE_TIMEOUT_SECS).saturating_sub(Duration::from_millis(100));
     let limit = Duration::from_secs(HANDSHAKE_TIMEOUT_SECS * 5);
     let mut buf = [0u8; 64];
     match tokio::time::timeout(limit, stream.read(&mut buf)).await {
-        Ok(Ok(0)) | Ok(Err(_)) => Ok(()),
+        Ok(Ok(0)) | Ok(Err(_)) => {
+            let elapsed = connected_at.elapsed();
+            if elapsed < min {
+                return Err(format!(
+                    "proxy closed after {elapsed:?}, before the {HANDSHAKE_TIMEOUT_SECS}s handshake timeout"
+                )
+                .into());
+            }
+            Ok(())
+        }
         Ok(Ok(n)) => Err(format!("expected the proxy to close, but it sent {n} bytes").into()),
         Err(_) => {
             Err(format!("proxy kept an idle pre-handshake connection open for {limit:?}").into())
@@ -151,14 +166,16 @@ async fn assert_closed_by_proxy(mut stream: TcpStream) -> Result<(), BoxError> {
 async fn silent_client_is_disconnected_after_handshake_timeout() -> Result<(), BoxError> {
     let (proxy, _handle) = spawn_tls_proxy().await?;
     let stream = TcpStream::connect(proxy).await?;
-    assert_closed_by_proxy(stream).await
+    let connected_at = Instant::now();
+    assert_closed_by_proxy(stream, connected_at).await
 }
 
 #[tokio::test]
 async fn partial_client_hello_is_disconnected_after_handshake_timeout() -> Result<(), BoxError> {
     let (proxy, _handle) = spawn_tls_proxy().await?;
     let mut stream = TcpStream::connect(proxy).await?;
+    let connected_at = Instant::now();
     // Start of a TLS record header, then silence.
     stream.write_all(&[0x16, 0x03, 0x01]).await?;
-    assert_closed_by_proxy(stream).await
+    assert_closed_by_proxy(stream, connected_at).await
 }

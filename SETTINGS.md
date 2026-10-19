@@ -1184,7 +1184,7 @@ HTTP/1.1 keep-alive plus upstream and client TCP keepalive. `enabled` controls H
 | `enabled`                  | bool    | `true`  | Enable HTTP/1.1 persistent connections (`Connection: keep-alive`).                                                                                                                            |
 | `upstream_idle_timeout`    | integer | `20`    | Seconds a proxy → backend connection can be idle before TCP keepalive probes start. Detects dead backend connections. Aligned with rpxy's `upstream_idle_timeout`.                            |
 | `client_tcp_idle_secs`     | integer | `20`    | Seconds a client → proxy connection can be idle before TCP keepalive probes start. Detects clients that vanished without closing. `0` disables client TCP keepalive.                          |
-| `client_tcp_interval_secs` | integer | `10`    | Seconds between TCP keepalive probes, on both client and upstream sockets. `0` disables client TCP keepalive and keeps the OS default interval on upstream sockets.                           |
+| `client_tcp_interval_secs` | integer | `10`    | Seconds between TCP keepalive probes, on both client and upstream sockets. `0` keeps the OS default interval on both.                                                                         |
 
 <table>
 <thead>

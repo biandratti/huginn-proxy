@@ -91,7 +91,7 @@ pub struct KeepAliveConfig {
     #[serde(default = "default_client_tcp_idle_secs")]
     pub client_tcp_idle_secs: u64,
     /// Seconds between TCP keepalive probes, on both client and upstream sockets.
-    /// `0` disables client TCP keepalive and keeps the OS default on upstream sockets.
+    /// `0` keeps the OS default interval on both.
     /// Default: 10 seconds
     #[serde(default = "default_client_tcp_interval_secs")]
     pub client_tcp_interval_secs: u64,
