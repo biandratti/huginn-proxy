@@ -292,7 +292,7 @@ continues running with the old values.
 | `[fingerprint]` | Fingerprinting feature flags (`tcp_enabled`, `tls_enabled`, `http_enabled`, `max_capture`) — static because they control eBPF program loading and capture buffers at startup |
 | `[logging]` | Log level and format |
 | `[telemetry]` | Metrics port and OpenTelemetry log level |
-| `[timeout]` | `upstream_connect_ms` (TCP connect to backend; absent = no timeout), `proxy_idle_ms` (inbound idle), `tls_handshake_secs`, `connection_handling_secs`, `drain_delay_secs`, `shutdown_secs`, `keep_alive.upstream_idle_timeout` |
+| `[timeout]` | `upstream_connect_ms` (TCP connect to backend; absent = no timeout), `proxy_idle_ms` (inbound idle), `tls_handshake_secs`, `connection_handling_secs`, `drain_delay_secs`, `shutdown_secs`, `keep_alive.upstream_idle_timeout`, `keep_alive.client_tcp_idle_secs`, `keep_alive.tcp_interval_secs` |
 | `[security].max_connections` | Maximum concurrent connections |
 
 > **TLS certificates** are re-read as part of a **config reload**, not by an
