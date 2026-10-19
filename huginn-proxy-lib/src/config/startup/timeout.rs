@@ -80,7 +80,7 @@ pub struct KeepAliveConfig {
     #[serde(default = "default_true")]
     pub enabled: bool,
     /// Idle seconds before TCP keep-alive probes on upstream (proxy → backend) connections.
-    /// Maps to rpxy's `upstream_idle_timeout`.
+    /// Detects dead backend connections. Maps to rpxy's `upstream_idle_timeout`.
     /// Default: 20 seconds
     #[serde(default = "default_upstream_idle_timeout")]
     pub upstream_idle_timeout: u64,
