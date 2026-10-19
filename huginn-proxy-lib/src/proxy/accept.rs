@@ -20,6 +20,23 @@ use tokio::net::TcpListener;
 use tokio::time::{Duration, Instant};
 use tracing::warn;
 
+/// TCP keep-alive on client sockets, to detect clients that vanish without closing.
+fn enable_client_keepalive(
+    stream: &tokio::net::TcpStream,
+    peer: SocketAddr,
+    config: &KeepAliveConfig,
+) {
+    if !config.enabled {
+        return;
+    }
+    let keepalive = socket2::TcpKeepalive::new()
+        .with_time(Duration::from_secs(config.client_tcp_idle_secs))
+        .with_interval(Duration::from_secs(config.tcp_interval_secs));
+    if let Err(e) = socket2::SockRef::from(stream).set_tcp_keepalive(&keepalive) {
+        warn!(?peer, error = %e, "failed to enable TCP keepalive on client socket");
+    }
+}
+
 /// Callback type for TCP SYN fingerprint lookup.
 ///
 /// Returns a [`SynResult`] so the server can record a precise metric label.
@@ -82,6 +99,8 @@ pub async fn accept_loop(
                 continue;
             }
         };
+
+        enable_client_keepalive(&stream, socket_peer, &ctx.keep_alive_config);
 
         let ctx_task = Arc::clone(&ctx);
         let shutdown_rx = shutdown_rx.clone();

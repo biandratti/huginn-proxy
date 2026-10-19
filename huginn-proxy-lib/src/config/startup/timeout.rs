@@ -10,7 +10,7 @@ pub struct TimeoutConfig {
     pub upstream_connect_ms: Option<u64>,
     /// Idle connection timeout for inbound client connections in milliseconds.
     /// Applied as HTTP/1.1 `header_read_timeout` and HTTP/2 keep-alive interval.
-    /// Default: 60000 (60 seconds)
+    /// Default: 20000 (20 seconds)
     #[serde(default = "default_proxy_idle_ms")]
     pub proxy_idle_ms: u64,
     /// Seconds to fail `/ready` while still accepting (phase 1). `0` = fail
@@ -25,7 +25,7 @@ pub struct TimeoutConfig {
     /// TLS handshake timeout in seconds
     /// Maximum time allowed for completing the TLS handshake
     /// Prevents slow clients from holding connections during handshake
-    /// Default: 15 seconds
+    /// Default: 5 seconds
     #[serde(default = "default_tls_handshake_timeout")]
     pub tls_handshake_secs: u64,
     /// Total connection handling timeout in seconds
@@ -75,26 +75,37 @@ pub struct KeepAliveConfig {
     /// Allows reusing the same TCP connection for multiple HTTP requests
     /// Default: true
     ///
-    /// Note: HTTP/2 connections are always persistent and use multiplexing,
-    /// so this setting only affects HTTP/1.1 connections.
+    /// Note: HTTP/2 connections are always persistent and use multiplexing.
+    /// When `false`, HTTP/2 PING and TCP keep-alive are also disabled.
     #[serde(default = "default_true")]
     pub enabled: bool,
-    /// TCP keep-alive interval for upstream (proxy → backend) connections, in seconds.
-    /// Maps to rpxy's `upstream_idle_timeout`: sets how often TCP keepalive packets are sent
-    /// to detect dead backend connections.
-    /// Default: 60 seconds
+    /// Idle seconds before TCP keep-alive probes on upstream (proxy → backend) connections.
+    /// Detects dead backend connections. Maps to rpxy's `upstream_idle_timeout`.
+    /// Default: 20 seconds
     #[serde(default = "default_upstream_idle_timeout")]
     pub upstream_idle_timeout: u64,
+    /// Idle seconds before TCP keep-alive probes on client connections.
+    /// Default: 20 seconds
+    #[serde(default = "default_client_tcp_idle_secs")]
+    pub client_tcp_idle_secs: u64,
+    /// Seconds between TCP keep-alive probes, on client and upstream connections.
+    /// Default: 10 seconds
+    #[serde(default = "default_tcp_interval_secs")]
+    pub tcp_interval_secs: u64,
 }
 
 impl Default for KeepAliveConfig {
     fn default() -> Self {
-        Self { enabled: true, upstream_idle_timeout: default_upstream_idle_timeout() }
+        Self {
+            enabled: true,
+            upstream_idle_timeout: default_upstream_idle_timeout(),
+            client_tcp_idle_secs: default_client_tcp_idle_secs(),
+            tcp_interval_secs: default_tcp_interval_secs(),
+        }
     }
 }
-
 fn default_proxy_idle_ms() -> u64 {
-    60000
+    20000
 }
 
 fn default_shutdown_timeout() -> u64 {
@@ -102,7 +113,7 @@ fn default_shutdown_timeout() -> u64 {
 }
 
 fn default_tls_handshake_timeout() -> u64 {
-    15
+    5
 }
 
 fn default_connection_handling_timeout() -> u64 {
@@ -114,7 +125,15 @@ fn default_true() -> bool {
 }
 
 fn default_upstream_idle_timeout() -> u64 {
-    60
+    20
+}
+
+fn default_client_tcp_idle_secs() -> u64 {
+    20
+}
+
+fn default_tcp_interval_secs() -> u64 {
+    10
 }
 
 /// Allowlisted effective-config view of [`TimeoutConfig`]. Field names are the JSON keys.
@@ -133,6 +152,8 @@ pub(crate) struct TimeoutView {
 struct KeepAliveView {
     enabled: bool,
     upstream_idle_timeout: u64,
+    client_tcp_idle_secs: u64,
+    tcp_interval_secs: u64,
 }
 
 impl TimeoutConfig {
@@ -147,6 +168,8 @@ impl TimeoutConfig {
             keep_alive: KeepAliveView {
                 enabled: self.keep_alive.enabled,
                 upstream_idle_timeout: self.keep_alive.upstream_idle_timeout,
+                client_tcp_idle_secs: self.keep_alive.client_tcp_idle_secs,
+                tcp_interval_secs: self.keep_alive.tcp_interval_secs,
             },
         }
     }
