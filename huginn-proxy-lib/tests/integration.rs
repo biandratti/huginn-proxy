@@ -172,13 +172,13 @@ max_connections = 256
 fn test_config_keep_alive_defaults() {
     let keep_alive = KeepAliveConfig::default();
     assert!(keep_alive.enabled);
-    assert_eq!(keep_alive.upstream_idle_timeout, 60);
-    assert_eq!(keep_alive.client_tcp_idle_secs, 60);
+    assert_eq!(keep_alive.upstream_idle_timeout, 20);
+    assert_eq!(keep_alive.client_tcp_idle_secs, 20);
     assert_eq!(keep_alive.client_tcp_interval_secs, 10);
 
     let config = create_test_config(8080, vec![]);
     assert!(config.timeout.keep_alive.enabled);
-    assert_eq!(config.timeout.keep_alive.upstream_idle_timeout, 60);
+    assert_eq!(config.timeout.keep_alive.upstream_idle_timeout, 20);
 }
 
 #[tokio::test]

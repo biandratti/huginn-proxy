@@ -59,11 +59,7 @@ impl ClientPool {
     ) -> HttpClient {
         let mut connector = HttpConnector::new();
         // TCP keep-alive: sends periodic packets to keep TCP connection alive
-        if keep_alive.enabled {
-            connector.set_keepalive(Some(Duration::from_secs(keep_alive.upstream_idle_timeout)));
-        } else {
-            connector.set_keepalive(None);
-        }
+        apply_upstream_keepalive(&mut connector, keep_alive);
         connector.set_connect_timeout(upstream_connect_ms.map(Duration::from_millis));
 
         let mut builder = Client::builder(TokioExecutor::new());
@@ -85,11 +81,7 @@ impl ClientPool {
         let mut connector = HttpConnector::new();
         // TCP keep-alive: sends periodic packets to keep TCP connection alive
         // HTTP/2 uses persistent connections by default with native multiplexing
-        if keep_alive.enabled {
-            connector.set_keepalive(Some(Duration::from_secs(keep_alive.upstream_idle_timeout)));
-        } else {
-            connector.set_keepalive(None);
-        }
+        apply_upstream_keepalive(&mut connector, keep_alive);
         connector.set_connect_timeout(upstream_connect_ms.map(Duration::from_millis));
 
         let mut builder = Client::builder(TokioExecutor::new());
@@ -161,5 +153,20 @@ impl ClientPool {
                 self.upstream_connect_ms,
             ),
         }
+    }
+}
+
+/// TCP keepalive on the proxy → backend socket: probes start after `upstream_idle_timeout`
+/// and repeat every `client_tcp_interval_secs` (`0` keeps the OS default interval).
+fn apply_upstream_keepalive(connector: &mut HttpConnector, keep_alive: &KeepAliveConfig) {
+    if keep_alive.enabled {
+        connector.set_keepalive(Some(Duration::from_secs(keep_alive.upstream_idle_timeout)));
+        if keep_alive.client_tcp_interval_secs > 0 {
+            connector.set_keepalive_interval(Some(Duration::from_secs(
+                keep_alive.client_tcp_interval_secs,
+            )));
+        }
+    } else {
+        connector.set_keepalive(None);
     }
 }

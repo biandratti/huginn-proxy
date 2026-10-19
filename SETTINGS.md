@@ -1130,8 +1130,8 @@ values.
 | Key                        | Type    | Default             | Description                                                                                                                           |
 |----------------------------|---------|---------------------|---------------------------------------------------------------------------------------------------------------------------------------|
 | `upstream_connect_ms`      | integer | absent (no timeout) | TCP connect timeout to backend in milliseconds. Absent or omitted = no timeout.                                                       |
-| `proxy_idle_ms`            | integer | `60000`             | Inbound idle timeout in milliseconds. Applied as HTTP/1.1 `header_read_timeout` and HTTP/2 keep-alive interval.                       |
-| `tls_handshake_secs`       | integer | `15`                | Maximum seconds to complete the client TLS handshake. Slow/malicious clients that stall the handshake are disconnected.               |
+| `proxy_idle_ms`            | integer | `20000`             | Inbound idle timeout in milliseconds. Applied as HTTP/1.1 `header_read_timeout` and HTTP/2 keep-alive interval.                       |
+| `tls_handshake_secs`       | integer | `5`                 | Maximum seconds to complete the client TLS handshake. Slow/malicious clients that stall the handshake are disconnected.               |
 | `connection_handling_secs` | integer | `300`               | Maximum total seconds for a full connection lifecycle (read request + proxy + write response). Guards against extremely slow clients. |
 | `drain_delay_secs`         | integer | `0`                 | Seconds to fail `/ready` while still accepting connections (graceful drain phase 1). `0` = fail readiness and stop accepting together. Size so `drain_delay_secs + shutdown_secs` is less than the orchestrator stop grace (`terminationGracePeriodSeconds`, systemd `TimeoutStopSec`). |
 | `shutdown_secs`            | integer | `30`                | After drain delay: seconds for in-flight requests to finish after the listen socket closes (phase 2).                                 |
@@ -1150,8 +1150,8 @@ values.
 ```toml
 [timeout]
 upstream_connect_ms = 5000
-proxy_idle_ms = 60000
-tls_handshake_secs = 15
+proxy_idle_ms = 20000
+tls_handshake_secs = 5
 connection_handling_secs = 300
 drain_delay_secs = 0
 shutdown_secs = 30
@@ -1163,8 +1163,8 @@ shutdown_secs = 30
 ```yaml
 timeout:
   upstream_connect_ms: 5000
-  proxy_idle_ms: 60000
-  tls_handshake_secs: 15
+  proxy_idle_ms: 20000
+  tls_handshake_secs: 5
   connection_handling_secs: 300
   drain_delay_secs: 0
   shutdown_secs: 30
@@ -1182,9 +1182,9 @@ HTTP/1.1 keep-alive plus upstream and client TCP keepalive. `enabled` applies on
 | Key                        | Type    | Default | Description                                                                                                                                                                                   |
 |----------------------------|---------|---------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `enabled`                  | bool    | `true`  | Enable HTTP/1.1 persistent connections (`Connection: keep-alive`).                                                                                                                            |
-| `upstream_idle_timeout`    | integer | `60`    | TCP keepalive interval in seconds for proxy → backend connections. Sets how often keepalive packets are sent to detect dead backend connections. Aligned with rpxy's `upstream_idle_timeout`. |
-| `client_tcp_idle_secs`     | integer | `60`    | Seconds a client → proxy connection can be idle before TCP keepalive probes start. Detects clients that vanished without closing. `0` disables client TCP keepalive.                          |
-| `client_tcp_interval_secs` | integer | `10`    | Seconds between client TCP keepalive probes. `0` disables client TCP keepalive.                                                                                                               |
+| `upstream_idle_timeout`    | integer | `20`    | Seconds a proxy → backend connection can be idle before TCP keepalive probes start. Detects dead backend connections. Aligned with rpxy's `upstream_idle_timeout`.                            |
+| `client_tcp_idle_secs`     | integer | `20`    | Seconds a client → proxy connection can be idle before TCP keepalive probes start. Detects clients that vanished without closing. `0` disables client TCP keepalive.                          |
+| `client_tcp_interval_secs` | integer | `10`    | Seconds between TCP keepalive probes, on both client and upstream sockets. `0` disables client TCP keepalive and keeps the OS default interval on upstream sockets.                           |
 
 <table>
 <thead>
@@ -1200,8 +1200,8 @@ HTTP/1.1 keep-alive plus upstream and client TCP keepalive. `enabled` applies on
 ```toml
 [timeout.keep_alive]
 enabled = true
-upstream_idle_timeout = 60
-client_tcp_idle_secs = 60
+upstream_idle_timeout = 20
+client_tcp_idle_secs = 20
 client_tcp_interval_secs = 10
 ```
 
@@ -1212,8 +1212,8 @@ client_tcp_interval_secs = 10
 timeout:
   keep_alive:
     enabled: true
-    upstream_idle_timeout: 60
-    client_tcp_idle_secs: 60
+    upstream_idle_timeout: 20
+    client_tcp_idle_secs: 20
     client_tcp_interval_secs: 10
 ```
 
@@ -1249,7 +1249,7 @@ recreation and draining of old connections.
 ```toml
 [backend_pool]
 enabled = true
-idle_timeout = 90
+idle_timeout = 20
 pool_max_idle_per_host = 0
 ```
 
@@ -1259,7 +1259,7 @@ pool_max_idle_per_host = 0
 ```yaml
 backend_pool:
   enabled: true
-  idle_timeout: 90
+  idle_timeout: 20
   pool_max_idle_per_host: 0
 ```
 

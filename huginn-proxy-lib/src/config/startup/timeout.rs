@@ -10,7 +10,7 @@ pub struct TimeoutConfig {
     pub upstream_connect_ms: Option<u64>,
     /// Idle connection timeout for inbound client connections in milliseconds.
     /// Applied as HTTP/1.1 `header_read_timeout` and HTTP/2 keep-alive interval.
-    /// Default: 60000 (60 seconds)
+    /// Default: 20000 (20 seconds)
     #[serde(default = "default_proxy_idle_ms")]
     pub proxy_idle_ms: u64,
     /// Seconds to fail `/ready` while still accepting (phase 1). `0` = fail
@@ -25,7 +25,7 @@ pub struct TimeoutConfig {
     /// TLS handshake timeout in seconds
     /// Maximum time allowed for completing the TLS handshake
     /// Prevents slow clients from holding connections during handshake
-    /// Default: 15 seconds
+    /// Default: 5 seconds
     #[serde(default = "default_tls_handshake_timeout")]
     pub tls_handshake_secs: u64,
     /// Total connection handling timeout in seconds
@@ -79,19 +79,19 @@ pub struct KeepAliveConfig {
     /// so this setting only affects HTTP/1.1 connections.
     #[serde(default = "default_true")]
     pub enabled: bool,
-    /// TCP keep-alive interval for upstream (proxy → backend) connections, in seconds.
-    /// Maps to rpxy's `upstream_idle_timeout`: sets how often TCP keepalive packets are sent
-    /// to detect dead backend connections.
-    /// Default: 60 seconds
+    /// Seconds an upstream (proxy → backend) connection can be idle before TCP keepalive
+    /// probes start. Maps to rpxy's `upstream_idle_timeout`. Probes repeat every
+    /// `client_tcp_interval_secs` (`0` keeps the OS default interval).
+    /// Default: 20 seconds
     #[serde(default = "default_upstream_idle_timeout")]
     pub upstream_idle_timeout: u64,
     /// Seconds a client connection can be idle before TCP keepalive probes start.
     /// `0` disables client TCP keepalive.
-    /// Default: 60 seconds
+    /// Default: 20 seconds
     #[serde(default = "default_client_tcp_idle_secs")]
     pub client_tcp_idle_secs: u64,
-    /// Seconds between client TCP keepalive probes.
-    /// `0` disables client TCP keepalive.
+    /// Seconds between TCP keepalive probes, on both client and upstream sockets.
+    /// `0` disables client TCP keepalive and keeps the OS default on upstream sockets.
     /// Default: 10 seconds
     #[serde(default = "default_client_tcp_interval_secs")]
     pub client_tcp_interval_secs: u64,
@@ -109,7 +109,7 @@ impl Default for KeepAliveConfig {
 }
 
 fn default_proxy_idle_ms() -> u64 {
-    60000
+    20000
 }
 
 fn default_shutdown_timeout() -> u64 {
@@ -117,7 +117,7 @@ fn default_shutdown_timeout() -> u64 {
 }
 
 fn default_tls_handshake_timeout() -> u64 {
-    15
+    5
 }
 
 fn default_connection_handling_timeout() -> u64 {
@@ -129,11 +129,11 @@ fn default_true() -> bool {
 }
 
 fn default_upstream_idle_timeout() -> u64 {
-    60
+    20
 }
 
 fn default_client_tcp_idle_secs() -> u64 {
-    60
+    20
 }
 
 fn default_client_tcp_interval_secs() -> u64 {
