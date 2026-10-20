@@ -11,6 +11,7 @@ const CONTENT_TYPE_HANDSHAKE: u8 = 0x16;
 /// Largest record `tls-parser` accepts (2^14 + 256).
 const MAX_RECORD_LEN: usize = (1 << 14) + 256;
 
+#[doc(hidden)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ClientHelloScan {
     NeedMore,
@@ -21,6 +22,7 @@ pub enum ClientHelloScan {
 }
 
 /// Finds first handshake message, joining it if split across records (RFC 8446 §5.1).
+#[doc(hidden)]
 #[derive(Debug, Default)]
 pub struct ClientHelloScanner {
     /// Start of the next unparsed record.
