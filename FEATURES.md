@@ -335,13 +335,15 @@ Limitation: Global setting only, cannot be configured per-route.
 Multiple timeout controls to prevent resource exhaustion:
 
 - `upstream_connect_ms` — TCP connect timeout to backend. Optional; if absent, no connect timeout is applied.
-- `proxy_idle_ms` (default: 60s) — Inbound idle timeout: HTTP/1.1 `header_read_timeout` + HTTP/2 keep-alive interval.
-- `tls_handshake_secs` (default: 15s) — Maximum time for completing TLS handshake.
+- `proxy_idle_ms` (default: 20s) — Inbound idle timeout: HTTP/1.1 `header_read_timeout` + HTTP/2 keep-alive interval.
+- `tls_handshake_secs` (default: 5s) — Maximum time for completing TLS handshake.
 - `connection_handling_secs` (default: 300s) — Maximum total time for entire connection lifecycle (read + process +
   write).
 - `drain_delay_secs` (default: 0s) — Fail `/ready` while still accepting. `0` = 503 and stop accept together.
 - `shutdown_secs` (default: 30s) — After drain delay, window for in-flight connections to finish.
-- `keep_alive.upstream_idle_timeout` (default: 60s) — TCP keep-alive interval for proxy → backend connections.
+- `keep_alive.upstream_idle_timeout` (default: 20s) — Idle time before TCP keep-alive probes start on proxy → backend connections (probe interval: `keep_alive.tcp_interval_secs`, 10s).
+- `keep_alive.client_tcp_idle_secs` (default: 20s) — Idle time before TCP keep-alive probes start on client → proxy connections, so clients that vanish without closing get detected (probe interval: `keep_alive.tcp_interval_secs`, 10s).
+- `keep_alive.enabled = false` turns off HTTP/1.1 reuse, HTTP/2 PING keep-alive, and TCP keep-alive on both sides.
 
 All timeouts are independently configurable.
 

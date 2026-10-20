@@ -7,6 +7,24 @@ follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.0.6-rc.1]
+
+### Added
+
+- **Client TCP keep-alive.** `timeout.keep_alive.client_tcp_idle_secs` (default `20`) starts TCP keep-alive probes on client connections, so clients that vanish without closing (e.g. mobile clients losing network) get dropped.
+- **`timeout.keep_alive.tcp_interval_secs`** (default `10`): seconds between TCP keep-alive probes, on both client and upstream connections. Upstream probes used the OS default interval before.
+
+### Changed
+
+- **Shorter timeout defaults.** `tls_handshake_secs` 15 → 5, `proxy_idle_ms` 60000 → 20000, `keep_alive.upstream_idle_timeout` 60 → 20. Set them explicitly to keep the old values.
+- **`keep_alive.enabled = false` also disables HTTP/2 PING keep-alive and client TCP keep-alive** (upstream TCP keep-alive was already disabled).
+
+### Fixed
+
+- **Silent clients no longer hold a TLS connection slot forever.** `tls_handshake_secs` now covers the ClientHello read as well as the handshake; before, a client that connected and sent nothing was never timed out.
+
+---
+
 ## [0.0.6-rc.0]
 
 ### Breaking changes
