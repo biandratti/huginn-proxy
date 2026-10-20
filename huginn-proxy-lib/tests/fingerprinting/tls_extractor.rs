@@ -7,7 +7,6 @@ use tokio::io::AsyncWriteExt;
 /// Single-record ClientHello from reqwest/rustls.
 const CLIENT_HELLO: &[u8] = include_bytes!("../../../benches/fixtures/clienthello_reqwest.bin");
 
-/// `CLIENT_HELLO` split into records of at most `chunk` payload bytes.
 fn client_hello_records(chunk: usize) -> Vec<Vec<u8>> {
     CLIENT_HELLO[5..]
         .chunks(chunk)

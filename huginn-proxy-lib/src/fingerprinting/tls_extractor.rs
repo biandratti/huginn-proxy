@@ -4,7 +4,6 @@ use tokio::time::Instant;
 use super::ja4::Ja4Fingerprints;
 use crate::telemetry::Metrics;
 
-/// Max bytes buffered while waiting for a complete ClientHello.
 const MAX_CLIENT_HELLO_BYTES: usize = 64 * 1024;
 const RECORD_HEADER_LEN: usize = 5;
 const HANDSHAKE_HEADER_LEN: usize = 4;
@@ -14,7 +13,6 @@ const MAX_RECORD_LEN: usize = (1 << 14) + 256;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ClientHelloScan {
-    /// Message incomplete; read more.
     NeedMore,
     /// Not a parsable handshake; parse buffer as is.
     AsIs,
@@ -23,12 +21,10 @@ pub enum ClientHelloScan {
 }
 
 /// Finds first handshake message, joining it if split across records (RFC 8446 §5.1).
-/// Keeps state between calls, so each byte is parsed once.
 #[derive(Debug, Default)]
 pub struct ClientHelloScanner {
     /// Start of the next unparsed record.
     offset: usize,
-    /// Handshake bytes from parsed records.
     payload: Vec<u8>,
 }
 
