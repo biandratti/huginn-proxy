@@ -180,15 +180,18 @@ async fn partial_client_hello_is_disconnected_after_handshake_timeout() -> Resul
     assert_closed_by_proxy(stream, connected_at).await
 }
 
+/// Single-record ClientHello from reqwest/rustls.
 const CLIENT_HELLO: &[u8] = include_bytes!("../../../benches/fixtures/clienthello_reqwest.bin");
 
-/// `CLIENT_HELLO` split into records of at most 64 payload bytes.
-fn client_hello_records() -> Vec<Vec<u8>> {
+/// `CLIENT_HELLO` split into records of at most `chunk` payload bytes.
+fn client_hello_records(chunk: usize) -> Vec<Vec<u8>> {
     CLIENT_HELLO[5..]
-        .chunks(64)
+        .chunks(chunk)
         .map(|part| {
+            let len = u16::try_from(part.len())
+                .unwrap_or_else(|_| panic!("chunk of {} bytes exceeds a record", part.len()));
             let mut record = CLIENT_HELLO[..3].to_vec();
-            record.extend_from_slice(&u16::try_from(part.len()).unwrap_or(u16::MAX).to_be_bytes());
+            record.extend_from_slice(&len.to_be_bytes());
             record.extend_from_slice(part);
             record
         })
@@ -198,7 +201,7 @@ fn client_hello_records() -> Vec<Vec<u8>> {
 #[tokio::test]
 async fn fragmented_client_hello_is_disconnected_after_handshake_timeout() -> Result<(), BoxError> {
     let (proxy, _handle) = spawn_tls_proxy().await?;
-    let records = client_hello_records();
+    let records = client_hello_records(64);
     assert!(records.len() > 1);
 
     let mut stalled = TcpStream::connect(proxy).await?;
