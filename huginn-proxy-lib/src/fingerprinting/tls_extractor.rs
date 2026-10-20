@@ -11,7 +11,7 @@ const CONTENT_TYPE_HANDSHAKE: u8 = 0x16;
 /// Largest record `tls-parser` accepts (2^14 + 256).
 const MAX_RECORD_LEN: usize = (1 << 14) + 256;
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ClientHelloScan {
     /// Message incomplete; read more.
     NeedMore,

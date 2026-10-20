@@ -19,50 +19,30 @@ fn fragmented_client_hello(chunk: usize) -> Vec<u8> {
     out
 }
 
-fn complete() -> ClientHelloScan {
-    ClientHelloScan::Complete(CLIENT_HELLO.to_vec())
-}
-
 #[test]
-fn single_record_client_hello_is_complete() {
-    assert_eq!(scan_client_hello(CLIENT_HELLO), complete());
-}
-
-#[test]
-fn partial_record_needs_more_bytes() {
-    assert_eq!(scan_client_hello(&CLIENT_HELLO[..3]), ClientHelloScan::NeedMore);
-    assert_eq!(scan_client_hello(&CLIENT_HELLO[..100]), ClientHelloScan::NeedMore);
-}
-
-/// Regression: huginn-net-tls parses only the first record, so fragmented ClientHello failed.
-#[test]
-fn fragmented_client_hello_is_reassembled() {
+fn scan_client_hello_cases() {
+    let complete = ClientHelloScan::Complete(CLIENT_HELLO.to_vec());
     let fragmented = fragmented_client_hello(64);
     assert!(parse_tls_client_hello(&fragmented).is_err());
-    assert_eq!(scan_client_hello(&fragmented), complete());
     assert!(parse_tls_client_hello(CLIENT_HELLO).is_ok());
-}
 
-/// Records smaller than the 4-byte handshake header.
-#[test]
-fn tiny_records_are_reassembled() {
-    for chunk in [1, 3, 5] {
-        assert_eq!(scan_client_hello(&fragmented_client_hello(chunk)), complete(), "chunk {chunk}");
+    let cases: [(&str, &[u8], ClientHelloScan); 8] = [
+        ("single record", CLIENT_HELLO, complete.clone()),
+        ("fragmented", &fragmented, complete.clone()),
+        ("1-byte records", &fragmented_client_hello(1), complete.clone()),
+        ("3-byte records", &fragmented_client_hello(3), complete.clone()),
+        ("partial header", &CLIENT_HELLO[..3], ClientHelloScan::NeedMore),
+        ("partial record", &CLIENT_HELLO[..100], ClientHelloScan::NeedMore),
+        (
+            "missing last fragment byte",
+            &fragmented[..fragmented.len() - 1],
+            ClientHelloScan::NeedMore,
+        ),
+        ("not TLS", b"GET / HTTP/1.1\r\n", ClientHelloScan::AsIs),
+    ];
+    for (name, input, expected) in cases {
+        assert_eq!(scan_client_hello(input), expected, "{name}");
     }
-}
-
-#[test]
-fn fragmented_client_hello_needs_all_fragments() {
-    let fragmented = fragmented_client_hello(64);
-    assert_eq!(
-        scan_client_hello(&fragmented[..fragmented.len() - 1]),
-        ClientHelloScan::NeedMore
-    );
-}
-
-#[test]
-fn non_handshake_record_is_parsed_as_is() {
-    assert_eq!(scan_client_hello(b"GET / HTTP/1.1\r\n"), ClientHelloScan::AsIs);
 }
 
 #[tokio::test]
