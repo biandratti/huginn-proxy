@@ -44,6 +44,7 @@ See [`examples/`](examples/).
   (listen, TLS, fingerprint flags, logging, telemetry, timeouts, …) need a **restart** (reload ignores them). See
   [DEPLOYMENT.md](DEPLOYMENT.md).
 - **IPv4 & IPv6 Dual-Stack** - Listen on both address families simultaneously with per-family eBPF maps
+- **HTTP and HTTPS listeners** - `listen.port` (plaintext) and `listen.port_tls` (TLS) at the same time, or either port alone. With both, a matched HTTP request gets a `301` to HTTPS by default; set `listen.https_redirection = false` to proxy HTTP as well
 - **HTTP/1.x & HTTP/2** - Full support for both protocol versions
 - **Load Balancing** - Round-robin load balancing across multiple backends
 - **Connection Pooling** - Automatic connection reuse to backends for reduced latency (bypasses pooling per-route for
