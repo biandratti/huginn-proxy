@@ -1,6 +1,6 @@
 ---
 title: Rate limiting
-description: Token-bucket HTTP limits and the separate eBPF SYN capture limiter.
+description: HTTP limits by burst per window, and the separate eBPF SYN capture limiter.
 sidebar:
   order: 8
 ---
@@ -17,9 +17,9 @@ Huginn has **two different rate limiters**. They do not share knobs, counters, o
 | **Sized against** | Request rate you want to allow | `HUGINN_EBPF_SYN_MAP_MAX_ENTRIES` (and CPU/queues) |
 | **Scope** | Global / domain / route | Per source IP (IPv6: `/64` prefix) |
 
-The rest of this page covers the **proxy** token bucket. The eBPF limiter and how to run both without losing TCP signatures are in [eBPF SYN rate limiter](#ebpf-syn-rate-limiter).
+The rest of this page covers the **proxy** limiter. The eBPF limiter, and how to run both without losing TCP signatures, is in [eBPF SYN rate limiter](#ebpf-syn-rate-limiter).
 
-Token-bucket limits live under **`[security.rate_limit]`** (global), **`[domains.security.rate_limit]`** (per domain), and **`[domains.routes.security.rate_limit]`** (per route). **Dynamic.**
+Limits live under **`[security.rate_limit]`** (global), **`[domains.security.rate_limit]`** (per domain), and **`[domains.routes.security.rate_limit]`** (per route). **Dynamic.** A client may send **`burst` requests per `window_seconds`**. `requests_per_second` is still accepted in the file, but the limiter does not use it.
 
 Per-domain and per-route blocks are **whole-block replaces**: the most specific scope that defines a `rate_limit` block replaces the parent's block entirely. There is no field-level inheritance.
 

@@ -14,7 +14,7 @@ The **`[[backends]]`** entries define upstream targets. Each route references a 
 | Key | Default | Description |
 | --- | --- | --- |
 | `address` | - | `host:port` (or bracketed IPv6). In orchestrated setups this is usually a **service name** (Docker Compose, Kubernetes DNS, etc.). Used as the pool key: must match exactly what routes reference. |
-| `http_version` | `null` (preserve) | Protocol to use when connecting to this backend. `"http11"`, `"http2"`, or `"preserve"` (negotiate based on what the client used). |
+| `http_version` | unset | Protocol toward this backend: `"http11"`, `"http2"`, or `"preserve"`. When the key is omitted, HTTPS clients use `preserve` and plain HTTP clients use `http11`. |
 | `health_check` | `null` (off) | Optional active health probe. When set, the proxy tracks per-upstream health and returns **502** to clients when the backend is marked unhealthy. See [Health checks](#health-checks) below. |
 
 ## Example
@@ -50,7 +50,7 @@ http_version = "http11"
 
 Optional active probes via **`health_check`** on a `[[backends]]` entry. When configured, a background task probes the backend on an interval. If consecutive failures exceed `unhealthy_threshold`, the backend is marked unhealthy and the proxy returns **502** for matching routes instead of waiting on TCP timeouts. Once consecutive successes reach `healthy_threshold`, the backend is marked healthy again. **Dynamic**: hot-reloadable.
 
-If you omit `health_check`, the backend is always treated as healthy (no background probing).
+If you omit `health_check`, the backend is always treated as healthy (no background probing). An empty table (`health_check = {}`) is not off: it starts a TCP probe with the defaults below.
 
 | Key | Default | Description |
 | --- | --- | --- |

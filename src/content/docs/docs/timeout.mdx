@@ -33,7 +33,7 @@ timeout:
     enabled: true
     upstream_idle_timeout: 20
     client_tcp_idle_secs: 20
-    client_tcp_interval_secs: 10
+    tcp_interval_secs: 10
 ```
 
  </TabItem>
@@ -52,7 +52,7 @@ shutdown_secs = 30
 enabled = true
 upstream_idle_timeout = 20
 client_tcp_idle_secs = 20
-client_tcp_interval_secs = 10
+tcp_interval_secs = 10
 ```
 
  </TabItem>
@@ -62,14 +62,14 @@ On **SIGTERM** / **SIGINT**, `/ready` fails first (`proxy_draining`) for `drain_
 
 ### `[timeout.keep_alive]`
 
-HTTP/1.1 persistence, HTTP/2 PING keep-alive, and TCP keepalive on the client socket and on upstream connections. HTTP/2 streams stay multiplexed either way.
+HTTP/1.1 keep-alive, HTTP/2 PING, and TCP keepalive on the client socket and on connections to backends. HTTP/2 stays multiplexed either way. `enabled = false` turns off HTTP/1.1 persistence, the PINGs, and TCP keepalive in both directions.
 
 | Key | Default | Description |
 | --- | --- | --- |
-| `enabled` | `true` | HTTP/1.1 persistent connections. Also enables HTTP/2 PING keep-alive (interval is `proxy_idle_ms`) and TCP keepalive toward backends. `false` turns those three off. |
-| `upstream_idle_timeout` | `20` | Seconds a proxy → backend connection can be idle before TCP keepalive probes start. |
-| `client_tcp_idle_secs` | `20` | Seconds a client connection can be idle before TCP keepalive probes start, so a client that vanishes without closing is dropped. `0` disables client TCP keepalive. |
-| `client_tcp_interval_secs` | `10` | Seconds between TCP keepalive probes, on the client socket and on the upstream socket. `0` disables client TCP keepalive. |
+| `enabled` | `true` | HTTP/1.1 persistent connections, HTTP/2 PING (interval is `proxy_idle_ms`), and TCP keepalive on the client and on backends. |
+| `upstream_idle_timeout` | `20` | Seconds a connection to a backend can sit idle before TCP keepalive probes start. |
+| `client_tcp_idle_secs` | `20` | Seconds a client connection can sit idle before TCP keepalive probes start. Clients that disappear without closing get dropped. |
+| `tcp_interval_secs` | `10` | Seconds between those probes, on the client socket and on backend sockets. |
 
 ## Related
 

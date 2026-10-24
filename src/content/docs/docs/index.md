@@ -9,7 +9,7 @@ Huginn Proxy sits in front of your services and enriches every request with
 TLS (JA4), HTTP/2 (Akamai) and TCP SYN fingerprints, without touching your
 application code.
 
-Its focus is **fingerprint collection**, **security** (header control, TLS policy, rate limiting), and **performance** (async Rust, connection pooling). It is not trying to be a general-purpose proxy: some features common in Nginx or Traefik are out of scope or not yet implemented. If you need passive client fingerprinting as a first-class feature, this is the tool for you.
+It collects fingerprints, and it has the security and performance pieces needed to sit in front of a service (header control, TLS policy, rate limiting, connection pooling). It is not a general-purpose proxy. Nginx and Traefik still do things this one does not.
 
 ## Live demo
 
