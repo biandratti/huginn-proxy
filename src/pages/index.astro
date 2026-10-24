@@ -4,7 +4,9 @@ import { join } from 'node:path';
 import '../styles/landing.css';
 
 const releasePath = join(process.cwd(), 'src/data/release-version.json');
-const { tag: releaseTag } = JSON.parse(readFileSync(releasePath, 'utf8'));
+const { tag, url } = JSON.parse(readFileSync(releasePath, 'utf8'));
+const releaseTag = typeof tag === 'string' && tag.length > 0 ? tag : 'latest';
+const releaseUrl = typeof url === 'string' && url.length > 0 ? url : undefined;
 
 const base = import.meta.env.BASE_URL;
 const docs = `${base}docs/`;
@@ -37,14 +39,22 @@ const github = 'https://github.com/biandratti/huginn-proxy';
 			<header class="hp-hero">
 				<div class="hp-hero-layout">
 					<div class="hp-hero-text">
-						<span class="hp-badge">{releaseTag}</span>
+						{
+							releaseUrl ? (
+								<a class="hp-badge" href={releaseUrl}>
+									{releaseTag}
+								</a>
+							) : (
+								<span class="hp-badge">{releaseTag}</span>
+							)
+						}
 						<h1 class="hp-title">Huginn Proxy</h1>
 						<p class="hp-tagline">
-							Reverse proxy for the hot path: passive TLS, HTTP/2, and TCP SYN (eBPF) fingerprints, injected as trusted headers. Load-tested under concurrent HTTPS — tens of thousands of requests per second with fingerprinting on.
+							Reverse proxy for the hot path: passive TLS, HTTP/2, and TCP SYN (eBPF) fingerprints, injected as trusted headers. Load-tested under concurrent HTTPS: tens of thousands of requests per second with fingerprinting on.
 						</p>
 						<p class="hp-lede">
 							<strong>Open source all the way down.</strong> Fingerprints come from{' '}
-							<a href="https://github.com/biandratti/huginn-net">Huginn Net</a> — proxy and signature engine alike,
+							<a href="https://github.com/biandratti/huginn-net">Huginn Net</a>, proxy and signature engine alike,
 							dual-licensed MIT/Apache-2.0. No proprietary core, no separate license for commercial use.
 						</p>
 						<div class="hp-actions">

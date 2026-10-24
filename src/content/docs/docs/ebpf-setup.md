@@ -30,8 +30,8 @@ The agent picks the attach mechanism at load time from the running kernel, then 
 | --- | --- | --- | --- | --- |
 | `tc` | ≥ 6.6 | `tcx` | yes | hitless; the new agent replaces the program on the same link |
 | `tc` | < 6.6 | `netlink` | no (warns at start) | detaches; fresh captures pause until the new agent attaches |
-| `xdp-*` | kernel accepts `bpf_link_create` (typically ≥ 5.9) | — | yes | hitless |
-| `xdp-*` | netlink fallback | — | no (warns) | detaches |
+| `xdp-*` | kernel accepts `bpf_link_create` (typically ≥ 5.9) | n/a | yes | hitless |
+| `xdp-*` | netlink fallback | n/a | no (warns) | detaches |
 
 There is **no `tcx` value** of `HUGINN_EBPF_CAPTURE`; it is chosen for you. Do not assume a rollout is hitless until `link_pinned="true"`.
 
@@ -110,7 +110,7 @@ The SYN map is keyed by **source IP and port** as seen on the wire. CNIs that SN
 
 ## Runtime lifecycle
 
-Two processes, **not a joint shutdown**. They start and stop in any order; neither waits for the other. The load balancer sees one probe: proxy `/ready`. Agent drain fails that probe (`capture_draining`) so **new** traffic stops while capture can stay attached. Size `timeout.drain_delay_secs` and `HUGINN_EBPF_DRAIN_DELAY_SECS` together below the orchestrator grace — two clocks, not a barrier. Tables: [LIFECYCLE.md](https://github.com/biandratti/huginn-proxy/blob/master/LIFECYCLE.md).
+Two processes, **not a joint shutdown**. They start and stop in any order; neither waits for the other. The load balancer sees one probe: proxy `/ready`. Agent drain fails that probe (`capture_draining`) so **new** traffic stops while capture can stay attached. Size `timeout.drain_delay_secs` and `HUGINN_EBPF_DRAIN_DELAY_SECS` together below the orchestrator grace. Two clocks, not a barrier. Tables: [LIFECYCLE.md](https://github.com/biandratti/huginn-proxy/blob/master/LIFECYCLE.md).
 
 - **Startup:** the proxy binds immediately. `/ready` is 503 (`capture_absent`) until the agent publishes `capture_state` with a non-zero `agent_boot_id`; lookups miss until the watcher opens the pins.
 - **Proxy SIGTERM:** the agent is untouched. `/ready` is `proxy_draining` for `drain_delay_secs`, then accept stops. Capture keeps running.

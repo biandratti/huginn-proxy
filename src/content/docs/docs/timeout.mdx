@@ -1,6 +1,6 @@
 ---
 title: Timeout
-description: Connect, idle, TLS handshake, two-phase drain, shutdown, and HTTP/1.1 keep-alive. Static.
+description: Connect, idle, TLS handshake, two-phase drain, shutdown, and keep-alive. Static.
 sidebar:
   order: 3
 ---
@@ -12,8 +12,8 @@ The **`[timeout]`** section sets connection timeouts and graceful shutdown behav
 | Key | Default | Description |
 | --- | --- | --- |
 | `upstream_connect_ms` | absent (no timeout) | TCP connect to backend (ms). Omitted = no limit. |
-| `proxy_idle_ms` | `60000` | Inbound idle timeout (ms). |
-| `tls_handshake_secs` | `15` | Max time for client TLS handshake. |
+| `proxy_idle_ms` | `20000` | Inbound idle timeout (ms). HTTP/1.1 header read timeout, and the HTTP/2 PING interval when `keep_alive.enabled` is true. |
+| `tls_handshake_secs` | `5` | Max time for the client TLS handshake, including the ClientHello read. |
 | `connection_handling_secs` | `300` | Max time for full request/response on a connection. |
 | `drain_delay_secs` | `0` | Phase 1 of shutdown: fail `/ready` (`proxy_draining`) while the traffic port still accepts. `0` = fail readiness and stop accept together. Size so `drain_delay_secs + shutdown_secs` is below the orchestrator stop grace. |
 | `shutdown_secs` | `30` | Phase 2: stop accept and drain in-flight connections. `/live` stays 200 until exit. |
@@ -24,14 +24,16 @@ The **`[timeout]`** section sets connection timeouts and graceful shutdown behav
 ```yaml
 timeout:
   upstream_connect_ms: 5000
-  proxy_idle_ms: 60000
+  proxy_idle_ms: 20000
   drain_delay_secs: 1
-  tls_handshake_secs: 15
+  tls_handshake_secs: 5
   connection_handling_secs: 300
   shutdown_secs: 30
   keep_alive:
     enabled: true
-    upstream_idle_timeout: 60
+    upstream_idle_timeout: 20
+    client_tcp_idle_secs: 20
+    client_tcp_interval_secs: 10
 ```
 
  </TabItem>
@@ -40,15 +42,17 @@ timeout:
 ```toml
 [timeout]
 upstream_connect_ms = 5000
-proxy_idle_ms = 60000
+proxy_idle_ms = 20000
 drain_delay_secs = 1
-tls_handshake_secs = 15
+tls_handshake_secs = 5
 connection_handling_secs = 300
 shutdown_secs = 30
 
 [timeout.keep_alive]
 enabled = true
-upstream_idle_timeout = 60
+upstream_idle_timeout = 20
+client_tcp_idle_secs = 20
+client_tcp_interval_secs = 10
 ```
 
  </TabItem>
@@ -58,7 +62,14 @@ On **SIGTERM** / **SIGINT**, `/ready` fails first (`proxy_draining`) for `drain_
 
 ### `[timeout.keep_alive]`
 
-HTTP/1.1 keep-alive and upstream TCP keepalive. Applies only to **HTTP/1.1**; HTTP/2 connections are always persistent.
+HTTP/1.1 persistence, HTTP/2 PING keep-alive, and TCP keepalive on the client socket and on upstream connections. HTTP/2 streams stay multiplexed either way.
+
+| Key | Default | Description |
+| --- | --- | --- |
+| `enabled` | `true` | HTTP/1.1 persistent connections. Also enables HTTP/2 PING keep-alive (interval is `proxy_idle_ms`) and TCP keepalive toward backends. `false` turns those three off. |
+| `upstream_idle_timeout` | `20` | Seconds a proxy → backend connection can be idle before TCP keepalive probes start. |
+| `client_tcp_idle_secs` | `20` | Seconds a client connection can be idle before TCP keepalive probes start, so a client that vanishes without closing is dropped. `0` disables client TCP keepalive. |
+| `client_tcp_interval_secs` | `10` | Seconds between TCP keepalive probes, on the client socket and on the upstream socket. `0` disables client TCP keepalive. |
 
 ## Related
 

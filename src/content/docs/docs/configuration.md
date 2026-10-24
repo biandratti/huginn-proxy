@@ -45,7 +45,7 @@ These apply to the **`huginn-proxy`** process. They do **not** change how TOML v
 | `HUGINN_CONFIG_PATH` | Path to the config file when you do **not** pass it as the sole CLI argument (equivalent to `huginn-proxy /path/to/config`). |
 | `RUST_LOG` | Overrides log filtering at the Rust tracing layer; can override `[logging].level`. See [Logging](/huginn-proxy/docs/logging/). |
 
-File watching and debounce live in the config file under **`[reload]`** (not env vars): `watch` (default `true`) and `debounce_secs` (default `60`). See [SETTINGS.md — `[reload]`](https://github.com/biandratti/huginn-proxy/blob/master/SETTINGS.md).
+File watching and debounce live in the config file under **`[reload]`** (not env vars): `watch` (default `true`) and `debounce_secs` (default `60`). See [SETTINGS.md: `[reload]`](https://github.com/biandratti/huginn-proxy/blob/master/SETTINGS.md).
 
 **eBPF (TCP SYN path):** when the proxy uses pinned BPF maps, it reads **`HUGINN_EBPF_PIN_PATH`** (must match the agent) and optionally **`HUGINN_EBPF_RECONNECT_POLL_SECS`**. Map capacity (`HUGINN_EBPF_SYN_MAP_MAX_ENTRIES`) is **agent-only**: the proxy reads it from the pinned `syn_meta` map. Capture backend (`HUGINN_EBPF_CAPTURE`: `xdp-native` / `xdp-skb` / `tc`) is **agent-only**. See [eBPF TCP setup](/huginn-proxy/docs/ebpf-setup/#environment-variables).
 

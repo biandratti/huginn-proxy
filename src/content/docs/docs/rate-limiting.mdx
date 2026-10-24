@@ -226,7 +226,7 @@ limit_by_header = "X-API-Key"
 
 ## eBPF SYN rate limiter
 
-Optional. Only relevant when the **TCP SYN** path is on (`fingerprint.tcp_enabled` + eBPF agent). Configured on the **agent** with environment variables — not in `[security.rate_limit]`.
+Optional. Only relevant when the **TCP SYN** path is on (`fingerprint.tcp_enabled` + eBPF agent). Configured on the **agent** with environment variables, not in `[security.rate_limit]`.
 
 | Variable | Default | Role |
 | --- | --- | --- |
@@ -242,9 +242,9 @@ Size `BURST` against the capture LRU:
 burst ≈ HUGINN_EBPF_SYN_MAP_MAX_ENTRIES / (4 × cpus)
 ```
 
-Use the NIC’s RX queue count (or CPU count on veth/single-queue). Full tables and caveats: [EBPF-SETUP.md — Sizing the SYN rate limiter](https://github.com/biandratti/huginn-proxy/blob/master/EBPF-SETUP.md#sizing-the-syn-rate-limiter). The compose default `2000` is a placeholder for a single-core lab host — **recompute** for production.
+Use the NIC’s RX queue count (or CPU count on veth/single-queue). Full tables and caveats: [EBPF-SETUP.md: Sizing the SYN rate limiter](https://github.com/biandratti/huginn-proxy/blob/master/EBPF-SETUP.md#sizing-the-syn-rate-limiter). The compose default `2000` is a placeholder for a single-core lab host. **Recompute** for production.
 
-Watch agent metrics (rate, not totals — counters are pinned across restarts): `tcp_syn_rate_skipped_total` should stay flat under normal load; if it climbs without an attack, `BURST` is too tight (common behind a shared NAT). See [Telemetry](/huginn-proxy/docs/telemetry/).
+Watch agent metrics (rate, not totals; counters are pinned across restarts): `tcp_syn_rate_skipped_total` should stay flat under normal load; if it climbs without an attack, `BURST` is too tight (common behind a shared NAT). See [Telemetry](/huginn-proxy/docs/telemetry/).
 
 ### Coordinating proxy and eBPF limiters
 
@@ -253,7 +253,7 @@ Treat them as **orthogonal**. Copying the same `burst` / RPS numbers between the
 1. **Decide who stops abuse.** HTTP abuse → tighten **`[security.rate_limit]`** (429). Capture-map thrash from one loud IP opening many connections → enable and size the **eBPF** limiter. Do not expect the eBPF limiter to return 429 or protect backends.
 2. **Preserve TCP signatures for legitimate clients.** Prefer that a healthy client hit the **proxy** limit (request denied, but the SYN was already captured) rather than the eBPF limit (request may succeed without `x-tcp-p0f`). Keep eBPF `BURST` high enough that normal peak SYN rates (including NAT gateways) do not skip capture; keep the proxy request budget as the tighter application control.
 3. **New connections vs keep-alive.** The eBPF path only sees **SYNs**. Keep-alive requests reuse the fingerprint from accept time. A client that already has `x-tcp-p0f` can still be HTTP-rate-limited on later requests without losing that header. A client skipped at SYN time never gets the header for that connection.
-4. **Validate independently.** Proxy: rejection rates on `huginn_rate_limit_*`. Agent: `tcp_syn_rate_skipped_total` / `tcp_syn_rate_allowed_total`. If skipped climbs while allowed goes flat across many sources, the sketch may be saturated (distributed flood) — that is a capture outage, not “working rate limit”; raise map size / revisit whether the limiter should stay on.
+4. **Validate independently.** Proxy: rejection rates on `huginn_rate_limit_*`. Agent: `tcp_syn_rate_skipped_total` / `tcp_syn_rate_allowed_total`. If skipped climbs while allowed goes flat across many sources, the sketch may be saturated (distributed flood). That is a capture outage, not “working rate limit”; raise map size / revisit whether the limiter should stay on.
 5. **Fail closed on bad agent config.** An invalid `HUGINN_EBPF_RATE_LIMIT_*` value stops the agent; unset uses defaults. Typos here also leave the proxy without maps until the agent starts.
 
 Env table and Compose layout: [eBPF TCP setup](/huginn-proxy/docs/ebpf-setup/#environment-variables).

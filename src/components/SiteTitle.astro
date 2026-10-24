@@ -1,0 +1,43 @@
+---
+import Default from '@astrojs/starlight/components/SiteTitle.astro';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const releasePath = join(process.cwd(), 'src/data/release-version.json');
+const { tag, url } = JSON.parse(readFileSync(releasePath, 'utf8'));
+const releaseTag = typeof tag === 'string' && tag.length > 0 ? tag : 'latest';
+const releaseUrl = typeof url === 'string' && url.length > 0 ? url : undefined;
+---
+
+<div class="site-title-row">
+	<Default />
+	{
+		releaseUrl ? (
+			<a class="release-tag" href={releaseUrl}>
+				{releaseTag}
+			</a>
+		) : (
+			<span class="release-tag">{releaseTag}</span>
+		)
+	}
+</div>
+
+<style>
+	.site-title-row {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		min-width: 0;
+	}
+
+	.release-tag {
+		font-size: var(--sl-text-xs);
+		font-weight: 600;
+		color: var(--sl-color-text-accent);
+		text-decoration: none;
+		border: 1px solid var(--sl-color-gray-5);
+		border-radius: 0.25rem;
+		padding: 0.1rem 0.4rem;
+		white-space: nowrap;
+	}
+</style>

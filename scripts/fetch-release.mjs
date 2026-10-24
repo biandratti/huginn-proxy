@@ -1,14 +1,16 @@
 #!/usr/bin/env node
-import { mkdirSync, writeFileSync, existsSync, readFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const out = join(dirname(fileURLToPath(import.meta.url)), '..', 'src/data/release-version.json');
-const url = 'https://api.github.com/repos/biandratti/huginn-proxy/releases/latest';
+const endpoint = 'https://api.github.com/repos/biandratti/huginn-proxy/releases/latest';
 
-let tag;
+/** @type {{ tag: string | null, url: string | null }} */
+const release = { tag: null, url: null };
+
 try {
-	const res = await fetch(url, {
+	const res = await fetch(endpoint, {
 		headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'huginn-proxy-docs' },
 		signal: AbortSignal.timeout(10_000),
 	});
@@ -19,20 +21,15 @@ try {
 	if (typeof json.tag_name !== 'string' || json.tag_name.length === 0) {
 		throw new Error('empty tag_name');
 	}
-	tag = json.tag_name;
-} catch (err) {
-	console.warn(`fetch-release: failed to fetch latest release (${err.message}), using fallback`);
-	// Use the existing cached value if available, otherwise fall back to a placeholder.
-	if (existsSync(out)) {
-		const cached = JSON.parse(readFileSync(out, 'utf8'));
-		tag = cached.tag ?? 'latest';
-		console.warn(`fetch-release: using cached tag ${tag}`);
-	} else {
-		tag = 'latest';
-		console.warn('fetch-release: no cache found, using "latest"');
+	if (typeof json.html_url !== 'string' || json.html_url.length === 0) {
+		throw new Error('empty html_url');
 	}
+	release.tag = json.tag_name;
+	release.url = json.html_url;
+} catch (err) {
+	console.warn(`fetch-release: ${err instanceof Error ? err.message : err}`);
 }
 
 mkdirSync(dirname(out), { recursive: true });
-writeFileSync(out, JSON.stringify({ tag }, null, '\t') + '\n');
-console.log('fetch-release:', tag);
+writeFileSync(out, JSON.stringify(release, null, '\t') + '\n');
+console.log('fetch-release:', release.tag ?? 'latest');

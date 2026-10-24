@@ -237,7 +237,7 @@ On coalesced HTTP/2 connections, any request whose host is served by a **differe
 
 ## Client authentication (mTLS)
 
-mTLS is **per-domain** via **`client_ca_path`** on a `[[domains]]` entry — there is no listener-wide `[tls.client_auth]`. Domains with a CA bundle require a client certificate; domains without it stay public. One listener can mix both. mTLS domains **never resume** a TLS session (client cert re-verified every connection).
+mTLS is **per-domain** via **`client_ca_path`** on a `[[domains]]` entry. There is no listener-wide `[tls.client_auth]`. Domains with a CA bundle require a client certificate; domains without it stay public. One listener can mix both. mTLS domains **never resume** a TLS session (client cert re-verified every connection).
 
 <Tabs syncKey="huginn-config">
  <TabItem label="YAML">
@@ -271,7 +271,7 @@ backend = "admin:9000"
  </TabItem>
 </Tabs>
 
-A request whose `Host` names an mTLS domain is rejected with **421** unless it arrives over a TLS session established for that same domain (plaintext / no-SNI / foreign SNI are rejected). Failures to load cert or CA material never fall back to a config without a client verifier. Details: [SETTINGS.md — Mutual TLS](https://github.com/biandratti/huginn-proxy/blob/master/SETTINGS.md).
+A request whose `Host` names an mTLS domain is rejected with **421** unless it arrives over a TLS session established for that same domain (plaintext / no-SNI / foreign SNI are rejected). Failures to load cert or CA material never fall back to a config without a client verifier. Details: [SETTINGS.md: Mutual TLS](https://github.com/biandratti/huginn-proxy/blob/master/SETTINGS.md).
 
 ## Session resumption
 

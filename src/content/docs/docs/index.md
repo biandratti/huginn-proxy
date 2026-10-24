@@ -11,6 +11,10 @@ application code.
 
 Its focus is **fingerprint collection**, **security** (header control, TLS policy, rate limiting), and **performance** (async Rust, connection pooling). It is not trying to be a general-purpose proxy: some features common in Nginx or Traefik are out of scope or not yet implemented. If you need passive client fingerprinting as a first-class feature, this is the tool for you.
 
+## Live demo
+
+[huginn-proxy.duckdns.org](https://huginn-proxy.duckdns.org/) shows the fingerprints of the browser that opens it. huginn-proxy terminates TLS, collecting and parsing that visit with [huginn-net](https://github.com/biandratti/huginn-net).
+
 Check the [GitHub releases](https://github.com/biandratti/huginn-proxy/releases) for the version you run.
 
 **New here?** Start with [Getting started](/huginn-proxy/docs/getting-started/), then skim
