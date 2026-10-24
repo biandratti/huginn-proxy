@@ -1,9 +1,11 @@
 // @ts-check
+import sitemap from '@astrojs/sitemap';
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
 
 const site = 'https://biandratti.github.io';
 const base = '/huginn-proxy';
+const ogImage = `${site}${base}/android-chrome-512x512.png`;
 
 export default defineConfig({
 	site,
@@ -80,6 +82,14 @@ export default defineConfig({
 						href: `${base}/site.webmanifest`,
 					},
 				},
+				{
+					tag: 'meta',
+					attrs: { property: 'og:image', content: ogImage },
+				},
+				{
+					tag: 'meta',
+					attrs: { name: 'twitter:image', content: ogImage },
+				},
 			],
 			favicon: '/favicon.ico',
 			lastUpdated: true,
@@ -146,5 +156,6 @@ export default defineConfig({
 				},
 			],
 		}),
+		sitemap(),
 	],
 });
