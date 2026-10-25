@@ -5,7 +5,7 @@
 #   docker build -f docker/ebpf-agent.Dockerfile .
 
 # ── builder ─────────────────────────────────────────────────────
-FROM rust:1.99.1-slim@sha256:4df2ae8cfdfebdfc13a65da7f253b73d68983dc0339f2719bc17a279c913b13d AS builder
+FROM rust:1.99.1-slim@sha256:aab42391a986424e22d6a3ec14f37bc6dd3dacff4d457ca7cccd781e02297cc6 AS builder
 # bpf-linker 0.11+ needs a matching LLVM when built from source; install the prebuilt binary instead.
 RUN apt-get update -q && apt-get install -y --no-install-recommends \
     pkg-config libssl-dev \
