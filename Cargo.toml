@@ -16,7 +16,7 @@ members = [
 resolver = "3"
 
 [workspace.package]
-version = "0.0.6-rc.1"
+version = "0.1.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 authors = ["Maximiliano Biandratti"]
@@ -24,7 +24,7 @@ repository = "https://github.com/biandratti/huginn-proxy"
 
 [workspace.dependencies]
 ahash = "0.8.12"
-arc-swap = "1.9.2"
+arc-swap = "1.9.3"
 async-trait = "0.1.92"
 aya = "0.14.0"
 aya-log = "0.3.0"
@@ -45,7 +45,7 @@ huginn-proxy-lib = { path = "huginn-proxy-lib" }
 hyper = { version = "1.12.0", features = ["full"] }
 hyper-util = { version = "0.1.21", features = ["full"] }
 ipnet = "2.12.2"
-libc = "0.2.190"
+libc = "0.2.191"
 log = "0.4.34"
 notify = "8.2.0"
 opentelemetry = { version = "0.33.1", features = ["metrics"] }
@@ -64,9 +64,9 @@ serde_norway = "0.9.42"
 serial_test = "4.0.1"
 socket2 = "0.6.5"
 tempfile = "3.27.0"
-thirtyfour = { version = "0.37.8", default-features = false, features = ["reqwest", "rustls"] }
+thirtyfour = { version = "0.38.1", default-features = false, features = ["reqwest", "rustls"] }
 thiserror = "2.0.21"
-tokio = { version = "1.53.3", features = ["net", "time", "io-util", "macros", "rt-multi-thread", "sync", "signal", "fs"] }
+tokio = { version = "1.54.1", features = ["net", "time", "io-util", "macros", "rt-multi-thread", "sync", "signal", "fs"] }
 tokio-rustls = "0.26.6"
 tokio-util = { version = "0.7.20", features = ["rt"] }
 toml = "1.1.8"
