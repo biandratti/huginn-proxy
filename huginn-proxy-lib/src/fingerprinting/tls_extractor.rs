@@ -82,15 +82,12 @@ pub async fn read_client_hello<S: AsyncRead + Unpin>(
     let mut scanner = ClientHelloScanner::default();
     let client_hello = loop {
         match scanner.scan(&buf) {
+            ClientHelloScan::NeedMore if buf.len() > MAX_CLIENT_HELLO_BYTES => break None,
             ClientHelloScan::NeedMore => {}
             ClientHelloScan::AsIs => break None,
             ClientHelloScan::Complete(record) => break Some(record),
         }
-        let read = stream.read_buf(&mut buf).await?;
-        if read == 0 {
-            break None;
-        }
-        if buf.len() > MAX_CLIENT_HELLO_BYTES {
+        if stream.read_buf(&mut buf).await? == 0 {
             break None;
         }
     };

@@ -78,3 +78,30 @@ async fn read_client_hello_fingerprints_fragmented_client_hello()
     assert!(fingerprints.is_some());
     Ok(())
 }
+
+#[tokio::test]
+async fn read_client_hello_cap_only_stops_incomplete_hello()
+-> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let empty_record = [0x16, 0x03, 0x01, 0x00, 0x00];
+
+    // 12_819 empty records (64_095 B) + hello in 1-byte records (1_446 B) = 65_541 B.
+    // Reads fill the buffer to 65_536 B, so the last 5 bytes finish the hello and cross the cap.
+    let mut input = empty_record.repeat(12_819);
+    input.extend(client_hello_records(1).concat());
+    let (mut client, mut server) = tokio::io::duplex(input.len());
+    client.write_all(&input).await?;
+    let (prefix, fingerprints) = read_client_hello(&mut server, &Metrics::new_noop()).await?;
+    assert_eq!(prefix, input);
+    assert!(prefix.len() > 64 * 1024);
+    assert!(fingerprints.is_some());
+
+    // Never completes: stops at the cap while the client keeps the connection open.
+    let input = empty_record.repeat(14_000);
+    let (mut client, mut server) = tokio::io::duplex(input.len());
+    client.write_all(&input).await?;
+    let (prefix, fingerprints) = read_client_hello(&mut server, &Metrics::new_noop()).await?;
+    assert!(prefix.len() > 64 * 1024);
+    assert!(fingerprints.is_none());
+    drop(client);
+    Ok(())
+}
