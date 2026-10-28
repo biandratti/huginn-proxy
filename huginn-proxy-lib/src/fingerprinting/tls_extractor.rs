@@ -43,7 +43,11 @@ impl ClientHelloScanner {
             let Some(header) = buf.get(self.offset..start) else {
                 return ClientHelloScan::NeedMore;
             };
-            let end = start.saturating_add(u16::from_be_bytes([header[3], header[4]]) as usize);
+            let record_len = u16::from_be_bytes([header[3], header[4]]) as usize;
+            if record_len > MAX_RECORD_LEN {
+                return ClientHelloScan::AsIs;
+            }
+            let end = start.saturating_add(record_len);
             let Some(fragment) = buf.get(start..end) else {
                 return ClientHelloScan::NeedMore;
             };

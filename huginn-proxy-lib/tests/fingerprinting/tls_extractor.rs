@@ -33,7 +33,8 @@ fn scan_client_hello_cases() {
     assert!(parse_tls_client_hello(&fragmented).is_err());
     assert!(parse_tls_client_hello(CLIENT_HELLO).is_ok());
 
-    let cases: [(&str, &[u8], ClientHelloScan); 8] = [
+    let alert = [0x15, 0x03, 0x03, 0x00, 0x02, 0x02, 0x28];
+    let cases: [(&str, &[u8], ClientHelloScan); 11] = [
         ("single record", CLIENT_HELLO, complete.clone()),
         ("fragmented", &fragmented, complete.clone()),
         ("1-byte records", &client_hello_records(1).concat(), complete.clone()),
@@ -46,6 +47,17 @@ fn scan_client_hello_cases() {
             ClientHelloScan::NeedMore,
         ),
         ("not TLS", b"GET / HTTP/1.1\r\n", ClientHelloScan::AsIs),
+        ("oversized record", &[0x16, 0x03, 0x01, 0xFF, 0xFF], ClientHelloScan::AsIs),
+        (
+            "oversized hello",
+            &[0x16, 0x03, 0x01, 0x00, 0x04, 0x01, 0x00, 0xFF, 0xFF],
+            ClientHelloScan::AsIs,
+        ),
+        (
+            "alert after first fragment",
+            &[client_hello_records(64)[0].as_slice(), &alert].concat(),
+            ClientHelloScan::AsIs,
+        ),
     ];
     for (name, input, expected) in cases {
         assert_eq!(scan(input), expected, "{name}");
@@ -61,8 +73,7 @@ fn scan_client_hello_cases() {
 }
 
 #[tokio::test]
-async fn read_client_hello_fingerprints_fragmented_client_hello()
--> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+async fn read_client_hello_fragmented() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let fragmented = client_hello_records(64).concat();
     // 6-byte pipe: every read returns at most 6 bytes, forcing many reads.
     let (mut client, mut server) = tokio::io::duplex(6);
@@ -76,6 +87,15 @@ async fn read_client_hello_fingerprints_fragmented_client_hello()
 
     assert_eq!(prefix, fragmented);
     assert!(fingerprints.is_some());
+
+    // Client closes mid-hello: no fingerprint, sent bytes kept.
+    let partial = &fragmented[..100];
+    let (mut client, mut server) = tokio::io::duplex(partial.len());
+    client.write_all(partial).await?;
+    drop(client);
+    let (prefix, fingerprints) = read_client_hello(&mut server, &Metrics::new_noop()).await?;
+    assert_eq!(prefix, partial);
+    assert!(fingerprints.is_none());
     Ok(())
 }
 
