@@ -1,3 +1,4 @@
+use huginn_net_tls::tls_process::parse_tls_client_hello;
 use tokio::io::{AsyncRead, AsyncReadExt};
 use tokio::time::Instant;
 
@@ -16,7 +17,7 @@ const MAX_RECORD_LEN: usize = (1 << 14) + 256;
 pub enum ClientHelloScan {
     NeedMore,
     /// Not a parsable handshake; parse buffer as is.
-    AsIs,
+    Unparsable,
     /// Whole ClientHello as one record, joined if it was fragmented.
     Complete(Vec<u8>),
 }
@@ -37,15 +38,15 @@ impl ClientHelloScanner {
             match buf.get(self.offset) {
                 None => return ClientHelloScan::NeedMore,
                 Some(&CONTENT_TYPE_HANDSHAKE) => {}
-                Some(_) => return ClientHelloScan::AsIs,
+                Some(_) => return ClientHelloScan::Unparsable,
             }
             let start = self.offset.saturating_add(RECORD_HEADER_LEN);
             let Some(header) = buf.get(self.offset..start) else {
                 return ClientHelloScan::NeedMore;
             };
-            let record_len = u16::from_be_bytes([header[3], header[4]]) as usize;
+            let record_len = usize::from(u16::from_be_bytes([header[3], header[4]]));
             if record_len > MAX_RECORD_LEN {
-                return ClientHelloScan::AsIs;
+                return ClientHelloScan::Unparsable;
             }
             let end = start.saturating_add(record_len);
             let Some(fragment) = buf.get(start..end) else {
@@ -60,7 +61,7 @@ impl ClientHelloScanner {
             let msg_len =
                 HANDSHAKE_HEADER_LEN.saturating_add(u32::from_be_bytes([0, a, b, c]) as usize);
             if msg_len > MAX_RECORD_LEN {
-                return ClientHelloScan::AsIs;
+                return ClientHelloScan::Unparsable;
             }
             if self.payload.len() >= msg_len {
                 // msg_len <= MAX_RECORD_LEN, fits in u16.
@@ -79,8 +80,6 @@ pub async fn read_client_hello<S: AsyncRead + Unpin>(
     stream: &mut S,
     metrics: &Metrics,
 ) -> std::io::Result<(Vec<u8>, Option<Ja4Fingerprints>)> {
-    use huginn_net_tls::tls_process::parse_tls_client_hello;
-
     let start = Instant::now();
     let mut buf = Vec::with_capacity(8192);
     let mut scanner = ClientHelloScanner::default();
@@ -88,7 +87,7 @@ pub async fn read_client_hello<S: AsyncRead + Unpin>(
         match scanner.scan(&buf) {
             ClientHelloScan::NeedMore if buf.len() > MAX_CLIENT_HELLO_BYTES => break None,
             ClientHelloScan::NeedMore => {}
-            ClientHelloScan::AsIs => break None,
+            ClientHelloScan::Unparsable => break None,
             ClientHelloScan::Complete(record) => break Some(record),
         }
         if stream.read_buf(&mut buf).await? == 0 {

@@ -46,17 +46,17 @@ fn scan_client_hello_cases() {
             &fragmented[..fragmented.len().saturating_sub(1)],
             ClientHelloScan::NeedMore,
         ),
-        ("not TLS", b"GET / HTTP/1.1\r\n", ClientHelloScan::AsIs),
-        ("oversized record", &[0x16, 0x03, 0x01, 0xFF, 0xFF], ClientHelloScan::AsIs),
+        ("not TLS", b"GET / HTTP/1.1\r\n", ClientHelloScan::Unparsable),
+        ("oversized record", &[0x16, 0x03, 0x01, 0xFF, 0xFF], ClientHelloScan::Unparsable),
         (
             "oversized hello",
             &[0x16, 0x03, 0x01, 0x00, 0x04, 0x01, 0x00, 0xFF, 0xFF],
-            ClientHelloScan::AsIs,
+            ClientHelloScan::Unparsable,
         ),
         (
             "alert after first fragment",
             &[client_hello_records(64)[0].as_slice(), &alert].concat(),
-            ClientHelloScan::AsIs,
+            ClientHelloScan::Unparsable,
         ),
     ];
     for (name, input, expected) in cases {
