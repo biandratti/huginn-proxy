@@ -363,8 +363,9 @@ In-flight connections keep going; the load balancer stops **new** traffic. Size 
 Shutdown leaves map pins and the capture link pin. The next agent reopens the same kernel IDs
 and, if a link pin exists, replaces the program in place.
 
-Maps are recreated only when `HUGINN_EBPF_SYN_MAP_MAX_ENTRIES` changes (otherwise aya would keep
-the old capacity). New IDs. The proxy compares published vs open IPv4/IPv6 IDs every
+Maps are recreated only when `HUGINN_EBPF_SYN_MAP_MAX_ENTRIES` changes. A pin whose capacity, type,
+or value size does not match the object is dropped before load, so startup recreates the maps
+instead of failing. New IDs. The proxy compares published vs open IPv4/IPv6 IDs every
 `HUGINN_EBPF_RECONNECT_POLL_SECS` (default 5; `0` disables this, not the capture gate) and swaps
 atomically. A pin missing during recreate is transient: old maps stay until the next reconnect tick.
 
