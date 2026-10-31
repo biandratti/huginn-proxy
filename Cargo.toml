@@ -26,8 +26,11 @@ repository = "https://github.com/biandratti/huginn-proxy"
 ahash = "0.8.12"
 arc-swap = "1.9.3"
 async-trait = "0.1.92"
-aya = "0.14.0"
-aya-log = "0.3.0"
+# crates.io aya-log 0.3.0 depends on aya ^0.14. The 0.16-compatible
+# sources ship in the aya-v0.16.0 tag and are not published yet. Both
+# crates must come from that tag so Cargo unifies a single `aya`.
+aya = { git = "https://github.com/aya-rs/aya", tag = "aya-v0.16.0" }
+aya-log = { git = "https://github.com/aya-rs/aya", tag = "aya-v0.16.0" }
 bytes = "1.12.1"
 clap = { version = "4.6.7", features = ["derive", "env"] }
 criterion = { version = "0.8.2", features = ["html_reports"] }

@@ -23,7 +23,7 @@ RUN cargo build --release -p huginn-proxy
 # ── ebpf builder ────────────────────────────────────────────────
 FROM builder-base AS builder-ebpf
 # bpf-linker 0.11+ needs a matching LLVM when built from source; install the prebuilt binary instead.
-RUN rustup toolchain install nightly --component rust-src
+RUN rustup toolchain install nightly-2026-10-23 --component rust-src
 ARG TARGETARCH
 ADD https://github.com/cargo-bins/cargo-binstall/releases/latest/download/cargo-binstall-x86_64-unknown-linux-musl.tgz /tmp/cargo-binstall-amd64.tgz
 ADD https://github.com/cargo-bins/cargo-binstall/releases/latest/download/cargo-binstall-aarch64-unknown-linux-musl.tgz /tmp/cargo-binstall-arm64.tgz

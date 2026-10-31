@@ -30,7 +30,7 @@ Requires Rust stable. Install from [rustup.rs](https://rustup.rs/).
 
 ## eBPF
 
-The kernel programs crate (`huginn-ebpf-programs`) is Linux-only and needs `bpf-linker` + Rust nightly with `rust-src`. For most changes — proxy logic, config, fingerprinting, docs — the standard workspace build is enough. The CI action `.github/actions/setup-ebpf-build` handles the full setup automatically.
+`huginn-ebpf-programs` is Linux-only. It needs `bpf-linker` and the nightly pinned in `huginn-ebpf-programs/rust-toolchain.toml` (with `rust-src`). Proxy, config, fingerprinting, and docs changes only need the workspace build. CI sets this up in `.github/actions/setup-ebpf-build`.
 
 ```bash
 # standard

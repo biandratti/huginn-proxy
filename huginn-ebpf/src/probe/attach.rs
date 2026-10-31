@@ -1,10 +1,11 @@
+use std::ffi::{CStr, CString};
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 
 use aya::Ebpf;
 use aya::programs::links::{FdLink, LinkError, PinnedLink};
 use aya::programs::tc::qdisc_add_clsact;
-use aya::programs::tc::{NlOptions, SchedClassifierLinkId, TcAttachOptions};
+use aya::programs::tc::{NlOptions, SchedClassifierLinkId, TcAttach};
 use aya::programs::xdp::XdpLinkId;
 use aya::programs::{LinkOrder, SchedClassifier, TcAttachType, Xdp, XdpMode};
 use aya::sys::SyscallError;
@@ -35,6 +36,7 @@ pub(super) fn attach_xdp(
 
     program.load().map_err(EbpfError::ProgramLoad)?;
 
+    let if_name = interface_name(interface)?;
     let aya_mode = match xdp_mode {
         XdpAttachMode::Skb => XdpMode::Skb,
         XdpAttachMode::Native => XdpMode::Driver,
@@ -47,13 +49,13 @@ pub(super) fn attach_xdp(
         None => (
             false,
             program
-                .attach(interface, aya_mode)
+                .attach(&if_name, aya_mode)
                 .map_err(EbpfError::Attach)?,
         ),
     };
 
     let link_pinned =
-        persist_xdp_link(program, link_id, link_pin_path, already_pinned, interface, aya_mode)?;
+        persist_xdp_link(program, link_id, link_pin_path, already_pinned, &if_name, aya_mode)?;
     if !link_pinned {
         warn!(
             interface,
@@ -71,7 +73,8 @@ pub(super) fn attach_tc(
     interface: &str,
     link_pin_path: &Path,
 ) -> Result<AttachOutcome, EbpfError> {
-    if let Err(e) = qdisc_add_clsact(interface) {
+    let if_name = interface_name(interface)?;
+    if let Err(e) = qdisc_add_clsact(&if_name) {
         warn!(interface, error = %e, "clsact qdisc add returned an error (continuing; likely already present)");
     }
 
@@ -103,10 +106,12 @@ pub(super) fn attach_tc(
             Some(link) => (true, program.attach_to_link(link).map_err(EbpfError::Attach)?),
             None => {
                 let link_id = program
-                    .attach_with_options(
-                        interface,
-                        TcAttachType::Ingress,
-                        TcAttachOptions::TcxOrder(LinkOrder::default()),
+                    .attach(
+                        &if_name,
+                        TcAttach::Tcx {
+                            attach_type: TcAttachType::Ingress,
+                            order: LinkOrder::default(),
+                        },
                     )
                     .map_err(EbpfError::Attach)?;
                 (false, link_id)
@@ -116,10 +121,12 @@ pub(super) fn attach_tc(
         Ok(AttachOutcome { mode, link_pinned: true })
     } else {
         program
-            .attach_with_options(
-                interface,
-                TcAttachType::Ingress,
-                TcAttachOptions::Netlink(NlOptions::default()),
+            .attach(
+                &if_name,
+                TcAttach::Netlink {
+                    parent: TcAttachType::Ingress.into(),
+                    options: NlOptions::default(),
+                },
             )
             .map_err(EbpfError::Attach)?;
         Ok(AttachOutcome { mode, link_pinned: false })
@@ -206,7 +213,7 @@ fn persist_xdp_link(
     link_id: XdpLinkId,
     pin_path: &Path,
     already_pinned: bool,
-    interface: &str,
+    interface: &CStr,
     aya_mode: XdpMode,
 ) -> Result<bool, EbpfError> {
     let link = program.take_link(link_id).map_err(EbpfError::Attach)?;
@@ -231,6 +238,10 @@ fn persist_xdp_link(
         }
         Err(err) => Err(EbpfError::Link(err)),
     }
+}
+
+fn interface_name(interface: &str) -> Result<CString, EbpfError> {
+    Ok(CString::new(interface)?)
 }
 
 fn pin_fd_link(fd_link: FdLink, pin_path: &Path) -> Result<(), EbpfError> {

@@ -26,8 +26,9 @@ impl EbpfProbe {
 /// Ensure the pin directory exists with permissions the proxy can traverse, and
 /// drop any stale pins whose SYN map capacity no longer matches the requested `syn_map_max_entries`.
 ///
-/// Because `aya` reuses an existing pin as-is (without validating its
-/// attributes), a capacity change would otherwise be silently ignored.
+/// A pin whose type, sizes, flags, or `max_entries` does not match the object
+/// is rejected on load. Dropping a capacity mismatch here recreates the maps
+/// instead of failing agent startup.
 pub(super) fn prepare_pins(base_path: &str, syn_map_max_entries: u32) -> Result<(), EbpfError> {
     let base = Path::new(base_path);
     std::fs::create_dir_all(base)
@@ -115,7 +116,7 @@ pub(super) fn write_syn_capacity(
         .ok_or_else(|| EbpfError::MapNotFound { name: pin::SYN_META_NAME.to_string() })?;
     let mut meta = Array::<_, u64>::try_from(map)
         .map_err(|source| EbpfError::FromPin { path: pin::SYN_META_NAME.to_string(), source })?;
-    meta.set(0, u64::from(syn_map_max_entries), 0)
+    meta.set(0, &u64::from(syn_map_max_entries), 0)
         .map_err(|source| EbpfError::MapInfo { path: pin::SYN_META_NAME.to_string(), source })
 }
 
