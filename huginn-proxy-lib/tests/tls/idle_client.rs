@@ -4,7 +4,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use arc_swap::ArcSwap;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 
 use huginn_proxy_lib::config::{
@@ -137,7 +137,7 @@ async fn spawn_tls_proxy() -> Result<(std::net::SocketAddr, tokio::task::AbortHa
 /// Pass if the proxy closes or resets `stream` once the handshake timeout has run out,
 /// counted from `connected_at`. Closing too early means something other than the timeout did it.
 async fn assert_closed_by_proxy(
-    mut stream: TcpStream,
+    mut stream: impl AsyncRead + Unpin,
     connected_at: Instant,
 ) -> Result<(), BoxError> {
     let min =
@@ -178,4 +178,51 @@ async fn partial_client_hello_is_disconnected_after_handshake_timeout() -> Resul
     // Start of a TLS record header, then silence.
     stream.write_all(&[0x16, 0x03, 0x01]).await?;
     assert_closed_by_proxy(stream, connected_at).await
+}
+
+/// Single-record ClientHello from reqwest/rustls.
+const CLIENT_HELLO: &[u8] = include_bytes!("../../../benches/fixtures/clienthello_reqwest.bin");
+
+fn client_hello_records(chunk: usize) -> Vec<Vec<u8>> {
+    CLIENT_HELLO[5..]
+        .chunks(chunk)
+        .map(|part| {
+            let len = u16::try_from(part.len())
+                .unwrap_or_else(|_| panic!("chunk of {} bytes exceeds a record", part.len()));
+            let mut record = CLIENT_HELLO[..3].to_vec();
+            record.extend_from_slice(&len.to_be_bytes());
+            record.extend_from_slice(part);
+            record
+        })
+        .collect()
+}
+
+#[tokio::test]
+async fn fragmented_client_hello_is_disconnected_after_handshake_timeout() -> Result<(), BoxError> {
+    let (proxy, _handle) = spawn_tls_proxy().await?;
+    let records = client_hello_records(64);
+    assert!(records.len() > 1);
+
+    let mut stalled = TcpStream::connect(proxy).await?;
+    let stalled_at = Instant::now();
+    stalled.write_all(&records[0]).await?;
+
+    let (drip_read, mut drip_write) = TcpStream::connect(proxy).await?.into_split();
+    let drip_at = Instant::now();
+    let interval = Duration::from_secs(HANDSHAKE_TIMEOUT_SECS * 2) / records.len() as u32;
+    let _writer = tokio::spawn(async move {
+        for record in records {
+            if drip_write.write_all(&record).await.is_err() {
+                return;
+            }
+            tokio::time::sleep(interval).await;
+        }
+        tokio::time::sleep(Duration::from_secs(HANDSHAKE_TIMEOUT_SECS * 10)).await;
+    });
+
+    tokio::try_join!(
+        assert_closed_by_proxy(stalled, stalled_at),
+        assert_closed_by_proxy(drip_read, drip_at),
+    )?;
+    Ok(())
 }
