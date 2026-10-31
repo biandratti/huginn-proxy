@@ -5,7 +5,7 @@ runs:
   steps:
     - name: Install Rust nightly with rust-src and clippy
       shell: bash
-      run: rustup toolchain install nightly --component rust-src --component clippy
+      run: rustup toolchain install nightly-2026-10-23 --component rust-src --component clippy
     # Prebuilt Linux artifacts are musl, not gnu
     # (https://github.com/aya-rs/bpf-linker#installation). `cargo binstall` on
     # ubuntu-latest looks for x86_64-unknown-linux-gnu, misses, and falls back

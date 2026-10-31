@@ -10,7 +10,7 @@ FROM rust:1.99.1-slim@sha256:aab42391a986424e22d6a3ec14f37bc6dd3dacff4d457ca7ccc
 RUN apt-get update -q && apt-get install -y --no-install-recommends \
     pkg-config libssl-dev \
     && rm -rf /var/lib/apt/lists/*
-RUN rustup toolchain install nightly --component rust-src
+RUN rustup toolchain install nightly-2026-10-23 --component rust-src
 ARG TARGETARCH
 ADD https://github.com/cargo-bins/cargo-binstall/releases/latest/download/cargo-binstall-x86_64-unknown-linux-musl.tgz /tmp/cargo-binstall-amd64.tgz
 ADD https://github.com/cargo-bins/cargo-binstall/releases/latest/download/cargo-binstall-aarch64-unknown-linux-musl.tgz /tmp/cargo-binstall-arm64.tgz
