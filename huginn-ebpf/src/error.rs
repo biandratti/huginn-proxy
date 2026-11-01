@@ -15,6 +15,13 @@ pub enum EbpfError {
     #[error("failed to attach BPF program to interface: {0}")]
     Attach(#[source] aya::programs::ProgramError),
 
+    #[error("network interface name '{name}' contains an interior nul")]
+    InvalidInterfaceName {
+        name: String,
+        #[source]
+        source: std::ffi::NulError,
+    },
+
     #[error("failed to open or convert BPF link: {0}")]
     Link(#[from] aya::programs::links::LinkError),
 

@@ -68,13 +68,13 @@ pub fn write_capture_state(base_path: &str, state: CaptureState) -> Result<(), E
     let mut array = Array::<_, u64>::try_from(&mut map)
         .map_err(|source| EbpfError::FromPin { path: path.display().to_string(), source })?;
     array
-        .set(pin::CAPTURE_STATE_SLOT_GENERATION, state.generation, 0)
+        .set(pin::CAPTURE_STATE_SLOT_GENERATION, &state.generation, 0)
         .map_err(|source| EbpfError::MapInfo { path: path.display().to_string(), source })?;
     array
-        .set(pin::CAPTURE_STATE_SLOT_LIFECYCLE, state.lifecycle, 0)
+        .set(pin::CAPTURE_STATE_SLOT_LIFECYCLE, &state.lifecycle, 0)
         .map_err(|source| EbpfError::MapInfo { path: path.display().to_string(), source })?;
     array
-        .set(pin::CAPTURE_STATE_SLOT_BOOT_ID, state.boot_id, 0)
+        .set(pin::CAPTURE_STATE_SLOT_BOOT_ID, &state.boot_id, 0)
         .map_err(|source| EbpfError::MapInfo { path: path.display().to_string(), source })?;
     Ok(())
 }
@@ -120,7 +120,7 @@ fn set_capture_slot(base_path: &str, slot: u32, value: u64) -> Result<(), EbpfEr
     let mut array = Array::<_, u64>::try_from(&mut map)
         .map_err(|source| EbpfError::FromPin { path: path.display().to_string(), source })?;
     array
-        .set(slot, value, 0)
+        .set(slot, &value, 0)
         .map_err(|source| EbpfError::MapInfo { path: path.display().to_string(), source })?;
     Ok(())
 }

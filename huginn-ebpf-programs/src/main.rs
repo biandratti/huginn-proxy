@@ -16,13 +16,13 @@ mod xdp;
 // The capture pipelines never drop: an over-rate-limit SYN is simply not captured (skipped),
 // and the packet always passes through to the stack.
 #[xdp]
-pub fn huginn_xdp_syn(ctx: XdpContext) -> u32 {
+fn huginn_xdp_syn(ctx: XdpContext) -> u32 {
     xdp::try_xdp_syn(&ctx);
     XDP_PASS
 }
 
 #[classifier]
-pub fn huginn_tc_syn(ctx: TcContext) -> i32 {
+fn huginn_tc_syn(ctx: TcContext) -> i32 {
     tc::try_tc_syn(&ctx);
     TC_ACT_OK
 }

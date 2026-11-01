@@ -91,7 +91,7 @@ pub fn finish_tcp_syn_v4(
     };
 
     let key = make_key_v4(ip.saddr, tcp.source);
-    if tcp_syn_map_v4.insert(key, syn_raw_data, 0).is_err() {
+    if tcp_syn_map_v4.insert(&key, &syn_raw_data, 0).is_err() {
         increment_syn_insert_failures_v4();
         return Err(TcpSynError::MapInsertFailed);
     }
@@ -151,7 +151,7 @@ pub fn finish_tcp_syn_v6(
     };
 
     let key = make_key_v6(ip6.saddr, tcp.source);
-    if tcp_syn_map_v6.insert(key, syn_raw_data, 0).is_err() {
+    if tcp_syn_map_v6.insert(&key, &syn_raw_data, 0).is_err() {
         increment_syn_insert_failures_v6();
         return Err(TcpSynError::MapInsertFailed);
     }

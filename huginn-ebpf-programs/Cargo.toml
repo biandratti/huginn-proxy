@@ -16,7 +16,7 @@ name = "huginn-ebpf-programs"
 path = "src/main.rs"
 
 [dependencies]
-aya-ebpf = "0.2.1"
-aya-log-ebpf = "0.2.0"
+aya-ebpf = "0.3.0"
+aya-log-ebpf = "0.3.0"
 huginn-ebpf-common = { path = "../huginn-ebpf-common" }
 huginn-ebpf-rate-limit = { path = "../huginn-ebpf-rate-limit" }
