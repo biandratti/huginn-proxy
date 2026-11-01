@@ -241,7 +241,10 @@ fn persist_xdp_link(
 }
 
 fn interface_name(interface: &str) -> Result<CString, EbpfError> {
-    Ok(CString::new(interface)?)
+    CString::new(interface).map_err(|source| EbpfError::InvalidInterfaceName {
+        name: interface.to_string(),
+        source,
+    })
 }
 
 fn pin_fd_link(fd_link: FdLink, pin_path: &Path) -> Result<(), EbpfError> {
