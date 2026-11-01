@@ -192,7 +192,8 @@ dependencies = [
 [[package]]
 name = "aya"
 version = "0.16.0"
-source = "git+https://github.com/aya-rs/aya?tag=aya-v0.16.0#7192299e5e4680742b0ae87bf8fa1305a8b23d45"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3c193744eaa31250fd29ceb101a85219ae3cc26ea595a2cdb848df5a866cf19e"
 dependencies = [
  "assert_matches",
  "aya-obj",
@@ -208,8 +209,9 @@ dependencies = [
 
 [[package]]
 name = "aya-log"
-version = "0.3.0"
-source = "git+https://github.com/aya-rs/aya?tag=aya-v0.16.0#7192299e5e4680742b0ae87bf8fa1305a8b23d45"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "425a0093e7b0f87ef6fd0fcc33c33c7e9658dc2a2693b657195785c8b36efb04"
 dependencies = [
  "aya",
  "aya-log-common",
@@ -220,7 +222,8 @@ dependencies = [
 [[package]]
 name = "aya-log-common"
 version = "0.3.0"
-source = "git+https://github.com/aya-rs/aya?tag=aya-v0.16.0#7192299e5e4680742b0ae87bf8fa1305a8b23d45"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ab343b69a6419491a44f99d37e1782226f0c59bcf1c26e00e3df537a5f87d676"
 dependencies = [
  "num_enum",
 ]
@@ -228,7 +231,8 @@ dependencies = [
 [[package]]
 name = "aya-obj"
 version = "0.6.0"
-source = "git+https://github.com/aya-rs/aya?tag=aya-v0.16.0#7192299e5e4680742b0ae87bf8fa1305a8b23d45"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "66254e485eda05c8ab20b83fb55ea4bde22a8436981f435e35cffa5e6aa6196d"
 dependencies = [
  "bytes",
  "log 0.4.35",
