@@ -137,7 +137,9 @@ impl RateLimitManager {
 ///
 /// When the peer is a trusted proxy, walks the inbound `X-Forwarded-For` right-to-left
 /// (most-trusted first) and returns the first non-trusted IP, the real client behind
-/// the load balancer. Falls back to the peer IP if all entries are trusted or absent.
+/// the load balancer. Repeated field lines are one list: the last field is the
+/// rightmost hop, then each field is split on commas. Falls back to the peer IP if
+/// all entries are trusted or absent.
 fn resolve_client_ip(
     peer: std::net::SocketAddr,
     headers: &http::HeaderMap,
@@ -147,9 +149,10 @@ fn resolve_client_ip(
     if !trusted_proxies.trusts(&peer_ip) {
         return peer_ip.to_string();
     }
-    if let Some(xff) = headers.get("x-forwarded-for")
-        && let Ok(xff_str) = xff.to_str()
-    {
+    for value in headers.get_all("x-forwarded-for").iter().rev() {
+        let Ok(xff_str) = value.to_str() else {
+            continue;
+        };
         for raw in xff_str.rsplit(',') {
             if let Ok(ip) = raw.trim().parse::<IpAddr>()
                 && !trusted_proxies.trusts(&ip)

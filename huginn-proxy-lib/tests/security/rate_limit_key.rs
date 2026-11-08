@@ -25,6 +25,16 @@ fn headers_with_xff(xff: &str) -> http::HeaderMap {
     h
 }
 
+fn headers_with_xff_fields(fields: &[&str]) -> http::HeaderMap {
+    let mut h = http::HeaderMap::new();
+    for field in fields {
+        if let Ok(hv) = http::header::HeaderValue::from_str(field) {
+            h.append(http::header::HeaderName::from_static("x-forwarded-for"), hv);
+        }
+    }
+    h
+}
+
 fn key_ip(
     peer_addr: std::net::SocketAddr,
     headers: &http::HeaderMap,
@@ -120,6 +130,31 @@ fn ip_xff_with_spaces() {
     let proxies = nets(&["10.0.0.0/8"]);
     let xff = "  203.0.113.5  ,  10.0.0.2  ";
     assert_eq!(key_ip(peer("10.0.0.1:443"), &headers_with_xff(xff), &proxies), "203.0.113.5");
+}
+
+#[test]
+fn ip_trusted_peer_joined_xff_returns_real_client() {
+    // Two hops in one comma-joined X-Forwarded-For value, peer is trusted.
+    let proxies = nets(&["10.0.0.0/8"]);
+    let xff = "203.0.113.5, 198.51.100.7";
+    assert_eq!(key_ip(peer("10.0.0.1:443"), &headers_with_xff(xff), &proxies), "198.51.100.7");
+}
+
+#[test]
+fn ip_trusted_peer_repeated_xff_fields_returns_real_client() {
+    // Same two hops as the joined case, sent as two X-Forwarded-For field lines.
+    // The last field is the hop the trusted peer appended.
+    let proxies = nets(&["10.0.0.0/8"]);
+    let headers = headers_with_xff_fields(&["203.0.113.5", "198.51.100.7"]);
+    assert_eq!(key_ip(peer("10.0.0.1:443"), &headers, &proxies), "198.51.100.7");
+}
+
+#[test]
+fn ip_trusted_peer_repeated_xff_fields_skips_trusted_hops() {
+    // Trusted hops split across fields still walk back to the client address.
+    let proxies = nets(&["10.0.0.0/8"]);
+    let headers = headers_with_xff_fields(&["203.0.113.5, 10.0.0.2", "10.0.0.3"]);
+    assert_eq!(key_ip(peer("10.0.0.1:443"), &headers, &proxies), "203.0.113.5");
 }
 
 #[test]
