@@ -6,7 +6,9 @@ pub mod rate_limit_validation;
 pub mod request;
 pub mod resolve;
 pub use authority::{authority_matches_sni, mutual_tls_session_matches};
-pub use headers::{add_forwarded_headers, akamai_header_value, tls_header_value};
+pub use headers::{
+    add_forwarded_headers, akamai_header_value, append_forwarded_for, tls_header_value,
+};
 pub use host::{
     extract_request_host_inner, https_redirect_location, strip_host_port, strip_trailing_dot,
 };

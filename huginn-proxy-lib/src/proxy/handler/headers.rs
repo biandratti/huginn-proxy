@@ -2,7 +2,7 @@ use huginn_net_http::AkamaiFingerprint;
 use hyper::Request;
 use hyper::body::Incoming;
 use hyper::header::HeaderValue;
-use std::net::SocketAddr;
+use std::net::{IpAddr, SocketAddr};
 
 use crate::fingerprinting::headers::forwarded;
 
@@ -14,6 +14,26 @@ pub fn akamai_header_value(value: Option<&AkamaiFingerprint>) -> Option<HeaderVa
 /// Convert TLS (JA4) fingerprint to HTTP header value
 pub fn tls_header_value(value: Option<&huginn_net_tls::Ja4Payload>) -> Option<HeaderValue> {
     value.and_then(|f| HeaderValue::from_str(&f.full.to_string()).ok())
+}
+
+/// Append `client_ip` to the inbound `X-Forwarded-For` chain, or create it if missing.
+///
+/// Repeated field lines are one list, so every field is kept, in order, and the result
+/// is a single comma-joined field with `client_ip` as the rightmost hop. Fields that are
+/// not visible ASCII or are empty carry no usable hop and are dropped.
+pub fn append_forwarded_for(headers: &mut hyper::HeaderMap, client_ip: IpAddr) {
+    let mut chain: Vec<&str> = headers
+        .get_all(forwarded::FOR)
+        .iter()
+        .filter_map(|value| value.to_str().ok())
+        .map(str::trim)
+        .filter(|field| !field.is_empty())
+        .collect();
+    let client_ip = client_ip.to_string();
+    chain.push(&client_ip);
+    if let Ok(header_value) = HeaderValue::from_str(&chain.join(", ")) {
+        headers.insert(forwarded::FOR, header_value);
+    }
 }
 
 /// Add X-Forwarded-* headers to the request
@@ -29,22 +49,7 @@ pub fn add_forwarded_headers(
     is_https: bool,
     forwarded_host: &str,
 ) {
-    // X-Forwarded-For: Append client IP to existing header, or create new one
-    let client_ip = peer.ip().to_string();
-    if let Some(existing_for) = req.headers().get(forwarded::FOR) {
-        // Append to existing header (comma-separated)
-        if let Ok(existing_str) = existing_for.to_str() {
-            let new_value = format!("{existing_str}, {client_ip}");
-            if let Ok(header_value) = HeaderValue::from_str(&new_value) {
-                req.headers_mut().insert(forwarded::FOR, header_value);
-            }
-        }
-    } else {
-        // Create new header
-        if let Ok(header_value) = HeaderValue::from_str(&client_ip) {
-            req.headers_mut().insert(forwarded::FOR, header_value);
-        }
-    }
+    append_forwarded_for(req.headers_mut(), peer.ip());
 
     // X-Forwarded-Host: strip any client-supplied value first, then set it to the host the
     // proxy actually routed on. This is the resolved host from `extract_request_host`
