@@ -19,17 +19,22 @@ pub fn tls_header_value(value: Option<&huginn_net_tls::Ja4Payload>) -> Option<He
 /// Append `client_ip` to the inbound `X-Forwarded-For` chain, or create it if missing.
 ///
 /// Repeated field lines are one list, so every field is kept, in order, and the result
-/// is a single comma-joined field with `client_ip` as the rightmost hop. Fields that are
-/// not visible ASCII or are empty carry no usable hop and are dropped.
+/// is a single comma-joined field with `client_ip` as the rightmost hop. Empty fields are
+/// ignored. If any field is not visible ASCII the chain cannot be reproduced faithfully,
+/// so it fails closed: the inbound chain is discarded and only `client_ip` is forwarded,
+/// rather than forwarding a chain with a hop silently missing.
 pub fn append_forwarded_for(headers: &mut hyper::HeaderMap, client_ip: IpAddr) {
-    let mut chain: Vec<&str> = headers
+    let client_ip = client_ip.to_string();
+    let inbound: Option<Vec<&str>> = headers
         .get_all(forwarded::FOR)
         .iter()
-        .filter_map(|value| value.to_str().ok())
-        .map(str::trim)
+        .map(|value| value.to_str().ok().map(str::trim))
+        .collect();
+    let mut chain: Vec<&str> = inbound
+        .unwrap_or_default()
+        .into_iter()
         .filter(|field| !field.is_empty())
         .collect();
-    let client_ip = client_ip.to_string();
     chain.push(&client_ip);
     if let Ok(header_value) = HeaderValue::from_str(&chain.join(", ")) {
         headers.insert(forwarded::FOR, header_value);

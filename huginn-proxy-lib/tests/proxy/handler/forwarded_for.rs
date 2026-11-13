@@ -55,11 +55,18 @@ fn repeated_fields_with_lists_are_joined_in_order() {
 }
 
 #[test]
-fn unusable_fields_are_dropped_and_peer_still_appended() {
-    // A non-ASCII field and an empty field carry no hop; the peer must still be recorded.
-    let mut headers = headers_with_xff_fields(&[b"\xff\xfe", b"", b"198.51.100.7"]);
+fn empty_fields_are_ignored() {
+    let mut headers = headers_with_xff_fields(&[b"", b"198.51.100.7", b"  "]);
     append_forwarded_for(&mut headers, PEER);
     assert_eq!(xff_fields(&headers), ["198.51.100.7, 10.0.0.1"]);
+}
+
+#[test]
+fn unreadable_field_discards_inbound_chain() {
+    // Fail closed: a non-ASCII field means a hop would go missing, so only the peer is sent.
+    let mut headers = headers_with_xff_fields(&[b"203.0.113.5", b"\xff\xfe", b"198.51.100.7"]);
+    append_forwarded_for(&mut headers, PEER);
+    assert_eq!(xff_fields(&headers), ["10.0.0.1"]);
 }
 
 #[test]

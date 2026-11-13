@@ -1283,7 +1283,7 @@ backend_pool:
 
 | Key        | Type         | Default | Description                                                                          |
 |------------|--------------|---------|--------------------------------------------------------------------------------------|
-| `cidrs`    | string array | `[]`    | Trusted reverse-proxy CIDRs. When empty (default), the non-forgeable TCP peer IP is used. When set and the peer is a trusted proxy, `X-Forwarded-For` is walked right-to-left and the first IP **not** in this list is used. Consumed by rate limiting (`limit_by = "ip" \| "combined"`) and PROXY protocol. Accepts CIDR notation. |
+| `cidrs`    | string array | `[]`    | Trusted reverse-proxy CIDRs. When empty (default), the non-forgeable TCP peer IP is used. When set and the peer is a trusted proxy, `X-Forwarded-For` is walked right-to-left and the first IP **not** in this list is used; if a hop on the way cannot be parsed, the walk fails closed to the TCP peer IP. Consumed by rate limiting (`limit_by = "ip" \| "combined"`) and PROXY protocol. Accepts CIDR notation. |
 | `insecure` | boolean      | `false` | Trust **every** peer, regardless of `cidrs` (Traefik-style). Dangerous: any client can then spoof `X-Forwarded-For` and the PROXY protocol header. Set to `true` to opt in deliberately (e.g. behind a controlled L4 LB); this also silences the trust-all config warning. |
 
 > **Validation:** `trusted_proxies` is the trust boundary for `X-Forwarded-For` and the PROXY protocol

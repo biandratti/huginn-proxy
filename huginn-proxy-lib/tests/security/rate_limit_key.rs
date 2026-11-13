@@ -26,9 +26,13 @@ fn headers_with_xff(xff: &str) -> http::HeaderMap {
 }
 
 fn headers_with_xff_fields(fields: &[&str]) -> http::HeaderMap {
+    headers_with_xff_bytes(&fields.iter().map(|f| f.as_bytes()).collect::<Vec<_>>())
+}
+
+fn headers_with_xff_bytes(fields: &[&[u8]]) -> http::HeaderMap {
     let mut h = http::HeaderMap::new();
     for field in fields {
-        if let Ok(hv) = http::header::HeaderValue::from_str(field) {
+        if let Ok(hv) = http::header::HeaderValue::from_bytes(field) {
             h.append(http::header::HeaderName::from_static("x-forwarded-for"), hv);
         }
     }
@@ -116,7 +120,7 @@ fn ip_trusted_peer_all_xff_trusted() {
 
 #[test]
 fn ip_malformed_xff_falls_back() {
-    // Unparseable XFF entries are skipped; if all fail, fall back to peer IP.
+    // An unparseable XFF entry fails closed to the peer IP.
     let proxies = nets(&["10.0.0.0/8"]);
     assert_eq!(
         key_ip(peer("10.0.0.1:443"), &headers_with_xff("not-an-ip"), &proxies),
@@ -155,6 +159,95 @@ fn ip_trusted_peer_repeated_xff_fields_skips_trusted_hops() {
     let proxies = nets(&["10.0.0.0/8"]);
     let headers = headers_with_xff_fields(&["203.0.113.5, 10.0.0.2", "10.0.0.3"]);
     assert_eq!(key_ip(peer("10.0.0.1:443"), &headers, &proxies), "203.0.113.5");
+}
+
+#[test]
+fn ip_unparseable_trusted_hop_fails_closed() {
+    // The rightmost hop was written by the trusted peer. If it cannot be parsed, the walk
+    // must not step left onto the client-controlled entry.
+    let proxies = nets(&["10.0.0.0/8"]);
+    for xff in [
+        "1.2.3.4, unknown",
+        "1.2.3.4, not-an-ip",
+        "1.2.3.4, _hidden",
+        "1.2.3.4, 198.51.100.7:x",
+    ] {
+        assert_eq!(
+            key_ip(peer("10.0.0.1:443"), &headers_with_xff(xff), &proxies),
+            "10.0.0.1",
+            "{xff}"
+        );
+    }
+}
+
+#[test]
+fn ip_unparseable_hop_behind_trusted_hops_fails_closed() {
+    let proxies = nets(&["10.0.0.0/8"]);
+    let headers = headers_with_xff_fields(&["1.2.3.4", "garbage", "10.0.0.2"]);
+    assert_eq!(key_ip(peer("10.0.0.1:443"), &headers, &proxies), "10.0.0.1");
+}
+
+#[test]
+fn ip_unreadable_field_fails_closed() {
+    // A non-ASCII field line right of the client entry is not skipped.
+    let proxies = nets(&["10.0.0.0/8"]);
+    let headers = headers_with_xff_bytes(&[b"1.2.3.4", b"\xff\xfe"]);
+    assert_eq!(key_ip(peer("10.0.0.1:443"), &headers, &proxies), "10.0.0.1");
+}
+
+#[test]
+fn ip_garbage_left_of_client_hop_is_not_inspected() {
+    // Entries left of the first non-trusted hop are client-supplied and irrelevant.
+    let proxies = nets(&["10.0.0.0/8"]);
+    let xff = "garbage, 198.51.100.7, 10.0.0.2";
+    assert_eq!(key_ip(peer("10.0.0.1:443"), &headers_with_xff(xff), &proxies), "198.51.100.7");
+}
+
+#[test]
+fn ip_hop_with_port_is_accepted() {
+    let proxies = nets(&["10.0.0.0/8", "fc00::/7"]);
+    for (xff, want) in [
+        ("1.2.3.4, 198.51.100.7:51234", "198.51.100.7"),
+        ("1.2.3.4, [2001:db8::1]:443", "2001:db8::1"),
+        ("1.2.3.4, [2001:db8::1]", "2001:db8::1"),
+        ("1.2.3.4, 198.51.100.7, 10.0.0.2:8080, [fc00::2]:80", "198.51.100.7"),
+    ] {
+        assert_eq!(key_ip(peer("10.0.0.1:443"), &headers_with_xff(xff), &proxies), want, "{xff}");
+    }
+}
+
+#[test]
+fn ip_malformed_port_fails_closed() {
+    let proxies = nets(&["10.0.0.0/8"]);
+    for xff in [
+        "1.2.3.4, 198.51.100.7:",
+        "1.2.3.4, 198.51.100.7:99999",
+        "1.2.3.4, 198.51.100.7:+80",
+        "1.2.3.4, [2001:db8::1]x",
+        "1.2.3.4, [2001:db8::1",
+        "1.2.3.4, [198.51.100.7]",
+    ] {
+        assert_eq!(
+            key_ip(peer("10.0.0.1:443"), &headers_with_xff(xff), &proxies),
+            "10.0.0.1",
+            "{xff}"
+        );
+    }
+}
+
+#[test]
+fn ip_mapped_ipv4_hop_matches_ipv4_trusted_cidr() {
+    // `::ffff:10.0.0.2` is the trusted proxy 10.0.0.2, not a client.
+    let proxies = nets(&["10.0.0.0/8"]);
+    let xff = "198.51.100.7, ::ffff:10.0.0.2";
+    assert_eq!(key_ip(peer("10.0.0.1:443"), &headers_with_xff(xff), &proxies), "198.51.100.7");
+}
+
+#[test]
+fn ip_empty_list_members_are_ignored() {
+    let proxies = nets(&["10.0.0.0/8"]);
+    let xff = "198.51.100.7, , 10.0.0.2,";
+    assert_eq!(key_ip(peer("10.0.0.1:443"), &headers_with_xff(xff), &proxies), "198.51.100.7");
 }
 
 #[test]
