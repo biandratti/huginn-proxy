@@ -2,7 +2,7 @@ name: Renovate
 
 on:
   schedule:
-    - cron: "0 9 * * 6"
+    - cron: "0 9 * * 3,6"
   workflow_dispatch:
 
 permissions:
@@ -13,7 +13,6 @@ jobs:
     name: Run Renovate
     runs-on: ubuntu-latest
     steps:
-      # Short-lived (1 h) installation token for the Renovate GitHub App, scoped to this repo.
       - name: Get GitHub App token
         id: app-token
         uses: actions/create-github-app-token@v2
