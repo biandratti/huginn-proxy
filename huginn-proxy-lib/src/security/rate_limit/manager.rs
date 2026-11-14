@@ -130,6 +130,15 @@ impl RateLimitManager {
     }
 }
 
+/// The value of `name` if it is sent exactly once and is readable; a repeated header is ambiguous.
+fn single_header_value(headers: &http::HeaderMap, name: &str) -> Option<String> {
+    let mut values = headers.get_all(name).iter();
+    match (values.next(), values.next()) {
+        (Some(value), None) => value.to_str().ok().map(str::to_string),
+        _ => None,
+    }
+}
+
 /// Extract rate limiting key from request context.
 ///
 /// # Arguments
@@ -153,20 +162,9 @@ pub fn extract_rate_limit_key(
 ) -> String {
     match limit_by {
         LimitBy::Ip => resolve_client_ip(peer, headers, trusted_proxies),
-        LimitBy::Header => {
-            // The key is the header's single value. A header sent as several field lines is
-            // ambiguous (which line counts?), so it is not guessed at: like a missing or
-            // unreadable header, it falls back to the peer IP.
-            if let Some(name) = header_name {
-                let mut values = headers.get_all(name).iter();
-                if let (Some(value), None) = (values.next(), values.next())
-                    && let Ok(value_str) = value.to_str()
-                {
-                    return value_str.to_string();
-                }
-            }
-            peer.ip().to_string()
-        }
+        LimitBy::Header => header_name
+            .and_then(|name| single_header_value(headers, name))
+            .unwrap_or_else(|| peer.ip().to_string()),
         LimitBy::Route => route_prefix.to_string(),
         LimitBy::Combined => {
             let ip_str = resolve_client_ip(peer, headers, trusted_proxies);

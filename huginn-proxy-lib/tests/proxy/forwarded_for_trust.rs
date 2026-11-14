@@ -1,9 +1,3 @@
-//! `X-Forwarded-For` sent to the backend, through the full accept loop.
-//!
-//! An in-process proxy (plain HTTP) forwards to a backend that echoes the `X-Forwarded-For`
-//! and `Forwarded` headers it received. The loopback test client is either a direct,
-//! untrusted client or, when `127.0.0.1` is in `security.trusted_proxies`, a trusted proxy.
-
 use std::convert::Infallible;
 use std::net::SocketAddr;
 use std::time::Duration;

@@ -105,17 +105,8 @@ fn parse_xff_chain(headers: &http::HeaderMap) -> Option<Vec<IpAddr>> {
     Some(chain)
 }
 
-/// The `X-Forwarded-For` chain to send to the backend, always ending with `peer_ip`.
-///
-/// - Untrusted peer: the inbound header is client-supplied, so it is discarded and the
-///   chain is just `peer_ip`.
-/// - Trusted peer: the inbound chain plus `peer_ip`, cut at the trust boundary. Walking
-///   from the right, trusted proxies are kept up to and including the first non-trusted
-///   hop (the real client); everything left of it is client-supplied and dropped. If every
-///   hop is trusted the whole chain is kept.
-/// - Trusted peer with a chain that cannot be parsed: fails closed to just `peer_ip`.
-///
-/// Hops are emitted in canonical form (no port, IPv4-mapped IPv6 folded to IPv4).
+/// The `X-Forwarded-For` chain for the backend: just `peer_ip` unless the peer is trusted,
+/// else the inbound chain plus `peer_ip`, from the real client rightwards (unparseable: `peer_ip`).
 pub fn forwarded_for_chain(
     peer_ip: IpAddr,
     headers: &http::HeaderMap,

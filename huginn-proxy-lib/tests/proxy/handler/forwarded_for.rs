@@ -49,8 +49,6 @@ fn from_trusted_peer(fields: &[&[u8]]) -> Vec<String> {
     xff_fields(&headers)
 }
 
-// --- untrusted peer -------------------------------------------------------------------
-
 #[test]
 fn untrusted_peer_without_header_gets_peer_only() {
     let mut headers = http::HeaderMap::new();
@@ -81,8 +79,6 @@ fn untrusted_peer_forwarded_header_is_removed() {
     set_forwarded_for(&mut headers, PEER, &untrusted());
     assert!(!headers.contains_key(FORWARDED));
 }
-
-// --- trusted peer ---------------------------------------------------------------------
 
 #[test]
 fn trusted_peer_without_header_gets_peer_only() {

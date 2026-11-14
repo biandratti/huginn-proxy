@@ -1,10 +1,3 @@
-//! `X-Forwarded-For` forwarding E2E tests.
-//!
-//! The compose config sets no `security.trusted_proxies`, so the test client is a direct,
-//! untrusted client: whatever `X-Forwarded-For` it sends, in one field line or several,
-//! must be discarded and the backend must see the peer alone. The trusted-proxy side is
-//! covered in-process by `huginn-proxy-lib/tests/proxy/forwarded_for_trust.rs`.
-
 use huginn_proxy_lib::fingerprinting::forwarded;
 use tests_e2e::common::{
     DEFAULT_SERVICE_TIMEOUT_SECS, PROXY_HTTPS_URL_IPV4, parse_backend_echo, wait_for_service,
