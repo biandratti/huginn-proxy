@@ -307,8 +307,10 @@ Limitation: Pooling is global or per-route only. No per-backend configuration fo
 
 Automatically sets X-Forwarded-For, X-Forwarded-Host, X-Forwarded-Port, and X-Forwarded-Proto:
 
-- **X-Forwarded-For** — the TCP peer IP is **appended** to any existing value (preserving the upstream proxy chain, per
-  the standard XFF convention). Note: do not trust the leftmost entry as the client IP — use `trusted_proxies` for that.
+- **X-Forwarded-For** — only honored from peers in `security.trusted_proxies`. From any other peer the inbound value is
+  **discarded** and the header is set to the peer IP alone (an inbound `Forwarded` header is removed too). From a trusted
+  proxy the peer IP is appended and the chain is cut at the trust boundary: the real client plus the trusted proxies after
+  it are kept, anything further left (client-supplied) is dropped. A chain that cannot be parsed is replaced by the peer IP.
 - **X-Forwarded-Host** — any client-supplied value is **stripped** and replaced with the host the proxy actually routed
   on, so it always agrees with the selected backend.
 - **X-Forwarded-Port** / **X-Forwarded-Proto** — set from the connection (peer port, and `https`/`http`), replacing any

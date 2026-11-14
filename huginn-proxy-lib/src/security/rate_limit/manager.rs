@@ -1,6 +1,6 @@
-use super::client_ip::resolve_client_ip;
 use super::{RateLimitResult, RateLimiter};
 use crate::config::{Domain, LimitBy, RateLimitConfig, TrustedProxiesConfig};
+use crate::security::client_ip::resolve_client_ip;
 use ahash::AHashMap;
 use std::time::Duration;
 
@@ -136,7 +136,8 @@ impl RateLimitManager {
 /// * `limit_by` - Key extraction strategy
 /// * `peer` - Client socket address (TCP peer, non-forgeable)
 /// * `route_prefix` - Matched route prefix
-/// * `header_name` - Custom header name (for `LimitBy::Header`)
+/// * `header_name` - Custom header name (for `LimitBy::Header`). The key is that header's
+///   value; if it is missing, unreadable or sent more than once, the peer IP is used.
 /// * `headers` - HTTP request headers
 /// * `trusted_proxies` - CIDRs whose XFF additions are trusted (see `resolve_client_ip`)
 ///
@@ -153,11 +154,16 @@ pub fn extract_rate_limit_key(
     match limit_by {
         LimitBy::Ip => resolve_client_ip(peer, headers, trusted_proxies),
         LimitBy::Header => {
-            if let Some(name) = header_name
-                && let Some(value) = headers.get(name)
-                && let Ok(value_str) = value.to_str()
-            {
-                return value_str.to_string();
+            // The key is the header's single value. A header sent as several field lines is
+            // ambiguous (which line counts?), so it is not guessed at: like a missing or
+            // unreadable header, it falls back to the peer IP.
+            if let Some(name) = header_name {
+                let mut values = headers.get_all(name).iter();
+                if let (Some(value), None) = (values.next(), values.next())
+                    && let Ok(value_str) = value.to_str()
+                {
+                    return value_str.to_string();
+                }
             }
             peer.ip().to_string()
         }

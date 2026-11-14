@@ -7,21 +7,41 @@ follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.2.0]
+
+### Changed
+
+- **`X-Forwarded-For` from untrusted peers is no longer forwarded.** Unless the peer is in `security.trusted_proxies`,
+  the inbound `X-Forwarded-For` is discarded and backends receive the peer IP alone; an inbound `Forwarded` header is
+  removed. From a trusted proxy the chain is cut at the trust boundary (real client plus the trusted proxies after it),
+  and a chain that cannot be parsed is replaced by the peer IP. Before, the peer IP was appended to whatever the client
+  sent. Backends behind a load balancer need that load balancer listed in `trusted_proxies` to keep receiving the client
+  IP.
+- **`limit_by = "header"` with a repeated header falls back to the client IP.** A request that sends the key header more
+  than once is keyed by client IP instead of by the first line.
+
+---
+
 ## [0.1.0]
 
 ### Added
 
-- **Client TCP keep-alive.** `timeout.keep_alive.client_tcp_idle_secs` (default `20`) starts TCP keep-alive probes on client connections, so clients that vanish without closing (e.g. mobile clients losing network) get dropped.
-- **`timeout.keep_alive.tcp_interval_secs`** (default `10`): seconds between TCP keep-alive probes, on both client and upstream connections. Upstream probes used the OS default interval before.
+- **Client TCP keep-alive.** `timeout.keep_alive.client_tcp_idle_secs` (default `20`) starts TCP keep-alive probes on
+  client connections, so clients that vanish without closing (e.g. mobile clients losing network) get dropped.
+- **`timeout.keep_alive.tcp_interval_secs`** (default `10`): seconds between TCP keep-alive probes, on both client and
+  upstream connections. Upstream probes used the OS default interval before.
 
 ### Changed
 
-- **Shorter timeout defaults.** `tls_handshake_secs` 15 → 5, `proxy_idle_ms` 60000 → 20000, `keep_alive.upstream_idle_timeout` 60 → 20. Set them explicitly to keep the old values.
-- **`keep_alive.enabled = false` also disables HTTP/2 PING keep-alive and client TCP keep-alive** (upstream TCP keep-alive was already disabled).
+- **Shorter timeout defaults.** `tls_handshake_secs` 15 → 5, `proxy_idle_ms` 60000 → 20000,
+  `keep_alive.upstream_idle_timeout` 60 → 20. Set them explicitly to keep the old values.
+- **`keep_alive.enabled = false` also disables HTTP/2 PING keep-alive and client TCP keep-alive** (upstream TCP
+  keep-alive was already disabled).
 
 ### Fixed
 
-- **Silent clients no longer hold a TLS connection slot forever.** `tls_handshake_secs` now covers the ClientHello read as well as the handshake; before, a client that connected and sent nothing was never timed out.
+- **Silent clients no longer hold a TLS connection slot forever.** `tls_handshake_secs` now covers the ClientHello read
+  as well as the handshake; before, a client that connected and sent nothing was never timed out.
 
 ---
 
@@ -29,14 +49,19 @@ follows [Semantic Versioning](https://semver.org/).
 
 ### Breaking changes
 
-- **`listen.addrs` removed.** Listeners are `listen.port` (HTTP) and `listen.port_tls` (HTTPS), plus `ipv6`, `address_v4`, and `address_v6`. At least one port is required; they must differ.
-- **`https_redirection` moved from `[[domains]]` to `[listen]`.** Process-wide. Default `true` when both ports are set, otherwise `false`. Writing the key with a single port is rejected. A reload that rewrites it is ignored until restart.
-- **Every domain needs `cert_path` and `key_path` when `listen.port_tls` is set**, catch-all included. Two domains may share the same pair of files. Omitting the pair to inherit the catch-all certificate is rejected.
+- **`listen.addrs` removed.** Listeners are `listen.port` (HTTP) and `listen.port_tls` (HTTPS), plus `ipv6`,
+  `address_v4`, and `address_v6`. At least one port is required; they must differ.
+- **`https_redirection` moved from `[[domains]]` to `[listen]`.** Process-wide. Default `true` when both ports are set,
+  otherwise `false`. Writing the key with a single port is rejected. A reload that rewrites it is ignored until restart.
+- **Every domain needs `cert_path` and `key_path` when `listen.port_tls` is set**, catch-all included. Two domains may
+  share the same pair of files. Omitting the pair to inherit the catch-all certificate is rejected.
 
 ### Added
 
-- Dual HTTP+HTTPS listeners. When `https_redirection` is effective, matched plaintext requests receive `301` (host, path, and query of the request; `port_tls` omitted in `Location` when it is `443`). Set `false` to proxy HTTP as well.
-- `HUGINN_EBPF_DST_PORTS` replaces `HUGINN_EBPF_DST_PORT`: one or two capture ports. With dual listen and redirect, capture `port_tls` only.
+- Dual HTTP+HTTPS listeners. When `https_redirection` is effective, matched plaintext requests receive `301` (host,
+  path, and query of the request; `port_tls` omitted in `Location` when it is `443`). Set `false` to proxy HTTP as well.
+- `HUGINN_EBPF_DST_PORTS` replaces `HUGINN_EBPF_DST_PORT`: one or two capture ports. With dual listen and redirect,
+  capture `port_tls` only.
 
 ---
 
@@ -44,22 +69,36 @@ follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
-- **Two-phase graceful shutdown.** On SIGTERM, `/ready` fails first (`proxy_draining`) while the traffic port still accepts for `timeout.drain_delay_secs` (default `0`). Then accept stops and in-flight connections drain for `shutdown_secs`. `/live` stays 200. See `DEPLOYMENT.md`.
-- **Health body format.** `telemetry.health_format` (`json` default, or `text`) on `/health`, `/ready`, `/live`. Agent: `HUGINN_EBPF_HEALTH_FORMAT`. See `TELEMETRY.md`.
-- **Hitless eBPF attach + capture gate.** Agent pins the capture `bpf_link` (TCX / XDP fd-link) so a restart can replace the program without detaching. Proxy `/ready` ANDs a capture gate (`capture_absent` / `capture_draining` / `capture_detached`; text `NOCAPTURE`) when TCP SYN fingerprinting is on. Roll the agent image first, then the proxy. A rollout still blips `/ready` even where the pinned link keeps capturing. See `EBPF-SETUP.md`.
+- **Two-phase graceful shutdown.** On SIGTERM, `/ready` fails first (`proxy_draining`) while the traffic port still
+  accepts for `timeout.drain_delay_secs` (default `0`). Then accept stops and in-flight connections drain for
+  `shutdown_secs`. `/live` stays 200. See `DEPLOYMENT.md`.
+- **Health body format.** `telemetry.health_format` (`json` default, or `text`) on `/health`, `/ready`, `/live`. Agent:
+  `HUGINN_EBPF_HEALTH_FORMAT`. See `TELEMETRY.md`.
+- **Hitless eBPF attach + capture gate.** Agent pins the capture `bpf_link` (TCX / XDP fd-link) so a restart can replace
+  the program without detaching. Proxy `/ready` ANDs a capture gate (`capture_absent` / `capture_draining` /
+  `capture_detached`; text `NOCAPTURE`) when TCP SYN fingerprinting is on. Roll the agent image first, then the proxy. A
+  rollout still blips `/ready` even where the pinned link keeps capturing. See `EBPF-SETUP.md`.
 
 ### Breaking changes
 
 - **`/ready` 200 JSON is now `{"status":"serving"}`** (was `ready`). Text token is `SERVING`.
-- **JA4 raw-order headers follow FoxIO 2.2 names.** `x-tls-ja4-or` → `x-tls-ja4-ro`, `x-tls-ja4-s1r` → `x-tls-ja4-rs1` (`huginn-net-tls` 2.2). Backends that key on the old names must update.
+- **JA4 raw-order headers follow FoxIO 2.2 names.** `x-tls-ja4-or` → `x-tls-ja4-ro`, `x-tls-ja4-s1r` → `x-tls-ja4-rs1` (
+  `huginn-net-tls` 2.2). Backends that key on the old names must update.
 
 ### Changed
 
 - **Container runtime base is `gcr.io/distroless/cc-debian13`** (was `debian:trixie-slim`).
-- **TLS accept noise is `debug`.** Routine client noise (peer abort or reset, including during the ClientHello read, plus non-TLS bytes) no longer logs at `warn`. An unmatched SNI drops to `info` rather than `debug`, since it usually means a missing domain; timeouts and cert/mTLS failures stay `warn`. The `huginn-net-tls` target, which logs a JA4 parse `error` per non-TLS byte, is off in the default log filter and can be restored with `RUST_LOG`.
-- **`huginn_tls_handshake_errors_total` now carries `error_type`** (`client_hello_read`, `peer_eof`, `unmatched_sni`, `not_tls`, `handshake_timeout`, `other`), so causes demoted to `debug` stay diagnosable — a missing domain shows up as `unmatched_sni`. The label was already documented but never emitted; queries that sum the metric are unaffected.
-- **`/ready` 503 now reports why:** `proxy_starting` or `proxy_draining` (text: `STARTING` / `DRAINING`). With TCP fingerprinting, also `capture_*` (text: `NOCAPTURE`). The observability server stays up until after drain.
-- **Agent `/ready`** is attached + required pins + not draining (not pins-only). kubelet only; do not AND it with the proxy as a second load-balancer monitor.
+- **TLS accept noise is `debug`.** Routine client noise (peer abort or reset, including during the ClientHello read,
+  plus non-TLS bytes) no longer logs at `warn`. An unmatched SNI drops to `info` rather than `debug`, since it usually
+  means a missing domain; timeouts and cert/mTLS failures stay `warn`. The `huginn-net-tls` target, which logs a JA4
+  parse `error` per non-TLS byte, is off in the default log filter and can be restored with `RUST_LOG`.
+- **`huginn_tls_handshake_errors_total` now carries `error_type`** (`client_hello_read`, `peer_eof`, `unmatched_sni`,
+  `not_tls`, `handshake_timeout`, `other`), so causes demoted to `debug` stay diagnosable — a missing domain shows up as
+  `unmatched_sni`. The label was already documented but never emitted; queries that sum the metric are unaffected.
+- **`/ready` 503 now reports why:** `proxy_starting` or `proxy_draining` (text: `STARTING` / `DRAINING`). With TCP
+  fingerprinting, also `capture_*` (text: `NOCAPTURE`). The observability server stays up until after drain.
+- **Agent `/ready`** is attached + required pins + not draining (not pins-only). kubelet only; do not AND it with the
+  proxy as a second load-balancer monitor.
 
 ---
 
@@ -67,14 +106,18 @@ follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
-- **Client-CA dedup by Subject Key Identifier.** Repeated CAs in a `client_ca_path` bundle collapse to one anchor; CAs without SKID fall back to DER identity.
+- **Client-CA dedup by Subject Key Identifier.** Repeated CAs in a `client_ca_path` bundle collapse to one anchor; CAs
+  without SKID fall back to DER identity.
 - **mTLS context in TLS failure logs.** `TLS accept failed` / `handshake timeout` warnings now include `sni` and `mtls`.
-- **Config validation warnings + `--validate --strict`.** Non-fatal audits on boot, validate, and hot reload; `--strict` fails on warnings. See `SETTINGS.md`.
-- **In-kernel per-source SYN rate limiter (eBPF).** Optional Count-Min Sketch limiter via `HUGINN_EBPF_RATE_LIMIT_*` env vars; skips fingerprint capture above threshold, packet still forwarded. See `EBPF-SETUP.md` and `TELEMETRY.md`.
+- **Config validation warnings + `--validate --strict`.** Non-fatal audits on boot, validate, and hot reload; `--strict`
+  fails on warnings. See `SETTINGS.md`.
+- **In-kernel per-source SYN rate limiter (eBPF).** Optional Count-Min Sketch limiter via `HUGINN_EBPF_RATE_LIMIT_*` env
+  vars; skips fingerprint capture above threshold, packet still forwarded. See `EBPF-SETUP.md` and `TELEMETRY.md`.
 
 ### Breaking changes
 
-- **`[security].trusted_proxies` is now a table** (`cidrs` + `insecure`). `insecure = true` replaces listing `0.0.0.0/0`.
+- **`[security].trusted_proxies` is now a table** (`cidrs` + `insecure`). `insecure = true` replaces listing
+  `0.0.0.0/0`.
 
   ```toml
   [security.trusted_proxies]
@@ -82,7 +125,8 @@ follows [Semantic Versioning](https://semver.org/).
   insecure = false
   ```
 
-- **Filesystem watch moved to `[reload]`.** `--watch`/`--watch-delay-secs` flags and `HUGINN_WATCH`/`HUGINN_WATCH_DELAY_SECS` removed; defaults to `watch = true`.
+- **Filesystem watch moved to `[reload]`.** `--watch`/`--watch-delay-secs` flags and `HUGINN_WATCH`/
+  `HUGINN_WATCH_DELAY_SECS` removed; defaults to `watch = true`.
 
   ```toml
   [reload]
@@ -90,7 +134,8 @@ follows [Semantic Versioning](https://semver.org/).
   debounce_secs = 60
   ```
 
-- **`[tls.client_auth]` removed; mTLS is per-domain via `client_ca_path`.** Configs with `[tls.client_auth]` are rejected at load.
+- **`[tls.client_auth]` removed; mTLS is per-domain via `client_ca_path`.** Configs with `[tls.client_auth]` are
+  rejected at load.
 
   ```toml
   # before
@@ -110,13 +155,16 @@ follows [Semantic Versioning](https://semver.org/).
 ### Changed
 
 - **TLS version limits are now enforced** (`min_version`/`max_version`/`versions`).
-- **`curve_preferences` is now applied** (was validated then ignored). Empty default keeps PQ-first provider defaults; explicit classical-only lists drop PQ unless you include `X25519MLKEM768` or `SECP256R1MLKEM768`. `secp521r1` removed.
+- **`curve_preferences` is now applied** (was validated then ignored). Empty default keeps PQ-first provider defaults;
+  explicit classical-only lists drop PQ unless you include `X25519MLKEM768` or `SECP256R1MLKEM768`. `secp521r1` removed.
 - **TLS resumption is stateless tickets only** (shared ticketer, TLS 1.3 resumption enabled; mTLS domains never resume).
-- **`huginn_config_hash` / `huginn_tls_cert_hash` use fixed FNV-1a** — values change once on upgrade; comparable across replicas thereafter.
+- **`huginn_config_hash` / `huginn_tls_cert_hash` use fixed FNV-1a** — values change once on upgrade; comparable across
+  replicas thereafter.
 
 ### Fixed
 
-- **`huginn_errors_total` double-counted handler rejections** — adjust alert thresholds (~half rate for `ip_blocked`, `misdirected_request`, `no_matching_route`). `TELEMETRY.md` corrected.
+- **`huginn_errors_total` double-counted handler rejections** — adjust alert thresholds (~half rate for `ip_blocked`,
+  `misdirected_request`, `no_matching_route`). `TELEMETRY.md` corrected.
 - **Multi-key PEM files now pick the matching key** instead of always using the last one.
 
 ---
@@ -179,11 +227,11 @@ backend = "backend-a:9000"
 [[domains]]
 host = "api.example.com"
 cert_path = "/config/certs/api.crt"
-key_path  = "/config/certs/api.key"
+key_path = "/config/certs/api.key"
 
-  [[domains.routes]]
-  prefix  = "/api"
-  backend = "backend-a:9000"
+[[domains.routes]]
+prefix = "/api"
+backend = "backend-a:9000"
 ```
 
 A **catch-all** domain (matches any host, plain HTTP) uses a host-less entry:
@@ -191,15 +239,15 @@ A **catch-all** domain (matches any host, plain HTTP) uses a host-less entry:
 ```toml
 # Before
 [[routes]]
-prefix  = "/"
+prefix = "/"
 backend = "localhost:3000"
 
 # After
 [[domains]]          # no host = catch-all
 
-  [[domains.routes]]
-  prefix  = "/"
-  backend = "localhost:3000"
+[[domains.routes]]
+prefix = "/"
+backend = "localhost:3000"
 ```
 
 **`[tls]` no longer carries `cert_path` / `key_path`**
@@ -211,8 +259,8 @@ contains transport options (`alpn`, `[tls.options]`):
 # Before
 [tls]
 cert_path = "/config/certs/server.crt"
-key_path  = "/config/certs/server.key"
-alpn      = ["h2", "http/1.1"]
+key_path = "/config/certs/server.key"
+alpn = ["h2", "http/1.1"]
 
 # After
 [tls]

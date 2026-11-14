@@ -4,7 +4,9 @@ use hyper::body::Incoming;
 use hyper::header::HeaderValue;
 use std::net::{IpAddr, SocketAddr};
 
+use crate::config::TrustedProxiesConfig;
 use crate::fingerprinting::headers::forwarded;
+use crate::security::forwarded_for_chain;
 
 /// Convert Akamai fingerprint to HTTP header value
 pub fn akamai_header_value(value: Option<&AkamaiFingerprint>) -> Option<HeaderValue> {
@@ -16,35 +18,36 @@ pub fn tls_header_value(value: Option<&huginn_net_tls::Ja4Payload>) -> Option<He
     value.and_then(|f| HeaderValue::from_str(&f.full.to_string()).ok())
 }
 
-/// Append `client_ip` to the inbound `X-Forwarded-For` chain, or create it if missing.
+/// Set `X-Forwarded-For` to the chain the backend should see, ending with `peer_ip`.
 ///
-/// Repeated field lines are one list, so every field is kept, in order, and the result
-/// is a single comma-joined field with `client_ip` as the rightmost hop. Empty fields are
-/// ignored. If any field is not visible ASCII the chain cannot be reproduced faithfully,
-/// so it fails closed: the inbound chain is discarded and only `client_ip` is forwarded,
-/// rather than forwarding a chain with a hop silently missing.
-pub fn append_forwarded_for(headers: &mut hyper::HeaderMap, client_ip: IpAddr) {
-    let client_ip = client_ip.to_string();
-    let inbound: Option<Vec<&str>> = headers
-        .get_all(forwarded::FOR)
+/// The chain comes from [`forwarded_for_chain`]: an untrusted peer's inbound header is
+/// discarded, a trusted proxy's is cut at the trust boundary. The result replaces every
+/// inbound field line with a single comma-joined one.
+///
+/// When the peer is not a trusted proxy, an inbound `Forwarded` header (RFC 7239) is
+/// client-supplied too and is removed. From a trusted proxy it is passed through unchanged.
+pub fn set_forwarded_for(
+    headers: &mut hyper::HeaderMap,
+    peer_ip: IpAddr,
+    trusted_proxies: &TrustedProxiesConfig,
+) {
+    let chain: Vec<String> = forwarded_for_chain(peer_ip, headers, trusted_proxies)
         .iter()
-        .map(|value| value.to_str().ok().map(str::trim))
+        .map(IpAddr::to_string)
         .collect();
-    let mut chain: Vec<&str> = inbound
-        .unwrap_or_default()
-        .into_iter()
-        .filter(|field| !field.is_empty())
-        .collect();
-    chain.push(&client_ip);
     if let Ok(header_value) = HeaderValue::from_str(&chain.join(", ")) {
         headers.insert(forwarded::FOR, header_value);
+    }
+    if !trusted_proxies.trusts(&peer_ip) {
+        headers.remove(hyper::header::FORWARDED);
     }
 }
 
 /// Add X-Forwarded-* headers to the request
 ///
 /// This function:
-/// 1. Appends client IP to X-Forwarded-For (or creates it if missing)
+/// 1. Sets X-Forwarded-For (see [`set_forwarded_for`]): the peer alone, or, behind a trusted
+///    proxy, the inbound chain cut at the trust boundary plus the peer
 /// 2. Sets X-Forwarded-Host from the resolved routing host
 /// 3. Sets X-Forwarded-Port from the peer's port
 /// 4. Sets X-Forwarded-Proto based on is_https flag
@@ -53,8 +56,9 @@ pub fn add_forwarded_headers(
     peer: SocketAddr,
     is_https: bool,
     forwarded_host: &str,
+    trusted_proxies: &TrustedProxiesConfig,
 ) {
-    append_forwarded_for(req.headers_mut(), peer.ip());
+    set_forwarded_for(req.headers_mut(), peer.ip(), trusted_proxies);
 
     // X-Forwarded-Host: strip any client-supplied value first, then set it to the host the
     // proxy actually routed on. This is the resolved host from `extract_request_host`
