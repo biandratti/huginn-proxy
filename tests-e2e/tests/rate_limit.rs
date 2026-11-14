@@ -10,6 +10,7 @@
 //! used as the key (same for every request from this test process), so the
 //! bucket fills normally and the 4th request gets 429.
 
+use huginn_proxy_lib::fingerprinting::forwarded;
 use reqwest::StatusCode;
 use tests_e2e::common::{DEFAULT_SERVICE_TIMEOUT_SECS, PROXY_HTTPS_URL_IPV4, wait_for_service};
 
@@ -35,7 +36,7 @@ async fn test_rate_limit_xff_rotation_does_not_bypass()
     for i in 0..=BURST {
         let resp = client
             .get(&url)
-            .header("x-forwarded-for", format!("10.0.0.{}", i + 1))
+            .header(forwarded::FOR, format!("10.0.0.{}", i + 1))
             .send()
             .await
             .map_err(|e| format!("Request {i} failed: {e}"))?;
@@ -78,7 +79,7 @@ async fn test_xff_bypass_attempt_is_blocked() -> Result<(), Box<dyn std::error::
     for i in 0..BURST {
         let resp = client
             .get(&url)
-            .header("x-forwarded-for", "10.10.10.1")
+            .header(forwarded::FOR, "10.10.10.1")
             .send()
             .await
             .map_err(|e| format!("Phase-1 request {i} failed: {e}"))?;
@@ -91,7 +92,7 @@ async fn test_xff_bypass_attempt_is_blocked() -> Result<(), Box<dyn std::error::
 
     let bypass = client
         .get(&url)
-        .header("x-forwarded-for", "99.99.99.99")
+        .header(forwarded::FOR, "99.99.99.99")
         .send()
         .await
         .map_err(|e| format!("Bypass attempt failed: {e}"))?;

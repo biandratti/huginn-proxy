@@ -57,3 +57,7 @@ harness = false
 name = "bench_proxy"
 path = "../benches/bench_proxy.rs"
 harness = false
+
+[lints.rust]
+# `cfg(tarpaulin)` is set by cargo-tarpaulin in the coverage job.
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(tarpaulin)'] }

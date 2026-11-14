@@ -7,3 +7,4 @@ pub mod rate_limit_key;
 pub mod rate_limit_limiter;
 pub mod rate_limit_manager;
 pub mod rate_limit_rate;
+pub mod rate_limit_trusted_proxy;

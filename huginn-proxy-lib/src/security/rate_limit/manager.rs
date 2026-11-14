@@ -1,7 +1,7 @@
+use super::client_ip::resolve_client_ip;
 use super::{RateLimitResult, RateLimiter};
 use crate::config::{Domain, LimitBy, RateLimitConfig, TrustedProxiesConfig};
 use ahash::AHashMap;
-use std::net::IpAddr;
 use std::time::Duration;
 
 /// Build the limiter for a fully-resolved config (`None` when disabled).
@@ -128,37 +128,6 @@ impl RateLimitManager {
                 .values()
                 .any(|m| m.values().any(Option::is_some))
     }
-}
-
-/// Resolve the effective client IP for rate limiting.
-///
-/// When no peer is trusted (empty `cidrs` and not `insecure`), returns the TCP peer IP
-/// unconditionally, this is the secure default and cannot be spoofed by a client.
-///
-/// When the peer is a trusted proxy, walks the inbound `X-Forwarded-For` right-to-left
-/// (most-trusted first) and returns the first non-trusted IP, the real client behind
-/// the load balancer. Falls back to the peer IP if all entries are trusted or absent.
-fn resolve_client_ip(
-    peer: std::net::SocketAddr,
-    headers: &http::HeaderMap,
-    trusted_proxies: &TrustedProxiesConfig,
-) -> String {
-    let peer_ip = peer.ip();
-    if !trusted_proxies.trusts(&peer_ip) {
-        return peer_ip.to_string();
-    }
-    if let Some(xff) = headers.get("x-forwarded-for")
-        && let Ok(xff_str) = xff.to_str()
-    {
-        for raw in xff_str.rsplit(',') {
-            if let Ok(ip) = raw.trim().parse::<IpAddr>()
-                && !trusted_proxies.trusts(&ip)
-            {
-                return ip.to_string();
-            }
-        }
-    }
-    peer_ip.to_string()
 }
 
 /// Extract rate limiting key from request context.

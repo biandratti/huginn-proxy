@@ -9,6 +9,8 @@
 //!   [`RateLimitResult`].
 //! - [`RateLimitManager`] (`manager.rs`): registry of global and per-route
 //!   limiters plus key extraction (IP, header, route, combined).
+//! - `client_ip.rs`: real client IP behind trusted proxies, from the TCP peer
+//!   and `X-Forwarded-For`, used for the IP-based keys.
 //!
 //! # Example Usage
 //!
@@ -46,6 +48,7 @@
 //! rate_limit = { requests_per_second = 50, burst = 100 }
 //! ```
 
+mod client_ip;
 mod limiter;
 mod manager;
 

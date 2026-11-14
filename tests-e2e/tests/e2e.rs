@@ -14,6 +14,7 @@ mod fingerprint_akamai;
 mod fingerprint_isolation;
 mod fingerprint_ja4;
 mod fingerprint_sync_tcp;
+mod forwarded_for;
 mod header_override;
 mod health_checks;
 mod https_redirect;
