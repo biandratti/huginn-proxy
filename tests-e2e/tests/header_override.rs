@@ -68,29 +68,17 @@ async fn test_injected_headers_override_client_headers()
     let forwarded_for = echo
         .header(forwarded::FOR)
         .ok_or("X-Forwarded-For should be present")?;
+    // The test client is not a trusted proxy, so its X-Forwarded-For is discarded: the
+    // backend sees only the peer address the proxy observed.
     assert!(
-        forwarded_for.contains("192.168.1.100"),
-        "X-Forwarded-For should contain the spoofed value from client. Current value: {forwarded_for}"
-    );
-    let parts: Vec<&str> = forwarded_for.split(',').map(|s| s.trim()).collect();
-    assert!(
-        parts.len() >= 2,
-        "X-Forwarded-For should contain at least 2 IPs (spoofed + real). Current value: {forwarded_for}"
-    );
-    let real_ip = match parts.last() {
-        Some(ip) => ip,
-        None => {
-            return Err("X-Forwarded-For should contain at least 2 IPs".into());
-        }
-    };
-    assert_ne!(
-        *real_ip, "192.168.1.100",
-        "X-Forwarded-For should end with the real client IP. Current value: {forwarded_for}"
+        !forwarded_for.contains("192.168.1.100"),
+        "X-Forwarded-For must not carry the client-supplied value. Current value: {forwarded_for}"
     );
     assert!(
-        real_ip.contains('.') || real_ip.contains(':'),
-        "Real IP should be a valid IP address format. Current value: {real_ip}"
+        forwarded_for.parse::<std::net::IpAddr>().is_ok(),
+        "X-Forwarded-For should be the peer IP alone. Current value: {forwarded_for}"
     );
+    let real_ip = &forwarded_for;
     println!(
         "✓ X-Forwarded-For correctly handled (spoofed: 192.168.1.100, real IP: {real_ip}): {forwarded_for}"
     );
@@ -266,13 +254,8 @@ async fn test_injected_headers_override_client_headers_ipv6()
         .header(forwarded::FOR)
         .ok_or("X-Forwarded-For should be present")?;
     assert!(
-        forwarded_for.contains("192.168.1.100"),
-        "X-Forwarded-For should contain spoofed value; got: {forwarded_for}"
-    );
-    let parts: Vec<&str> = forwarded_for.split(',').map(|s| s.trim()).collect();
-    assert!(
-        parts.len() >= 2,
-        "X-Forwarded-For should have at least 2 entries; got: {forwarded_for}"
+        forwarded_for.parse::<std::net::IpAddr>().is_ok(),
+        "X-Forwarded-For should be the peer IP alone, without the client-supplied value; got: {forwarded_for}"
     );
     println!("✓ IPv6 X-Forwarded-For: {forwarded_for}");
 

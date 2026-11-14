@@ -1,6 +1,6 @@
-use super::client_ip::resolve_client_ip;
 use super::{RateLimitResult, RateLimiter};
 use crate::config::{Domain, LimitBy, RateLimitConfig, TrustedProxiesConfig};
+use crate::security::client_ip::resolve_client_ip;
 use ahash::AHashMap;
 use std::time::Duration;
 
@@ -130,13 +130,23 @@ impl RateLimitManager {
     }
 }
 
+/// The value of `name` if it is sent exactly once and is readable; a repeated header is ambiguous.
+fn single_header_value(headers: &http::HeaderMap, name: &str) -> Option<String> {
+    let mut values = headers.get_all(name).iter();
+    match (values.next(), values.next()) {
+        (Some(value), None) => value.to_str().ok().map(str::to_string),
+        _ => None,
+    }
+}
+
 /// Extract rate limiting key from request context.
 ///
 /// # Arguments
 /// * `limit_by` - Key extraction strategy
 /// * `peer` - Client socket address (TCP peer, non-forgeable)
 /// * `route_prefix` - Matched route prefix
-/// * `header_name` - Custom header name (for `LimitBy::Header`)
+/// * `header_name` - Custom header name (for `LimitBy::Header`). The key is that header's
+///   value; if it is missing, unreadable or sent more than once, the peer IP is used.
 /// * `headers` - HTTP request headers
 /// * `trusted_proxies` - CIDRs whose XFF additions are trusted (see `resolve_client_ip`)
 ///
@@ -152,15 +162,9 @@ pub fn extract_rate_limit_key(
 ) -> String {
     match limit_by {
         LimitBy::Ip => resolve_client_ip(peer, headers, trusted_proxies),
-        LimitBy::Header => {
-            if let Some(name) = header_name
-                && let Some(value) = headers.get(name)
-                && let Ok(value_str) = value.to_str()
-            {
-                return value_str.to_string();
-            }
-            peer.ip().to_string()
-        }
+        LimitBy::Header => header_name
+            .and_then(|name| single_header_value(headers, name))
+            .unwrap_or_else(|| peer.ip().to_string()),
         LimitBy::Route => route_prefix.to_string(),
         LimitBy::Combined => {
             let ip_str = resolve_client_ip(peer, headers, trusted_proxies);

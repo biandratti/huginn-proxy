@@ -50,8 +50,10 @@ impl Default for SecurityConfig {
 /// ignored, so only the non-forgeable TCP peer IP is used.
 ///
 /// When a peer is trusted, `X-Forwarded-For` is walked right-to-left and the first IP not in
-/// `cidrs` is used as the real client IP. Consumed by rate limiting (`limit_by = "ip" | "combined"`)
-/// and PROXY protocol handling.
+/// `cidrs` is used as the real client IP. The `X-Forwarded-For` sent to backends follows the
+/// same boundary: an untrusted peer's inbound header is replaced by the peer IP, a trusted
+/// proxy's chain is kept from the real client rightwards. Consumed by rate limiting
+/// (`limit_by = "ip" | "combined"`), `X-Forwarded-For` forwarding and PROXY protocol handling.
 #[derive(Debug, Deserialize, Clone, PartialEq, Default)]
 #[serde(deny_unknown_fields)]
 pub struct TrustedProxiesConfig {

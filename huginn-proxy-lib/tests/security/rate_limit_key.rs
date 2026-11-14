@@ -303,6 +303,45 @@ fn header_strategy_unchanged() {
     assert_eq!(key, "secret-token");
 }
 
+fn key_header(headers: &http::HeaderMap) -> String {
+    extract_rate_limit_key(
+        LimitBy::Header,
+        peer("1.2.3.4:1234"),
+        "/",
+        Some("x-api-key"),
+        headers,
+        &none(),
+    )
+}
+
+fn headers_with_api_keys(values: &[&[u8]]) -> http::HeaderMap {
+    let mut h = http::HeaderMap::new();
+    for value in values {
+        if let Ok(hv) = http::header::HeaderValue::from_bytes(value) {
+            h.append(http::header::HeaderName::from_static("x-api-key"), hv);
+        }
+    }
+    h
+}
+
+#[test]
+fn header_missing_falls_back_to_peer() {
+    assert_eq!(key_header(&http::HeaderMap::new()), "1.2.3.4");
+}
+
+#[test]
+fn header_repeated_falls_back_to_peer() {
+    // Several field lines are ambiguous: neither the client's nor an upstream's line is
+    // picked, so rotating one of them cannot change the key.
+    assert_eq!(key_header(&headers_with_api_keys(&[b"rotating-1", b"secret-token"])), "1.2.3.4");
+    assert_eq!(key_header(&headers_with_api_keys(&[b"same", b"same"])), "1.2.3.4");
+}
+
+#[test]
+fn header_unreadable_falls_back_to_peer() {
+    assert_eq!(key_header(&headers_with_api_keys(&[b"\xff\xfe"])), "1.2.3.4");
+}
+
 #[test]
 fn route_strategy_unchanged() {
     let key = extract_rate_limit_key(

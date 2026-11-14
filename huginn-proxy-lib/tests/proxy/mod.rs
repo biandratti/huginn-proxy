@@ -2,6 +2,7 @@ mod client_pool;
 mod connection;
 mod dual_fingerprint;
 mod edge_cases;
+mod forwarded_for_trust;
 mod forwarding;
 mod h2c_forwarding;
 mod handler;

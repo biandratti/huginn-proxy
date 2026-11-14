@@ -408,7 +408,8 @@ pub async fn handle_proxy_request(
     // Add X-Forwarded-* headers after fingerprinting. X-Forwarded-Host mirrors the resolved
     // routing host (`host`) so it agrees with the backend the request is sent to, even for
     // coalesced HTTP/2 connections where `:authority` differs from the connection SNI.
-    add_forwarded_headers(&mut req, peer, is_https, &host);
+    // X-Forwarded-For is only trusted from peers in `trusted_proxies`.
+    add_forwarded_headers(&mut req, peer, is_https, &host, &security.trusted_proxies);
 
     apply_request_header_manipulation(
         req.headers_mut(),

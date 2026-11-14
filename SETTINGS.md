@@ -1283,7 +1283,7 @@ backend_pool:
 
 | Key        | Type         | Default | Description                                                                          |
 |------------|--------------|---------|--------------------------------------------------------------------------------------|
-| `cidrs`    | string array | `[]`    | Trusted reverse-proxy CIDRs. When empty (default), the non-forgeable TCP peer IP is used. When set and the peer is a trusted proxy, `X-Forwarded-For` is walked right-to-left and the first IP **not** in this list is used; if a hop on the way cannot be parsed, the walk fails closed to the TCP peer IP. Consumed by rate limiting (`limit_by = "ip" \| "combined"`) and PROXY protocol. Accepts CIDR notation. |
+| `cidrs`    | string array | `[]`    | Trusted reverse-proxy CIDRs. When empty (default), the non-forgeable TCP peer IP is used. When set and the peer is a trusted proxy, `X-Forwarded-For` is walked right-to-left and the first IP **not** in this list is used; if a hop on the way cannot be parsed, the walk fails closed to the TCP peer IP. The same boundary decides the `X-Forwarded-For` sent to backends: from an untrusted peer the inbound header is discarded (peer IP only, and an inbound `Forwarded` header is removed); from a trusted proxy the chain is kept from the real client rightwards. Consumed by rate limiting (`limit_by = "ip" \| "combined"`), `X-Forwarded-For` forwarding and PROXY protocol. Accepts CIDR notation. |
 | `insecure` | boolean      | `false` | Trust **every** peer, regardless of `cidrs` (Traefik-style). Dangerous: any client can then spoof `X-Forwarded-For` and the PROXY protocol header. Set to `true` to opt in deliberately (e.g. behind a controlled L4 LB); this also silences the trust-all config warning. |
 
 > **Validation:** `trusted_proxies` is the trust boundary for `X-Forwarded-For` and the PROXY protocol
@@ -1418,7 +1418,7 @@ The real client IP used for `limit_by = "ip" | "combined"` is resolved from the 
 | `burst`               | integer | `2000`  | Maximum burst size above the sustained rate.                                        |
 | `window_seconds`      | integer | `1`     | Sliding window in seconds for the token bucket refill. Must be `> 0` when `enabled` — an enabled limiter with `window_seconds = 0` emits a non-fatal validation warning. |
 | `limit_by`            | string       | `"ip"`  | Key used to track limits: `"ip"`, `"header"`, `"route"`, `"combined"` (IP + route). |
-| `limit_by_header`     | string       | `null`  | Header name to use as the rate limit key when `limit_by = "header"`. Required in that mode — if missing, the limiter silently falls back to the client IP and a non-fatal validation warning is emitted. |
+| `limit_by_header`     | string       | `null`  | Header name to use as the rate limit key when `limit_by = "header"`. Required in that mode — if missing, the limiter silently falls back to the client IP and a non-fatal validation warning is emitted. A request without the header, or with the header sent more than once, is also keyed by the client IP. |
 
 <table>
 <thead>
