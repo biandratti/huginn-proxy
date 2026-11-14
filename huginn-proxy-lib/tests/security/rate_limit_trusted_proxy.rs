@@ -77,7 +77,14 @@ fn assert_limited(allowed: usize, limited: usize) {
 
 /// Control: the trusted proxy reports a different client on every request, so each has its
 /// own bucket. Proves the key really comes from `X-Forwarded-For` in this setup.
+///
+/// Skipped in the coverage job: tarpaulin's default ptrace engine segfaults on this test
+/// (the code itself does not crash; it passes in `cargo test` and under `--engine llvm`).
 #[tokio::test]
+#[cfg_attr(
+    tarpaulin,
+    ignore = "segfaults under tarpaulin's ptrace engine; covered by the regular test job"
+)]
 async fn distinct_clients_behind_trusted_proxy_are_not_limited() -> TestResult {
     let (allowed, limited) =
         send_requests(|i| vec![format!("198.51.100.{}", i.saturating_add(1))]).await?;
