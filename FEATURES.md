@@ -316,7 +316,14 @@ Automatically sets X-Forwarded-For, X-Forwarded-Host, X-Forwarded-Port, and X-Fo
 - **X-Forwarded-Port** / **X-Forwarded-Proto** — set from the connection (peer port, and `https`/`http`), replacing any
   client value.
 
-Limitation: No configurable header names. No support for Forwarded header (RFC 7239).
+**Hop-by-hop headers**
+
+`Connection` and the headers it names, `Keep-Alive`, `Proxy-Connection`, `Proxy-Authenticate`, `Proxy-Authorization`,
+`TE` (except `TE: trailers`), `Trailer`, `Transfer-Encoding` and `Upgrade` are removed from requests before forwarding
+and from backend responses. A client that names a fingerprint header in `Connection` is reported in
+`X-Fingerprint-Spoofing-Detected`.
+
+Limitation: No configurable header names. No support for Forwarded header (RFC 7239). No WebSocket upgrade.
 
 ## Host Header Preservation
 
