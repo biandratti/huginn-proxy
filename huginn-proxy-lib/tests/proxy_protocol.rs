@@ -33,6 +33,7 @@ use huginn_proxy_lib::config::{
     Backend, Domain, FingerprintConfig, KeepAliveConfig, ListenConfig, LoggingConfig,
     ProxyProtocolConfig, ProxyProtocolMode, Route, SecurityConfig, TelemetryConfig, TimeoutConfig,
 };
+use huginn_proxy_lib::fingerprinting::forwarded;
 use huginn_proxy_lib::{Config, Metrics, TlsConfig, WatchOptions};
 
 type BoxError = Box<dyn std::error::Error + Send + Sync>;
@@ -86,13 +87,13 @@ async fn spawn_echo_backend()
                     service_fn(move |req: hyper::Request<hyper::body::Incoming>| async move {
                         let xff = req
                             .headers()
-                            .get("x-forwarded-for")
+                            .get(forwarded::FOR)
                             .and_then(|v| v.to_str().ok())
                             .unwrap_or("(none)")
                             .to_string();
                         let xfp = req
                             .headers()
-                            .get("x-forwarded-port")
+                            .get(forwarded::PORT)
                             .and_then(|v| v.to_str().ok())
                             .unwrap_or("(none)")
                             .to_string();

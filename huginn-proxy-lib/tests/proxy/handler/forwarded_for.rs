@@ -1,9 +1,10 @@
 use std::net::{IpAddr, Ipv4Addr};
 
 use http::header::{HeaderName, HeaderValue};
+use huginn_proxy_lib::fingerprinting::forwarded;
 use huginn_proxy_lib::proxy::handler::append_forwarded_for;
 
-const XFF: HeaderName = HeaderName::from_static("x-forwarded-for");
+const XFF: HeaderName = HeaderName::from_static(forwarded::FOR);
 const PEER: IpAddr = IpAddr::V4(Ipv4Addr::new(10, 0, 0, 1));
 
 fn headers_with_xff_fields(fields: &[&[u8]]) -> http::HeaderMap {

@@ -1,5 +1,6 @@
 use super::{RateLimitResult, RateLimiter};
 use crate::config::{Domain, LimitBy, RateLimitConfig, TrustedProxiesConfig};
+use crate::fingerprinting::headers::forwarded;
 use ahash::AHashMap;
 use std::net::IpAddr;
 use std::time::Duration;
@@ -188,7 +189,7 @@ fn resolve_client_ip(
     if !trusted_proxies.trusts(&peer_ip) {
         return peer_ip.to_string();
     }
-    for value in headers.get_all("x-forwarded-for").iter().rev() {
+    for value in headers.get_all(forwarded::FOR).iter().rev() {
         let Ok(xff_str) = value.to_str() else {
             return peer_ip.to_string();
         };

@@ -21,7 +21,6 @@ mod https_redirect;
 mod load_balance;
 mod path_manipulation;
 mod rate_limit;
-mod rate_limit_trusted_proxy;
 mod security_headers;
 mod tls;
 mod tls_cipher_curve_config;

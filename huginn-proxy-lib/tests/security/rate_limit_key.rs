@@ -1,4 +1,5 @@
 use huginn_proxy_lib::config::{LimitBy, TrustedProxiesConfig};
+use huginn_proxy_lib::fingerprinting::forwarded;
 use huginn_proxy_lib::security::extract_rate_limit_key;
 
 fn peer(s: &str) -> std::net::SocketAddr {
@@ -20,7 +21,7 @@ fn none() -> TrustedProxiesConfig {
 fn headers_with_xff(xff: &str) -> http::HeaderMap {
     let mut h = http::HeaderMap::new();
     if let Ok(hv) = http::header::HeaderValue::from_str(xff) {
-        h.insert(http::header::HeaderName::from_static("x-forwarded-for"), hv);
+        h.insert(http::header::HeaderName::from_static(forwarded::FOR), hv);
     }
     h
 }
@@ -33,7 +34,7 @@ fn headers_with_xff_bytes(fields: &[&[u8]]) -> http::HeaderMap {
     let mut h = http::HeaderMap::new();
     for field in fields {
         if let Ok(hv) = http::header::HeaderValue::from_bytes(field) {
-            h.append(http::header::HeaderName::from_static("x-forwarded-for"), hv);
+            h.append(http::header::HeaderName::from_static(forwarded::FOR), hv);
         }
     }
     h
