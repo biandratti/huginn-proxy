@@ -2,7 +2,7 @@ name: Renovate
 
 on:
   schedule:
-    - cron: "0 9 * * 6"
+    - cron: "0 9 * * 3,6"
   workflow_dispatch:
 
 permissions:
@@ -13,6 +13,15 @@ jobs:
     name: Run Renovate
     runs-on: ubuntu-latest
     steps:
+      - name: Get GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.RENOVATE_APP_ID }}
+          private-key: ${{ secrets.RENOVATE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+
       - name: Checkout
         uses: actions/checkout@v7
 
@@ -20,9 +29,8 @@ jobs:
         uses: renovatebot/github-action@v46.3.13
         with:
           configurationFile: renovate.json
-          token: ${{ secrets.RENOVATE_TOKEN }}
+          token: ${{ steps.app-token.outputs.token }}
           renovate-version: full
         env:
           LOG_LEVEL: debug
           RENOVATE_REPOSITORIES: ${{ github.repository }}
-          RENOVATE_GIT_AUTHOR: "Renovate Bot <bot@renovateapp.com>"
