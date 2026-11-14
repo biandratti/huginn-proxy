@@ -1,8 +1,9 @@
 use super::host::{extract_request_host, https_redirect_location};
 use crate::backend::UpstreamGateway;
-use crate::config::{Backend, Domain, KeepAliveConfig, RuntimeListen, DEFAULT_DOMAIN_LABEL};
-use crate::fingerprinting::names;
+use crate::config::{Backend, DEFAULT_DOMAIN_LABEL, Domain, KeepAliveConfig, RuntimeListen};
 use crate::fingerprinting::ConnectionFingerprints;
+use crate::fingerprinting::names;
+use crate::proxy::ClientPool;
 use crate::proxy::forwarding::forward;
 use crate::proxy::handler::header_manipulation::{
     apply_request_header_manipulation, apply_response_header_manipulation,
@@ -12,16 +13,15 @@ use crate::proxy::handler::hop_by_hop::{strip_hop_by_hop, strip_request_hop_by_h
 use crate::proxy::handler::rate_limit_validation::check_rate_limit;
 use crate::proxy::handler::resolve::{domain_defers_ip_filter, resolve_security};
 use crate::proxy::http_result::{HttpError, HttpResult};
-use crate::proxy::ClientPool;
 use crate::telemetry::Metrics;
-use crate::utils::http::{empty_body, RespBody};
+use crate::utils::http::{RespBody, empty_body};
 use http::HeaderMap;
 use http::StatusCode;
 use http::Version;
-use hyper::body::Incoming;
-use hyper::header::{HeaderName, LOCATION};
 use hyper::Request;
 use hyper::Response;
+use hyper::body::Incoming;
+use hyper::header::{HeaderName, LOCATION};
 use std::sync::Arc;
 use tokio::time::Instant;
 use tracing::debug;

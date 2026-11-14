@@ -3,8 +3,8 @@ use std::net::SocketAddr;
 
 use bytes::Bytes;
 use http_body_util::{BodyExt, Full};
-use hyper::service::service_fn;
 use hyper::Response;
+use hyper::service::service_fn;
 use hyper_util::rt::{TokioExecutor, TokioIo};
 use hyper_util::server::conn::auto::Builder as ConnBuilder;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
