@@ -6,6 +6,7 @@ mod forwarded_for_trust;
 mod forwarding;
 mod h2c_forwarding;
 mod handler;
+mod hop_by_hop_forwarding;
 mod http_akamai;
 mod http_result;
 mod https_redirect;

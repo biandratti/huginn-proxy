@@ -19,6 +19,12 @@ follows [Semantic Versioning](https://semver.org/).
   IP.
 - **`limit_by = "header"` with a repeated header falls back to the client IP.** A request that sends the key header more
   than once is keyed by client IP instead of by the first line.
+- **Hop-by-hop headers are no longer forwarded.** `Connection` and the headers it names, `Keep-Alive`,
+  `Proxy-Connection`, `Proxy-Authenticate`, `Proxy-Authorization`, `TE` (except `TE: trailers`), `Trailer`,
+  `Transfer-Encoding` and `Upgrade` are removed from requests before they reach the backend and from backend responses
+  before they reach the client. Before, a client could send `Connection: x-tls-ja4` to ask a server behind the proxy to
+  drop the fingerprint header. Naming a fingerprint header in `Connection` is now reported in
+  `X-Fingerprint-Spoofing-Detected`, like a forged value.
 
 ---
 

@@ -9,6 +9,7 @@ use crate::proxy::handler::header_manipulation::{
     apply_request_header_manipulation, apply_response_header_manipulation,
 };
 use crate::proxy::handler::headers::{add_forwarded_headers, akamai_header_value};
+use crate::proxy::handler::hop_by_hop::{strip_hop_by_hop, strip_request_hop_by_hop};
 use crate::proxy::handler::rate_limit_validation::check_rate_limit;
 use crate::proxy::handler::resolve::{domain_defers_ip_filter, resolve_security};
 use crate::proxy::http_result::{HttpError, HttpResult};
@@ -316,7 +317,15 @@ pub async fn handle_proxy_request(
 
     // Strip proxy-authoritative fingerprint headers unconditionally, must run outside the
     // fingerprinting gate, so routes with fingerprinting=false also strip spoofed values.
-    let spoofed = strip_client_fingerprints(req.headers_mut());
+    let mut spoofed = strip_client_fingerprints(req.headers_mut());
+
+    // Must run before the proxy adds its own headers.
+    let nominated = strip_request_hop_by_hop(req.headers_mut());
+    for &name in names::FINGERPRINTS {
+        if !spoofed.contains(&name) && nominated.iter().any(|n| n.as_str() == name) {
+            spoofed.push(name);
+        }
+    }
     for &name in &spoofed {
         metrics.record_fingerprint_spoofing_attempt(name);
     }
@@ -447,6 +456,8 @@ pub async fn handle_proxy_request(
         {
             metrics.record_bytes_sent(length, &protocol);
         }
+
+        strip_hop_by_hop(response.headers_mut());
 
         apply_response_header_manipulation(
             response.headers_mut(),
