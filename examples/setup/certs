@@ -42,24 +42,9 @@ case "$os" in
 esac
 
 if ! command -v mkcert >/dev/null 2>&1; then
-  echo "mkcert is not installed. Install it, then run ./examples/setup/certs again." >&2
-  case "$os" in
-    Darwin)
-      echo "  brew install mkcert nss" >&2
-      ;;
-    Linux)
-      if command -v apt-get >/dev/null 2>&1; then
-        echo "  sudo apt install mkcert libnss3-tools" >&2
-      elif command -v dnf >/dev/null 2>&1; then
-        echo "  sudo dnf install mkcert nss-tools" >&2
-      elif command -v pacman >/dev/null 2>&1; then
-        echo "  sudo pacman -S mkcert nss" >&2
-      else
-        echo "  install mkcert and the NSS tools from your package manager" >&2
-        echo "  https://github.com/FiloSottile/mkcert#installation" >&2
-      fi
-      ;;
-  esac
+  echo "mkcert is not installed. Install it, then run ./examples/setup/certs again:" >&2
+  echo "  https://github.com/FiloSottile/mkcert#installation" >&2
+  echo "Firefox also needs the NSS tools; that page lists them." >&2
   exit 1
 fi
 
