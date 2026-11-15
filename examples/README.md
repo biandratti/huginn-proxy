@@ -4,10 +4,10 @@ Docker Compose stacks for huginn-proxy. On Linux or macOS, one command creates a
 
 ```bash
 ./examples/up            # JA4 + Akamai
-./examples/up --ebpf     # Linux only: also starts the eBPF agent
+./examples/up --ebpf     # also starts the eBPF agent
 ```
 
-`./examples/up` needs Docker and `mkcert`. It installs a local CA (the system asks once), writes `examples/certs`, pulls the published images in `examples/docker-compose.release-without-ebpf.yml`, waits until the proxy is healthy, and opens `https://localhost`. `--no-open` skips the browser. `--ebpf` uses `examples/docker-compose.release-ebpf.yml` and exits on macOS, where eBPF does not run.
+`./examples/up` needs Docker and `mkcert`. It installs a local CA (the system asks once), writes `examples/certs`, pulls the published images in `examples/docker-compose.release-without-ebpf.yml`, waits until the proxy is healthy, and opens `https://localhost`. `--no-open` skips the browser. `--ebpf` uses `examples/docker-compose.release-ebpf.yml`. On macOS that agent runs inside Docker Desktop's Linux VM and attaches the XDP hook there. The native macOS binary has no eBPF.
 
 If `mkcert` is missing, the script prints the install line and stops. It does not download the binary.
 
@@ -24,7 +24,7 @@ CI does not run this script. `.github/actions/setup-docker-compose` still genera
 | --- | --- | --- |
 | Fingerprints | JA4 + Akamai | JA4 + Akamai + TCP SYN |
 | Compose file | `docker-compose.release-without-ebpf.yml` | `docker-compose.release-ebpf.yml` |
-| Host | Linux or macOS | Linux, kernel ≥ 5.11 |
+| Host | Linux or macOS | Linux, or macOS via Docker Desktop |
 
 Both stacks publish **80** (HTTP, `301` to HTTPS) and **443**, mount `config/compose.yaml`, and start two `traefik/whoami` backends. The proxy container is UID `10001`.
 

@@ -14,7 +14,9 @@ Usage: ./examples/up [--ebpf] [--no-open]
   examples/certs/server.crt and server.key, and starts the example stack.
   Then opens https://localhost.
 
-  --ebpf     Linux only. Start examples/docker-compose.release-ebpf.yml.
+  --ebpf     Also start the eBPF agent (examples/docker-compose.release-ebpf.yml).
+             On macOS the agent runs inside Docker Desktop's Linux VM and
+             attaches the XDP hook there. The native macOS binary has no eBPF.
              Without this flag, start examples/docker-compose.release-without-ebpf.yml.
   --no-open  Do not open a browser.
 EOF
@@ -43,12 +45,6 @@ case "$os" in
     exit 1
     ;;
 esac
-
-if [[ "$ebpf" -eq 1 && "$os" != "Linux" ]]; then
-  echo "eBPF does not run on macOS or Docker Desktop." >&2
-  echo "Start the example without it: ./examples/up" >&2
-  exit 1
-fi
 
 if ! docker info >/dev/null 2>&1; then
   echo "Docker is not running. Start Docker and run ./examples/up again." >&2
