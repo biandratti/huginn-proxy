@@ -14,8 +14,8 @@ Usage: ./examples/up [--ebpf] [--no-open]
   examples/certs/server.crt and server.key, and starts the example stack.
   Then opens https://localhost.
 
-  --ebpf     Linux only. Start examples/docker-compose.ebpf.yml.
-             Without this flag, start examples/docker-compose.without-ebpf.yml.
+  --ebpf     Linux only. Start examples/docker-compose.release-ebpf.yml.
+             Without this flag, start examples/docker-compose.release-without-ebpf.yml.
   --no-open  Do not open a browser.
 EOF
 }
@@ -85,6 +85,12 @@ echo "Installing the local CA. The system will ask you to authorize it."
 mkcert -install
 
 mkdir -p examples/certs
+if [[ ! -w examples/certs ]]; then
+  sudo chown "$USER" examples/certs
+fi
+# A previous run leaves server.key owned by UID 10001 with mode 0600. mkcert cannot
+# overwrite it, but removing it only needs write access to the directory.
+rm -f examples/certs/server.key examples/certs/server.crt
 mkcert \
   -key-file examples/certs/server.key \
   -cert-file examples/certs/server.crt \
@@ -103,15 +109,16 @@ else
 fi
 
 if [[ "$ebpf" -eq 1 ]]; then
-  compose_file=examples/docker-compose.ebpf.yml
+  compose_file=examples/docker-compose.release-ebpf.yml
   services=(proxy ebpf-agent)
 else
-  compose_file=examples/docker-compose.without-ebpf.yml
+  compose_file=examples/docker-compose.release-without-ebpf.yml
   services=(proxy)
 fi
 
 echo "Starting ${compose_file}"
-docker compose -f "$compose_file" up -d --build
+docker compose -f "$compose_file" pull
+docker compose -f "$compose_file" up -d
 
 deadline=$((SECONDS + 180))
 ready=0

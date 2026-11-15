@@ -7,7 +7,7 @@ Docker Compose stacks for huginn-proxy. On Linux or macOS, one command creates a
 ./examples/up --ebpf     # Linux only: also starts the eBPF agent
 ```
 
-`./examples/up` needs Docker and `mkcert`. It installs a local CA (the system asks once), writes `examples/certs`, starts `examples/docker-compose.without-ebpf.yml`, waits until the proxy is healthy, and opens `https://localhost`. `--no-open` skips the browser. `--ebpf` starts `examples/docker-compose.ebpf.yml` and exits on macOS, where eBPF does not run.
+`./examples/up` needs Docker and `mkcert`. It installs a local CA (the system asks once), writes `examples/certs`, pulls the published images in `examples/docker-compose.release-without-ebpf.yml`, waits until the proxy is healthy, and opens `https://localhost`. `--no-open` skips the browser. `--ebpf` uses `examples/docker-compose.release-ebpf.yml` and exits on macOS, where eBPF does not run.
 
 If `mkcert` is missing, the script prints the install line and stops. It does not download the binary.
 
@@ -23,7 +23,7 @@ CI does not run this script. `.github/actions/setup-docker-compose` still genera
 | | `./examples/up` | `./examples/up --ebpf` |
 | --- | --- | --- |
 | Fingerprints | JA4 + Akamai | JA4 + Akamai + TCP SYN |
-| Compose file | `docker-compose.without-ebpf.yml` | `docker-compose.ebpf.yml` |
+| Compose file | `docker-compose.release-without-ebpf.yml` | `docker-compose.release-ebpf.yml` |
 | Host | Linux or macOS | Linux, kernel ≥ 5.11 |
 
 Both stacks publish **80** (HTTP, `301` to HTTPS) and **443**, mount `config/compose.yaml`, and start two `traefik/whoami` backends. The proxy container is UID `10001`.
@@ -45,18 +45,18 @@ Headers on `/api/test`:
 
 ---
 
-## Published images
+## Build from this repo
 
-Same ports and config, without building this repo:
+`./examples/up` pulls GHCR images (`:latest`). To build the proxy from this checkout instead, use the compose files CI uses:
 
 ```bash
-docker compose -f examples/docker-compose.release-without-ebpf.yml up -d
-docker compose -f examples/docker-compose.release-ebpf.yml up -d
+docker compose -f examples/docker-compose.without-ebpf.yml up --build
+docker compose -f examples/docker-compose.ebpf.yml up --build
 ```
 
-Pin `:latest` to a release tag in the compose file for a reproducible pull. Image names: [DEPLOYMENT-MATRIX.md](../DEPLOYMENT-MATRIX.md).
+Create `examples/certs` first with `./examples/up --no-open`, then stop the release stack (`docker compose -f examples/docker-compose.release-without-ebpf.yml down`) before starting a build file. Both bind-mount the same `examples/certs`.
 
-The release files expect `examples/certs` too. Run `./examples/up --no-open` once to create them, then stop that stack (`docker compose -f examples/docker-compose.without-ebpf.yml down`) and start the release file. On Linux the script leaves the key owned by UID `10001`.
+Pin `:latest` to a release tag in the release compose file for a reproducible pull. Image names: [DEPLOYMENT-MATRIX.md](../DEPLOYMENT-MATRIX.md).
 
 ---
 
@@ -109,10 +109,10 @@ Open `http://localhost:3000` and log in with **admin / huginn**.
 
 ## Troubleshooting
 
-**Connection refused.** `docker compose -f examples/docker-compose.without-ebpf.yml ps` (or `docker-compose.ebpf.yml`). Logs: `docker compose -f examples/docker-compose.without-ebpf.yml logs proxy`.
+**Connection refused.** `docker compose -f examples/docker-compose.release-without-ebpf.yml ps` (or `docker-compose.release-ebpf.yml`). Logs: `docker compose -f examples/docker-compose.release-without-ebpf.yml logs proxy`.
 
 **`ERR_CERT_AUTHORITY_INVALID`.** The browser is not using the mkcert CA. Run `./examples/up` again and accept the system prompt. Firefox also needs the NSS tools (`nss` on macOS, `libnss3-tools` on Debian/Ubuntu). `curl -k` skips verification.
 
 **Port bind error on `[::]` (macOS).** Remove the `[::]:*` port lines from the compose file in use.
 
-**Stop.** `docker compose -f examples/docker-compose.without-ebpf.yml down` or the eBPF file, if that is the one running.
+**Stop.** `docker compose -f examples/docker-compose.release-without-ebpf.yml down`, or `docker-compose.release-ebpf.yml` if that is the stack running.
