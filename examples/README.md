@@ -1,195 +1,49 @@
 ## Examples
 
-This directory contains Docker Compose examples and configuration files to help you get started with huginn-proxy.
+Linux or macOS. Two ways to run the stack: pull the published images, or build this checkout.
 
-> [!IMPORTANT]
-> **macOS (Docker Desktop) limitations:** The compose files bind ports on both IPv4 (`0.0.0.0`) and
-> IPv6 (`[::]`). Docker Desktop may fail to bind the `[::]` entries — if you get port binding errors
-> on startup, remove the `[::]:*` lines from the `ports` section of the compose file you are using.
-> Additionally, all traffic from the macOS host is NATed through Docker Desktop's gateway
-> (`192.168.65.1`), so the proxy always sees an IPv4 source address — even when using `curl -6`.
-> See [Enable IPv6 locally](#2-enable-ipv6-locally) for the workaround.
+## Requirements
 
----
+- Docker, running, with Compose v2 (`docker compose`)
+- [`mkcert`](https://github.com/FiloSottile/mkcert#installation), with its NSS tools if you use Firefox. The install steps for your system are on that page.
 
-## Building from Source
+The scripts check for `mkcert` and link to that page if it is missing. They do not install it.
 
-### Standard build (no eBPF)
+A Rust toolchain is only needed for `cargo run` in [Development](#development).
 
-No extra system dependencies required.
+## Latest images
+
+`./examples/setup/up` installs the local CA (the system asks once), writes `examples/certs`, pulls the GHCR images tagged `:latest`, waits until the proxy is healthy, and opens `https://localhost`.
 
 ```bash
-cargo build --release -p huginn-proxy
+./examples/setup/up
 ```
 
-### With TCP SYN fingerprinting (eBPF/XDP) - Linux only
+In a terminal it asks what to start:
 
-eBPF is **Linux-only** (does not compile or run on macOS or Windows). Building
-`--features ebpf-tcp` needs nightly + `rust-src` (`huginn-ebpf-programs/rust-toolchain.toml`).
-Runtime needs kernel ≥ 5.11.
+```text
+1) Proxy
+2) Proxy + Telemetry
+3) Proxy + eBPF
+4) Proxy + eBPF + Telemetry
+```
+
+Flags skip the menu. Without a terminal and without flags, only the proxy starts.
 
 ```bash
-# Build with the ebpf-tcp feature (no clang or kernel headers needed)
-cargo build --release -p huginn-proxy --features ebpf-tcp
+./examples/setup/up --ebpf        # docker-compose.release-ebpf.yml
+./examples/setup/up --telemetry   # also Prometheus, Grafana, cAdvisor
+./examples/setup/up --no-open     # do not open a browser
+./examples/setup/down             # stop the release stack and telemetry
 ```
 
-> **Runtime requirements:** the resulting binary needs `CAP_BPF`, `CAP_NET_ADMIN`, and `CAP_PERFMON`
-> (or root). See [EBPF-SETUP.md](../EBPF-SETUP.md) for kernel requirements, Docker, and Kubernetes
-> deployment details.
+| | `./examples/setup/up` | `./examples/setup/up --ebpf` |
+| --- | --- | --- |
+| Fingerprints | JA4 + Akamai | JA4 + Akamai + TCP SYN |
+| Compose file | `docker-compose.release-without-ebpf.yml` | `docker-compose.release-ebpf.yml` |
+| Host | Linux or macOS | Linux, or macOS via Docker Desktop |
 
----
-
-## Quick Start (Docker Compose)
-
-### 1. Generate TLS Certificates (first time only)
-
-**Create the certificates directory:**
-
-```bash
-mkdir -p examples/certs
-sudo chown -R $USER:$USER examples/certs/
-```
-
-**Option A: Self-signed certificate (default, works with `curl -k` but browsers will show warnings)**
-
-Include **SAN** (`subjectAltName`) so `https://localhost`, `https://127.0.0.1`, and IPv6 loopback match the
-certificate — CN-only certs are rejected by many TLS stacks. Requires OpenSSL 1.1.1 or newer (`openssl version`).
-
-```bash
-openssl req -x509 -newkey rsa:2048 -nodes \
-  -keyout examples/certs/server.key \
-  -out examples/certs/server.crt \
-  -days 365 \
-  -subj "/CN=localhost" \
-  -addext "subjectAltName=DNS:localhost,IP:127.0.0.1,IP:0:0:0:0:0:0:0:1"
-
-chmod 644 examples/certs/server.crt
-chmod 600 examples/certs/server.key
-sudo chown 10001 examples/certs/server.key
-```
-
-**Option B: Trusted local certificate (recommended for browser testing)**
-
-For browser testing without security warnings, use `mkcert` to generate locally-trusted certificates:
-
-```bash
-# Install mkcert (if not already installed)
-# Linux: sudo apt install libnss3-tools && wget https://github.com/FiloSottile/mkcert/releases/latest/download/mkcert-v1.4.4-linux-amd64 -O mkcert && chmod +x mkcert && sudo mv mkcert /usr/local/bin/
-# macOS: brew install mkcert
-# Windows: choco install mkcert
-
-# Install local CA (one-time setup)
-mkcert -install
-
-# Names/IPs listed become Subject Alternative Names (SAN). The browser checks the URL against
-# them — include every form you will type: hostname, IPv4 loopback, IPv6 loopback.
-mkcert -key-file examples/certs/server.key -cert-file examples/certs/server.crt localhost 127.0.0.1 ::1
-
-chmod 644 examples/certs/server.crt
-chmod 600 examples/certs/server.key
-sudo chown 10001 examples/certs/server.key
-```
-
-> **Key permissions:** the proxy container runs as UID `10001` and reads the key from the bind
-> mount, so the key must be both `0600` and owned by that UID — hence the `chown`. Leaving it
-> `root`-owned at `0600` makes it unreadable inside the container and every handshake fails with
-> `no server certificate chain resolved`; leaving it at `0644` works but the proxy logs a
-> `TLS private key file is world-readable` warning on startup.
-
-> **Note:** With self-signed certificates, browsers will show a security warning. You can either:
-> - Click "Advanced" → "Continue to localhost (unsafe)" to proceed
-> - Use Option B with `mkcert` for trusted certificates
-> - Use `curl -k` for command-line testing (ignores certificate validation)
-
-### 2. Enable IPv6 locally
-
-Docker requires explicit IPv6 configuration on the host before the compose files can publish
-IPv6 ports and create dual-stack networks.
-
-**Linux (Docker Engine):**
-
-```bash
-sudo tee /etc/docker/daemon.json > /dev/null <<'EOF'
-{
-  "ipv6": true,
-  "fixed-cidr-v6": "fd00::/80"
-}
-EOF
-
-sudo systemctl restart docker
-```
-
-**macOS (Docker Desktop):**
-
-Docker Desktop runs a Linux VM — all `curl` from the macOS host goes through Docker Desktop's NAT
-gateway (`192.168.65.1`), so the proxy always sees an IPv4 source regardless of `-6` or `[::1]`.
-To get a real IPv6 fingerprint, run a container **inside** the Docker network:
-
-```bash
-PROXY_IPV6=$(docker inspect \
-  $(docker compose -f examples/docker-compose.without-ebpf.yml ps -q proxy) \
-  --format '{{range .NetworkSettings.Networks}}{{.GlobalIPv6Address}}{{end}}')
-
-docker run --rm \
-  --network examples_default \
-  curlimages/curl \
-  -sk "https://[${PROXY_IPV6}]/api/test"
-```
-
-To enable IPv6 in Docker Desktop's engine config, go to **Settings → Docker Engine** and add:
-
-```json
-{
-  "ipv6": true,
-  "fixed-cidr-v6": "fd00::/80"
-}
-```
-
-Then click **Apply & restart**.
-
-### 3. Start Services
-
-Pick **one** stack. Both give you **JA4** (and related TLS/JA4H-style signals) and **Akamai-style** HTTP fingerprinting
-from the proxy. The only fork is whether you also run **TCP SYN** capture via **eBPF/XDP**.
-
-|                                 | **eBPF stack** (`docker-compose.ebpf.yml`)                           | **Without-eBPF stack** (`docker-compose.without-ebpf.yml`) |
-|---------------------------------|----------------------------------------------------------------------|------------------------------------------------------------|
-| **Fingerprints**                | JA4 + Akamai + **TCP SYN** (kernel)                                  | JA4 + Akamai **only** (no TCP SYN)                         |
-| **Images built from this repo** | **Two:** `proxy` (Dockerfile target `ebpf`) + `ebpf-agent`           | **One:** `proxy` (Dockerfile target `plain`)               |
-| **Extra volume**                | **`bpffs`** — shared BPF filesystem for maps between proxy and agent | None                                                       |
-| **Host requirements**           | Linux kernel ≥ 5.11, Docker grants `cap_add` (see compose)           | Any recent Linux kernel, no BPF caps                       |
-
-Both files also start the same **demo backends** (`traefik/whoami`) — that is unrelated to the choice above.
-
-Both stacks publish **80** (HTTP, `301` to HTTPS) and **443**, and mount `config/compose.yaml`. Compose adds `CAP_NET_BIND_SERVICE` so UID 10001 can bind those ports.
-
-```bash
-# JA4 + Akamai + TCP SYN — two images + bpffs volume (kernel ≥ 5.11)
-docker compose -f examples/docker-compose.ebpf.yml up --build
-
-# JA4 + Akamai — single proxy image, no eBPF agent or bpffs volume
-docker compose -f examples/docker-compose.without-ebpf.yml up --build
-```
-
-The same ports and config, from published images (no local build):
-
-```bash
-docker compose -f examples/docker-compose.release-ebpf.yml up -d
-docker compose -f examples/docker-compose.release-without-ebpf.yml up -d
-```
-
-| Image                                            | Description                                                                                      |
-|--------------------------------------------------|--------------------------------------------------------------------------------------------------|
-| `ghcr.io/<owner>/huginn-proxy:latest`            | Proxy with eBPF — Linux kernel ≥ 5.11. Compose adds `CAP_BPF` and `CAP_NET_BIND_SERVICE`.      |
-| `ghcr.io/<owner>/huginn-proxy-plain:latest`      | Proxy without eBPF. Compose adds `CAP_NET_BIND_SERVICE` to bind 80 and 443.                     |
-| `ghcr.io/<owner>/huginn-proxy-ebpf-agent:latest` | Capture agent — pairs with the eBPF proxy image                                                 |
-
-Pin `:latest` to a release tag in the compose file when you need a reproducible pull. Image names and tags: [DEPLOYMENT-MATRIX.md](../DEPLOYMENT-MATRIX.md).
-
-### 4. Test the Proxy
-
-Use `127.0.0.1` here so the host matches published ports reliably (some systems resolve `localhost` to IPv6 first; the
-compose example publishes both IPv4 and IPv6, but explicit IPv4 avoids surprises in CI and scripts).
+Both publish **80** (HTTP, `301` to HTTPS) and **443**, mount `config/compose.yaml`, and start two `traefik/whoami` backends. The proxy container is UID `10001`. `https://localhost` is trusted. CI uses a self-signed certificate instead, so that stack still needs `curl -k`.
 
 ```bash
 curl -sk https://127.0.0.1/api/test
@@ -197,124 +51,65 @@ curl -sI http://127.0.0.1/api/test
 curl http://127.0.0.1:9090/metrics | grep huginn_proxy
 ```
 
-To pick a stack explicitly when using a hostname (e.g. `localhost`), curl supports `-4` / `--ipv4` and `-6` / `--ipv6`:
+Headers on `/api/test`: `x-tls-ja4`, `x-tls-ja4-r`, `x-tls-ja4-o`, `x-tls-ja4-ro`, `x-tls-ja4-s1`, `x-tls-ja4-rs1`, `x-http2-akamai`, and `x-tcp-p0f` when the eBPF agent is running.
+
+On macOS the script adds `examples/setup/ipv4.yml` (or `ipv4-ebpf.yml`) and publishes `0.0.0.0` only. Docker Desktop does not bind `[::]`. Leave those lines in the compose files: Linux and CI use them. Host traffic is NATed through `192.168.65.1`, so the proxy sees an IPv4 client. The eBPF agent runs inside Docker Desktop's Linux VM. The native macOS binary has no eBPF.
+
+CI does not run this script. `.github/actions/setup-docker-compose` generates its own certificate and starts `docker-compose.ebpf.yml`.
+
+Pin `:latest` to a release tag in the release compose file for a reproducible pull. Image names: [DEPLOYMENT-MATRIX.md](../DEPLOYMENT-MATRIX.md).
+
+## Development
+
+Build the proxy from this checkout. Create the certificate first. `./examples/setup/certs` does not start a container. If a release stack is running, `./examples/setup/down` before the build file. Both bind-mount `examples/certs`.
 
 ```bash
-curl -4 -sk https://localhost/api/test    # IPv4 only
-curl -6 -sk https://localhost/api/test    # IPv6 only (or https://[::1]/...)
-
-curl -4 http://localhost:9090/metrics | grep huginn_proxy
-curl -6 http://localhost:9090/metrics | grep huginn_proxy
+./examples/setup/certs
+docker compose -f examples/docker-compose.without-ebpf.yml up --build
+docker compose -f examples/docker-compose.ebpf.yml up --build
 ```
 
-**Browser:** Open `https://localhost/` (or `https://127.0.0.1/` if your cert includes that name in SAN —
-`mkcert` Option B lists both). `http://localhost/` returns `301` to HTTPS. The self-signed **Option A** cert uses `CN=localhost`, so the hostname `localhost`
-matches; you may still need to accept the browser warning unless you use `mkcert`.
+On macOS, add the IPv4 override:
 
----
+```bash
+docker compose -f examples/docker-compose.without-ebpf.yml -f examples/setup/ipv4.yml up --build
+docker compose -f examples/docker-compose.ebpf.yml -f examples/setup/ipv4-ebpf.yml up --build
+```
 
-## Endpoints
+To run the proxy on the host, without Docker, generate the certificate and then:
 
-| Service    | URL                             | Description                       |
-|------------|---------------------------------|-----------------------------------|
-| Proxy      | `https://127.0.0.1/`            | HTTPS proxy                       |
-| Proxy      | `http://127.0.0.1/`             | HTTP → `301` to HTTPS             |
-| Proxy      | `http://127.0.0.1:9090/health`  | Health (liveness alias)           |
-| Proxy      | `http://127.0.0.1:9090/ready`   | Readiness (accepting connections) |
-| Proxy      | `http://127.0.0.1:9090/live`    | Liveness                          |
-| Proxy      | `http://127.0.0.1:9090/metrics` | Prometheus metrics                |
-| eBPF Agent | `http://127.0.0.1:9091/health`  | Health (liveness alias)           |
-| eBPF Agent | `http://127.0.0.1:9091/ready`   | Readiness (attached + pins; kubelet) |
-| eBPF Agent | `http://127.0.0.1:9091/live`    | Liveness                          |
-| eBPF Agent | `http://127.0.0.1:9091/metrics` | Prometheus metrics                |
+```bash
+cargo run -p huginn-proxy -- examples/config/local.toml
+```
 
-eBPF compose examples map agent HTTP on the proxy service (`9091:9091`).
-
----
-
-## Configuration Files
-
-The `config/` directory contains the Compose stack in two formats:
-
-- **`compose.yaml`** — mounted by every compose file in this directory (HTTP `80`, HTTPS `443`, `https_redirection`)
-- **`compose.toml`** — the same stack; the TOML volume lines in the compose files are commented out
-
-To switch configurations, edit `command` and `volumes` in the compose file you started.
-
----
+That listens on `127.0.0.1:8443`. `config/compose.yaml` is what the compose files mount (HTTP `80`, HTTPS `443`). `config/compose.toml` is the same stack. Its volume lines in the compose files are commented out.
 
 ## Telemetry
 
-The observability stack runs **Prometheus** (`prom/prometheus`), **Grafana**, and **cAdvisor** as a separate Docker
-Compose project alongside the main proxy stack. Prometheus scrape config lives in `prometheus/prometheus.yml`; Grafana
-provisioning and dashboards live under `grafana/`. Prometheus scrapes metrics from the proxy (`port 9090`) and the eBPF
-agent (`port 9091`) via `host.docker.internal`, and scrapes **cAdvisor** on the compose network for per-container CPU
-and memory. Grafana is pre-provisioned with a data source and a dashboard (including a **Docker resources (cAdvisor)**
-row) — no manual setup needed. Optional cAdvisor UI: `http://localhost:8099/`.
+`--telemetry` starts Prometheus, Grafana, and cAdvisor after the proxy is healthy. Prometheus scrapes the proxy (`9090`), the eBPF agent (`9091`) via `host.docker.internal`, and cAdvisor. Grafana opens at `http://localhost:3000` with **admin / huginn**. cAdvisor UI: `http://localhost:8099/`.
 
-### Prerequisites
-
-The main proxy stack must already be running and exposing ports `9090` and `9091` on the host before starting the
-observability stack. Prometheus reaches the proxy via `host.docker.internal` (mapped to `host-gateway` inside the
-container).
-
-### Start
-
-Run the observability stack from the repo root:
+The same stack on its own, after the proxy is already up:
 
 ```bash
 docker compose -f examples/docker-compose.observability.yml up -d
 ```
 
-### Access Grafana
+## Endpoints
 
-1. Open `http://localhost:3000` in your browser.
-2. Log in with **admin / huginn**.
-3. The **Huginn Proxy** dashboard loads automatically as the default home dashboard.
+| Service | URL |
+| --- | --- |
+| Proxy | `https://127.0.0.1/` and `http://127.0.0.1/` (`301` to HTTPS) |
+| Proxy health | `http://127.0.0.1:9090/health`, `/ready`, `/live`, `/metrics` |
+| eBPF agent | `http://127.0.0.1:9091/health`, `/ready`, `/live`, `/metrics` |
 
----
-
-## Advanced Examples
-
-### TLS Fingerprinting
-
-Verify that TLS and HTTP/2 fingerprints are injected:
-
-```bash
-curl -sk https://127.0.0.1/api/test
-```
-
-Expected headers:
-
-- `x-tls-ja4`: TLS fingerprint, cipher suites and extensions sorted, SHA-256 hashed (standard FoxIO JA4)
-- `x-tls-ja4-r`: TLS fingerprint, cipher suites and extensions sorted, raw hex (FoxIO JA4_r)
-- `x-tls-ja4-o`: TLS fingerprint, original ClientHello order, SHA-256 hashed (FoxIO JA4_o)
-- `x-tls-ja4-ro`: TLS fingerprint, original ClientHello order, raw hex (FoxIO JA4_ro)
-- `x-tls-ja4-s1`: TLS fingerprint, cipher suites and extensions sorted, SHA-256 hashed, session extensions excluded (
-  huginn-net-tls Stable v1)
-- `x-tls-ja4-rs1`: TLS fingerprint, raw hex, session extensions excluded (huginn-net-tls Stable v1)
-- `x-http2-akamai`: HTTP/2 fingerprint
-- `x-tcp-p0f`: TCP SYN fingerprint
-
----
+The eBPF compose file publishes agent HTTP on the proxy service (`9091:9091`).
 
 ## Troubleshooting
 
-**Connection refused?**
+**Connection refused.** `docker compose -f examples/docker-compose.release-without-ebpf.yml ps` (or `docker-compose.release-ebpf.yml`). Logs: `docker compose -f examples/docker-compose.release-without-ebpf.yml logs proxy`.
 
-- Ensure services are running: `docker compose -f examples/docker-compose.ebpf.yml ps` (or
-  `docker-compose.without-ebpf.yml`)
-- Check logs: `docker compose -f examples/docker-compose.ebpf.yml logs proxy`
+**`ERR_CERT_AUTHORITY_INVALID`.** Run `./examples/setup/up` again and accept the system prompt. Firefox needs the NSS package from [Requirements](#requirements). `curl -k` skips verification.
 
-**Rate limits not working?**
+**Port bind error on `[::]` (macOS).** `./examples/setup/up` already publishes IPv4 only. For a build file, add `-f examples/setup/ipv4.yml` or `examples/setup/ipv4-ebpf.yml`.
 
-- Verify configuration is loaded correctly in logs
-- Check that you're making parallel requests (sequential requests may not hit the limit)
-
-**TLS errors in browser (`ERR_CERT_AUTHORITY_INVALID`)?**
-
-- **Self-signed certificates:** Browsers will show a security warning. Click "Advanced" → "Continue to localhost (
-  unsafe)" to proceed, or use `mkcert` (Option B above) for trusted certificates
-- **Command-line testing:** Use `curl -k` flag to ignore certificate validation
-- **Certificate expired:** Regenerate certificates using the commands above
-- **Docker Compose:** Ensure certificates are mounted correctly in `docker-compose.ebpf.yml` volumes section
+**Stop.** `./examples/setup/down`. Certificates in `examples/certs` stay.

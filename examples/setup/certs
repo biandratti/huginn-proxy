@@ -1,0 +1,78 @@
+#!/usr/bin/env bash
+# Local certificates for huginn-proxy: install a browser-trusted CA with mkcert and
+# write examples/certs/server.crt and server.key for localhost, 127.0.0.1 and ::1.
+# Does not start any container. examples/setup/up calls this script; so can you before
+# a development build (docker compose -f examples/docker-compose.without-ebpf.yml up --build).
+# CI does not use this script. It generates a self-signed cert in setup-docker-compose.
+set -euo pipefail
+
+root=$(cd "$(dirname "$0")/../.." && pwd)
+cd "$root"
+
+usage() {
+  cat <<'EOF'
+Usage: ./examples/setup/certs
+
+  Installs a local CA with mkcert (one system prompt) and writes
+  examples/certs/server.crt and examples/certs/server.key.
+  Safe to run again: it replaces the certificate and key.
+
+  Linux: the key is 0600 and owned by UID 10001 (the proxy container user).
+  macOS: the key is 0644, because Docker Desktop does not map UID 10001.
+EOF
+}
+
+case "${1:-}" in
+  "") ;;
+  -h | --help) usage; exit 0 ;;
+  *)
+    echo "unknown argument: $1" >&2
+    usage >&2
+    exit 2
+    ;;
+esac
+
+os=$(uname -s)
+case "$os" in
+  Linux | Darwin) ;;
+  *)
+    echo "examples/setup/certs supports Linux and macOS. This host reports $os." >&2
+    exit 1
+    ;;
+esac
+
+if ! command -v mkcert >/dev/null 2>&1; then
+  echo "mkcert is not installed. Install it, then run ./examples/setup/certs again:" >&2
+  echo "  https://github.com/FiloSottile/mkcert#installation" >&2
+  echo "Firefox also needs the NSS tools; that page lists them." >&2
+  exit 1
+fi
+
+echo "Installing the local CA. The system will ask you to authorize it."
+mkcert -install
+
+mkdir -p examples/certs
+if [[ ! -w examples/certs ]]; then
+  sudo chown "$USER" examples/certs
+fi
+# A previous run leaves server.key owned by UID 10001 with mode 0600. mkcert cannot
+# overwrite it, but removing it only needs write access to the directory.
+rm -f examples/certs/server.key examples/certs/server.crt
+mkcert \
+  -key-file examples/certs/server.key \
+  -cert-file examples/certs/server.crt \
+  localhost 127.0.0.1 ::1
+
+chmod 644 examples/certs/server.crt
+if [[ "$os" == "Linux" ]]; then
+  chmod 600 examples/certs/server.key
+  if ! chown 10001 examples/certs/server.key 2>/dev/null; then
+    sudo chown 10001 examples/certs/server.key
+  fi
+else
+  # Docker Desktop on macOS does not map host UID 10001 into the container.
+  # The proxy can read the key and logs that the example key is world-readable.
+  chmod 644 examples/certs/server.key
+fi
+
+echo "Wrote examples/certs/server.crt and examples/certs/server.key"

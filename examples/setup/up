@@ -1,0 +1,182 @@
+#!/usr/bin/env bash
+# Local example: make certificates (examples/setup/certs), start Compose, open the browser.
+# CI does not use this script. It generates a self-signed cert in setup-docker-compose.
+set -euo pipefail
+
+root=$(cd "$(dirname "$0")/../.." && pwd)
+cd "$root"
+
+usage() {
+  cat <<'EOF'
+Usage: ./examples/setup/up [--ebpf] [--telemetry] [--no-open]
+
+  Runs examples/setup/certs (local CA with mkcert, one system prompt), then
+  starts the example stack.
+  Then opens https://localhost.
+
+  Without flags, and in an interactive terminal, shows a menu:
+    1) Proxy
+    2) Proxy + Telemetry
+    3) Proxy + eBPF
+    4) Proxy + eBPF + Telemetry
+
+  --ebpf     Also start the eBPF agent (examples/docker-compose.release-ebpf.yml).
+             On macOS the agent runs inside Docker Desktop's Linux VM and
+             attaches the XDP hook there. The native macOS binary has no eBPF.
+  --telemetry  Also start telemetry: Grafana, Prometheus and cAdvisor
+             (examples/docker-compose.observability.yml). Grafana: http://localhost:3000
+  --no-open  Do not open a browser.
+
+  With --ebpf or --telemetry the menu is skipped. Without a terminal and without
+  those flags, only the proxy starts.
+EOF
+}
+
+ebpf=0
+telemetry=0
+open_browser=1
+flags_given=0
+for arg in "$@"; do
+  case "$arg" in
+    --ebpf) ebpf=1; flags_given=1 ;;
+    --telemetry) telemetry=1; flags_given=1 ;;
+    --no-open) open_browser=0 ;;
+    -h | --help) usage; exit 0 ;;
+    *)
+      echo "unknown argument: $arg" >&2
+      usage >&2
+      exit 2
+      ;;
+  esac
+done
+
+# Check the host before asking anything.
+os=$(uname -s)
+case "$os" in
+  Linux | Darwin) ;;
+  *)
+    echo "examples/setup/up supports Linux and macOS. This host reports $os." >&2
+    exit 1
+    ;;
+esac
+
+if [[ "$flags_given" -eq 0 && -t 0 ]]; then
+  echo "What do you want to run?"
+  echo "  1) Proxy"
+  echo "  2) Proxy + Telemetry"
+  echo "  3) Proxy + eBPF"
+  echo "  4) Proxy + eBPF + Telemetry"
+  read -r -p "Choose [1-4] (default 1): " choice
+  case "${choice:-1}" in
+    1) ;;
+    2) telemetry=1 ;;
+    3) ebpf=1 ;;
+    4) ebpf=1; telemetry=1 ;;
+    *)
+      echo "invalid choice: $choice" >&2
+      exit 2
+      ;;
+  esac
+fi
+
+
+if ! docker info >/dev/null 2>&1; then
+  echo "Docker is not running. Start Docker and run ./examples/setup/up again." >&2
+  exit 1
+fi
+if ! docker compose version >/dev/null 2>&1; then
+  echo "Docker Compose v2 is required (the \`docker compose\` command)." >&2
+  exit 1
+fi
+
+# Certificates: browser-trusted CA and examples/certs (see examples/setup/certs).
+"$root/examples/setup/certs"
+
+if [[ "$ebpf" -eq 1 ]]; then
+  compose_file=examples/docker-compose.release-ebpf.yml
+  services=(proxy ebpf-agent)
+else
+  compose_file=examples/docker-compose.release-without-ebpf.yml
+  services=(proxy)
+fi
+
+# On macOS, Docker Desktop rejects the "[::]:port" publishes in the compose files.
+# An override replaces that list with IPv4. The compose files themselves stay
+# dual-stack for Linux and for CI.
+compose_args=(-f "$compose_file")
+if [[ "$os" == "Darwin" ]]; then
+  if [[ "$ebpf" -eq 1 ]]; then
+    compose_args+=(-f examples/setup/ipv4-ebpf.yml)
+  else
+    compose_args+=(-f examples/setup/ipv4.yml)
+  fi
+  echo "macOS: publishing IPv4 only. Docker Desktop does not bind [::]."
+fi
+
+echo "Starting ${compose_file}"
+docker compose "${compose_args[@]}" pull
+docker compose "${compose_args[@]}" up -d
+
+deadline=$((SECONDS + 180))
+ready=0
+until [[ "$SECONDS" -ge "$deadline" ]]; do
+  ready=1
+  for svc in "${services[@]}"; do
+    if ! docker compose "${compose_args[@]}" ps "$svc" | grep -q "(healthy)"; then
+      ready=0
+    fi
+  done
+  if [[ "$ready" -eq 1 ]]; then
+    break
+  fi
+  sleep 2
+done
+if [[ "$ready" -ne 1 ]]; then
+  echo "Services did not become healthy in time." >&2
+  docker compose "${compose_args[@]}" ps >&2
+  exit 1
+fi
+
+# Grafana is a separate Compose project. Start it after the proxy so the
+# host ports 9090/9091 that Prometheus scrapes are already published.
+observability_file=examples/docker-compose.observability.yml
+grafana_url=http://localhost:3000
+if [[ "$telemetry" -eq 1 ]]; then
+  echo "Starting ${observability_file}"
+  docker compose -f "$observability_file" pull
+  docker compose -f "$observability_file" up -d
+
+  if command -v curl >/dev/null 2>&1; then
+    grafana_deadline=$((SECONDS + 90))
+    until curl -fsS "$grafana_url/api/health" >/dev/null 2>&1; do
+      if [[ "$SECONDS" -ge "$grafana_deadline" ]]; then
+        echo "Grafana did not answer in time. Check: docker compose -f $observability_file logs grafana" >&2
+        break
+      fi
+      sleep 2
+    done
+  fi
+fi
+
+url=https://localhost
+echo
+echo "Ready: $url"
+if [[ "$telemetry" -eq 1 ]]; then
+  echo "Grafana: $grafana_url  (admin / huginn)"
+fi
+echo "Logs:  docker compose -f $compose_file logs -f proxy"
+echo "Stop:  ./examples/setup/down"
+
+if [[ "$open_browser" -eq 1 ]]; then
+  opener=""
+  case "$os" in
+    Darwin) opener=open ;;
+    Linux) opener=xdg-open ;;
+  esac
+  if [[ -n "$opener" ]]; then
+    "$opener" "$url" >/dev/null 2>&1 || true
+    if [[ "$telemetry" -eq 1 ]]; then
+      "$opener" "$grafana_url" >/dev/null 2>&1 || true
+    fi
+  fi
+fi

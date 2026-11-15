@@ -1,0 +1,9 @@
+# macOS only. Docker Desktop fails to publish "[::]:port".
+# examples/setup/up adds this file on Darwin. It replaces the proxy port list
+# from the release and build compose files; those files stay IPv4+IPv6 for Linux and CI.
+services:
+  proxy:
+    ports: !override
+      - "0.0.0.0:80:80"
+      - "0.0.0.0:443:443"
+      - "0.0.0.0:9090:9090"
