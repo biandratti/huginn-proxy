@@ -1,13 +1,15 @@
 ## Examples
 
-Docker Compose stacks for huginn-proxy. On Linux or macOS, one command creates a certificate the browser trusts and starts the stack.
+Docker Compose stacks for huginn-proxy. On Linux or macOS, one command creates a certificate the browser trusts and starts the stack. `./examples/setup/certs` creates only the certificate, for development builds.
 
 ```bash
-./examples/up            # JA4 + Akamai
-./examples/up --ebpf     # also starts the eBPF agent
+./examples/setup/up            # menu: proxy, proxy + Telemetry, proxy + eBPF, proxy + eBPF + Telemetry
+./examples/setup/up --ebpf     # skip the menu: also starts the eBPF agent
+./examples/setup/up --telemetry  # skip the menu: also starts Grafana, Prometheus, cAdvisor (Grafana: http://localhost:3000, admin / huginn)
+./examples/setup/down          # stop the release stack and telemetry
 ```
 
-`./examples/up` needs Docker and `mkcert`. It installs a local CA (the system asks once), writes `examples/certs`, pulls the published images in `examples/docker-compose.release-without-ebpf.yml`, waits until the proxy is healthy, and opens `https://localhost`. `--no-open` skips the browser. `--ebpf` uses `examples/docker-compose.release-ebpf.yml`. On macOS that agent runs inside Docker Desktop's Linux VM and attaches the XDP hook there. The native macOS binary has no eBPF.
+`./examples/setup/up` needs Docker and `mkcert`. It installs a local CA (the system asks once), writes `examples/certs`, pulls the published images in `examples/docker-compose.release-without-ebpf.yml`, waits until the proxy is healthy, and opens `https://localhost`. `--no-open` skips the browser. `--ebpf` uses `examples/docker-compose.release-ebpf.yml`. On macOS that agent runs inside Docker Desktop's Linux VM and attaches the XDP hook there. The native macOS binary has no eBPF. `--telemetry` starts `examples/docker-compose.observability.yml` (Prometheus, Grafana, cAdvisor) after the proxy is healthy. Without a terminal and without flags, only the proxy starts.
 
 If `mkcert` is missing, the script prints the install line and stops. It does not download the binary.
 
@@ -20,7 +22,7 @@ CI does not run this script. `.github/actions/setup-docker-compose` still genera
 
 ## What you get
 
-| | `./examples/up` | `./examples/up --ebpf` |
+| | `./examples/setup/up` | `./examples/setup/up --ebpf` |
 | --- | --- | --- |
 | Fingerprints | JA4 + Akamai | JA4 + Akamai + TCP SYN |
 | Compose file | `docker-compose.release-without-ebpf.yml` | `docker-compose.release-ebpf.yml` |
@@ -34,7 +36,7 @@ curl -sI http://127.0.0.1/api/test
 curl http://127.0.0.1:9090/metrics | grep huginn_proxy
 ```
 
-With `./examples/up`, `https://localhost` is trusted. A self-signed certificate (the CI one) still needs `curl -k` or a browser warning.
+With `./examples/setup/up`, `https://localhost` is trusted. A self-signed certificate (the CI one) still needs `curl -k` or a browser warning.
 
 Headers on `/api/test`:
 
@@ -47,14 +49,15 @@ Headers on `/api/test`:
 
 ## Build from this repo
 
-`./examples/up` pulls GHCR images (`:latest`). To build the proxy from this checkout instead, use the compose files CI uses:
+`./examples/setup/up` pulls GHCR images (`:latest`). To build the proxy from this checkout instead, create the certificates once, then use the compose files CI uses:
 
 ```bash
+./examples/setup/certs
 docker compose -f examples/docker-compose.without-ebpf.yml up --build
 docker compose -f examples/docker-compose.ebpf.yml up --build
 ```
 
-Create `examples/certs` first with `./examples/up --no-open`, then stop the release stack (`docker compose -f examples/docker-compose.release-without-ebpf.yml down`) before starting a build file. Both bind-mount the same `examples/certs`.
+`./examples/setup/certs` only makes `examples/certs` (local CA plus `server.crt` and `server.key`). It starts no container. If a release stack is running, stop it with `./examples/setup/down` before the build file. Both bind-mount the same `examples/certs`.
 
 Pin `:latest` to a release tag in the release compose file for a reproducible pull. Image names: [DEPLOYMENT-MATRIX.md](../DEPLOYMENT-MATRIX.md).
 
@@ -89,7 +92,7 @@ The eBPF compose file publishes agent HTTP on the proxy service (`9091:9091`).
 cargo run -p huginn-proxy -- examples/config/local.toml
 ```
 
-Generate `examples/certs` with `./examples/up --no-open` first. This listens on `127.0.0.1:8443`.
+Generate `examples/certs` with `./examples/setup/certs` first. This listens on `127.0.0.1:8443`.
 
 ---
 
@@ -97,7 +100,7 @@ Generate `examples/certs` with `./examples/up --no-open` first. This listens on 
 
 Prometheus, Grafana, and cAdvisor run as a second Compose project. Prometheus scrapes the proxy (`9090`), the eBPF agent (`9091`) via `host.docker.internal`, and cAdvisor for per-container CPU and memory. Grafana loads the Huginn Proxy dashboard on its own. Optional cAdvisor UI: `http://localhost:8099/`.
 
-Start the proxy stack first (`./examples/up` or `./examples/up --ebpf`), then:
+Start the proxy stack first (`./examples/setup/up` or `./examples/setup/up --ebpf`), then:
 
 ```bash
 docker compose -f examples/docker-compose.observability.yml up -d
@@ -111,8 +114,8 @@ Open `http://localhost:3000` and log in with **admin / huginn**.
 
 **Connection refused.** `docker compose -f examples/docker-compose.release-without-ebpf.yml ps` (or `docker-compose.release-ebpf.yml`). Logs: `docker compose -f examples/docker-compose.release-without-ebpf.yml logs proxy`.
 
-**`ERR_CERT_AUTHORITY_INVALID`.** The browser is not using the mkcert CA. Run `./examples/up` again and accept the system prompt. Firefox also needs the NSS tools (`nss` on macOS, `libnss3-tools` on Debian/Ubuntu). `curl -k` skips verification.
+**`ERR_CERT_AUTHORITY_INVALID`.** The browser is not using the mkcert CA. Run `./examples/setup/up` again and accept the system prompt. Firefox also needs the NSS tools (`nss` on macOS, `libnss3-tools` on Debian/Ubuntu). `curl -k` skips verification.
 
 **Port bind error on `[::]` (macOS).** Remove the `[::]:*` port lines from the compose file in use.
 
-**Stop.** `docker compose -f examples/docker-compose.release-without-ebpf.yml down`, or `docker-compose.release-ebpf.yml` if that is the stack running.
+**Stop.** `./examples/setup/down`. It stops the release stack and the observability stack. Certificates in `examples/certs` stay.

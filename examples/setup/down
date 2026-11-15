@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# Stop the stacks ./examples/setup/up starts. Leaves examples/certs and telemetry volumes.
+# CI does not use this script.
+set -euo pipefail
+
+root=$(cd "$(dirname "$0")/../.." && pwd)
+cd "$root"
+
+if ! docker info >/dev/null 2>&1; then
+  echo "Docker is not running. Nothing to stop." >&2
+  exit 1
+fi
+if ! docker compose version >/dev/null 2>&1; then
+  echo "Docker Compose v2 is required (the \`docker compose\` command)." >&2
+  exit 1
+fi
+
+# Both release files live in examples/, so they share one Compose project.
+# Down each file, and drop containers the other file does not define (the eBPF agent).
+for compose_file in \
+  examples/docker-compose.release-ebpf.yml \
+  examples/docker-compose.release-without-ebpf.yml \
+  examples/docker-compose.observability.yml
+do
+  echo "Stopping ${compose_file}"
+  docker compose -f "$compose_file" down --remove-orphans
+done
