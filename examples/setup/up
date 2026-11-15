@@ -50,6 +50,16 @@ for arg in "$@"; do
   esac
 done
 
+# Check the host before asking anything.
+os=$(uname -s)
+case "$os" in
+  Linux | Darwin) ;;
+  *)
+    echo "examples/setup/up supports Linux and macOS. This host reports $os." >&2
+    exit 1
+    ;;
+esac
+
 if [[ "$flags_given" -eq 0 && -t 0 ]]; then
   echo "What do you want to run?"
   echo "  1) Proxy"
@@ -69,14 +79,6 @@ if [[ "$flags_given" -eq 0 && -t 0 ]]; then
   esac
 fi
 
-os=$(uname -s)
-case "$os" in
-  Linux | Darwin) ;;
-  *)
-    echo "examples/setup/up supports Linux and macOS. This host reports $os." >&2
-    exit 1
-    ;;
-esac
 
 if ! docker info >/dev/null 2>&1; then
   echo "Docker is not running. Start Docker and run ./examples/setup/up again." >&2
