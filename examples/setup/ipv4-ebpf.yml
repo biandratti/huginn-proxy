@@ -1,0 +1,8 @@
+# macOS only, eBPF stack. Same as ipv4.yml plus the agent metrics port.
+services:
+  proxy:
+    ports: !override
+      - "0.0.0.0:80:80"
+      - "0.0.0.0:443:443"
+      - "0.0.0.0:9090:9090"
+      - "0.0.0.0:9091:9091"

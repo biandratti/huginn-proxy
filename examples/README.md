@@ -16,7 +16,7 @@ If `mkcert` is missing, the script prints the install line and stops. It does no
 CI does not run this script. `.github/actions/setup-docker-compose` still generates a self-signed certificate and starts `docker-compose.ebpf.yml`.
 
 > [!IMPORTANT]
-> The compose files publish IPv4 and IPv6. Docker Desktop on macOS can fail to bind `[::]`. If startup reports a port bind error, remove the `[::]:*` lines from the compose file you are using. Traffic from the macOS host is NATed through `192.168.65.1`, so the proxy sees an IPv4 client even for `curl -6`.
+> The compose files publish IPv4 and IPv6. On macOS, `./examples/setup/up` adds `examples/setup/ipv4.yml` (or `ipv4-ebpf.yml`) so Docker Desktop only publishes `0.0.0.0`. Do not edit the `[::]` lines: Linux and CI use them. Traffic from the macOS host is NATed through `192.168.65.1`, so the proxy sees an IPv4 client even for `curl -6`.
 
 ---
 
@@ -55,6 +55,13 @@ Headers on `/api/test`:
 ./examples/setup/certs
 docker compose -f examples/docker-compose.without-ebpf.yml up --build
 docker compose -f examples/docker-compose.ebpf.yml up --build
+```
+
+On macOS, add the IPv4 override. Docker Desktop does not bind `[::]`:
+
+```bash
+docker compose -f examples/docker-compose.without-ebpf.yml -f examples/setup/ipv4.yml up --build
+docker compose -f examples/docker-compose.ebpf.yml -f examples/setup/ipv4-ebpf.yml up --build
 ```
 
 `./examples/setup/certs` only makes `examples/certs` (local CA plus `server.crt` and `server.key`). It starts no container. If a release stack is running, stop it with `./examples/setup/down` before the build file. Both bind-mount the same `examples/certs`.
@@ -116,6 +123,6 @@ Open `http://localhost:3000` and log in with **admin / huginn**.
 
 **`ERR_CERT_AUTHORITY_INVALID`.** The browser is not using the mkcert CA. Run `./examples/setup/up` again and accept the system prompt. Firefox also needs the NSS tools (`nss` on macOS, `libnss3-tools` on Debian/Ubuntu). `curl -k` skips verification.
 
-**Port bind error on `[::]` (macOS).** Remove the `[::]:*` port lines from the compose file in use.
+**Port bind error on `[::]` (macOS).** `./examples/setup/up` already publishes IPv4 only. For a build compose file, add `-f examples/setup/ipv4.yml` (or `examples/setup/ipv4-ebpf.yml`). Leave the `[::]` lines in the compose files.
 
 **Stop.** `./examples/setup/down`. It stops the release stack and the observability stack. Certificates in `examples/certs` stay.

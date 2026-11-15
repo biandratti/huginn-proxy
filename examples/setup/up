@@ -98,16 +98,29 @@ else
   services=(proxy)
 fi
 
+# On macOS, Docker Desktop rejects the "[::]:port" publishes in the compose files.
+# An override replaces that list with IPv4. The compose files themselves stay
+# dual-stack for Linux and for CI.
+compose_args=(-f "$compose_file")
+if [[ "$os" == "Darwin" ]]; then
+  if [[ "$ebpf" -eq 1 ]]; then
+    compose_args+=(-f examples/setup/ipv4-ebpf.yml)
+  else
+    compose_args+=(-f examples/setup/ipv4.yml)
+  fi
+  echo "macOS: publishing IPv4 only. Docker Desktop does not bind [::]."
+fi
+
 echo "Starting ${compose_file}"
-docker compose -f "$compose_file" pull
-docker compose -f "$compose_file" up -d
+docker compose "${compose_args[@]}" pull
+docker compose "${compose_args[@]}" up -d
 
 deadline=$((SECONDS + 180))
 ready=0
 until [[ "$SECONDS" -ge "$deadline" ]]; do
   ready=1
   for svc in "${services[@]}"; do
-    if ! docker compose -f "$compose_file" ps "$svc" | grep -q "(healthy)"; then
+    if ! docker compose "${compose_args[@]}" ps "$svc" | grep -q "(healthy)"; then
       ready=0
     fi
   done
@@ -118,7 +131,7 @@ until [[ "$SECONDS" -ge "$deadline" ]]; do
 done
 if [[ "$ready" -ne 1 ]]; then
   echo "Services did not become healthy in time." >&2
-  docker compose -f "$compose_file" ps >&2
+  docker compose "${compose_args[@]}" ps >&2
   exit 1
 fi
 
