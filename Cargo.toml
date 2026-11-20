@@ -40,6 +40,9 @@ huginn-ebpf-common = { path = "huginn-ebpf-common" }
 huginn-ebpf-rate-limit = { path = "huginn-ebpf-rate-limit" }
 huginn-net-http = { version = "2.2.1", features = ["akamai"] }
 huginn-net-tcp = { version = "2.2.1", features = ["syn"] }
+# Temporary pin: huginn-net-tcp 2.2.1 requires pcap-file 3.0.0-rc1 (3.0.0 made PcapPacket::data private).
+# Remove this line and the pcap-file entry in huginn-proxy-lib/Cargo.toml when huginn-net-tcp publishes a release compatible with pcap-file 3.x.
+pcap-file = "=3.0.0-rc1"
 huginn-net-tls = { version = "2.2.1", features = ["stable-v1"] }
 huginn-proxy-lib = { path = "huginn-proxy-lib" }
 hyper = { version = "1.12.0", features = ["full"] }

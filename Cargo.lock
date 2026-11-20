@@ -1086,6 +1086,7 @@ dependencies = [
  "opentelemetry",
  "opentelemetry-prometheus",
  "opentelemetry_sdk",
+ "pcap-file",
  "pingora-limits",
  "pingora-timeout",
  "ppp",
@@ -1840,14 +1841,14 @@ checksum = "2ee67f1008b1ba2321834326597b8e186293b049a023cdef258527550b9935b4"
 
 [[package]]
 name = "pcap-file"
-version = "3.0.0"
+version = "3.0.0-rc1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3900579bc38e335a54d52a21470bb62bf59609cd9dd45306573a3598320c0429"
+checksum = "dc44e44ff0157dd4a876d81d83ae1bdb3b031873ca042116977908b987092f44"
 dependencies = [
  "byteorder_slice",
  "derive-into-owned",
  "once_cell",
- "thiserror 2.0.21",
+ "thiserror 1.0.69",
 ]
 
 [[package]]
