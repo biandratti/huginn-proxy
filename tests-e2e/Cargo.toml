@@ -6,11 +6,11 @@ license.workspace = true
 publish = false
 
 [dependencies]
-huginn-proxy-lib.workspace = true
 reqwest.workspace = true
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "net"] }
 
 [dev-dependencies]
+huginn-proxy-lib.workspace = true
 serial_test.workspace = true
 
 [[test]]

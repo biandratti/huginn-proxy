@@ -11,9 +11,11 @@ path = "src/lib.rs"
 
 [dependencies]
 huginn-proxy-lib.workspace = true
-serial_test.workspace = true
 thirtyfour = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
+
+[dev-dependencies]
+serial_test.workspace = true
 
 [[test]]
 name = "chrome"

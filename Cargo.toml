@@ -24,12 +24,12 @@ repository = "https://github.com/biandratti/huginn-proxy"
 
 [workspace.dependencies]
 ahash = "0.8.12"
-arc-swap = "1.9.3"
+arc-swap = "1.9.5"
 async-trait = "0.1.92"
 aya = "0.16.0"
 aya-log = "0.4.0"
-bytes = "1.12.1"
-clap = { version = "4.6.7", features = ["derive", "env"] }
+bytes = "1.12.2"
+clap = { version = "4.6.9", features = ["derive", "env"] }
 criterion = { version = "0.8.2", features = ["html_reports"] }
 getrandom = "0.4.3"
 http = "1.5.0"
@@ -38,41 +38,38 @@ huginn-certs = { path = "huginn-certs" }
 huginn-ebpf = { path = "huginn-ebpf" }
 huginn-ebpf-common = { path = "huginn-ebpf-common" }
 huginn-ebpf-rate-limit = { path = "huginn-ebpf-rate-limit" }
-huginn-net-http = { version = "2.2.1", features = ["akamai"] }
-huginn-net-tcp = { version = "2.2.1", features = ["syn"] }
-huginn-net-tls = { version = "2.2.1", features = ["stable-v1"] }
+huginn-net-http = { version = "2.2.2", features = ["akamai"] }
+huginn-net-tcp = { version = "2.2.2", features = ["syn"] }
+huginn-net-tls = { version = "2.2.2", features = ["stable-v1"] }
 huginn-proxy-lib = { path = "huginn-proxy-lib" }
 hyper = { version = "1.12.0", features = ["full"] }
 hyper-util = { version = "0.1.21", features = ["full"] }
 ipnet = "2.12.2"
 libc = "0.2.191"
-log = "0.4.34"
-notify = "8.2.0"
+log = "0.4.35"
+notify = "9.0.0"
 opentelemetry = { version = "0.33.1", features = ["metrics"] }
 opentelemetry-prometheus = "0.33.1"
 opentelemetry_sdk = { version = "0.33.1", features = ["metrics", "trace"] }
-# Temporary pin: huginn-net-tcp 2.2.1 requires pcap-file 3.0.0-rc1 (3.0.0 made PcapPacket::data private).
-# Remove this line and the pcap-file entry in huginn-proxy-lib/Cargo.toml when huginn-net-tcp publishes a release compatible with pcap-file 3.x.
-pcap-file = "=3.0.0-rc1"
-pingora-limits = "0.9.0"
-pingora-timeout = "0.9.0"
+pingora-limits = "0.9.1"
+pingora-timeout = "0.9.1"
 ppp = "2.3.0"
 prometheus = "0.14.0"
 rcgen = "0.14.10"
 reqwest = { version = "0.13.5", features = ["json", "http2"] }
-rustls-pki-types = "1.15.1"
+rustls-pki-types = "1.16.0"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
 serde_norway = "0.9.42"
 serial_test = "4.0.1"
 socket2 = "0.6.5"
 tempfile = "3.27.0"
-thirtyfour = { version = "0.38.1", default-features = false, features = ["reqwest", "rustls"] }
+thirtyfour = { version = "0.38.3", default-features = false, features = ["reqwest", "rustls"] }
 thiserror = "2.0.21"
 tokio = { version = "1.54.1", features = ["net", "time", "io-util", "macros", "rt-multi-thread", "sync", "signal", "fs"] }
 tokio-rustls = "0.26.6"
 tokio-util = { version = "0.7.20", features = ["rt"] }
-toml = "1.1.8"
+toml = "1.2.2"
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["fmt", "env-filter"] }
 x509-parser = "0.18.1"
