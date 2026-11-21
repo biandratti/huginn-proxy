@@ -8,7 +8,7 @@ runs:
   using: 'composite'
   steps:
     - name: Install Chrome
-      uses: browser-actions/setup-chrome@v2
+      uses: browser-actions/setup-chrome@39ce663831f86d2ea36cbda0a8143709cdfcc410 # v2.2.0
       with:
         chrome-version: latest
     

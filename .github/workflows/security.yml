@@ -27,13 +27,15 @@ jobs:
           - huginn-certs
           - huginn-proxy-lib
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1
+        with:
+          toolchain: stable
       
       - name: Cache cargo-geiger
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cargo/bin/cargo-geiger
           key: cargo-geiger-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
@@ -58,9 +60,9 @@ jobs:
   #   runs-on: ubuntu-latest
   #   if: github.event_name == 'pull_request'
   #   steps:
-  #     - uses: actions/checkout@v7
+  #     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
   #     - name: Dependency Review
-  #       uses: actions/dependency-review-action@v4
+  #       uses: actions/dependency-review-action@bbc44d14a204704ccc493733616cd1e93a0321ec # v5.0.1
   #       with:
   #         allow-licenses: MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, Unicode-3.0
 

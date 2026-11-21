@@ -1,0 +1,18 @@
+# Licenses accepted for dependencies when generating THIRD-PARTY-LICENSES.md.
+# Keep in sync with the [licenses] allow list and exceptions in deny.toml.
+accepted = [
+    "MIT",
+    "Apache-2.0",
+    "Unicode-3.0",
+    "ISC",
+    "BSD-3-Clause",
+    "CC0-1.0",
+    "CDLA-Permissive-2.0",
+    "Zlib",
+    # Only used by xxhash-rust (via notify). Same exception as deny.toml.
+    "BSL-1.0",
+]
+
+# Skip the workspace's own crates (publish = false); only third-party dependencies are listed.
+[private]
+ignore = true
