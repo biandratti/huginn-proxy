@@ -17,7 +17,7 @@ runs:
   using: 'composite'
   steps:
     - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
+      uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
     - name: Generate TLS certificates
       shell: bash

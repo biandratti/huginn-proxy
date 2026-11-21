@@ -22,10 +22,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@v4.39.3
+        uses: github/codeql-action/init@e0462179768953fd6790193e15caaef674ff709e # v4.39.4
         with:
           languages: rust
           config-file: ./.github/codeql/codeql-config.yml
@@ -34,10 +34,12 @@ jobs:
         uses: ./.github/actions/setup-ebpf-build
 
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1
+        with:
+          toolchain: stable
 
       - name: Build
         run: cargo build --workspace
 
       - name: Perform CodeQL analysis
-        uses: github/codeql-action/analyze@v4.39.3
+        uses: github/codeql-action/analyze@e0462179768953fd6790193e15caaef674ff709e # v4.39.4

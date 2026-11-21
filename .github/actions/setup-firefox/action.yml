@@ -11,7 +11,7 @@ runs:
   using: 'composite'
   steps:
     - name: Install Firefox
-      uses: browser-actions/setup-firefox@v1
+      uses: browser-actions/setup-firefox@8058e910ee76e74bb76b7b2e5b61a55b3a65ed78 # v1.7.2
       with:
         firefox-version: ${{ inputs.firefox-version }}
     
