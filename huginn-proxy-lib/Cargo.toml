@@ -22,6 +22,8 @@ notify.workspace = true
 opentelemetry.workspace = true
 opentelemetry-prometheus.workspace = true
 opentelemetry_sdk = { workspace = true, features = ["metrics", "trace"] }
+# Temporary pin, see the root Cargo.toml. Not used in code; remove with the pin.
+pcap-file.workspace = true
 pingora-limits.workspace = true
 pingora-timeout.workspace = true
 ppp.workspace = true
