@@ -7,7 +7,9 @@
   ],
   "enabledManagers": ["dockerfile"],
   "dockerfile": {
-    "fileMatch": ["(^|/)docker/[^/]*\\.Dockerfile$"]
+    "managerFilePatterns": [
+      "/(^|/)docker/[^/]*\\.Dockerfile$/"
+    ]
   },
   "pinDigests": true,
   "schedule": ["at any time"],
