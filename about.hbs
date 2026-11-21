@@ -1,0 +1,32 @@
+# Third-Party Licenses
+
+This file lists the third-party crates used by huginn-proxy and the license texts they are distributed under.
+
+This file is generated. Do not edit it by hand. Regenerate it with:
+
+```sh
+cargo about generate about.hbs > THIRD-PARTY-LICENSES.md
+```
+
+## Overview
+
+{{#each overview}}
+- {{{name}}} ({{count}})
+{{/each}}
+
+## Licenses
+
+{{#each licenses}}
+### {{{name}}}
+
+Used by:
+
+{{#each used_by}}
+- {{#if crate.repository}}[{{crate.name}} {{crate.version}}]({{crate.repository}}){{else}}{{crate.name}} {{crate.version}}{{/if}}
+{{/each}}
+
+```text
+{{{text}}}
+```
+
+{{/each}}
