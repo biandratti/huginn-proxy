@@ -35,7 +35,7 @@ RUN cargo build --release -p huginn-proxy --features ebpf-tcp
 
 # ── runtime base ────────────────────────────────────────────────
 # Distroless contains only the glibc/libgcc runtime and CA store needed by the binaries.
-FROM gcr.io/distroless/cc-debian13:latest@sha256:809d04afa1be033c441f76bb0051878c342fb76d0ea236bc6dc94b655fa0fbd6 AS runtime-base
+FROM gcr.io/distroless/cc-debian13:latest@sha256:dac90a25ffe03ebaace90cda886b081e61ab6cd77ac47eda51f7bcc15c320765 AS runtime-base
 COPY --from=builder-base /healthcheck /usr/local/bin/healthcheck
 
 # ── plain target ────────────────────────────────────────────────
