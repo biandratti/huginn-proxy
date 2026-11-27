@@ -36,7 +36,7 @@ async fn spawn_echo_backend() -> Result<(SocketAddr, tokio::task::AbortHandle), 
                     let body_len = body.collect().await.map_or(0, |b| b.to_bytes().len());
                     echo.push_str(&format!("body-len: {body_len}\n"));
                     let resp = Response::builder()
-                        .header("connection", "x-internal-debug")
+                        .header("connection", "x-internal-debug, x-frame-options")
                         .header("x-internal-debug", "1")
                         .header("keep-alive", "timeout=5")
                         .header("proxy-authenticate", "Basic realm=\"backend\"")
@@ -60,9 +60,19 @@ async fn spawn_echo_backend() -> Result<(SocketAddr, tokio::task::AbortHandle), 
 /// `head` must make the proxy close the connection (`Connection: close`), since the
 /// response is read to EOF.
 async fn raw_exchange(head: &str, body: &str) -> Result<(String, String), BoxError> {
+    raw_exchange_with(head, body, "").await
+}
+
+/// [`raw_exchange`] with `extra_toml` appended to the proxy config.
+async fn raw_exchange_with(
+    head: &str,
+    body: &str,
+    extra_toml: &str,
+) -> Result<(String, String), BoxError> {
     let (backend, _backend_handle) = spawn_echo_backend().await?;
     let tmp = tempfile::Builder::new().suffix(".toml").tempfile()?;
-    write_toml(tmp.path(), &toml_single_backend(free_port()?, backend))?;
+    let toml = format!("{}\n{extra_toml}", toml_single_backend(free_port()?, backend));
+    write_toml(tmp.path(), &toml)?;
     let (proxy, _proxy_handle) = spawn_proxy(tmp.path(), false, 0).await?;
 
     let mut stream = TcpStream::connect(proxy).await?;
@@ -160,5 +170,18 @@ async fn response_hop_by_hop_headers_do_not_reach_client() -> TestResult {
     }
     assert!(resp_head.contains("\r\nx-backend: kept"), "{resp_head}");
     assert!(body.contains("body-len: 0\n"), "response body must be intact: {body}");
+    Ok(())
+}
+
+#[tokio::test]
+async fn backend_connection_cannot_strip_proxy_security_headers() -> TestResult {
+    // The backend answers `Connection: x-internal-debug, x-frame-options`; the proxy's own
+    // X-Frame-Options is added after the backend's hop-by-hop headers are removed.
+    let extra = r#"[security.headers]
+custom = [{ name = "X-Frame-Options", value = "DENY" }]
+"#;
+    let (resp_head, _) =
+        raw_exchange_with("Connection: close\r\nContent-Length: 0\r\n", "", extra).await?;
+    assert!(resp_head.contains("\r\nx-frame-options: deny"), "{resp_head}");
     Ok(())
 }
