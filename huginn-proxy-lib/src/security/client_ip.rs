@@ -54,12 +54,12 @@ fn walk_trusted_hops(
 ) -> Option<Vec<IpAddr>> {
     let mut hops = vec![peer_ip];
     for value in headers.get_all(forwarded::FOR).iter().rev() {
-        for raw in value.to_str().ok()?.rsplit(',') {
-            let token = raw.trim();
+        for raw in value.as_bytes().rsplit(|&b| b == b',') {
+            let token = raw.trim_ascii();
             if token.is_empty() {
                 continue;
             }
-            let ip = parse_xff_hop(token)?;
+            let ip = parse_xff_hop(std::str::from_utf8(token).ok()?)?;
             hops.push(ip);
             if !trusted_proxies.trusts(&ip) {
                 return Some(hops);

@@ -154,6 +154,11 @@ fn trusted_peer_garbage_left_of_client_is_ignored() {
 }
 
 #[test]
+fn trusted_peer_non_ascii_left_of_client_on_same_line_is_ignored() {
+    assert_eq!(from_trusted_peer(&[b"\xff\xfe, 198.51.100.7"]), ["198.51.100.7, 10.0.0.1"]);
+}
+
+#[test]
 fn trusted_peer_unreadable_field_fails_closed() {
     assert_eq!(from_trusted_peer(&[b"198.51.100.7", b"\xff\xfe"]), ["10.0.0.1"]);
 }

@@ -189,6 +189,13 @@ fn ip_unparseable_hop_behind_trusted_hops_fails_closed() {
 }
 
 #[test]
+fn ip_non_ascii_left_of_client_on_same_line_is_not_inspected() {
+    let proxies = nets(&["10.0.0.0/8"]);
+    let headers = headers_with_xff_bytes(&[b"\xff\xfe, 198.51.100.7"]);
+    assert_eq!(key_ip(peer("10.0.0.1:443"), &headers, &proxies), "198.51.100.7");
+}
+
+#[test]
 fn ip_unreadable_field_fails_closed() {
     // A non-ASCII field line right of the client entry is not skipped.
     let proxies = nets(&["10.0.0.0/8"]);
@@ -325,12 +332,12 @@ fn headers_with_api_keys(values: &[&[u8]]) -> http::HeaderMap {
 }
 
 #[test]
-fn header_missing_falls_back_to_peer() {
+fn header_missing_falls_back_to_client_ip() {
     assert_eq!(key_header(&http::HeaderMap::new()), "ip:1.2.3.4");
 }
 
 #[test]
-fn header_repeated_falls_back_to_peer() {
+fn header_repeated_falls_back_to_client_ip() {
     // Several field lines are ambiguous: neither the client's nor an upstream's line is
     // picked, so rotating one of them cannot change the key.
     assert_eq!(
@@ -359,7 +366,7 @@ fn header_fallback_behind_trusted_proxy_uses_client_ip() {
 }
 
 #[test]
-fn header_unreadable_falls_back_to_peer() {
+fn header_unreadable_falls_back_to_client_ip() {
     assert_eq!(key_header(&headers_with_api_keys(&[b"\xff\xfe"])), "ip:1.2.3.4");
 }
 
