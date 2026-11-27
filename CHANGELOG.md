@@ -14,7 +14,7 @@ follows [Semantic Versioning](https://semver.org/).
 - **`X-Forwarded-For` from untrusted peers is no longer forwarded.** Unless the peer is in `security.trusted_proxies`,
   the inbound `X-Forwarded-For` is discarded and backends receive the peer IP alone; an inbound `Forwarded` header is
   removed. From a trusted proxy the chain is cut at the trust boundary (real client plus the trusted proxies after it),
-  and a chain that cannot be parsed is replaced by the peer IP. Before, the peer IP was appended to whatever the client
+  and an unparseable hop between the peer and the client replaces the chain with the peer IP. Before, the peer IP was appended to whatever the client
   sent. Backends behind a load balancer need that load balancer listed in `trusted_proxies` to keep receiving the client
   IP.
 - **`limit_by = "header"` with a repeated header falls back to the client IP.** A request that sends the key header more

@@ -44,21 +44,32 @@ fn is_port(port: &str) -> bool {
         && port.parse::<u16>().is_ok()
 }
 
-/// Resolve the effective client IP for rate limiting.
-///
-/// When no peer is trusted (empty `cidrs` and not `insecure`), returns the TCP peer IP
-/// unconditionally, this is the secure default and cannot be spoofed by a client.
-///
-/// When the peer is a trusted proxy, walks the inbound `X-Forwarded-For` right-to-left
-/// (most-trusted first) and returns the first non-trusted IP, the real client behind
-/// the load balancer. Repeated field lines are one list: the last field is the
-/// rightmost hop, then each field is split on commas.
-///
-/// The walk fails closed. Every hop it visits was written by a trusted proxy, so a hop
-/// it cannot read (non-ASCII field, or a token `parse_xff_hop` rejects) is never skipped:
-/// stepping past it would land on an entry the client controls. The peer IP is used
-/// instead, as it is when all entries are trusted or absent. Empty list members are
-/// ignored. Entries left of the returned hop are client-supplied and are not inspected.
+/// Walk `X-Forwarded-For` right to left from a trusted `peer_ip`, stopping at the first
+/// untrusted hop (the real client). Returns the visited hops, peer first; `None` if a visited
+/// hop cannot be parsed. Entries left of the client are client-written and never read.
+fn walk_trusted_hops(
+    peer_ip: IpAddr,
+    headers: &http::HeaderMap,
+    trusted_proxies: &TrustedProxiesConfig,
+) -> Option<Vec<IpAddr>> {
+    let mut hops = vec![peer_ip];
+    for value in headers.get_all(forwarded::FOR).iter().rev() {
+        for raw in value.to_str().ok()?.rsplit(',') {
+            let token = raw.trim();
+            if token.is_empty() {
+                continue;
+            }
+            let ip = parse_xff_hop(token)?;
+            hops.push(ip);
+            if !trusted_proxies.trusts(&ip) {
+                return Some(hops);
+            }
+        }
+    }
+    Some(hops)
+}
+
+/// The client IP for rate limiting: the first untrusted hop behind a trusted peer, else the peer.
 pub(crate) fn resolve_client_ip(
     peer: std::net::SocketAddr,
     headers: &http::HeaderMap,
@@ -68,45 +79,15 @@ pub(crate) fn resolve_client_ip(
     if !trusted_proxies.trusts(&peer_ip) {
         return peer_ip.to_string();
     }
-    for value in headers.get_all(forwarded::FOR).iter().rev() {
-        let Ok(xff_str) = value.to_str() else {
-            return peer_ip.to_string();
-        };
-        for raw in xff_str.rsplit(',') {
-            let token = raw.trim();
-            if token.is_empty() {
-                continue;
-            }
-            let Some(ip) = parse_xff_hop(token) else {
-                return peer_ip.to_string();
-            };
-            if !trusted_proxies.trusts(&ip) {
-                return ip.to_string();
-            }
-        }
-    }
-    peer_ip.to_string()
-}
-
-/// Parse the whole inbound `X-Forwarded-For` list, left to right.
-///
-/// Repeated field lines are one list. `None` if any field is not visible ASCII or any
-/// non-empty member is not a hop [`parse_xff_hop`] accepts.
-fn parse_xff_chain(headers: &http::HeaderMap) -> Option<Vec<IpAddr>> {
-    let mut chain = Vec::new();
-    for value in headers.get_all(forwarded::FOR) {
-        for raw in value.to_str().ok()?.split(',') {
-            let token = raw.trim();
-            if !token.is_empty() {
-                chain.push(parse_xff_hop(token)?);
-            }
-        }
-    }
-    Some(chain)
+    walk_trusted_hops(peer_ip, headers, trusted_proxies)
+        .and_then(|hops| hops.last().copied())
+        .filter(|ip| !trusted_proxies.trusts(ip))
+        .unwrap_or(peer_ip)
+        .to_string()
 }
 
 /// The `X-Forwarded-For` chain for the backend: just `peer_ip` unless the peer is trusted,
-/// else the inbound chain plus `peer_ip`, from the real client rightwards (unparseable: `peer_ip`).
+/// else the hops from the real client to `peer_ip` (unparseable: `peer_ip`).
 pub fn forwarded_for_chain(
     peer_ip: IpAddr,
     headers: &http::HeaderMap,
@@ -115,16 +96,9 @@ pub fn forwarded_for_chain(
     if !trusted_proxies.trusts(&peer_ip) {
         return vec![peer_ip];
     }
-    let Some(mut chain) = parse_xff_chain(headers) else {
+    let Some(mut hops) = walk_trusted_hops(peer_ip, headers, trusted_proxies) else {
         return vec![peer_ip];
     };
-    chain.push(peer_ip);
-    let trusted_suffix = chain
-        .iter()
-        .rev()
-        .take_while(|ip| trusted_proxies.trusts(ip))
-        .count();
-    // Index of the first non-trusted hop from the right, or 0 when every hop is trusted.
-    let keep_from = chain.len().saturating_sub(trusted_suffix).saturating_sub(1);
-    chain.split_off(keep_from)
+    hops.reverse();
+    hops
 }

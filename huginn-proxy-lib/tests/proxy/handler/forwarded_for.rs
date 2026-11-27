@@ -132,19 +132,30 @@ fn trusted_peer_empty_members_are_ignored() {
 
 #[test]
 fn trusted_peer_unparseable_hop_fails_closed() {
-    // A hop that is not an IP anywhere in the chain discards it: only the peer is sent.
+    // A hop that is not an IP between the peer and the client discards the chain.
     for fields in [
         &[b"198.51.100.7, unknown".as_slice()][..],
-        &[b"garbage, 198.51.100.7"],
         &[b"198.51.100.7", b"_hidden"],
+        &[b"198.51.100.7, garbage, 10.0.0.2"],
     ] {
         assert_eq!(from_trusted_peer(fields), ["10.0.0.1"], "{fields:?}");
     }
 }
 
 #[test]
+fn trusted_peer_garbage_left_of_client_is_ignored() {
+    // Entries left of the client are client-written: they must not decide the outcome,
+    // or a client could hide its IP from the backend with one invalid token.
+    assert_eq!(from_trusted_peer(&[b"garbage, 198.51.100.7"]), ["198.51.100.7, 10.0.0.1"]);
+    assert_eq!(
+        from_trusted_peer(&[b"203.0.113.5", b"\xff\xfe", b"198.51.100.7"]),
+        ["198.51.100.7, 10.0.0.1"]
+    );
+}
+
+#[test]
 fn trusted_peer_unreadable_field_fails_closed() {
-    assert_eq!(from_trusted_peer(&[b"203.0.113.5", b"\xff\xfe", b"198.51.100.7"]), ["10.0.0.1"]);
+    assert_eq!(from_trusted_peer(&[b"198.51.100.7", b"\xff\xfe"]), ["10.0.0.1"]);
 }
 
 #[test]
