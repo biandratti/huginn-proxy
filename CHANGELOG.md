@@ -18,7 +18,8 @@ follows [Semantic Versioning](https://semver.org/).
   sent. Backends behind a load balancer need that load balancer listed in `trusted_proxies` to keep receiving the client
   IP.
 - **`limit_by = "header"` with a repeated header falls back to the client IP.** A request that sends the key header more
-  than once is keyed by client IP instead of by the first line.
+  than once is keyed by client IP instead of by the first line. The fallback client IP (also used when the header is
+  missing) is now resolved through `trusted_proxies`, so clients behind a trusted load balancer no longer share its bucket.
 - **Hop-by-hop headers are no longer forwarded.** `Connection` and the headers it names, `Keep-Alive`,
   `Proxy-Connection`, `Proxy-Authenticate`, `Proxy-Authorization`, `TE` (except `TE: trailers`), `Trailer`,
   `Transfer-Encoding` and `Upgrade` are removed from requests before they reach the backend and from backend responses

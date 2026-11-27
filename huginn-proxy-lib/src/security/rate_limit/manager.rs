@@ -145,8 +145,7 @@ fn single_header_value(headers: &http::HeaderMap, name: &str) -> Option<String> 
 /// * `limit_by` - Key extraction strategy
 /// * `peer` - Client socket address (TCP peer, non-forgeable)
 /// * `route_prefix` - Matched route prefix
-/// * `header_name` - Custom header name (for `LimitBy::Header`). The key is that header's
-///   value; if it is missing, unreadable or sent more than once, the peer IP is used.
+/// * `header_name` - Key header for `LimitBy::Header`; falls back to the client IP if not sent once.
 /// * `headers` - HTTP request headers
 /// * `trusted_proxies` - CIDRs whose XFF additions are trusted (see `resolve_client_ip`)
 ///
@@ -164,7 +163,8 @@ pub fn extract_rate_limit_key(
         LimitBy::Ip => resolve_client_ip(peer, headers, trusted_proxies),
         LimitBy::Header => header_name
             .and_then(|name| single_header_value(headers, name))
-            .unwrap_or_else(|| peer.ip().to_string()),
+            .map(|value| format!("header:{value}"))
+            .unwrap_or_else(|| format!("ip:{}", resolve_client_ip(peer, headers, trusted_proxies))),
         LimitBy::Route => route_prefix.to_string(),
         LimitBy::Combined => {
             let ip_str = resolve_client_ip(peer, headers, trusted_proxies);
