@@ -2,6 +2,7 @@
 **/target/
 .idea/
 cobertura.xml
+*.profraw
 *.log
 **/Cargo.lock
 !Cargo.lock
