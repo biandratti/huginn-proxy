@@ -189,6 +189,13 @@ fn ip_unparseable_hop_behind_trusted_hops_fails_closed() {
 }
 
 #[test]
+fn ip_non_ascii_left_of_client_on_same_line_is_not_inspected() {
+    let proxies = nets(&["10.0.0.0/8"]);
+    let headers = headers_with_xff_bytes(&[b"\xff\xfe, 198.51.100.7"]);
+    assert_eq!(key_ip(peer("10.0.0.1:443"), &headers, &proxies), "198.51.100.7");
+}
+
+#[test]
 fn ip_unreadable_field_fails_closed() {
     // A non-ASCII field line right of the client entry is not skipped.
     let proxies = nets(&["10.0.0.0/8"]);
@@ -300,7 +307,7 @@ fn header_strategy_unchanged() {
         &h,
         &none(),
     );
-    assert_eq!(key, "secret-token");
+    assert_eq!(key, "header:secret-token");
 }
 
 fn key_header(headers: &http::HeaderMap) -> String {
@@ -325,21 +332,53 @@ fn headers_with_api_keys(values: &[&[u8]]) -> http::HeaderMap {
 }
 
 #[test]
-fn header_missing_falls_back_to_peer() {
-    assert_eq!(key_header(&http::HeaderMap::new()), "1.2.3.4");
+fn header_missing_falls_back_to_client_ip() {
+    assert_eq!(key_header(&http::HeaderMap::new()), "ip:1.2.3.4");
 }
 
 #[test]
-fn header_repeated_falls_back_to_peer() {
+fn header_repeated_falls_back_to_client_ip() {
     // Several field lines are ambiguous: neither the client's nor an upstream's line is
     // picked, so rotating one of them cannot change the key.
-    assert_eq!(key_header(&headers_with_api_keys(&[b"rotating-1", b"secret-token"])), "1.2.3.4");
-    assert_eq!(key_header(&headers_with_api_keys(&[b"same", b"same"])), "1.2.3.4");
+    assert_eq!(
+        key_header(&headers_with_api_keys(&[b"rotating-1", b"secret-token"])),
+        "ip:1.2.3.4"
+    );
+    assert_eq!(key_header(&headers_with_api_keys(&[b"same", b"same"])), "ip:1.2.3.4");
 }
 
 #[test]
-fn header_unreadable_falls_back_to_peer() {
-    assert_eq!(key_header(&headers_with_api_keys(&[b"\xff\xfe"])), "1.2.3.4");
+fn header_fallback_behind_trusted_proxy_uses_client_ip() {
+    // Missing or repeated key header behind a trusted load balancer: each client keeps its
+    // own bucket instead of sharing the load balancer's.
+    let proxies = nets(&["10.0.0.0/8"]);
+    let lb = peer("10.0.0.1:443");
+    let key = |h: &http::HeaderMap| {
+        extract_rate_limit_key(LimitBy::Header, lb, "/", Some("x-api-key"), h, &proxies)
+    };
+    assert_eq!(key(&headers_with_xff("198.51.100.7")), "ip:198.51.100.7");
+    let mut repeated = headers_with_api_keys(&[b"a", b"b"]);
+    repeated.insert(
+        http::header::HeaderName::from_static(forwarded::FOR),
+        http::header::HeaderValue::from_static("198.51.100.8"),
+    );
+    assert_eq!(key(&repeated), "ip:198.51.100.8");
+}
+
+#[test]
+fn header_unreadable_falls_back_to_client_ip() {
+    assert_eq!(key_header(&headers_with_api_keys(&[b"\xff\xfe"])), "ip:1.2.3.4");
+}
+
+#[test]
+fn header_value_cannot_share_an_ip_fallback_bucket() {
+    // A client sending another client's IP as the key header must not reach that client's
+    // fallback bucket.
+    let forged = key_header(&headers_with_api_keys(&[b"1.2.3.4"]));
+    let fallback = key_header(&http::HeaderMap::new());
+    assert_eq!(forged, "header:1.2.3.4");
+    assert_eq!(fallback, "ip:1.2.3.4");
+    assert_ne!(forged, fallback);
 }
 
 #[test]

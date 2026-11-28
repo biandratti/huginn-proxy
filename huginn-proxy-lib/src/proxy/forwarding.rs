@@ -1,5 +1,6 @@
 use crate::config::{BackendHttpVersion, KeepAliveConfig};
 use crate::proxy::ClientPool;
+use crate::proxy::handler::strip_hop_by_hop;
 use crate::proxy::http_result::{HttpError, HttpResult};
 use crate::telemetry::Metrics;
 use crate::utils::http::RespBody;
@@ -143,6 +144,7 @@ pub async fn forward(
 
     match result {
         Ok(mut resp) => {
+            strip_hop_by_hop(resp.headers_mut());
             let status_code = resp.status().as_u16();
 
             if let Some(content_length) = resp.headers().get(hyper::header::CONTENT_LENGTH)

@@ -2618,10 +2618,10 @@ DEALINGS IN THE SOFTWARE.
 
 Used by:
 
-- [cc 1.11.3](https://github.com/rust-lang/cc-rs)
+- [cc 1.12.0](https://github.com/rust-lang/cc-rs)
 - [cfg-if 1.0.5](https://github.com/rust-lang/cfg-if)
 - [cmake 0.1.58](https://github.com/rust-lang/cmake-rs)
-- [find-msvc-tools 0.1.15](https://github.com/rust-lang/cc-rs)
+- [find-msvc-tools 0.1.16](https://github.com/rust-lang/cc-rs)
 - [jobserver 0.1.35](https://github.com/rust-lang/jobserver-rs)
 - [js-sys 0.3.107](https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/js-sys)
 - [openssl-probe 0.2.2](https://github.com/rustls/openssl-probe)
@@ -2982,7 +2982,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 Used by:
 
-- [hyper 1.12.0](https://github.com/hyperium/hyper)
+- [hyper 1.13.0](https://github.com/hyperium/hyper)
 
 ```text
 Copyright (c) 2014-2026 Sean McArthur
@@ -3336,7 +3336,7 @@ DEALINGS IN THE SOFTWARE.
 
 Used by:
 
-- [hashbrown 0.17.1](https://github.com/rust-lang/hashbrown)
+- [hashbrown 0.17.2](https://github.com/rust-lang/hashbrown)
 
 ```text
 Copyright (c) 2016 Amanieu d'Antras
@@ -3728,7 +3728,7 @@ THE SOFTWARE.
 
 Used by:
 
-- [sha2 0.11.1](https://github.com/RustCrypto/hashes)
+- [sha2 0.11.2](https://github.com/RustCrypto/hashes)
 
 ```text
 Copyright (c) 2016-2026 The RustCrypto Project Developers
@@ -3944,7 +3944,7 @@ DEALINGS IN THE SOFTWARE.
 
 Used by:
 
-- [h2 0.4.20](https://github.com/hyperium/h2)
+- [h2 0.4.21](https://github.com/hyperium/h2)
 
 ```text
 Copyright (c) 2017 h2 authors
@@ -4260,7 +4260,7 @@ DEALINGS IN THE SOFTWARE.
 
 Used by:
 
-- [ahash 0.8.12](https://github.com/tkaitchuck/ahash)
+- [ahash 0.8.15](https://github.com/tkaitchuck/ahash)
 
 ```text
 Copyright (c) 2018 Tom Kaitchuck
@@ -5276,18 +5276,18 @@ Used by:
 - [anstyle-query 1.1.5](https://github.com/rust-cli/anstyle.git)
 - [anstyle-wincon 3.0.11](https://github.com/rust-cli/anstyle.git)
 - [anstyle 1.0.14](https://github.com/rust-cli/anstyle.git)
-- [clap 4.6.9](https://github.com/clap-rs/clap)
-- [clap_builder 4.6.7](https://github.com/clap-rs/clap)
+- [clap 4.6.10](https://github.com/clap-rs/clap)
+- [clap_builder 4.6.10](https://github.com/clap-rs/clap)
 - [clap_derive 4.6.9](https://github.com/clap-rs/clap)
 - [clap_lex 1.1.2](https://github.com/clap-rs/clap)
 - [colorchoice 1.0.5](https://github.com/rust-cli/anstyle.git)
 - [is_terminal_polyfill 1.70.2](https://github.com/polyfill-rs/is_terminal_polyfill)
 - [once_cell_polyfill 1.70.2](https://github.com/polyfill-rs/once_cell_polyfill)
 - [serde_spanned 1.1.3](https://github.com/toml-rs/toml)
-- [toml 1.2.2+spec-1.1.0](https://github.com/toml-rs/toml)
+- [toml 1.2.3+spec-1.1.0](https://github.com/toml-rs/toml)
 - [toml_datetime 1.1.3+spec-1.1.0](https://github.com/toml-rs/toml)
-- [toml_edit 0.25.20+spec-1.1.0](https://github.com/toml-rs/toml)
-- [toml_parser 1.1.6+spec-1.1.0](https://github.com/toml-rs/toml)
+- [toml_edit 0.25.21+spec-1.1.0](https://github.com/toml-rs/toml)
+- [toml_parser 1.1.7+spec-1.1.0](https://github.com/toml-rs/toml)
 - [toml_writer 1.2.0+spec-1.1.0](https://github.com/toml-rs/toml)
 
 ```text
@@ -5557,8 +5557,8 @@ DEALINGS IN THE SOFTWARE.
 
 Used by:
 
-- [zerocopy-derive 0.8.64](https://github.com/google/zerocopy)
-- [zerocopy 0.8.64](https://github.com/google/zerocopy)
+- [zerocopy-derive 0.8.66](https://github.com/google/zerocopy)
+- [zerocopy 0.8.66](https://github.com/google/zerocopy)
 
 ```text
 Copyright 2023 The Fuchsia Authors
@@ -5725,7 +5725,7 @@ SOFTWARE.
 
 Used by:
 
-- [crc32fast 1.5.5](https://github.com/srijs/rust-crc32fast)
+- [crc32fast 1.5.6](https://github.com/srijs/rust-crc32fast)
 
 ```text
 MIT License
