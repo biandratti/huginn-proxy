@@ -27,7 +27,7 @@ RUN rustc --edition=2024 -O docker/healthcheck.rs -o /healthcheck
 RUN cargo build --release -p huginn-ebpf-agent
 
 # ── runtime ─────────────────────────────────────────────────────
-FROM gcr.io/distroless/cc-debian13:latest@sha256:dac90a25ffe03ebaace90cda886b081e61ab6cd77ac47eda51f7bcc15c320765
+FROM gcr.io/distroless/cc-debian13:latest@sha256:e8343d4a7da8bb210df0c3ea29de38bbadbba6c773bed0cd8bde506fca3a5c44
 LABEL org.opencontainers.image.description="eBPF XDP agent for huginn-proxy — loads XDP program and pins BPF maps"
 COPY --from=builder /app/target/release/huginn-ebpf-agent /usr/local/bin/huginn-ebpf-agent
 COPY --from=builder /healthcheck /usr/local/bin/healthcheck
